@@ -23,6 +23,7 @@
         "monolog/monolog": "^3.0",
         "squizlabs/php_codesniffer": "@stable"
     },
+    "bin": ["wRunner"],
     "authors": [
         {
             "name": "Flytachi",
