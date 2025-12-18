@@ -12,7 +12,7 @@
     },
     "require": {
         "php": ">=8.3",
-        "flytachi/winter-thread": "@dev",
+        "flytachi/winter-thread": "^1.0",
         "flytachi/winter-edo": "^1.0",
         "flytachi/winter-mapping": "^1.0",
         "flytachi/file-store": "^1.0",
