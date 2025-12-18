@@ -71,8 +71,7 @@ final class Kernel extends KernelStore
         LoggerRegistry::setInstance($logger !== null ? $logger : self::registryLogger());
 
         // thread
-//        Thread::bindRunner(dirname(__DIR__) . '/vendor/bin/runner');
-//        Thread::bindRunner(dirname(__DIR__) . '/wThread');
+        Thread::bindRunner(dirname(__DIR__) . '/vendor/bin/runner');
     }
 
     public static function info(): array
