@@ -71,7 +71,7 @@ final class Kernel extends KernelStore
         LoggerRegistry::setInstance($logger !== null ? $logger : self::registryLogger());
 
         // thread
-        Thread::bindRunner(dirname(__DIR__) . '/vendor/bin/runner');
+        self::bindThreadRunner();
     }
 
     public static function info(): array
@@ -155,5 +155,18 @@ final class Kernel extends KernelStore
         }
 
         return $logger;
+    }
+
+    private static function bindThreadRunner(): void
+    {
+        $pathBin = dirname(__DIR__) . '/vendor/bin/wRunner';
+        if (!file_exists($pathBin)) {
+            $pathBin = dirname(__DIR__) . '/vendor/bin/runner';
+            if (!file_exists($pathBin)) {
+                return;
+            }
+        }
+
+        Thread::bindRunner($pathBin);
     }
 }
