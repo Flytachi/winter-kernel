@@ -1,0 +1,18 @@
+<?php
+
+namespace __namespace__;
+
+use Flytachi\Winter\Cdo\Config\DbConfig;
+
+class __className__ extends DbConfig
+{
+    public function sepUp(): void
+    {
+        $this->driver = env('DB_DRIVER', 'pgsql');
+        $this->host = env('DB_HOST', 'localhost');
+        $this->port = env('DB_PORT', '5432');
+        $this->database = env('DB_NAME', 'postgres');
+        $this->username = env('DB_USER', 'postgres');
+        $this->password = env('DB_PASS', '');
+    }
+}

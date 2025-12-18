@@ -1,0 +1,12 @@
+<?php
+
+namespace __namespace__;
+
+use Flytachi\Winter\Edo\Stereotype\Repository;
+
+class __className__ extends Repository
+{
+    protected string $dbConfigClassName;
+    public static string $table = '__tableName__';
+    protected string $entityClassName = \stdClass::class;
+}

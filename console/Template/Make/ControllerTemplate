@@ -1,0 +1,16 @@
+<?php
+
+namespace __namespace__;
+
+use Flytachi\Winter\Kernel\Stereotype\Output\View;
+use Flytachi\Winter\Kernel\Stereotype\Controller;
+use Flytachi\Winter\Mapping\Annotation\RequestMapping;
+
+class __className__ extends Controller
+{
+    #[RequestMapping('/__shortName__')]
+    public function index(): View
+    {
+        return new View('index');
+    }
+}

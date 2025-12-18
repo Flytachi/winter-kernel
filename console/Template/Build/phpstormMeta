@@ -1,0 +1,24 @@
+<?php
+
+namespace PHPSTORM_META;
+
+override(\env(0), map([
+    'TIME_ZONE' => 'UTC',
+    'DEBUG' => 'true',
+    'LOGGER_LEVEL_ALLOW' => 'DEBUG,INFO,NOTICE,WARNING,ERROR,CRITICAL,ALERT,EMERGENCY',
+    'LOGGER_MAX_FILES' => '0',
+    'LOGGER_FILE_DATE_FORMAT' => 'Y-m-d',
+    'LOGGER_LINE_DATE_FORMAT' => 'Y-m-d H:i:s P',
+]));
+
+expectedArguments(\env(), 1,
+    match (arg(0)) {
+        'TIME_ZONE' => 'UTC',
+        'DEBUG' => 'true', 'false',
+        'LOGGER_LEVEL_ALLOW' => 'DEBUG,INFO,NOTICE,WARNING,ERROR,CRITICAL,ALERT,EMERGENCY',
+            'DEBUG', 'INFO', 'NOTICE', 'WARNING', 'ERROR', 'CRITICAL', 'ALERT', 'EMERGENCY',
+        'LOGGER_FILE_DATE_FORMAT' => 'Y-m-d', 'Y-m', 'Y', 'Ymd',
+        'LOGGER_LINE_DATE_FORMAT' => 'Y-m-d H:i:s P', 'd/m/Y H:i:s',
+        default => ''
+    }
+);

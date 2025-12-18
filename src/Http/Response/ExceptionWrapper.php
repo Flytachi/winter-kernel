@@ -140,7 +140,7 @@ abstract class ExceptionWrapper
                 . 'margin-top: 8px;margin-bottom: 17px">';
             $result .=        '<span style="float: left;font-size: 1.2rem; color: #ffffff;">';
             $result .=            '<span style="color: #' . $tColor . ';font-weight: bold;">[' . $throwable->getCode()
-                . '] Extra Debug Message:</span> ' . $throwable::class;
+                . '] Winter Debug Message:</span> ' . $throwable::class;
             $result .=        '</span>';
             $result .=        '<span style="float: right;font-style: italic;">';
             $result .=            '<span style="color: #adadad">' . date(DATE_ATOM) . '</span> ';
@@ -189,7 +189,7 @@ abstract class ExceptionWrapper
                 $result .= '</head>';
                 $result .= '<body style="background-color: #0a0f1f;color: #ffffff">';
                 $result .=      '<center>';
-                $result .=          '<strong style="font-size:21px;"><em>Extra ' . $_error['code'] . ' - '
+                $result .=          '<strong style="font-size:21px;"><em>Winter ' . $_error['code'] . ' - '
                     . $httpMessage . '</em></strong>';
                 $result .=          '<hr width="50%">';
                 $result .=          "<h2 style=\"color:#676980FF\">{$_error['message']}</h2>";

@@ -58,7 +58,7 @@ final class Locale
 
     public static function setLang(string $lang): void
     {
-        $currentPath = self::$serviceInstance ? self::getPath() : Extra::$pathRoot . '/lang';
+        $currentPath = self::$serviceInstance ? self::getPath() : Kernel::$pathRoot . '/lang';
         self::$serviceInstance = new LocaleService($currentPath, $lang);
     }
 

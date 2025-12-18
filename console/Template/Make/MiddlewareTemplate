@@ -1,0 +1,14 @@
+<?php
+
+namespace __namespace__;
+
+use Flytachi\Winter\Kernel\Stereotype\Middleware;
+
+#[\Attribute(\Attribute::TARGET_CLASS | \Attribute::TARGET_METHOD)]
+class __className__ extends Middleware
+{
+    public function optionBefore(): void
+    {
+        // TODO: Implement optionBefore() method.
+    }
+}

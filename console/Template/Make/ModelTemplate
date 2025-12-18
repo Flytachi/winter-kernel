@@ -1,0 +1,9 @@
+<?php
+
+namespace __namespace__;
+
+class __className__
+{
+    public ?int $id = null;
+    public string $field;
+}

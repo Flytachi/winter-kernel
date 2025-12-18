@@ -1,0 +1,13 @@
+<?php
+
+namespace __namespace__;
+
+class __className__
+{
+    public function __construct(
+        public string $requireField,
+        public int $intField = 1,
+        public bool $boolField = false,
+    ) {
+    }
+}

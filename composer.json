@@ -3,13 +3,16 @@
     "description": "Winter framework kernel",
     "type": "library",
     "license": "MIT",
+    "version": "1.0.0",
     "autoload": {
         "psr-4": {
+            "Flytachi\\Winter\\Console\\": "console/",
             "Flytachi\\Winter\\Kernel\\": "src/"
         }
     },
     "require": {
         "php": ">=8.3",
+        "flytachi/winter-thread": "@dev",
         "flytachi/winter-edo": "^1.0",
         "flytachi/winter-mapping": "^1.0",
         "flytachi/file-store": "^1.0",

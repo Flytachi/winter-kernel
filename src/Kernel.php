@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel;
 
 use Flytachi\Winter\Base\Log\LoggerRegistry;
+use Flytachi\Winter\Thread\Thread;
 use Monolog\Formatter\LineFormatter;
 use Monolog\Handler\FilterHandler;
 use Monolog\Handler\RotatingFileHandler;
@@ -68,12 +69,16 @@ final class Kernel extends KernelStore
 
         // logging
         LoggerRegistry::setInstance($logger !== null ? $logger : self::registryLogger());
+
+        // thread
+//        Thread::bindRunner(dirname(__DIR__) . '/vendor/bin/runner');
+//        Thread::bindRunner(dirname(__DIR__) . '/wThread');
     }
 
     public static function info(): array
     {
         return json_decode(
-            file_get_contents(__DIR__ . '/composer.json') ?: '',
+            file_get_contents(dirname(__DIR__) . '/composer.json') ?: '',
             true
         ) ?? [];
     }
@@ -96,7 +101,8 @@ final class Kernel extends KernelStore
             return new NullLogger();
         }
 
-        $allowedLevels = env('LOGGER_LEVEL_ALLOW');
+//        $allowedLevels = env('LOGGER_LEVEL_ALLOW');
+        $allowedLevels = 'DEBUG,INFO,NOTICE,WARNING,ERROR,CRITICAL';
         if ($allowedLevels === null || trim($allowedLevels) === '') {
             return new NullLogger();
         }

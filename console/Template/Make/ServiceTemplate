@@ -1,0 +1,9 @@
+<?php
+
+namespace __namespace__;
+
+use Flytachi\Winter\Kernel\Stereotype\Service;
+
+class __className__ extends Service
+{
+}

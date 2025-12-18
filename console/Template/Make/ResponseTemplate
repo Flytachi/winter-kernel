@@ -1,0 +1,19 @@
+<?php
+
+namespace __namespace__;
+
+use Flytachi\Winter\Base\HttpCode;
+use Flytachi\Winter\Kernel\Stereotype\Output\Response;
+
+class __className__ extends Response
+{
+    public function getBody(): string
+    {
+        $this->content = [
+            'code' => $this->httpCode->value,
+            'result' => $this->content,
+            ...$this->debugger()
+        ];
+        return parent::getBody();
+    }
+}
