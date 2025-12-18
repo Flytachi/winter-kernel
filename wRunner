@@ -1,0 +1,63 @@
+#!/usr/bin/env php
+<?php
+
+use Flytachi\Winter\Thread\Runnable;
+
+$fileAutoloader = dirname(__DIR__, 2) . '/autoload.php';
+if (file_exists($fileAutoloader)) {
+    require_once $fileAutoloader;
+} else {
+    require_once __DIR__ . '/vendor/autoload.php';
+}
+
+// 1. Reading all standard input data (stdin).
+$payload = stream_get_contents(STDIN);
+
+if (empty($payload)) {
+    fwrite(STDERR, "Error: No payload received from stdin.\n");
+    exit(1);
+}
+
+// 2. Decode and deserialize the object Runnable.
+if (function_exists('\Opis\Closure\serialize')) {
+    $runnable = \Opis\Closure\unserialize(
+        $payload,
+        \Flytachi\Winter\Thread\Thread::getSerSecurity()
+    );
+} else {
+    $runnable = unserialize($payload);
+}
+
+if (!$runnable instanceof Runnable) {
+    fwrite(STDERR, "Error: The provided payload is not a valid RunnableInterface object.\n");
+    exit(1);
+}
+
+// ----------
+
+if (function_exists('cli_set_process_title')) {
+    $options = getopt('', ['namespace::', 'name::', 'tag::']);
+    $processNamespace = isset($options['namespace'])
+        ? ($options['namespace'] . ' ') : '';
+    $processTag = $options['tag'] ?? 'runnable';
+
+    // Name
+    if (isset($options['name'])) {
+        $processName = $options['name'];
+    } else {
+        $className = get_class($runnable);
+        $processName = substr($className, strrpos($className, '\\') + 1);
+    }
+
+    cli_set_process_title("WinterThread {$processNamespace}-> {$processName}@$processTag");
+}
+
+// 3. Let's complete the task.
+try {
+    $runnable->run();
+    exit(0);
+} catch (\Throwable $e) {
+    fwrite(STDERR, "Uncaught exception in background process: " . $e->getMessage() . "\n");
+    fwrite(STDERR, $e->getTraceAsString() . "\n");
+    exit(1);
+}
