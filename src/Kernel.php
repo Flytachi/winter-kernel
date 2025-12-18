@@ -159,9 +159,9 @@ final class Kernel extends KernelStore
 
     private static function bindThreadRunner(): void
     {
-        $pathBin = dirname(__DIR__) . '/vendor/bin/wRunner';
+        $pathBin = self::$pathRoot . '/vendor/bin/wRunner';
         if (!file_exists($pathBin)) {
-            $pathBin = dirname(__DIR__) . '/vendor/bin/runner';
+            $pathBin = self::$pathRoot . '/vendor/bin/runner';
             if (!file_exists($pathBin)) {
                 return;
             }
