@@ -1,0 +1,44 @@
+<?php
+
+namespace Main;
+
+use Flytachi\Winter\Kernel\Factory\Mapping;
+use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Kernel\Stereotype\Output\ResponseContent;
+use Flytachi\Winter\Kernel\Stereotype\RestController;
+use Flytachi\Winter\Mapping\Annotation\GetMapping;
+use Flytachi\Winter\Mapping\OpenApi\OpenApi;
+use Flytachi\Winter\Mapping\OpenApi\Schema\SplOperation;
+use Flytachi\Winter\Mapping\OpenApi\Specification\Schema\ServerObject;
+use Flytachi\Winter\Mapping\OpenApi\Specification\SplObject;
+
+class OpenApiController extends RestController
+{
+    #[GetMapping('/collection')]
+    #[SplOperation('Collection', 'Collection - OpenApi format 3.2.0 (json file)')]
+    public function index(): Response
+    {
+        $project = basename(Kernel::$pathRoot) . ' API';
+
+        $spl = new SplObject(OpenApi::VERSION);
+        $declaration = Mapping::scanningDeclaration();
+        OpenApi::collectDeclaration($spl, $declaration);
+        $spl->tags = array_values($spl->tags);
+        $spl->info = [
+            'title' => $project,
+            'version' => '1.0.0',
+            'description' => "# **{$project}**\n\n**Update Collection:**\n"
+                . $_SERVER['HTTP_HOST'] . '/api/postman/collection'
+        ];
+        $spl->servers[] = new ServerObject('http://localhost:8000', 'Dev Server');
+//        \Flytachi\Winter\Kernel\File\JSON::write(
+//            Kernel::$pathStorage . '/' . basename(Kernel::$pathRoot) . '.openApi-collection.json',
+//            json_decode(json_encode($spl), true)
+//        );
+        return ResponseContent::json(
+            data: json_encode($spl),
+            fileName: basename(Kernel::$pathRoot) . '.openApi-collection.json',
+            isAttachment: true
+        );
+    }
+}

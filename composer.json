@@ -13,8 +13,9 @@
     "require": {
         "php": ">=8.3",
         "flytachi/winter-thread": "^1.0",
-        "flytachi/winter-edo": "^1.0",
         "flytachi/winter-mapping": "^1.0",
+        "flytachi/winter-edo": "^1.0",
+        "flytachi/winter-cache": "^1.0",
         "flytachi/file-store": "^1.0",
         "vlucas/phpdotenv": "^5.6",
         "ext-simplexml": "*"

@@ -1,0 +1,15 @@
+<?php
+
+namespace __namespace__;
+
+use Flytachi\Winter\Cache\Store\RedisStore;
+
+class __className__ extends RedisStore
+{
+    protected static string $redisConfigClassName;
+
+    public static function main(): \Redis
+    {
+        return self::init(0);
+    }
+}

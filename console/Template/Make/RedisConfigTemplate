@@ -1,0 +1,16 @@
+<?php
+
+namespace __namespace__;
+
+use Flytachi\Winter\Cache\Config\RedisConfig;
+
+class __className__ extends RedisConfig
+{
+    public function sepUp(): void
+    {
+        $this->host = env('REDIS_HOST', 'localhost');
+        $this->port = env('REDIS_PORT', 6379);
+        $this->password = env('REDIS_PASS', '');
+        $this->databaseIndex = env('REDIS_DBNAME', 0);
+    }
+}
