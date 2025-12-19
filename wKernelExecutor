@@ -3,17 +3,18 @@
 
 declare(strict_types=1);
 
+use Flytachi\Winter\Base\Log\LoggerRegistry;
 use Flytachi\Winter\Thread\Runnable;
 
 // initialization
 $fileAutoloader = dirname(__DIR__, 3) . '/bootstrap.php';
 if (file_exists($fileAutoloader)) {
     require_once $fileAutoloader;
+    $logger = LoggerRegistry::instance('Executor');
 } else {
     fwrite(STDERR, "Error: No file bootstrap.php.\n");
     exit(1);
 }
-
 
 // 1. Command line options (debugging, configure)
 $options = getopt('', ['namespace::', 'name::', 'tag::', 'debug']);
@@ -38,6 +39,7 @@ if (isset($options['debug'])) {
 $payload = stream_get_contents(STDIN);
 
 if (empty($payload)) {
+    $logger->emergency('No payload received from stdin');
     fwrite(STDERR, "Error: No payload received from stdin.\n");
     exit(1);
 }
@@ -54,6 +56,7 @@ if (function_exists('\Opis\Closure\serialize')) {
 unset($payload);
 
 if (!$runnable instanceof Runnable) {
+    $logger->emergency("The provided payload is not a valid RunnableInterface object");
     fwrite(STDERR, "Error: The provided payload is not a valid RunnableInterface object.\n");
     exit(1);
 }
@@ -82,11 +85,10 @@ try {
     $runnable->run();
     exit(0);
 } catch (\Throwable $e) {
-    \Flytachi\Winter\Base\Log\LoggerRegistry::instance('Executor')
-        ->emergency($e->getMessage(), [
-            'file' => $e->getFile(),
-            'line' => $e->getLine(),
-            'exception' => $e
-        ]);
+    $logger->emergency($e->getMessage(), [
+        'file' => $e->getFile(),
+        'line' => $e->getLine(),
+        'exception' => $e
+    ]);
     exit(1);
 }

@@ -12,6 +12,7 @@ use Flytachi\Winter\Kernel\Http\Response\ExceptionWrapper;
 use Flytachi\Winter\Kernel\Http\Response\ResponseFileContentInterface;
 use Flytachi\Winter\Kernel\Http\Response\ResponseInterface;
 use Flytachi\Winter\Kernel\Http\Response\ViewInterface;
+use Flytachi\Winter\Thread\ThreadException;
 
 final class Rendering
 {
@@ -105,9 +106,12 @@ final class Rendering
 
     private function logging(\Throwable $resource): void
     {
-        $logType = $resource instanceof Exception
-            ? $resource->getLogLevel()
-            : 'critical';
+        $logType = match (true) {
+            $resource instanceof Exception          => $resource->getLogLevel(),
+            $resource instanceof ThreadException    => 'emergency',
+            $resource instanceof \Error             => 'error',
+            default                                 => 'critical',
+        };
         if ((bool) env('DEBUG', false)) {
             LoggerRegistry::instance($resource::class)->{$logType}(sprintf(
                 "%d: %s -> %s(%d)\n#Stack trace:\n%s",
