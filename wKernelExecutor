@@ -1,13 +1,17 @@
 #!/usr/bin/env php
 <?php
 
+declare(strict_types=1);
+
 use Flytachi\Winter\Thread\Runnable;
 
-$fileAutoloader = dirname(__DIR__, 2) . '/autoload.php';
+// initialization
+$fileAutoloader = dirname(__DIR__, 3) . '/bootstrap.php';
 if (file_exists($fileAutoloader)) {
     require_once $fileAutoloader;
 } else {
-    require_once __DIR__ . '/vendor/autoload.php';
+    fwrite(STDERR, "Error: No file bootstrap.php.\n");
+    exit(1);
 }
 
 // 1. Reading all standard input data (stdin).
@@ -18,7 +22,12 @@ if (empty($payload)) {
     exit(1);
 }
 
-// 2. Decode and deserialize the object Runnable.
+// 2. Configure
+set_time_limit(0);
+ob_implicit_flush();
+ignore_user_abort(true);
+
+// 3. Decode and deserialize the object Runnable.
 if (function_exists('\Opis\Closure\serialize')) {
     $runnable = \Opis\Closure\unserialize(
         $payload,
@@ -33,8 +42,7 @@ if (!$runnable instanceof Runnable) {
     exit(1);
 }
 
-// ----------
-
+// 4. Set the process title.
 if (function_exists('cli_set_process_title')) {
     $options = getopt('', ['namespace::', 'name::', 'tag::']);
     $processNamespace = isset($options['namespace'])
@@ -52,7 +60,7 @@ if (function_exists('cli_set_process_title')) {
     cli_set_process_title("WinterThread {$processNamespace}-> {$processName}@$processTag");
 }
 
-// 3. Let's complete the task.
+// 5. Let's complete the task.
 try {
     $runnable->run();
     exit(0);

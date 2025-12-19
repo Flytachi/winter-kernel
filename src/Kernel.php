@@ -100,9 +100,8 @@ final class Kernel extends KernelStore
             return new NullLogger();
         }
 
-//        $allowedLevels = env('LOGGER_LEVEL_ALLOW');
-        $allowedLevels = 'DEBUG,INFO,NOTICE,WARNING,ERROR,CRITICAL';
-        if ($allowedLevels === null || trim($allowedLevels) === '') {
+        $allowedLevels = env('LOGGER_LEVEL_ALLOW');
+        if (empty($allowedLevels) || trim($allowedLevels) === '') {
             return new NullLogger();
         }
 
@@ -159,9 +158,9 @@ final class Kernel extends KernelStore
 
     private static function bindThreadRunner(): void
     {
-        $pathBin = self::$pathRoot . '/vendor/bin/wRunner';
+        $pathBin = self::$pathRoot . '/vendor/bin/wKernelExecutor';
         if (!file_exists($pathBin)) {
-            $pathBin = self::$pathRoot . '/vendor/bin/runner';
+            $pathBin = self::$pathRoot . '/vendor/bin/wExecutor';
             if (!file_exists($pathBin)) {
                 return;
             }
