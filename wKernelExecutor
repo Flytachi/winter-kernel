@@ -14,7 +14,27 @@ if (file_exists($fileAutoloader)) {
     exit(1);
 }
 
-// 1. Reading all standard input data (stdin).
+
+// 1. Command line options (debugging, configure)
+$options = getopt('', ['namespace::', 'name::', 'tag::', 'debug']);
+
+// Debugging / Configure
+set_time_limit(0);
+ob_implicit_flush();
+ignore_user_abort(true);
+
+if (isset($options['debug'])) {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+    ini_set('display_startup_errors', 1);
+} else {
+    error_reporting(0);
+    ini_set('display_errors', 0);
+    ini_set('display_startup_errors', 0);
+}
+
+
+// 2. Reading all standard input data (stdin).
 $payload = stream_get_contents(STDIN);
 
 if (empty($payload)) {
@@ -22,31 +42,27 @@ if (empty($payload)) {
     exit(1);
 }
 
-// 2. Configure
-set_time_limit(0);
-ob_implicit_flush();
-ignore_user_abort(true);
-
 // 3. Decode and deserialize the object Runnable.
 if (function_exists('\Opis\Closure\serialize')) {
     $runnable = \Opis\Closure\unserialize(
-        $payload,
-        \Flytachi\Winter\Thread\Thread::getSerSecurity()
+            $payload,
+            \Flytachi\Winter\Thread\Thread::getSerSecurity()
     );
 } else {
     $runnable = unserialize($payload);
 }
+unset($payload);
 
 if (!$runnable instanceof Runnable) {
     fwrite(STDERR, "Error: The provided payload is not a valid RunnableInterface object.\n");
     exit(1);
 }
 
+
 // 4. Set the process title.
 if (function_exists('cli_set_process_title')) {
-    $options = getopt('', ['namespace::', 'name::', 'tag::']);
     $processNamespace = isset($options['namespace'])
-        ? ($options['namespace'] . ' ') : '';
+            ? ($options['namespace'] . ' ') : '';
     $processTag = $options['tag'] ?? 'runnable';
 
     // Name
@@ -57,7 +73,8 @@ if (function_exists('cli_set_process_title')) {
         $processName = substr($className, strrpos($className, '\\') + 1);
     }
 
-    cli_set_process_title("WinterThread {$processNamespace}-> {$processName}@$processTag");
+    cli_set_process_title("Winter {$processNamespace}-> {$processName}@$processTag");
+    unset($processNamespace, $processTag, $processName);
 }
 
 // 5. Let's complete the task.
