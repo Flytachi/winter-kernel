@@ -9,5 +9,5 @@ use Psr\Log\LogLevel;
 
 class RouterException extends Exception
 {
-    protected string $logLevel = LogLevel::CRITICAL;
+    protected string $logLevel = LogLevel::ALERT;
 }

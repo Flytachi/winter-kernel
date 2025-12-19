@@ -107,7 +107,7 @@ final class Rendering
     {
         $logType = $resource instanceof Exception
             ? $resource->getLogLevel()
-            : 'alert';
+            : 'critical';
         if ((bool) env('DEBUG', false)) {
             LoggerRegistry::instance($resource::class)->{$logType}(sprintf(
                 "%d: %s -> %s(%d)\n#Stack trace:\n%s",

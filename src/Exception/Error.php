@@ -17,7 +17,7 @@ class Error extends Exception
     {
         $httpCode = HttpCode::tryFrom($code);
         if ($httpCode == null) {
-            $this->logLevel = LogLevel::ALERT;
+            $this->logLevel = LogLevel::CRITICAL;
         } else {
             if ($httpCode->isServerError()) {
                 $this->logLevel = LogLevel::ERROR;

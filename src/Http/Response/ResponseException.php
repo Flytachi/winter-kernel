@@ -11,5 +11,5 @@ use Psr\Log\LogLevel;
 class ResponseException extends Exception
 {
     protected $code = HttpCode::INTERNAL_SERVER_ERROR->value;
-    protected string $logLevel = LogLevel::ERROR;
+    protected string $logLevel = LogLevel::CRITICAL;
 }
