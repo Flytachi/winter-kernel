@@ -22,8 +22,7 @@ class Cfg extends Cmd
         ) {
             $this->resolution();
         } else {
-            self::printMessage("Enter argument");
-            self::print("Example: extra cfg env");
+            self::help();
         }
 
         self::printTitle("Cfg", 32);

@@ -1,6 +1,7 @@
 {
     "name": "flytachi/winter-kernel",
     "description": "Winter framework kernel",
+    "keywords": ["Winter Kernel", "winter kernel", "framework kernel", "kernel"],
     "type": "library",
     "license": "MIT",
     "version": "1.0.0",

@@ -21,8 +21,7 @@ class Db extends Cmd
         ) {
             $this->resolution();
         } else {
-            self::printMessage("Enter argument");
-            self::print("Example: extra db sql");
+            self::help();
         }
 
         self::printTitle("Db", 32);

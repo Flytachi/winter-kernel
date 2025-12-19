@@ -22,8 +22,7 @@ class Storage extends Cmd
         ) {
             $this->resolution();
         } else {
-            self::printMessage("Enter argument or options");
-            self::print("Example: extra storage init");
+            self::help();
         }
 
         self::printTitle("Storage", 32);
