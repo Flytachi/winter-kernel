@@ -85,10 +85,12 @@ try {
     $runnable->run();
     exit(0);
 } catch (\Throwable $e) {
-    $logger->emergency($e->getMessage(), [
+    $logger->alert($e->getMessage(), [
         'file' => $e->getFile(),
         'line' => $e->getLine(),
         'exception' => $e
     ]);
+    fwrite(STDERR, "Uncaught exception in background process: " . $e->getMessage() . "\n");
+    fwrite(STDERR, $e->getTraceAsString() . "\n");
     exit(1);
 }
