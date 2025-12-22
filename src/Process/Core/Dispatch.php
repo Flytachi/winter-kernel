@@ -12,10 +12,8 @@ abstract class Dispatch implements Dispatchable
     protected LoggerInterface $logger;
     protected int $pid;
 
-    public function __construct()
+    final public function __construct()
     {
-        $this->pid = getmypid();
-        $this->logger = LoggerRegistry::instance("[{$this->pid}] " . static::class);
     }
 
     public static function dispatch(mixed $data = null): int
@@ -29,6 +27,8 @@ abstract class Dispatch implements Dispatchable
 
     public static function start(mixed $data = null): void
     {
+        $runnable = new static();
+        $runnable->run();
     }
 
     final public function run(): void
@@ -43,6 +43,12 @@ abstract class Dispatch implements Dispatchable
         }
     }
 
-    abstract protected function resolutionStart(): mixed;
+    protected function resolutionStart(): mixed
+    {
+        $this->pid = getmypid();
+        $this->logger = LoggerRegistry::instance("[{$this->pid}] " . static::class);
+        return null;
+    }
+
     abstract protected function resolutionEnd(): void;
 }
