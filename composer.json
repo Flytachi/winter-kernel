@@ -19,7 +19,8 @@
         "flytachi/winter-cache": "^1.0",
         "flytachi/file-store": "^1.0",
         "vlucas/phpdotenv": "^5.6",
-        "ext-simplexml": "*"
+        "ext-simplexml": "*",
+        "ext-pcntl": "*"
     },
     "require-dev": {
         "monolog/monolog": "^3.0",
