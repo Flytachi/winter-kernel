@@ -15,6 +15,8 @@ abstract class ThreadProcess extends Dispatch
     use ThreadSignalHandler;
     use ThreadFork;
 
+    protected string $namespace = 'process';
+
     final protected function resolutionStart(): void
     {
         parent::resolutionStart();

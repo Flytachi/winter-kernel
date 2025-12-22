@@ -10,6 +10,9 @@ use Psr\Log\LoggerInterface;
 
 abstract class Dispatch implements Dispatchable
 {
+    protected string $exNamespace = 'dispatch';
+    protected ?string $exName = null;
+    protected ?string $exTag = null;
     protected LoggerInterface $logger;
     protected int $pid;
 
@@ -19,7 +22,13 @@ abstract class Dispatch implements Dispatchable
 
     final public static function dispatch(mixed $data = null): int
     {
-        $thread = new Thread(new static(), 'job');
+        $runnable = new static();
+        $thread = new Thread(
+            $runnable,
+            $runnable->exNamespace,
+            $runnable->exName,
+            $runnable->exTag
+        );
         $arguments = [];
         if (!empty($data)) {
             $storeKey = uniqid('cache-');
