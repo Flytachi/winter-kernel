@@ -4,6 +4,7 @@ namespace Flytachi\Winter\Kernel\Process\Core;
 
 use Flytachi\Winter\Base\Interface\Stereotype;
 use Flytachi\Winter\Base\Log\LoggerRegistry;
+use Flytachi\Winter\Thread\Thread;
 use Psr\Log\LoggerInterface;
 
 abstract class Dispatch implements Dispatchable
@@ -19,12 +20,15 @@ abstract class Dispatch implements Dispatchable
 
     public static function dispatch(mixed $data = null): int
     {
-        // TODO: Implement dispatch() method.
+        $thread = new Thread(
+            new static(),
+            'job',
+        );
+        return $thread->start();
     }
 
     public static function start(mixed $data = null): void
     {
-        // TODO: Implement start() method.
     }
 
     final public function run(): void
