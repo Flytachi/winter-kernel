@@ -21,7 +21,7 @@ abstract class Dispatch implements Dispatchable
     {
         $thread = new Thread(new static(), 'job');
         $arguments = [];
-        if ($data !== null) {
+        if ($data !== null || empty($data)) {
             $storeKey = uniqid('cache-');
             PStore::push($storeKey, $data);
             $arguments['storeKey'] = $storeKey;
