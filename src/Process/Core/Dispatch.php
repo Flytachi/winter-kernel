@@ -21,7 +21,7 @@ abstract class Dispatch implements Dispatchable
     {
         $thread = new Thread(new static(), 'job');
         $arguments = [];
-        if ($data !== null || empty($data)) {
+        if (!empty($data)) {
             $storeKey = uniqid('cache-');
             PStore::push($storeKey, $data);
             $arguments['storeKey'] = $storeKey;
@@ -32,15 +32,22 @@ abstract class Dispatch implements Dispatchable
     public static function start(mixed $data = null): void
     {
         $runnable = new static();
-        $runnable->run([]);
+        $arguments = [];
+        if (!empty($data)) {
+            $storeKey = uniqid('cache-');
+            PStore::push($storeKey, $data);
+            $arguments['storeKey'] = $storeKey;
+        }
+        $runnable->run($arguments);
     }
 
     final public function run(array $args): void
     {
         try {
             $this->resolutionStart();
-            $this->logger->alert('args: ' . print_r($args, true));
-            $this->resolution($args);
+            $this->resolution(isset($args['storeKey'])
+                ? PStore::pop($args['storeKey'])
+                : null);
         } catch (\Throwable $e) {
             $this->logger->critical($e->getMessage());
         } finally {

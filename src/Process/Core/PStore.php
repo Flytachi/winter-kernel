@@ -10,15 +10,15 @@ final class PStore
 {
     private static string $ES_NAME = 'threads/dispatcher';
 
-    final public static function push(string $filename, mixed $data): void
+    final public static function push(string $storeKey, mixed $data): void
     {
-        Kernel::store(self::$ES_NAME)->write($filename, $data);
+        Kernel::store(self::$ES_NAME)->write($storeKey, $data);
     }
 
-    final public static function pop(string $filename): mixed
+    final public static function pop(string $storeKey): mixed
     {
-        $data = Kernel::store(self::$ES_NAME)->read($filename);
-        Kernel::store(self::$ES_NAME)->del($filename);
+        $data = Kernel::store(self::$ES_NAME)->read($storeKey);
+        Kernel::store(self::$ES_NAME)->del($storeKey);
         return $data;
     }
 }
