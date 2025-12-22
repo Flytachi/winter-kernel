@@ -15,6 +15,7 @@ abstract class ThreadJob extends Dispatch
     {
         $data = parent::resolutionStart();
         if (PHP_SAPI === 'cli') {
+            pcntl_async_signals(true);
             pcntl_signal(SIGHUP, function () {
                 $this->signClose();
             });

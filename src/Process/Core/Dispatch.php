@@ -2,7 +2,6 @@
 
 namespace Flytachi\Winter\Kernel\Process\Core;
 
-use Flytachi\Winter\Base\Interface\Stereotype;
 use Flytachi\Winter\Base\Log\LoggerRegistry;
 use Flytachi\Winter\Thread\Thread;
 use Psr\Log\LoggerInterface;
