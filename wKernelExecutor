@@ -84,16 +84,16 @@ if (function_exists('cli_set_process_title')) {
 try {
 
     // Custom args
-    $rawOptions = getopt('', ['arg-::']);
     $customArgs = [];
-    if (isset($rawOptions['arg-'])) {
-        $args = is_array($rawOptions['arg-']) ? $rawOptions['arg-'] : [$rawOptions['arg-']];
-        foreach ($args as $arg) {
-            if (str_contains($arg, '=')) {
-                list($key, $value) = explode('=', $arg, 2);
+    for ($i = 1; $i < count($argv); $i++) {
+        $arg = $argv[$i];
+        if (str_starts_with($arg, '--arg-')) {
+            $argContent = substr($arg, 6);
+            if (str_contains($argContent, '=')) {
+                list($key, $value) = explode('=', $argContent, 2);
                 $customArgs[$key] = $value;
             } else {
-                $customArgs[$arg] = true;
+                $customArgs[$argContent] = true;
             }
         }
     }
