@@ -13,7 +13,7 @@ abstract class ThreadJob extends Dispatch
     use ThreadJobHandler;
     use ThreadSignalHandler;
 
-    protected string $namespace = 'job';
+    protected string $exNamespace = 'job';
 
     final protected function resolutionStart(): void
     {
