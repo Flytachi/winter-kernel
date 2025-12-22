@@ -82,7 +82,23 @@ if (function_exists('cli_set_process_title')) {
 
 // 5. Let's complete the task.
 try {
-    $runnable->run();
+
+    // Custom args
+    $rawOptions = getopt('', ['arg-::']);
+    $customArgs = [];
+    if (isset($rawOptions['arg-'])) {
+        $args = is_array($rawOptions['arg-']) ? $rawOptions['arg-'] : [$rawOptions['arg-']];
+        foreach ($args as $arg) {
+            if (str_contains($arg, '=')) {
+                list($key, $value) = explode('=', $arg, 2);
+                $customArgs[$key] = $value;
+            } else {
+                $customArgs[$arg] = true;
+            }
+        }
+    }
+
+    $runnable->run($customArgs);
     exit(0);
 } catch (\Throwable $e) {
     $logger->alert($e->getMessage(), [

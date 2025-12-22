@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Flytachi\Winter\Kernel\Process\Core;
 
 use Flytachi\Winter\Thread\Runnable;

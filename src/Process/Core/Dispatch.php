@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Flytachi\Winter\Kernel\Process\Core;
 
 use Flytachi\Winter\Base\Log\LoggerRegistry;
@@ -17,24 +19,28 @@ abstract class Dispatch implements Dispatchable
 
     public static function dispatch(mixed $data = null): int
     {
-        $thread = new Thread(
-            new static(),
-            'job',
-        );
-        return $thread->start();
+        $thread = new Thread(new static(), 'job');
+        $arguments = [];
+        if ($data !== null) {
+            $storeKey = uniqid('cache-');
+            PStore::push($storeKey, $data);
+            $arguments['storeKey'] = $storeKey;
+        }
+        return $thread->start(arguments: $arguments);
     }
 
     public static function start(mixed $data = null): void
     {
         $runnable = new static();
-        $runnable->run();
+        $runnable->run([]);
     }
 
-    final public function run(): void
+    final public function run(array $args): void
     {
         try {
-            $data = $this->resolutionStart();
-            $this->resolution($data);
+            $this->resolutionStart();
+            $this->logger->alert('args: ' . print_r($args, true));
+            $this->resolution($args);
         } catch (\Throwable $e) {
             $this->logger->critical($e->getMessage());
         } finally {
@@ -42,11 +48,10 @@ abstract class Dispatch implements Dispatchable
         }
     }
 
-    protected function resolutionStart(): mixed
+    protected function resolutionStart(): void
     {
         $this->pid = getmypid();
         $this->logger = LoggerRegistry::instance("[{$this->pid}] " . static::class);
-        return null;
     }
 
     abstract protected function resolutionEnd(): void;

@@ -11,9 +11,9 @@ abstract class ThreadJob extends Dispatch
 {
     use ThreatJobHandler;
 
-    final protected function resolutionStart(): mixed
+    final protected function resolutionStart(): void
     {
-        $data = parent::resolutionStart();
+        parent::resolutionStart();
         if (PHP_SAPI === 'cli') {
             pcntl_async_signals(true);
             pcntl_signal(SIGHUP, function () {
@@ -26,7 +26,6 @@ abstract class ThreadJob extends Dispatch
                 $this->signTermination();
             });
         }
-        return $data;
     }
 
     final protected function resolutionEnd(): void
