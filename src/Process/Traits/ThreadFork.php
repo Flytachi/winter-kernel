@@ -35,7 +35,7 @@ trait ThreadFork
                             $function();
                         } catch (\Throwable $exception) {
                             $this->logger->critical(
-                                'Process fork logic =>' . $exception->getMessage()
+                                'Process fork logic => ' . $exception->getMessage()
                                 . (env('DEBUG', false)
                                     ? "\n" . $exception->getTraceAsString()
                                     : ''
@@ -44,7 +44,7 @@ trait ThreadFork
                         }
                     } catch (\Throwable $exception) {
                         $this->logger->critical(
-                            'Process fork =>' . $exception->getMessage()
+                            'Process fork => ' . $exception->getMessage()
                             . (env('DEBUG', false)
                                 ? "\n" . $exception->getTraceAsString()
                                 : ''
@@ -91,12 +91,12 @@ trait ThreadFork
                     // Child process
                     try {
                         $this->pid = getmypid();
-                        $this->forkStart();
+                        $this->forkStart('anonymous');
                         try {
                             $this->anonymousResolution($data);
                         } catch (\Throwable $exception) {
                             $this->logger->critical(
-                                'Process fork logic (anonymous) =>' . $exception->getMessage()
+                                'Process fork logic (anonymous) => ' . $exception->getMessage()
                                 . (env('DEBUG', false)
                                     ? "\n" . $exception->getTraceAsString()
                                     : ''
@@ -105,7 +105,7 @@ trait ThreadFork
                         }
                     } catch (\Throwable $exception) {
                         $this->logger->critical(
-                            'Process fork (anonymous) =>' . $exception->getMessage()
+                            'Process fork (anonymous) => ' . $exception->getMessage()
                             . (env('DEBUG', false)
                                 ? "\n" . $exception->getTraceAsString()
                                 : ''
@@ -137,12 +137,23 @@ trait ThreadFork
         }
     }
 
-    protected function forkStart(): void
+    protected function forkStart(string $tag): void
     {
         $this->iAmChild = true;
         $this->logger = LoggerRegistry::instance("[{$this->pid}] " . static::class);
-        if (PHP_SAPI === 'cli') {
-            cli_set_process_title('extra thread ' . static::class);
+        if (
+            PHP_SAPI === 'cli'
+            && empty($_SERVER['REMOTE_ADDR'])
+            && function_exists('pcntl_signal')
+        ) {
+            $parentTitle = cli_get_process_title();
+            $title = str_replace(
+                $this->exNamespace,
+                ($this->exNamespace . '(fork)'),
+                $parentTitle
+            );
+            $title = str_replace($this->exTag, $tag, $title);
+            cli_set_process_title($title);
         }
     }
 

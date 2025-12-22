@@ -12,7 +12,7 @@ abstract class Dispatch implements Dispatchable
 {
     protected string $exNamespace = 'dispatch';
     protected ?string $exName = null;
-    protected ?string $exTag = null;
+    protected string $exTag = 'runnable';
     protected LoggerInterface $logger;
     protected int $pid;
 
