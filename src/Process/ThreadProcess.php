@@ -38,6 +38,7 @@ abstract class ThreadProcess extends Dispatch
             if (!is_null($callableEndChild)) {
                 $callableEndChild($pid, $status);
             }
+            pcntl_signal_dispatch();
         }
     }
 
@@ -60,6 +61,7 @@ abstract class ThreadProcess extends Dispatch
                 if (!is_null($callableEndChild)) {
                     $callableEndChild($pid, $status);
                 }
+                pcntl_signal_dispatch();
             }
         }
     }
