@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Process\Traits;
 
 use Flytachi\Winter\Base\Log\LoggerRegistry;
-use http\Exception\RuntimeException;
+use RuntimeException;
 
 trait ThreadFork
 {
@@ -35,14 +35,20 @@ trait ThreadFork
                             $function();
                         } catch (\Throwable $exception) {
                             $this->logger->critical(
-                                "[$this->pid] Thread Logic => " . $exception->getMessage()
-                                . "\n" . $exception->getTraceAsString()
+                                'Process fork logic =>' . $exception->getMessage()
+                                . (env('DEBUG', false)
+                                    ? "\n" . $exception->getTraceAsString()
+                                    : ''
+                                )
                             );
                         }
                     } catch (\Throwable $exception) {
                         $this->logger->critical(
-                            "[$this->pid] Thread: " . $exception->getMessage()
-                            . "\n" . $exception->getTraceAsString()
+                            'Process fork =>' . $exception->getMessage()
+                            . (env('DEBUG', false)
+                                ? "\n" . $exception->getTraceAsString()
+                                : ''
+                            )
                         );
                     } finally {
                         $this->forkEnd();
@@ -59,7 +65,13 @@ trait ThreadFork
                 throw new RuntimeException("Unable to fork process.");
             }
         } catch (\Throwable $e) {
-            $this->logger->alert($e->getMessage() . "\n" . $e->getTraceAsString());
+            $this->logger->alert(
+                $e->getMessage()
+                . (env('DEBUG', false)
+                    ? "\n" . $e->getTraceAsString()
+                    : ''
+                )
+            );
             return 0;
         }
     }
@@ -70,7 +82,7 @@ trait ThreadFork
      * @param mixed $data The data to be passed to the proc method. Default is null.
      * @return int The PID (Process ID) of the child process if the process was successfully forked, otherwise null.
      */
-    final protected function forkProc(mixed $data = null): int
+    final protected function forkAnonymous(mixed $data = null): int
     {
         try {
             $pid = pcntl_fork();
@@ -81,17 +93,23 @@ trait ThreadFork
                         $this->pid = getmypid();
                         $this->forkStart();
                         try {
-                            $this->forkResolution($data);
+                            $this->anonymousResolution($data);
                         } catch (\Throwable $exception) {
                             $this->logger->critical(
-                                "[$this->pid] Thread(proc) Logic => " . $exception->getMessage()
-                                . "\n" . $exception->getTraceAsString()
+                                'Process fork logic (anonymous) =>' . $exception->getMessage()
+                                . (env('DEBUG', false)
+                                    ? "\n" . $exception->getTraceAsString()
+                                    : ''
+                                )
                             );
                         }
                     } catch (\Throwable $exception) {
                         $this->logger->critical(
-                            "[$this->pid] Thread(proc): " . $exception->getMessage()
-                            . "\n" . $exception->getTraceAsString()
+                            'Process fork (anonymous) =>' . $exception->getMessage()
+                            . (env('DEBUG', false)
+                                ? "\n" . $exception->getTraceAsString()
+                                : ''
+                            )
                         );
                     } finally {
                         $this->forkEnd();
@@ -108,7 +126,13 @@ trait ThreadFork
                 throw new RuntimeException("Unable to fork process.");
             }
         } catch (\Throwable $e) {
-            $this->logger->alert($e->getMessage() . "\n" . $e->getTraceAsString());
+            $this->logger->alert(
+                $e->getMessage()
+                . (env('DEBUG', false)
+                    ? "\n" . $e->getTraceAsString()
+                    : ''
+                )
+            );
             return 0;
         }
     }
@@ -126,8 +150,8 @@ trait ThreadFork
     {
     }
 
-    public function forkResolution(mixed $data = null): void
+    public function anonymousResolution(mixed $data = null): void
     {
-        $this->logger->info("-fork- running");
+        $this->logger->info("-forkAnonymous- running");
     }
 }

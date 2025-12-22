@@ -59,7 +59,13 @@ abstract class Dispatch implements Dispatchable
                 ? PStore::pop($args['storeKey'])
                 : null);
         } catch (\Throwable $e) {
-            $this->logger->critical($e->getMessage());
+            $this->logger->critical(
+                $e->getMessage()
+                . (env('DEBUG', false)
+                    ? "\n" . $e->getTraceAsString()
+                    : ''
+                )
+            );
         } finally {
             $this->resolutionEnd();
         }
