@@ -17,8 +17,8 @@ trait ThreadJobHandler
      */
     private function signInterrupt(): never
     {
-        $this->asInterrupt();
         $this->resolutionEnd();
+        $this->asInterrupt();
         exit();
     }
 
@@ -32,8 +32,8 @@ trait ThreadJobHandler
      */
     private function signTermination(): never
     {
-        $this->asTermination();
         $this->resolutionEnd();
+        $this->asTermination();
         exit(1);
     }
 
@@ -44,8 +44,8 @@ trait ThreadJobHandler
      */
     private function signClose(): never
     {
-        $this->asClose();
         $this->resolutionEnd();
+        $this->asClose();
         exit(1);
     }
 

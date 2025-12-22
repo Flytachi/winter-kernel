@@ -20,7 +20,8 @@
         "flytachi/file-store": "^1.0",
         "vlucas/phpdotenv": "^5.6",
         "ext-simplexml": "*",
-        "ext-pcntl": "*"
+        "ext-pcntl": "*",
+        "ext-posix": "*"
     },
     "require-dev": {
         "monolog/monolog": "^3.0",
