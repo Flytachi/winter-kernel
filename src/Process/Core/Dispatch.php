@@ -17,7 +17,7 @@ abstract class Dispatch implements Dispatchable
     {
     }
 
-    public static function dispatch(mixed $data = null): int
+    final public static function dispatch(mixed $data = null): int
     {
         $thread = new Thread(new static(), 'job');
         $arguments = [];
@@ -26,10 +26,11 @@ abstract class Dispatch implements Dispatchable
             PStore::push($storeKey, $data);
             $arguments['storeKey'] = $storeKey;
         }
+
         return $thread->start(arguments: $arguments);
     }
 
-    public static function start(mixed $data = null): void
+    final public static function start(mixed $data = null): void
     {
         $runnable = new static();
         $arguments = [];

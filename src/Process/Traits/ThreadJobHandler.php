@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Process\Traits;
 
-trait ThreatJobHandler
+trait ThreadJobHandler
 {
     /**
      * Signs an interrupt and terminates the execution of the current script.
