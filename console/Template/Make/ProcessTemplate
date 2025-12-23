@@ -1,0 +1,23 @@
+<?php
+
+namespace __namespace__;
+
+use Flytachi\Winter\Kernel\Stereotype\Process;
+
+class __className__ extends Process
+{
+    public function resolution(mixed $data = null): void
+    {
+        $this->logger->info('START');
+        $pid = $this->forkAnonymous();
+        $this->wait($pid, function ($pid, $status) {
+            $this->logger->info("fork finally (status {$status})");
+        });
+        $this->logger->info('END');
+    }
+
+    public function anonymousResolution(mixed $data = null): void
+    {
+        $this->logger->info("fork running");
+    }
+}

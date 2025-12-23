@@ -50,13 +50,13 @@ class Thread extends Cmd
             ) {
                 $param = $this->args['arguments'][2];
                 $class = str_replace(
+                    '/',
+                    '\\',
+                    implode('/', array_map(fn($word) => ucfirst($word), explode(
                         '/',
-                        '\\',
-                        implode('/', array_map(fn($word) => ucfirst($word), explode(
-                            '/',
-                            str_replace('.', '/', $param)
-                        )))
-                    );
+                        str_replace('.', '/', $param)
+                    )))
+                );
                 if (class_exists($class)) {
                     if (
                         array_key_exists(0, $this->args['flags'])
@@ -110,11 +110,9 @@ class Thread extends Cmd
 
         // thread
         self::printLabel("run", $cl);
+        self::print("name - class name, with namespaces(example '... run main.threads.exampleJob')", $cl);
         self::printMessage("flags - additional args for running", $cl);
         self::print("d - start process in background", $cl);
-        self::printMessage("options - data for running", $cl);
-        self::print("name - class name, with namespaces(example 'main.threads.exampleJob')", $cl);
-        self::print("cache - name cache file used in process (serializable)", $cl);
         self::printLabel("run", $cl);
 
         self::printTitle("Thread Help", $cl);

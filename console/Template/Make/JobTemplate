@@ -1,0 +1,13 @@
+<?php
+
+namespace __namespace__;
+
+use Flytachi\Winter\Kernel\Stereotype\Job;
+
+class __className__ extends Job
+{
+    public function resolution(mixed $data = null): void
+    {
+        $this->logger->info('RUN');
+    }
+}
