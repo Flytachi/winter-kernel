@@ -6,7 +6,6 @@ namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\Kernel\Kernel;
-use Flytachi\Winter\Kernel\Process\Core\Dispatchable;
 
 class Run extends Cmd
 {
@@ -38,9 +37,6 @@ class Run extends Cmd
                     break;
                 case 'script':
                     $this->scriptArg();
-                    break;
-                case 'thread':
-                    $this->threadArg();
                     break;
                 default:
                     self::printMessage("Argument '{$this->args['arguments'][1]}' not found");
@@ -91,66 +87,6 @@ class Run extends Cmd
         }
     }
 
-    private function threadArg(): void
-    {
-        if (extension_loaded('pcntl') && pcntl_async_signals()) {
-            if (
-                array_key_exists('name', $this->args['options'])
-                && $this->args['options']['name']
-            ) {
-                $class = $this->args['options']['name'];
-                if (class_exists($class)) {
-                    if (
-                        array_key_exists(0, $this->args['flags'])
-                        && $this->args['flags'][0] == 'd'
-                    ) {
-//                        $this->threadRunnableToBack($class);
-                    } else {
-                        $this->threadRunnable($class);
-                    }
-                } else {
-                    self::printMessage("The specified class '{$class}' was not found");
-                }
-            } else {
-                self::printMessage("name option not specified");
-            }
-        } else {
-            self::printMessage("Asynchronous pcntl signals are not enabled", 31);
-        }
-    }
-
-    /**
-     * @param class-string<Dispatchable> $class
-     * @return void
-     */
-    private function threadRunnable(string $class): void
-    {
-        self::printMessage("{$class} start", 32);
-        ($class)::start();
-        self::printMessage("{$class} end", 32);
-    }
-
-    private function threadRunnableToBack(string $class): void
-    {
-//        // Cache
-//        $cache = null;
-//        if (array_key_exists('cache', $this->args['options'])) {
-//            $filePath = Kernel::$pathStorageCache . '/' . $this->args['options']['cache'];
-//            if (is_file($filePath)) {
-//                $cache = $this->args['options']['cache'];
-//            }
-//        }
-//
-//        $processId = exec(sprintf(
-//            "php extra run thread --name='%s' %s > %s 2>&1 & echo $!",
-//            $class,
-//            ($cache ? "--cache='{$cache}'" : ''),
-//            "/dev/null"
-//        ));
-//        self::printMessage("$class started in background!", 32);
-//        self::printMessage("PID: " . $processId, 32);
-    }
-
     public static function help(): void
     {
         $cl = 34;
@@ -160,7 +96,6 @@ class Run extends Cmd
         self::printMessage("args - command", $cl);
         self::print("serve - starting the server (default address '" . self::HOST . ':' . self::PORT . "')", $cl);
         self::print("script - run a custom command (specify the script name)", $cl);
-//        self::print("thread - run the 'Thread' task in the foreground (to run in the background use -d)", $cl);
 
         // serve
         self::printLabel("serve", $cl);
@@ -168,15 +103,6 @@ class Run extends Cmd
         self::print("host - hostname (default " . self::HOST . ")", $cl);
         self::print("port - port (default " . self::PORT . ")", $cl);
         self::printLabel("serve", $cl);
-
-        // thread
-//        self::printLabel("thread", $cl);
-//        self::printMessage("flags - additional args for running", $cl);
-//        self::print("d - start process in background", $cl);
-//        self::printMessage("options - data for running", $cl);
-//        self::print("name - class name, with namespaces(example 'Main\Threads\ExampleJob')", $cl);
-//        self::print("cache - name cache file used in process (serializable)", $cl);
-//        self::printLabel("thread", $cl);
 
         self::printTitle("Run Help", $cl);
     }
