@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Kernel\Process\Core\Dispatchable;
 
 class Run extends Cmd
 {
@@ -92,49 +93,45 @@ class Run extends Cmd
 
     private function threadArg(): void
     {
-        dd('not working');
-//        if (extension_loaded('pcntl') && pcntl_async_signals()) {
-//            if (
-//                array_key_exists('name', $this->args['options'])
-//                && $this->args['options']['name']
-//            ) {
-//                $class = $this->args['options']['name'];
-//                if (class_exists($class)) {
-//                    if (
-//                        array_key_exists(0, $this->args['flags'])
-//                        && $this->args['flags'][0] == 'd'
-//                    ) {
+        if (extension_loaded('pcntl') && pcntl_async_signals()) {
+            if (
+                array_key_exists('name', $this->args['options'])
+                && $this->args['options']['name']
+            ) {
+                $class = $this->args['options']['name'];
+                if (class_exists($class)) {
+                    if (
+                        array_key_exists(0, $this->args['flags'])
+                        && $this->args['flags'][0] == 'd'
+                    ) {
 //                        $this->threadRunnableToBack($class);
-//                    } else {
-//                        $this->threadRunnable($class);
-//                    }
-//                } else {
-//                    self::printMessage("The specified class '{$class}' was not found");
-//                }
-//            } else {
-//                self::printMessage("name option not specified");
-//            }
-//        } else {
-//            self::printMessage("Asynchronous pcntl signals are not enabled", 31);
-//        }
+                    } else {
+                        $this->threadRunnable($class);
+                    }
+                } else {
+                    self::printMessage("The specified class '{$class}' was not found");
+                }
+            } else {
+                self::printMessage("name option not specified");
+            }
+        } else {
+            self::printMessage("Asynchronous pcntl signals are not enabled", 31);
+        }
     }
-//
-//    private function threadRunnable(string $class): void
-//    {
-//        // Cache Data
-//        $data = null;
-//        if (array_key_exists('cache', $this->args['options'])) {
-//            $data = Kernel::store(Dispatcher::ES_NAME)->read($this->args['options']['cache']);
-//            Kernel::store(Dispatcher::ES_NAME)->del($this->args['options']['cache']);
-//        }
-//
-//        self::printMessage("{$class} start", 32);
-//        ($class)::start($data);
-//        self::printMessage("{$class} end", 32);
-//    }
-//
-//    private function threadRunnableToBack(string $class): void
-//    {
+
+    /**
+     * @param class-string<Dispatchable> $class
+     * @return void
+     */
+    private function threadRunnable(string $class): void
+    {
+        self::printMessage("{$class} start", 32);
+        ($class)::start();
+        self::printMessage("{$class} end", 32);
+    }
+
+    private function threadRunnableToBack(string $class): void
+    {
 //        // Cache
 //        $cache = null;
 //        if (array_key_exists('cache', $this->args['options'])) {
@@ -152,7 +149,7 @@ class Run extends Cmd
 //        ));
 //        self::printMessage("$class started in background!", 32);
 //        self::printMessage("PID: " . $processId, 32);
-//    }
+    }
 
     public static function help(): void
     {
