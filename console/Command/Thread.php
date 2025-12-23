@@ -94,23 +94,9 @@ class Thread extends Cmd
      */
     private function threadRunnableToBack(string $class): void
     {
-//        // Cache
-//        $cache = null;
-//        if (array_key_exists('cache', $this->args['options'])) {
-//            $filePath = Kernel::$pathStorageCache . '/' . $this->args['options']['cache'];
-//            if (is_file($filePath)) {
-//                $cache = $this->args['options']['cache'];
-//            }
-//        }
-//
-//        $processId = exec(sprintf(
-//            "php extra run thread --name='%s' %s > %s 2>&1 & echo $!",
-//            $class,
-//            ($cache ? "--cache='{$cache}'" : ''),
-//            "/dev/null"
-//        ));
-//        self::printMessage("$class started in background!", 32);
-//        self::printMessage("PID: " . $processId, 32);
+        $processId = ($class)::dispatch();
+        self::printMessage("$class started in background!", 32);
+        self::printMessage("PID: " . $processId, 32);
     }
 
     public static function help(): void
