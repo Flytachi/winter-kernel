@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\Edo\Declaration;
+use Flytachi\Winter\Edo\Mapping\Structure\Table;
 use Flytachi\Winter\Kernel\Factory\EdoMapping;
 
 class Db extends Cmd

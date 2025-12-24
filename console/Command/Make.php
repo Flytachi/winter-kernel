@@ -53,7 +53,7 @@ class Make extends Cmd
             if (in_array('s', $this->args['flags'])) {
                 $this->createService($templateName);
             }
-            if (in_array('l', $this->args['flags'])) {
+            if (in_array('m', $this->args['flags'])) {
                 $this->createMiddleware($templateName);
             }
             if (in_array('r', $this->args['flags'])) {
@@ -62,8 +62,8 @@ class Make extends Cmd
             if (in_array('t', $this->args['flags'])) {
                 $this->createStore($templateName);
             }
-            if (in_array('m', $this->args['flags'])) {
-                $this->createModel($templateName);
+            if (in_array('e', $this->args['flags'])) {
+                $this->createEntity($templateName);
             }
             if (in_array('d', $this->args['flags'])) {
                 $this->createDto($templateName);
@@ -71,7 +71,7 @@ class Make extends Cmd
             if (in_array('q', $this->args['flags'])) {
                 $this->createRequest($templateName);
             }
-            if (in_array('e', $this->args['flags'])) {
+            if (in_array('p', $this->args['flags'])) {
                 $this->createResponse($templateName);
             }
             if (in_array('j', $this->args['flags'])) {
@@ -80,8 +80,8 @@ class Make extends Cmd
             if (in_array('p', $this->args['flags'])) {
                 $this->createProcess($templateName);
             }
-            if (in_array('u', $this->args['flags'])) {
-                $this->createCluster($templateName);
+            if (in_array('y', $this->args['flags'])) {
+                $this->createDaemon($templateName);
             }
             if (in_array('w', $this->args['flags'])) {
                 $this->createWebSocket($templateName);
@@ -155,6 +155,8 @@ class Make extends Cmd
         $info = $this->getInfo($name, 'Middleware', 'MiddlewareTemplate');
         $this->smartInfo(
             $info,
+            'Middlewares',
+            'Middleware',
             'Controllers/Middlewares',
             'Controllers/Middleware',
             'Controller/Middlewares',
@@ -162,9 +164,7 @@ class Make extends Cmd
             'Utils/Middlewares',
             'Utils/Middleware',
             'Util/Middlewares',
-            'Util/Middleware',
-            'Middlewares',
-            'Middleware'
+            'Util/Middleware'
         );
         $code = file_get_contents($info['template']);
         $code = str_replace("__namespace__", $info['namespace'], $code);
@@ -199,17 +199,17 @@ class Make extends Cmd
         $this->createFile($info['className'], $info['path'], $code, 'store');
     }
 
-    private function createModel(string $name): void
+    private function createEntity(string $name): void
     {
-        $info = $this->getInfo($name, 'Model', 'ModelTemplate');
+        $info = $this->getInfo($name, '', 'EntityTemplate');
         $this->smartInfo(
             $info,
+            'Entity',
+            'Entities',
             'Entity/Models',
             'Entity/Model',
             'Entities/Models',
             'Entities/Model',
-            'Models',
-            'Model'
         );
         $code = file_get_contents($info['template']);
         $code = str_replace("__namespace__", $info['namespace'], $code);
@@ -222,9 +222,9 @@ class Make extends Cmd
         $info = $this->getInfo($name, 'Dto', 'DtoTemplate');
         $this->smartInfo(
             $info,
+            'Dto',
             'Entity/Dto',
             'Entities/Dto',
-            'Dto',
             'Entity',
             'Entities'
         );
@@ -239,14 +239,13 @@ class Make extends Cmd
         $info = $this->getInfo($name, 'Request', 'RequestTemplate');
         $this->smartInfo(
             $info,
+            'Requests',
+            'Request',
             'Entity/Requests',
             'Entity/Request',
             'Entities/Requests',
             'Entities/Request',
-            'Requests',
-            'Request',
-            'Entity',
-            'Entities'
+
         );
         $code = file_get_contents($info['template']);
         $code = str_replace("__namespace__", $info['namespace'], $code);
@@ -314,17 +313,17 @@ class Make extends Cmd
         $this->createFile($info['className'], $info['path'], $code, 'process');
     }
 
-    private function createCluster(string $name): void
+    private function createDaemon(string $name): void
     {
-        $info = $this->getInfo($name, 'Cluster', 'ClusterTemplate');
+        $info = $this->getInfo($name, 'Daemon', 'DaemonTemplate');
         $this->smartInfo(
             $info,
-            'Threads/Clusters',
-            'Threads/Cluster',
-            'Thread/Clusters',
-            'Thread/Cluster',
-            'Clusters',
-            'Cluster',
+            'Threads/Daemons',
+            'Threads/Daemon',
+            'Thread/Daemons',
+            'Thread/Daemon',
+            'Daemons',
+            'Daemon',
             'Threads',
             'Thread'
         );
@@ -446,11 +445,11 @@ class Make extends Cmd
                 case "Repository":
                     $way = 'Repositories' . $way;
                     break;
-                case "Model":
-                    $way = 'Models' . $way;
+                case "Entity":
+                    $way = 'Entities' . $way;
                     break;
                 case "Dto":
-                    $way = 'Entity' . $way;
+                    $way = 'Dto' . $way;
                     break;
                 case "Request":
                     $way = 'Requests' . $way;
@@ -458,7 +457,7 @@ class Make extends Cmd
                 case "Job":
                     $way = 'Jobs' . $way;
                     break;
-                case "Cluster":
+                case "Daemon":
                 case "Process":
                     $way = 'Processes' . $way;
                     break;
@@ -501,19 +500,19 @@ class Make extends Cmd
         self::print("a - Template RestController, prefix RestController", $cl);
         self::print("c - Template Controller, prefix Controller", $cl);
         self::print("", $cl);
-        self::print("m - Template ModelBase, prefix Model", $cl);
+        self::print("e - Template Entity, prefix Model", $cl);
         self::print("d - Template DtoObject, prefix Dto", $cl);
         self::print("q - Template RequestObject, prefix Request", $cl);
-        self::print("e - Template Custom Response", $cl);
+        self::print("p - Template Custom Response", $cl);
         self::print("", $cl);
         self::print("s - Template Service, prefix Service", $cl);
-        self::print("l - Template Middleware, prefix Middleware", $cl);
+        self::print("m - Template Middleware, prefix Middleware", $cl);
         self::print("r - Template Repository, prefix Repository", $cl);
         self::print("t - Template Store, prefix Store", $cl);
         self::print("", $cl);
         self::print("j - Template Job, prefix Job", $cl);
         self::print("p - Template Process, prefix Process", $cl);
-        self::print("u - Template Cluster, prefix Cluster", $cl);
+        self::print("Y - Template Daemon, prefix Daemon", $cl);
         self::print("w - Template WebSocket, prefix WebSocket", $cl);
         self::print("", $cl);
         self::print("D - Template DbConfig, prefix Config", $cl);
