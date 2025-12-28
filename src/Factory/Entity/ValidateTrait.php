@@ -474,7 +474,7 @@ trait ValidateTrait
         $dateTime = DateTime::createFromFormat($format, $value);
         $errors = DateTime::getLastErrors();
 
-        if (!$dateTime || $errors['warning_count'] > 0 || $errors['error_count'] > 0) {
+        if (!$dateTime || $errors) {
             RequestException::throw("Field '{$field}' must match format {$format}.");
         }
     }
