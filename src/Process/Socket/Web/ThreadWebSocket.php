@@ -120,7 +120,12 @@ abstract class ThreadWebSocket extends Dispatch
             $this->logger->critical('handlerDisconnect: ' . $exception->getMessage());
         }
 
-        $frame = WebSocketProtocol::encode('Connection closed', 'close');
+        $frame = WebSocketProtocol::encode(
+            'Connection closed',
+            'close',
+            false,
+            1000
+        );
         @fwrite($resource->getConnect(), $frame);
         @fclose($resource->getConnect());
         unset($this->connects[(string) $resource]);
@@ -186,8 +191,13 @@ abstract class ThreadWebSocket extends Dispatch
                 $resource = $this->connects[(string) $connect];
                 $data = @fread($connect, 65535);
 
-                if ($data === '' || $data === false) {
+                if ($data === false || ($data === '' && feof($connect))) {
+                    $this->logger->notice("Client {$resource} has disconnected (EOF).");
                     $this->disconnectClient($resource);
+                    continue;
+                }
+
+                if ($data === '') {
                     continue;
                 }
 
@@ -199,7 +209,6 @@ abstract class ThreadWebSocket extends Dispatch
                     }
 
                     $resource->readBuffer = substr($resource->readBuffer, $decodedFrame->frameLength);
-
                     $msg = $decodedFrame->msg;
 
                     if ($msg->type === 'error' || $msg->type === 'close') {
@@ -264,79 +273,4 @@ abstract class ThreadWebSocket extends Dispatch
 
         $this->logger->debug("Queued " . strlen($frame) . " bytes to send to {$resource}");
     }
-
-
-//    private function listen(int $rps): void
-//    {
-//        while (true) {
-//
-//            $read = $this->resourceConnects;
-//            $read[] = $this->resourceConnection;
-//            $write = $except = null;
-//            if (
-//                !@stream_select(
-//                    $read,
-//                    $write,
-//                    $except,
-//                    0,
-//                    ($rps < 1000 ? 1_000_000 / $rps : 1000)
-//                )
-//            ) {
-//                continue;
-//            }
-//
-//            // new connection
-//            if (in_array($this->resourceConnection, $read)) {
-//                if (
-//                    ($connect = stream_socket_accept($this->resourceConnection, -1))
-//                    && ($info = WebSocketProtocol::handshake($connect))
-//                ) {
-//                    $this->resourceConnects[(string) $connect] = $connect;
-//                    $this->connects[(string) $connect] = new Resource($connect, $info);
-//                    try {
-//                        $this->handleConnect($this->connects[(string) $connect]);
-//                    } catch (\Throwable $exception) {
-//                        $this->logger->critical('handlerConnect: ' . $exception->getMessage());
-//                    }
-//                }
-//                unset($read[array_search($this->resourceConnection, $read)]);
-//            }
-//
-//            // new message
-//            foreach ($read as $connect) {
-//                $data = fread($connect, 100000);
-//                $decoded = WebSocketProtocol::decode($data);
-//
-//                if (false === $decoded || 'close' === $decoded->type) {
-//                    try {
-//                        $this->handleDisconnect($this->connects[(string) $connect]);
-//                    } catch (\Throwable $exception) {
-//                        $this->logger->critical('handlerDisconnect: ' . $exception->getMessage());
-//                    }
-//                    try {
-//                        fwrite($connect, WebSocketProtocol::encode('  Closed on client demand', 'close'));
-//                        fclose($connect);
-//                    } catch (\Throwable $exception) {
-//                        $this->logger->error('handlerDisconnect: ' . $exception->getMessage());
-//                    }
-//                    unset($this->resourceConnects[(string) $connect]);
-//                    unset($this->connects[(string) $connect]);
-//                    continue;
-//                }
-//
-//                try {
-//                    $this->handle($this->connects[(string) $connect], $decoded);
-//                } catch (\Throwable $exception) {
-//                    $this->logger->critical('handler: ' . $exception->getMessage());
-//                }
-//            }
-//
-//            // close by time work limit
-//            if ($this->timeWorkLimit && time() - $this->startTime > $this->timeWorkLimit) {
-//                $this->logger->debug('Time limit. Stopping server');
-//                $this->socketClose();
-//            }
-//            pcntl_signal_dispatch();
-//        }
-//    }
 }

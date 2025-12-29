@@ -103,8 +103,16 @@ final class WebSocketProtocol
      * @return string The raw WebSocket frame as a binary string.
      * @throws \Exception if the frame is too large.
      */
-    public static function encode(string $payload, string $type = 'text', bool $masked = false): string
-    {
+    public static function encode(
+        string $payload,
+        string $type = 'text',
+        bool $masked = false,
+        ?int $closeStatus = null
+    ): string {
+        if ($type === 'close') {
+            $payload = pack('n', $closeStatus ?? 1000) . $payload;
+        }
+
         $frameHead = [];
         $payloadLength = strlen($payload);
 
