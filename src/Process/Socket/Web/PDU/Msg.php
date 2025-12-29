@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Process\Socket\Web\PDU;
 
+/**
+ * A Data Transfer Object representing a WebSocket message.
+ * This object is immutable.
+ */
 readonly class Msg
 {
     public string $type;
@@ -11,9 +15,9 @@ readonly class Msg
     public ?string $error;
 
     /**
-     * @param string $type
-     * @param string $payload
-     * @param string|null $error
+     * @param string $type The message type (e.g., 'text', 'binary', 'close', 'error').
+     * @param string $payload The message payload.
+     * @param string|null $error An optional error message.
      */
     public function __construct(string $type, string $payload, ?string $error = null)
     {
@@ -24,6 +28,9 @@ readonly class Msg
 
     public function __toString(): string
     {
-        return "[{$this->type}:{$this->payload}]";
+        if ($this->error) {
+            return "[type:{$this->type}, error:{$this->error}]";
+        }
+        return "[type:{$this->type}, payload:{$this->payload}]";
     }
 }

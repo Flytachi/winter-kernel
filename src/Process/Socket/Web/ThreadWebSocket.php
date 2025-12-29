@@ -6,40 +6,72 @@ namespace Flytachi\Winter\Kernel\Process\Socket\Web;
 
 use Flytachi\Winter\Kernel\Process\Core\Dispatch;
 use Flytachi\Winter\Kernel\Process\Socket\Web\PDU\Msg;
-use Flytachi\Winter\Kernel\Process\Socket\Web\PDU\Resource;
+use Flytachi\Winter\Kernel\Process\Socket\Web\PDU\WSResource;
 use Flytachi\Winter\Kernel\Process\Traits\ThreadSignalHandler;
+use Flytachi\Winter\Thread\ThreadException;
 
 abstract class ThreadWebSocket extends Dispatch
 {
     use SocketWebServerHandler;
     use ThreadSignalHandler;
 
-    /** @var \resource */
+    /**
+     * The main loop interval in microseconds.
+     * Determines how often the main loop will run even if there is no network activity.
+     * Lower values increase CPU usage but make the server more responsive to internal timers.
+     * Default is 200,000 microseconds (0.2 seconds), which means max 5 loops per second.
+     * @var int
+     */
+    protected int $loopInterval = 200_000; // 0.2 seconds
+
+    /**
+     * The IP address to listen on.
+     * '0.0.0.0' means listen on all available network interfaces.
+     * '127.0.0.1' means listen only for local connections.
+     * @var string
+     */
+    protected string $ip = '0.0.0.0';
+
+    /**
+     * The port to listen on.
+     * Must be in the range 1024-65535 unless running as root.
+     * @var int
+     */
+    protected int $port = 9001;
+
+    /**
+     * The maximum number of seconds the server should run.
+     * 0 means run indefinitely.
+     * @var int
+     */
+    protected int $timeWorkLimit = 0;
+
+    /**
+     * The time the server was started.
+     * @var int
+     */
+    protected int $startTime;
+
+    /** @var resource|null */
     protected $resourceConnection;
 
-    /** @var \resource[] */
-    protected array $resourceConnects = [];
-
-    /** @var Resource */
-    protected Resource $connection;
-
-    /** @var Resource[] */
+    /** @var WSResource[] */
     protected array $connects = [];
 
     protected string $exNamespace = 'web-socket';
 
 
-    protected function handle(Resource &$resource, Msg $msg): void
+    protected function handle(WSResource &$resource, Msg $msg): void
     {
         $this->logger->notice("handle: {$resource} => Send {$msg}");
     }
 
-    protected function handleConnect(Resource &$resource): void
+    protected function handleConnect(WSResource &$resource): void
     {
         $this->logger->notice("handleConnect: {$resource} => New connection accepted");
     }
 
-    protected function handleDisconnect(Resource &$resource): void
+    protected function handleDisconnect(WSResource &$resource): void
     {
         $this->logger->notice("handleDisconnect: {$resource} => Connection closing");
     }
@@ -55,336 +87,256 @@ abstract class ThreadWebSocket extends Dispatch
         $this->socketClose();
     }
 
-    final protected function socketStart(int $rps = 2, int $timeWorkLimit = 0): void
+    final protected function socketStart(int $timeWorkLimit = 0): void
     {
         $this->timeWorkLimit = $timeWorkLimit;
-        $this->logger->info("Starting the Web Server...");
-        $this->logger->info("Stream: tcp://{$this->ip}:{$this->port}");
+        $this->logger->debug("Starting the Web Server...[tcp://{$this->ip}:{$this->port}]");
 
         try {
             $this->resourceConnection = stream_socket_server(
-                'tcp://' . $this->ip . ':' . $this->port,
+                "tcp://{$this->ip}:{$this->port}",
                 $errno,
                 $errorStr
             );
             if (!$this->resourceConnection) {
                 throw new ThreadException("Cannot start server: {$errorStr}({$errno})");
             }
-            $this->connection = new Resource($this->resourceConnection);
+
+            stream_set_blocking($this->resourceConnection, false);
 
             $this->logger->debug("Server is running...");
             $this->startTime = time();
-            $this->listen($rps);
+            $this->listen();
         } catch (\Throwable $exception) {
             $this->logger->critical($exception->getMessage());
         }
     }
 
-    final protected function closeConnect(Resource $resource): void
+    final protected function disconnectClient(WSResource $resource): void
     {
-        fwrite($resource->getConnect(), self::encode('  Closed on client demand', 'close'));
-        fclose($resource->getConnect());
-        unset($this->resourceConnects[(string) $resource]);
+        try {
+            $this->handleDisconnect($resource);
+        } catch (\Throwable $exception) {
+            $this->logger->critical('handlerDisconnect: ' . $exception->getMessage());
+        }
+
+        $frame = WebSocketProtocol::encode('Connection closed', 'close');
+        @fwrite($resource->getConnect(), $frame);
+        @fclose($resource->getConnect());
         unset($this->connects[(string) $resource]);
+        $this->logger->notice("Client disconnected: {$resource}");
     }
 
     final protected function socketClose(): void
     {
-        fclose($this->resourceConnection);
-        if (!empty($this->resourceConnects)) {
-            foreach ($this->resourceConnects as $connect) {
-                if (is_resource($connect)) {
-                    fwrite($connect, self::encode('  Closed on server demand', 'close'));
-                    fclose($connect);
-                    unset($this->resourceConnects[(string) $connect]);
-                    unset($this->connects[(string) $connect]);
-                }
-            }
+        $connectsToClose = $this->connects;
+        foreach ($connectsToClose as $resource) {
+            $this->disconnectClient($resource);
         }
+        $this->connects = [];
+
+        if (is_resource($this->resourceConnection)) {
+            fclose($this->resourceConnection);
+            $this->resourceConnection = null;
+        }
+        $this->logger->notice("All connections closed.");
     }
 
-    private function listen(int $rps): void
+    private function listen(): void
     {
         while (true) {
-            $read = $this->resourceConnects;
+            $read = array_map(fn(WSResource $res) => $res->getConnect(), $this->connects);
             $read[] = $this->resourceConnection;
-            $write = $except = null;
-            if (
-                !@stream_select(
-                    $read,
-                    $write,
-                    $except,
-                    0,
-                    ($rps < 1000 ? 1_000_000 / $rps : 1000)
-                )
-            ) {
+
+            $write = [];
+            foreach ($this->connects as $resource) {
+                if (strlen($resource->writeBuffer) > 0) {
+                    $write[] = $resource->getConnect();
+                }
+            }
+            $except = null;
+
+            $seconds = intdiv($this->loopInterval, 1_000_000);
+            $microseconds = $this->loopInterval % 1_000_000;
+            $activity = @stream_select($read, $write, $except, $seconds, $microseconds);
+            if ($activity === false) {
                 continue;
             }
 
-            // new connection
-            if (in_array($this->resourceConnection, $read)) {
-                if (
-                    ($connect = stream_socket_accept($this->resourceConnection, -1))
-                    && ($info = $this->handshake($connect))
-                ) {
-                    $this->resourceConnects[(string) $connect] = $connect;
-                    $this->connects[(string) $connect] = new Resource($connect, $info);
-                    try {
-                        $this->handleConnect($this->connects[(string) $connect]);
-                    } catch (\Throwable $exception) {
-                        $this->logger->critical('handlerConnect: ' . $exception->getMessage());
+            if (in_array($this->resourceConnection, $read, true)) {
+                if ($newConnection = stream_socket_accept($this->resourceConnection, 0)) {
+                    stream_set_blocking($newConnection, false); // Важно!
+                    $info = WebSocketProtocol::handshake($newConnection);
+
+                    if ($info !== false) {
+                        $resource = new WSResource($newConnection, $info);
+                        $this->connects[(string) $newConnection] = $resource;
+                        $this->logger->notice("New client connected: {$resource}");
+                        try {
+                            $this->handleConnect($resource);
+                        } catch (\Throwable $exception) {
+                            $this->logger->critical('handlerConnect: ' . $exception->getMessage());
+                        }
                     }
                 }
-                unset($read[array_search($this->resourceConnection, $read)]);
+                unset($read[array_search($this->resourceConnection, $read, true)]);
             }
 
-            // new message
             foreach ($read as $connect) {
-                $data = fread($connect, 100000);
-                $decoded = self::decode($data);
+                $resource = $this->connects[(string) $connect];
+                $data = @fread($connect, 65535);
 
-                if (false === $decoded || 'close' === $decoded->type) {
-                    try {
-                        $this->handleDisconnect($this->connects[(string) $connect]);
-                    } catch (\Throwable $exception) {
-                        $this->logger->critical('handlerDisconnect: ' . $exception->getMessage());
-                    }
-                    try {
-                        fwrite($connect, self::encode('  Closed on client demand', 'close'));
-                        fclose($connect);
-                    } catch (\Throwable $exception) {
-                        $this->logger->error('handlerDisconnect: ' . $exception->getMessage());
-                    }
-                    unset($this->resourceConnects[(string) $connect]);
-                    unset($this->connects[(string) $connect]);
+                if ($data === '' || $data === false) {
+                    $this->disconnectClient($resource);
                     continue;
                 }
 
-                try {
-                    $this->handle($this->connects[(string) $connect], $decoded);
-                } catch (\Throwable $exception) {
-                    $this->logger->critical('handler: ' . $exception->getMessage());
+                $resource->readBuffer .= $data;
+                while (strlen($resource->readBuffer) > 0) {
+                    $decodedFrame = WebSocketProtocol::decode($resource->readBuffer);
+                    if ($decodedFrame === false) {
+                        break;
+                    }
+
+                    $resource->readBuffer = substr($resource->readBuffer, $decodedFrame->frameLength);
+
+                    $msg = $decodedFrame->msg;
+
+                    if ($msg->type === 'error' || $msg->type === 'close') {
+                        $this->logger->warning("Received '{$msg->type}' frame from {$resource}. Closing connection.");
+                        $this->disconnectClient($resource);
+                        break;
+                    }
+
+                    try {
+                        $this->handle($resource, $msg);
+                    } catch (\Throwable $exception) {
+                        $this->logger->critical('handler: ' . $exception->getMessage());
+                    }
                 }
             }
 
-            // close by time work limit
-            if ($this->timeWorkLimit && time() - $this->startTime > $this->timeWorkLimit) {
-                $this->logger->debug('Time limit. Stopping server');
-                $this->socketClose();
+            foreach ($write as $connect) {
+                $resource = $this->connects[(string) $connect];
+                $bytesWritten = @fwrite($connect, $resource->writeBuffer);
+                if ($bytesWritten === false) {
+                    $this->disconnectClient($resource);
+                    continue;
+                }
+
+                if ($bytesWritten === strlen($resource->writeBuffer)) {
+                    $resource->writeBuffer = '';
+                } else {
+                    $resource->writeBuffer = substr($resource->writeBuffer, $bytesWritten);
+                }
             }
+
+            if ($this->timeWorkLimit > 0 && (time() - $this->startTime) > $this->timeWorkLimit) {
+                $this->logger->notice('Time limit reached. Stopping server.');
+                break;
+            }
+
             pcntl_signal_dispatch();
         }
     }
 
-    /**
-     * Encoding messages before sending to the client
-     * @param $payload
-     * @param string $type
-     * @param bool $masked
-     * @return array|string
-     */
-    private static function encode($payload, string $type = 'text', bool $masked = false): array|string
-    {
-        $frameHead = array();
-        $payloadLength = strlen($payload);
-
-        switch ($type) {
-            case 'text':
-                // first byte indicates FIN, Text-Frame (10000001):
-                $frameHead[0] = 129;
-                break;
-            case 'close':
-                // first byte indicates FIN, Close Frame(10001000):
-                $frameHead[0] = 136;
-                break;
-            case 'ping':
-                // first byte indicates FIN, Ping frame (10001001):
-                $frameHead[0] = 137;
-                break;
-            case 'pong':
-                // first byte indicates FIN, Pong frame (10001010):
-                $frameHead[0] = 138;
-                break;
-        }
-
-        // set mask and payload length (using 1, 3 or 9 bytes)
-        if ($payloadLength > 65535) {
-            $payloadLengthBin = str_split(sprintf('%064b', $payloadLength), 8);
-            $frameHead[1] = ($masked === true) ? 255 : 127;
-            for ($i = 0; $i < 8; $i++) {
-                $frameHead[$i + 2] = bindec($payloadLengthBin[$i]);
-            }
-            // most significant bit MUST be 0
-            if ($frameHead[2] > 127) {
-                return array('type' => '', 'payload' => '', 'error' => 'frame too large (1004)');
-            }
-        } elseif ($payloadLength > 125) {
-            $payloadLengthBin = str_split(sprintf('%016b', $payloadLength), 8);
-            $frameHead[1] = ($masked === true) ? 254 : 126;
-            $frameHead[2] = bindec($payloadLengthBin[0]);
-            $frameHead[3] = bindec($payloadLengthBin[1]);
-        } else {
-            $frameHead[1] = ($masked === true) ? $payloadLength + 128 : $payloadLength;
-        }
-
-        // convert frame-head to string:
-        foreach (array_keys($frameHead) as $i) {
-            $frameHead[$i] = chr($frameHead[$i]);
-        }
-        if ($masked === true) {
-            // generate a random mask:
-            $mask = [];
-            for ($i = 0; $i < 4; $i++) {
-                $mask[$i] = chr(rand(0, 255));
-            }
-            $frameHead = array_merge($frameHead, $mask);
-        }
-        $frame = implode('', $frameHead);
-
-        // append payload to frame:
-        for ($i = 0; $i < $payloadLength; $i++) {
-            $frame .= ($masked === true) ? $payload[$i] ^ $mask[$i % 4] : $payload[$i];
-        }
-
-        return $frame;
-    }
 
     /**
-     * Decoding messages received from the client
-     * @param $msgEnc
-     * @return Msg|false
+     * Asynchronously sends a message to a client.
+     *
+     * This method does not write to the socket directly. Instead, it encodes the
+     * payload into a WebSocket frame and appends it to the client's write buffer.
+     * The main `listen` loop will then handle the actual non-blocking write.
+     *
+     * @param WSResource $resource The client resource to send the message to.
+     * @param string $payload The message content.
+     * @param string $type The WebSocket frame type ('text', 'binary', etc.).
      */
-    private static function decode($msgEnc): Msg|false
+    public function send(WSResource $resource, string $payload, string $type = 'text'): void
     {
-        if (!strlen($msgEnc)) {
-            return false;
+        if (!isset($this->connects[(string) $resource])) {
+            $this->logger->warning("Attempted to send to a non-existent or closed connection: {$resource}");
+            return;
         }
 
-        $unmaskedPayload = '';
-        $decodedData = [];
+        $frame = WebSocketProtocol::encode($payload, $type);
+        $resource->writeBuffer .= $frame;
 
-        // estimate frame type:
-        $firstByteBinary = sprintf('%08b', ord($msgEnc[0]));
-        $secondByteBinary = sprintf('%08b', ord($msgEnc[1]));
-        $opcode = bindec(substr($firstByteBinary, 4, 4));
-        $isMasked = $secondByteBinary[0] == '1';
-        $payloadLength = ord($msgEnc[1]) & 127;
-
-        // unmasked frame is received:
-        if (!$isMasked) {
-            return new Msg('', '', 'protocol opcode (1002)');
-        }
-
-        switch ($opcode) {
-            // text frame:
-            case 1:
-                $decodedData['type'] = 'text';
-                break;
-            case 2:
-                $decodedData['type'] = 'binary';
-                break;
-            // connection close frame:
-            case 8:
-                $decodedData['type'] = 'close';
-                break;
-            // ping frame:
-            case 9:
-                $decodedData['type'] = 'ping';
-                break;
-            // pong frame:
-            case 10:
-                $decodedData['type'] = 'pong';
-                break;
-            default:
-                return new Msg('', '', 'unknown opcode (1003)');
-        }
-
-        if ($payloadLength === 126) {
-            $mask = substr($msgEnc, 4, 4);
-            $payloadOffset = 8;
-            $dataLength = bindec(sprintf('%08b', ord($msgEnc[2])) . sprintf('%08b', ord($msgEnc[3]))) + $payloadOffset;
-        } elseif ($payloadLength === 127) {
-            $mask = substr($msgEnc, 10, 4);
-            $payloadOffset = 14;
-            $tmp = '';
-            for ($i = 0; $i < 8; $i++) {
-                $tmp .= sprintf('%08b', ord($msgEnc[$i + 2]));
-            }
-            $dataLength = bindec($tmp) + $payloadOffset;
-            unset($tmp);
-        } else {
-            $mask = substr($msgEnc, 2, 4);
-            $payloadOffset = 6;
-            $dataLength = $payloadLength + $payloadOffset;
-        }
-
-        /**
-         * We have to check for large frames here. socket_recv cuts at 1024 bytes
-         * so if websocket-frame is > 1024 bytes we have to wait until whole
-         * data is transfer.
-         */
-        if (strlen($msgEnc) < $dataLength) {
-            return false;
-        }
-
-        if ($isMasked) {
-            for ($i = $payloadOffset; $i < $dataLength; $i++) {
-                $j = $i - $payloadOffset;
-                if (isset($msgEnc[$i])) {
-                    $unmaskedPayload .= $msgEnc[$i] ^ $mask[$j % 4];
-                }
-            }
-            $decodedData['payload'] = $unmaskedPayload;
-        } else {
-            $payloadOffset = $payloadOffset - 4;
-            $decodedData['payload'] = substr($msgEnc, $payloadOffset);
-        }
-
-        return new Msg($decodedData['type'], $decodedData['payload']);
+        $this->logger->debug("Queued " . strlen($frame) . " bytes to send to {$resource}");
     }
 
-    /**
-     * "Handshake", i.e. sending headers according to the WebSocket protocol
-     * @param $connect
-     * @return false|array
-     */
-    private function handshake($connect): false|array
-    {
-        $info = array();
 
-        $line = fgets($connect);
-        $header = explode(' ', $line);
-        $info['method'] = $header[0] ?? null;
-        $info['uri'] = $header[1] ?? null;
-        $data = parseUrlDetail($info['uri']);
-        $info['url'] = $data['path'];
-        $info['params'] = $data['query'];
-
-        while ($line = rtrim(fgets($connect))) {
-            if (preg_match('/\A(\S+): (.*)\z/', $line, $matches)) {
-                $info[$matches[1]] = $matches[2];
-            } else {
-                break;
-            }
-        }
-
-        // получаем адрес клиента
-        $address = explode(':', stream_socket_get_name($connect, true));
-        $info['ip'] = $address[0];
-        $info['port'] = $address[1];
-
-        if (empty($info['Sec-WebSocket-Key'])) {
-            return false;
-        }
-
-        $SecWebSocketAccept =
-            base64_encode(pack('H*', sha1($info['Sec-WebSocket-Key'] . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')));
-        $upgrade = "HTTP/1.1 101 Web Socket Protocol Handshake\r\n" .
-            "Upgrade: websocket\r\n" .
-            "Connection: Upgrade\r\n" .
-            "Sec-WebSocket-Accept:" . $SecWebSocketAccept . "\r\n\r\n";
-        fwrite($connect, $upgrade);
-
-        return $info;
-    }
+//    private function listen(int $rps): void
+//    {
+//        while (true) {
+//
+//            $read = $this->resourceConnects;
+//            $read[] = $this->resourceConnection;
+//            $write = $except = null;
+//            if (
+//                !@stream_select(
+//                    $read,
+//                    $write,
+//                    $except,
+//                    0,
+//                    ($rps < 1000 ? 1_000_000 / $rps : 1000)
+//                )
+//            ) {
+//                continue;
+//            }
+//
+//            // new connection
+//            if (in_array($this->resourceConnection, $read)) {
+//                if (
+//                    ($connect = stream_socket_accept($this->resourceConnection, -1))
+//                    && ($info = WebSocketProtocol::handshake($connect))
+//                ) {
+//                    $this->resourceConnects[(string) $connect] = $connect;
+//                    $this->connects[(string) $connect] = new Resource($connect, $info);
+//                    try {
+//                        $this->handleConnect($this->connects[(string) $connect]);
+//                    } catch (\Throwable $exception) {
+//                        $this->logger->critical('handlerConnect: ' . $exception->getMessage());
+//                    }
+//                }
+//                unset($read[array_search($this->resourceConnection, $read)]);
+//            }
+//
+//            // new message
+//            foreach ($read as $connect) {
+//                $data = fread($connect, 100000);
+//                $decoded = WebSocketProtocol::decode($data);
+//
+//                if (false === $decoded || 'close' === $decoded->type) {
+//                    try {
+//                        $this->handleDisconnect($this->connects[(string) $connect]);
+//                    } catch (\Throwable $exception) {
+//                        $this->logger->critical('handlerDisconnect: ' . $exception->getMessage());
+//                    }
+//                    try {
+//                        fwrite($connect, WebSocketProtocol::encode('  Closed on client demand', 'close'));
+//                        fclose($connect);
+//                    } catch (\Throwable $exception) {
+//                        $this->logger->error('handlerDisconnect: ' . $exception->getMessage());
+//                    }
+//                    unset($this->resourceConnects[(string) $connect]);
+//                    unset($this->connects[(string) $connect]);
+//                    continue;
+//                }
+//
+//                try {
+//                    $this->handle($this->connects[(string) $connect], $decoded);
+//                } catch (\Throwable $exception) {
+//                    $this->logger->critical('handler: ' . $exception->getMessage());
+//                }
+//            }
+//
+//            // close by time work limit
+//            if ($this->timeWorkLimit && time() - $this->startTime > $this->timeWorkLimit) {
+//                $this->logger->debug('Time limit. Stopping server');
+//                $this->socketClose();
+//            }
+//            pcntl_signal_dispatch();
+//        }
+//    }
 }

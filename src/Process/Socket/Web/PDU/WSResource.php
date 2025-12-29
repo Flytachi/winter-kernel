@@ -4,15 +4,31 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Process\Socket\Web\PDU;
 
-class Resource
+/**
+ * Wraps a client connection resource, holding its state and buffers.
+ */
+class WSResource
 {
-    /** @var \resource $connect */
+    /** @var resource The raw socket connection resource. */
     private $connect;
+
+    /** @var array|null Information from the initial handshake. */
     private ?array $info;
+
+    /** @var array A general-purpose key-value store for this connection's state (e.g., user ID, subscriptions). */
     private array $store = [];
 
     /**
-     * @param \resource $connect
+     * @var string The input buffer for this connection.
+     * Data from fread() is appended here until a full frame can be parsed.
+     */
+    public string $readBuffer = '';
+
+    public string $writeBuffer = '';
+
+
+    /**
+     * @param resource $connect
      * @param array|null $info
      */
     public function __construct($connect, ?array $info = null)
@@ -31,6 +47,9 @@ class Resource
         $this->store = $store;
     }
 
+    /**
+     * @return resource
+     */
     public function getConnect()
     {
         return $this->connect;
@@ -43,7 +62,7 @@ class Resource
 
     public function info(): array
     {
-        return $this->info;
+        return $this->info ?? [];
     }
 
     public function __toString(): string
