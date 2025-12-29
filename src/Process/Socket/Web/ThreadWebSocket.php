@@ -22,7 +22,7 @@ abstract class ThreadWebSocket extends Dispatch
      * Default is 200,000 microseconds (0.2 seconds), which means max 5 loops per second.
      * @var int
      */
-    protected int $loopInterval = 300_000; // 0.2 seconds
+    protected int $loopInterval = 200_000; // 0.2 seconds
 
     /**
      * The IP address to listen on.
