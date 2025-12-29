@@ -15,5 +15,6 @@ readonly class DecodedFrame
     public function __construct(
         public Msg $msg,
         public int $frameLength
-    ) {}
+    ) {
+    }
 }

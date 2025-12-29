@@ -245,7 +245,6 @@ class Make extends Cmd
             'Entity/Request',
             'Entities/Requests',
             'Entities/Request',
-
         );
         $code = file_get_contents($info['template']);
         $code = str_replace("__namespace__", $info['namespace'], $code);

@@ -107,7 +107,7 @@ abstract class ThreadWebSocket extends Dispatch
                 "tcp://{$this->ip}:{$this->port}",
                 $errno,
                 $errorStr,
-                STREAM_SERVER_BIND|STREAM_SERVER_LISTEN
+                STREAM_SERVER_BIND | STREAM_SERVER_LISTEN
             );
             if (!$this->resourceConnection) {
                 throw new ThreadException("Cannot start server: {$errorStr}({$errno})");

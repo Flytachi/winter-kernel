@@ -33,7 +33,9 @@ final class WebSocketProtocol
 
         // Read the request line
         $line = @fgets($connect);
-        if ($line === false) return false;
+        if ($line === false) {
+            return false;
+        }
 
         $header = explode(' ', $line);
         if (strtoupper(trim($header[0] ?? '')) !== 'GET') {
@@ -210,11 +212,21 @@ final class WebSocketProtocol
 
         $type = '';
         switch ($opcode) {
-            case 1: $type = 'text'; break;
-            case 2: $type = 'binary'; break;
-            case 8: $type = 'close'; break;
-            case 9: $type = 'ping'; break;
-            case 10: $type = 'pong'; break;
+            case 1:
+                $type = 'text';
+                break;
+            case 2:
+                $type = 'binary';
+                break;
+            case 8:
+                $type = 'close';
+                break;
+            case 9:
+                $type = 'ping';
+                break;
+            case 10:
+                $type = 'pong';
+                break;
             default:
                 $msg = new Msg('error', '', "Unknown opcode: {$opcode} (1003)");
                 // We can't know the frame length, so we might have to close the connection.
@@ -224,11 +236,15 @@ final class WebSocketProtocol
 
         $headerOffset = 2;
         if ($payloadLength === 126) {
-            if ($bufferLength < 4) return false; // Need 2 more bytes for length
+            if ($bufferLength < 4) {
+                return false; // Need 2 more bytes for length
+            }
             $payloadLength = unpack('n', substr($buffer, 2, 2))[1];
             $headerOffset = 4;
         } elseif ($payloadLength === 127) {
-            if ($bufferLength < 10) return false; // Need 8 more bytes for length
+            if ($bufferLength < 10) {
+                return false; // Need 8 more bytes for length
+            }
             $parts = unpack('N2', substr($buffer, 2, 8));
             if ($parts[1] > 0 || $parts[2] < 0) { // PHP_INT_MAX check
                 $msg = new Msg('error', '', 'Frame too large (1009)');
@@ -260,5 +276,4 @@ final class WebSocketProtocol
 
         return new DecodedFrame($msg, $frameLength);
     }
-
 }
