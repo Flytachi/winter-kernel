@@ -60,21 +60,24 @@ abstract class ThreadWebSocket extends Dispatch
 
     protected string $exNamespace = 'web-socket';
 
+    /**
+     * Called when a new client has successfully completed the WebSocket handshake.
+     * @param WSResource $resource The resource object for the new client.
+     */
+    abstract protected function handleConnect(WSResource $resource): void;
 
-    protected function handle(WSResource &$resource, Msg $msg): void
-    {
-        $this->logger->notice("handle: {$resource} => Send {$msg}");
-    }
+    /**
+     * Called when a message is received from a client.
+     * @param WSResource $resource The client's resource object.
+     * @param Msg $msg The decoded message.
+     */
+    abstract protected function handle(WSResource $resource, Msg $msg): void;
 
-    protected function handleConnect(WSResource &$resource): void
-    {
-        $this->logger->notice("handleConnect: {$resource} => New connection accepted");
-    }
-
-    protected function handleDisconnect(WSResource &$resource): void
-    {
-        $this->logger->notice("handleDisconnect: {$resource} => Connection closing");
-    }
+    /**
+     * Called when a client's connection is closed (either by client or server).
+     * @param WSResource $resource The client's resource object.
+     */
+    abstract protected function handleDisconnect(WSResource $resource): void;
 
     final protected function resolutionStart(): void
     {
@@ -82,21 +85,29 @@ abstract class ThreadWebSocket extends Dispatch
         $this->prepareSignalHandler();
     }
 
-    final protected function resolutionEnd(): void
+    /**
+     * The main entry point for the thread. This method is final and cannot be overridden.
+     * It configures and starts the WebSocket server.
+     *
+     * @param mixed|null $data Data passed from the dispatch() call, expected to be an array with 'ip' and 'port'.
+     * @throws ThreadException
+     * @internal
+     */
+    final public function resolution(mixed $data = null): void
     {
-        $this->socketClose();
-    }
+        if (is_array($data)) {
+            $this->ip = (string) ($data['ip'] ?? $this->ip);
+            $this->port = (int) ($data['port'] ?? $this->port);
+        }
 
-    final protected function socketStart(int $timeWorkLimit = 0): void
-    {
-        $this->timeWorkLimit = $timeWorkLimit;
         $this->logger->debug("Starting the Web Server...[tcp://{$this->ip}:{$this->port}]");
 
         try {
             $this->resourceConnection = stream_socket_server(
                 "tcp://{$this->ip}:{$this->port}",
                 $errno,
-                $errorStr
+                $errorStr,
+                STREAM_SERVER_BIND|STREAM_SERVER_LISTEN
             );
             if (!$this->resourceConnection) {
                 throw new ThreadException("Cannot start server: {$errorStr}({$errno})");
@@ -104,12 +115,19 @@ abstract class ThreadWebSocket extends Dispatch
 
             stream_set_blocking($this->resourceConnection, false);
 
-            $this->logger->debug("Server is running...");
+            $this->logger->debug("Server is running. Listening for connections...");
             $this->startTime = time();
             $this->listen();
         } catch (\Throwable $exception) {
             $this->logger->critical($exception->getMessage());
+        } finally {
+            $this->socketClose();
         }
+    }
+
+    final protected function resolutionEnd(): void
+    {
+        $this->socketClose();
     }
 
     final protected function disconnectClient(WSResource $resource): void
@@ -129,7 +147,7 @@ abstract class ThreadWebSocket extends Dispatch
         @fwrite($resource->getConnect(), $frame);
         @fclose($resource->getConnect());
         unset($this->connects[(string) $resource]);
-        $this->logger->notice("Client disconnected: {$resource}");
+        $this->logger->debug("Client disconnected: {$resource}");
     }
 
     final protected function socketClose(): void
@@ -144,7 +162,7 @@ abstract class ThreadWebSocket extends Dispatch
             fclose($this->resourceConnection);
             $this->resourceConnection = null;
         }
-        $this->logger->notice("All connections closed.");
+        $this->logger->debug("All connections closed.");
     }
 
     private function listen(): void
@@ -176,7 +194,7 @@ abstract class ThreadWebSocket extends Dispatch
                     if ($info !== false) {
                         $resource = new WSResource($newConnection, $info);
                         $this->connects[(string) $newConnection] = $resource;
-                        $this->logger->notice("New client connected: {$resource}");
+                        $this->logger->debug("New client connected: {$resource}");
                         try {
                             $this->handleConnect($resource);
                         } catch (\Throwable $exception) {
@@ -192,7 +210,7 @@ abstract class ThreadWebSocket extends Dispatch
                 $data = @fread($connect, 65535);
 
                 if ($data === false || ($data === '' && feof($connect))) {
-                    $this->logger->notice("Client {$resource} has disconnected (EOF).");
+                    $this->logger->debug("Client {$resource} has disconnected (EOF).");
                     $this->disconnectClient($resource);
                     continue;
                 }
