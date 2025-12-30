@@ -230,7 +230,9 @@ abstract class ThreadWebSocket extends Dispatch
                     $msg = $decodedFrame->msg;
 
                     if ($msg->type === 'error' || $msg->type === 'close') {
-                        $this->logger->warning("Received '{$msg->type}' frame from {$resource}. Closing connection.");
+                        if ($msg->type === 'error') {
+                            $this->logger->warning("Received '{$msg->type}' frame from {$resource}. Closing connection.");
+                        }
                         $this->disconnectClient($resource);
                         break;
                     }
@@ -264,9 +266,13 @@ abstract class ThreadWebSocket extends Dispatch
             }
 
             pcntl_signal_dispatch();
+            $this->loop();
         }
     }
 
+    protected function loop(): void
+    {
+    }
 
     /**
      * Asynchronously sends a message to a client.
