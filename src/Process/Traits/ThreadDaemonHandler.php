@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Process\Traits;
 
-trait ThreadProcessHandler
+trait ThreadDaemonHandler
 {
     /**
      * Sends an interrupt signal to all child processes and terminates the current process.
@@ -15,7 +15,7 @@ trait ThreadProcessHandler
     {
         if (!$this->iAmChild) {
             // Parent
-            foreach ($this->childrenPids as $childPid) {
+            foreach (static::forkList() as $childPid) {
                 posix_kill($childPid, SIGINT);
                 pcntl_waitpid($childPid, $status);
             }
@@ -42,7 +42,7 @@ trait ThreadProcessHandler
     {
         if (!$this->iAmChild) {
             // Parent
-            foreach ($this->childrenPids as $childPid) {
+            foreach (static::forkList() as $childPid) {
                 posix_kill($childPid, SIGTERM);
                 pcntl_waitpid($childPid, $status);
             }
@@ -69,7 +69,7 @@ trait ThreadProcessHandler
     {
         if (!$this->iAmChild) {
             // Parent
-            foreach ($this->childrenPids as $childPid) {
+            foreach (static::forkList() as $childPid) {
                 posix_kill($childPid, SIGHUP);
                 pcntl_waitpid($childPid, $status);
             }

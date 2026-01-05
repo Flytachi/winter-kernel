@@ -7,7 +7,7 @@ namespace Flytachi\Winter\Kernel\Process\Traits;
 use Flytachi\Winter\Base\Log\LoggerRegistry;
 use RuntimeException;
 
-trait ThreadFork
+trait ThreadDaemonFork
 {
     /** @var bool $childrenPidSave Children process ids on/off */
     protected bool $childrenPidSave = true;
@@ -155,10 +155,12 @@ trait ThreadFork
             $title = str_replace($this->exTag, $tag, $title);
             cli_set_process_title($title);
         }
+        $this->preparationForkBefore($this->pid);
     }
 
     protected function forkEnd(): void
     {
+        $this->preparationForkAfter($this->pid);
     }
 
     public function anonymousResolution(mixed $data = null): void
@@ -195,7 +197,7 @@ trait ThreadFork
             && empty($_SERVER['REMOTE_ADDR'])
             && function_exists('pcntl_signal')
         ) {
-            foreach ($this->childrenPids as $key => $pid) {
+            foreach (static::forkList() as $key => $pid) {
                 pcntl_waitpid($pid, $status);
                 if (!is_null($callableEndChild)) {
                     $callableEndChild($pid, $status);

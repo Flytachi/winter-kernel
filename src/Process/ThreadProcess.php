@@ -11,9 +11,9 @@ use Flytachi\Winter\Kernel\Process\Traits\ThreadFork;
 
 abstract class ThreadProcess extends Dispatch
 {
-    use ThreadProcessHandler;
-    use ThreadSignalHandler;
     use ThreadFork;
+    use ThreadSignalHandler;
+    use ThreadProcessHandler;
 
     protected string $exNamespace = 'process';
 

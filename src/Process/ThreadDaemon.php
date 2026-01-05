@@ -12,27 +12,34 @@ use Flytachi\Winter\Kernel\Process\Entity\TCondition;
 use Flytachi\Winter\Kernel\Process\Entity\TDInfo;
 use Flytachi\Winter\Kernel\Process\Entity\TDStatus;
 use Flytachi\Winter\Kernel\Process\Entity\TStats;
-use Flytachi\Winter\Kernel\Process\Traits\ThreadFork;
-use Flytachi\Winter\Kernel\Process\Traits\ThreadJobHandler;
+use Flytachi\Winter\Kernel\Process\Traits\ThreadDaemonFork;
+use Flytachi\Winter\Kernel\Process\Traits\ThreadDaemonHandler;
+use Flytachi\Winter\Kernel\Process\Traits\ThreadDaemonStatement;
 use Flytachi\Winter\Kernel\Process\Traits\ThreadSignalHandler;
 use Flytachi\Winter\Thread\Signal;
 
 abstract class ThreadDaemon extends Dispatch
 {
-    use ThreadJobHandler;
+    use ThreadDaemonFork;
+    use ThreadDaemonHandler;
     use ThreadSignalHandler;
-    use ThreadFork;
+    use ThreadDaemonStatement;
 
     protected static string $EC_MAIN = 'daemons';
     protected static string $EC_THREADS = 'daemons-threads';
     protected string $exNamespace = 'daemon';
     protected int $streamRps = 0;
 
+    final public static function stmName(): string
+    {
+        return hash('xxh64', static::class);
+    }
+
     final protected function resolutionStart(): void
     {
         parent::resolutionStart();
         $this->prepareSignalHandler();
-        Kernel::store(static::$EC_MAIN)->write(static::class, new TDStatus(
+        Kernel::store(static::$EC_MAIN)->write(static::stmName(), new TDStatus(
             pid: $this->pid,
             className: static::class,
             condition: TCondition::STARTED,
@@ -44,7 +51,7 @@ abstract class ThreadDaemon extends Dispatch
 
     final protected function resolutionEnd(): void
     {
-        Kernel::store(static::$EC_MAIN)->del(static::class);
+        Kernel::store(static::$EC_MAIN)->del(static::stmName());
     }
 
     /**
@@ -66,7 +73,7 @@ abstract class ThreadDaemon extends Dispatch
     final protected function streaming(callable $complianceCallable, ?callable $negationCallable = null): void
     {
         while (true) {
-            if (static::threadQty() < $this->streamRps) {
+            if (static::forkQty() < $this->streamRps) {
                 $complianceCallable();
             } else {
                 if ($negationCallable !== null) {
@@ -74,20 +81,22 @@ abstract class ThreadDaemon extends Dispatch
                 }
             }
             usleep((int) ($this->streamRps < 1000 ? ceil(1_000_000 / $this->streamRps) : 1000));
+            pcntl_signal_dispatch();
         }
     }
 
     final public static function status(bool $showStats = false): ?TDInfo
     {
         try {
+            $key = static::stmName();
             /** @var ?TDStatus $status */
-            $status = Kernel::store(static::$EC_MAIN)->read(static::class);
+            $status = Kernel::store(static::$EC_MAIN)->read($key);
             if (!$status) {
                 return null;
             }
 
             if (!posix_getpgid($status->pid)) {
-                Kernel::store(static::$EC_MAIN)->del(static::class);
+                Kernel::store(static::$EC_MAIN)->del($key);
                 return null;
             }
 
@@ -112,4 +121,5 @@ abstract class ThreadDaemon extends Dispatch
             throw new DaemonException('Cluster process has not started', HttpCode::LOCKED->value);
         }
     }
+
 }

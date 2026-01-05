@@ -85,6 +85,11 @@ abstract class ThreadWebSocket extends Dispatch
         $this->prepareSignalHandler();
     }
 
+    final public static function dispatch(mixed $data = null): int
+    {
+        return parent::dispatch($data);
+    }
+
     /**
      * The main entry point for the thread. This method is final and cannot be overridden.
      * It configures and starts the WebSocket server.
