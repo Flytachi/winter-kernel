@@ -20,7 +20,7 @@ abstract class Dispatch implements Dispatchable
     {
     }
 
-    final public static function dispatch(mixed $data = null): int
+    public static function dispatch(mixed $data = null): int
     {
         $runnable = new static();
         $thread = new Thread(

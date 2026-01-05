@@ -24,4 +24,9 @@ abstract class ThreadJob extends Dispatch
     final protected function resolutionEnd(): void
     {
     }
+
+    final public static function dispatch(mixed $data = null): int
+    {
+        return parent::dispatch($data);
+    }
 }
