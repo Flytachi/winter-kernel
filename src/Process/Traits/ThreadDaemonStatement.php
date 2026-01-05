@@ -146,6 +146,7 @@ trait ThreadDaemonStatement
 
     protected function preparationForkAfter(int $forkPid): void
     {
+        \Flytachi\Winter\Base\Log\Log::alert(static::$EC_THREADS . '/' . static::stmName());
         Kernel::store(static::$EC_THREADS . '/' . static::stmName(), false)
             ->del("_{$forkPid}_");
     }

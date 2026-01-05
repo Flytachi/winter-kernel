@@ -23,6 +23,7 @@ trait ThreadDaemonHandler
             $this->asInterrupt();
         } else {
             // Child
+            $this->preparationForkAfter($this->pid);
             $this->asChildInterrupt();
         }
         exit();
@@ -50,6 +51,7 @@ trait ThreadDaemonHandler
             $this->asTermination();
         } else {
             // Child
+            $this->preparationForkAfter($this->pid);
             $this->asChildTermination();
         }
         exit(1);
@@ -77,6 +79,7 @@ trait ThreadDaemonHandler
             $this->asClose();
         } else {
             // Child
+            $this->preparationForkAfter($this->pid);
             $this->asChildClose();
         }
         exit(1);
