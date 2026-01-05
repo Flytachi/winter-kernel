@@ -1,0 +1,24 @@
+<?php
+
+namespace __namespace__;
+
+use Flytachi\Winter\Kernel\Stereotype\Daemon;
+
+class __className__ extends Daemon
+{
+    public function resolution(mixed $data = null): void
+    {
+        $this->logger?->info('START');
+        $this->prepare();
+        $pid = $this->forkAnonymous();
+        $this->wait($pid, function ($pid, $status) {
+            $this->logger?->info("PROC finally (status {$status})");
+        });
+        $this->logger?->info('END');
+    }
+
+    public function anonymousResolution(mixed $data = null): void
+    {
+        $this->logger?->info("PROC running");
+    }
+}

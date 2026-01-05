@@ -80,7 +80,7 @@ class Make extends Cmd
             if (in_array('p', $this->args['flags'])) {
                 $this->createProcess($templateName);
             }
-            if (in_array('y', $this->args['flags'])) {
+            if (in_array('Y', $this->args['flags'])) {
                 $this->createDaemon($templateName);
             }
             if (in_array('w', $this->args['flags'])) {
@@ -329,7 +329,7 @@ class Make extends Cmd
         $code = file_get_contents($info['template']);
         $code = str_replace("__namespace__", $info['namespace'], $code);
         $code = str_replace("__className__", $info['className'], $code);
-        $this->createFile($info['className'], $info['path'], $code, 'cluster');
+        $this->createFile($info['className'], $info['path'], $code, 'daemon');
     }
 
     private function createWebSocket(string $name): void
