@@ -63,21 +63,21 @@ final class ResourceTree
             ob_start();
             $delta = round(microtime(true) - WINTER_STARTUP_TIME, 3);
             ?>
-            <link rel="stylesheet" type="text/css" href="/static/extra/css/debug.css"/>
-            <script type="text/javascript" src="/static/extra/js/debug.js"></script>
-            <button id="extra_debug-btn" onclick="ExtraDebugBar()"><em>Debug</em></button>
+            <link rel="stylesheet" type="text/css" href="/static/winter/debug.css"/>
+            <script type="text/javascript" src="/static/winter/debug.js"></script>
+            <button id="winter_debug-btn" onclick="WinterDebugBar()"><em>Debug</em></button>
 
-            <div id="extra_debug-bar">
-                <div id="extra_debug-bar_body-indicator">
+            <div id="winter_debug-bar">
+                <div id="winter_debug-bar_body-indicator">
                     <b>Memory:</b> <?= bytes(memory_get_usage(), 'MiB')  ?> /
                     <b>Time:</b> <?= ($delta < 0.001) ? 0.001 : $delta; ?> sec
                 </div>
 
-                <div id="extra_debug-bar_body-accordion-container">
+                <div id="winter_debug-bar_body-accordion-container">
 
-                    <input type="checkbox" id="debug-item_general">
-                    <label for="debug-item_general">GENERAL</label>
-                    <div class="extra_debug-accordion-body">
+                    <input type="checkbox" id="winter_debug-item_general">
+                    <label for="winter_debug-item_general">GENERAL</label>
+                    <div class="winter_debug-accordion-body">
                         <pre><?php print_r([
                                 'sapi' => PHP_SAPI,
                                 'timezone' => date_default_timezone_get(),
@@ -96,9 +96,9 @@ final class ResourceTree
                             ]) ?></pre>
                     </div>
 
-                    <input type="checkbox" id="debug-item_mapping">
-                    <label for="debug-item_mapping">MAPPING</label>
-                    <div class="extra_debug-accordion-body">
+                    <input type="checkbox" id="winter_debug-item_mapping">
+                    <label for="winter_debug-item_mapping">MAPPING</label>
+                    <div class="winter_debug-accordion-body">
                         <?php
                         try {
                             $declaration = Mapping::scanningDeclaration();
@@ -134,7 +134,7 @@ final class ResourceTree
                             <?php $name = ltrim($name, '_'); ?>
                             <input type="checkbox" id="debug-item_<?= $name ?>">
                             <label for="debug-item_<?= $name ?>"><?= $name ?></label>
-                            <div class="extra_debug-accordion-body">
+                            <div class="winter_debug-accordion-body">
                                 <pre><?php print_r($INFO) ?></pre>
                             </div>
                         <?php endif; ?>
