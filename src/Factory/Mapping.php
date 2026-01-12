@@ -7,13 +7,16 @@ namespace Flytachi\Winter\Kernel\Factory;
 use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Kernel\Factory\Middleware\MiddlewareInterface;
 use Flytachi\Winter\Kernel\Stereotype\ControllerInterface;
+use Flytachi\Winter\Kernel\Stereotype\Plugin;
 use Flytachi\Winter\Mapping\Annotation\RequestMapping;
 use Flytachi\Winter\Mapping\Declaration\MappingDeclaration;
 use Flytachi\Winter\Mapping\Declaration\MappingDeclarationItem;
+use Flytachi\Winter\Mapping\MappingException;
 use Flytachi\Winter\Mapping\MappingRequestInterface;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionEnum;
+use ReflectionException;
 use ReflectionMethod;
 use ReflectionUnionType;
 
@@ -74,94 +77,130 @@ class Mapping
         $declaration = new MappingDeclaration();
 
         foreach ($reflectionClasses as $reflectionClass) {
-            // class annotation
-            $groupAnnotation = $reflectionClass->getAttributes(RequestMapping::class);
-            if (isset($groupAnnotation[0])) {
-                $groupAnnotation = $groupAnnotation[0];
-                /** @var MappingRequestInterface $mappingGroup */
-                $mappingClass = $groupAnnotation->newInstance();
-            } else {
-                $mappingClass = null;
-            }
-
-            // class middleware annotations
+            $mappingClass = null;
             $middlewaresClass = [];
-            $groupAnnotationMiddleware = $reflectionClass->getAttributes(
-                MiddlewareInterface::class,
-                ReflectionAttribute::IS_INSTANCEOF
-            );
-            foreach ($groupAnnotationMiddleware as $annotationMiddleware) {
-                $middlewaresClass[] = $annotationMiddleware->getName();
-            }
 
-            // method annotation
-            foreach ($reflectionClass->getMethods(ReflectionMethod::IS_PUBLIC) as $reflectionMethod) {
-                if ($reflectionMethod->name != '__construct') {
-                    $annotations = $reflectionMethod->getAttributes(
-                        MappingRequestInterface::class,
-                        ReflectionAttribute::IS_INSTANCEOF
-                    );
-                    foreach ($annotations as $annotation) {
-                        /** @var MappingRequestInterface $mapping */
-                        $mapping = $annotation->newInstance();
-
-                        // method middleware annotations
-                        $middlewares = [];
-                        $annotationMiddlewares = $reflectionMethod->getAttributes(
-                            MiddlewareInterface::class,
-                            ReflectionAttribute::IS_INSTANCEOF
-                        );
-                        foreach ($annotationMiddlewares as $annotationMiddleware) {
-                            $middlewares[] = $annotationMiddleware->getName();
-                        }
-
-                        // method arguments
-                        $arguments = [];
-                        foreach ($reflectionMethod->getParameters() as $parameter) {
-                            $type = $parameter->getType();
-                            $typeInfo = null;
-
-                            if ($type !== null) {
-                                $types = $type instanceof ReflectionUnionType ? $type->getTypes() : [$type];
-
-                                foreach ($types as $typeSub) {
-                                    if (!$typeSub->isBuiltin()) {
-                                        $refEnum = new ReflectionEnum($typeSub->getName());
-                                        if ($refEnum->isEnum()) {
-                                            $typeInfo = [
-                                                'name' => $refEnum->getName(),
-                                                'backing' => $refEnum->getBackingType()?->getName(),
-                                            ];
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-
-                            $arguments[] = [
-                                'name' => $parameter->getName(),
-                                'typeInfo' => $typeInfo,
-                            ];
-                        }
-
-                        $declarationItem = new MappingDeclarationItem(
-                            $mapping->getCallback() ?: '',
-                            ($mappingClass != null
-                                ? trim($mappingClass->getUrl() . '/' . $mapping->getUrl(), '/')
-                                : $mapping->getUrl()
-                            ),
-                            $reflectionClass->getName(),
-                            $reflectionMethod->getName(),
-                            $arguments,
-                            [...$middlewaresClass, ...$middlewares]
-                        );
-                        $declaration->push($declarationItem);
-                    }
+            // plugin annotation
+            if ($reflectionClass->isSubclassOf(Plugin::class)) {
+                $pluginAnnotation = $reflectionClass->getAttributes(PluginMapping::class);
+                dd($pluginAnnotation);
+//                if (isset($pluginAnnotation[0])) {
+//                    $pluginAnnotation = $groupAnnotation[0];
+//                    /** @var MappingRequestInterface $mappingGroup */
+//                    $mappingClass = $groupAnnotation->newInstance();
+//                } else {
+//                    $mappingClass = null;
+//                }
+            } else {
+                // group class annotation
+                $groupAnnotation = $reflectionClass->getAttributes(RequestMapping::class);
+                if (isset($groupAnnotation[0])) {
+                    $groupAnnotation = $groupAnnotation[0];
+                    /** @var MappingRequestInterface $mappingGroup */
+                    $mappingClass = $groupAnnotation->newInstance();
                 }
+
+                // class middleware annotations
+                $groupAnnotationMiddleware = $reflectionClass->getAttributes(
+                    MiddlewareInterface::class,
+                    ReflectionAttribute::IS_INSTANCEOF
+                );
+                foreach ($groupAnnotationMiddleware as $annotationMiddleware) {
+                    $middlewaresClass[] = $annotationMiddleware->getName();
+                }
+
+                // method annotation
+                self::declareMethodAnnotation(
+                    declaration: $declaration,
+                    reflectionClass: $reflectionClass,
+                    mappingClass: $mappingClass,
+                    middlewaresClass: $middlewaresClass
+                );
             }
         }
 
         $declaration->sorting();
         return $declaration;
+    }
+
+    /**
+     * @param MappingDeclaration $declaration
+     * @param ReflectionClass $reflectionClass
+     * @param MappingRequestInterface|null $mappingClass
+     * @param array $middlewaresClass
+     * @return void
+     * @throws ReflectionException
+     * @throws MappingException
+     */
+    private static function declareMethodAnnotation(
+        MappingDeclaration &$declaration,
+        ReflectionClass $reflectionClass,
+        ?MappingRequestInterface $mappingClass,
+        array $middlewaresClass
+    ): void {
+        foreach ($reflectionClass->getMethods(ReflectionMethod::IS_PUBLIC) as $reflectionMethod) {
+            if ($reflectionMethod->name != '__construct') {
+                $annotations = $reflectionMethod->getAttributes(
+                    MappingRequestInterface::class,
+                    ReflectionAttribute::IS_INSTANCEOF
+                );
+                foreach ($annotations as $annotation) {
+                    /** @var MappingRequestInterface $mapping */
+                    $mapping = $annotation->newInstance();
+
+                    // method middleware annotations
+                    $middlewares = [];
+                    $annotationMiddlewares = $reflectionMethod->getAttributes(
+                        MiddlewareInterface::class,
+                        ReflectionAttribute::IS_INSTANCEOF
+                    );
+                    foreach ($annotationMiddlewares as $annotationMiddleware) {
+                        $middlewares[] = $annotationMiddleware->getName();
+                    }
+
+                    // method arguments
+                    $arguments = [];
+                    foreach ($reflectionMethod->getParameters() as $parameter) {
+                        $type = $parameter->getType();
+                        $typeInfo = null;
+
+                        if ($type !== null) {
+                            $types = $type instanceof ReflectionUnionType ? $type->getTypes() : [$type];
+
+                            foreach ($types as $typeSub) {
+                                if (!$typeSub->isBuiltin()) {
+                                    $refEnum = new ReflectionEnum($typeSub->getName());
+                                    if ($refEnum->isEnum()) {
+                                        $typeInfo = [
+                                            'name' => $refEnum->getName(),
+                                            'backing' => $refEnum->getBackingType()?->getName(),
+                                        ];
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        $arguments[] = [
+                            'name' => $parameter->getName(),
+                            'typeInfo' => $typeInfo,
+                        ];
+                    }
+
+                    $declarationItem = new MappingDeclarationItem(
+                        $mapping->getCallback() ?: '',
+                        ($mappingClass != null
+                            ? trim($mappingClass->getUrl() . '/' . $mapping->getUrl(), '/')
+                            : $mapping->getUrl()
+                        ),
+                        $reflectionClass->getName(),
+                        $reflectionMethod->getName(),
+                        $arguments,
+                        [...$middlewaresClass, ...$middlewares]
+                    );
+                    $declaration->push($declarationItem);
+                }
+            }
+        }
     }
 }

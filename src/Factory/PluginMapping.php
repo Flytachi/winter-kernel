@@ -9,7 +9,7 @@ use Flytachi\Winter\Kernel\Stereotype\ControllerInterface;
 use Flytachi\Winter\Mapping\Annotation\AbstractMapping;
 use Flytachi\Winter\Mapping\MappingRequestInterface;
 
-#[Attribute(Attribute::TARGET_CLASS)]
+#[Attribute(Attribute::TARGET_CLASS | Attribute::IS_REPEATABLE)]
 class PluginMapping
 {
     /**
