@@ -82,15 +82,25 @@ class Mapping
 
             // plugin annotation
             if ($reflectionClass->isSubclassOf(Plugin::class)) {
-                $pluginAnnotation = $reflectionClass->getAttributes(PluginMapping::class);
-                dd($pluginAnnotation);
-//                if (isset($pluginAnnotation[0])) {
-//                    $pluginAnnotation = $groupAnnotation[0];
-//                    /** @var MappingRequestInterface $mappingGroup */
-//                    $mappingClass = $groupAnnotation->newInstance();
-//                } else {
-//                    $mappingClass = null;
-//                }
+                $pluginAnnotations = $reflectionClass->getAttributes(PluginMapping::class);
+
+                foreach ($pluginAnnotations as $pluginAnnotation) {
+                    /** @var PluginMapping $plugin */
+                    $plugin = $pluginAnnotation->newInstance();
+                    $mappingClass = new RequestMapping($plugin->url);
+                    try {
+                        $pluginReflectionClass = new ReflectionClass($plugin->controllerClassName);
+                        if ($pluginReflectionClass->implementsInterface(ControllerInterface::class)) {
+                            self::declareMethodAnnotation(
+                                declaration: $declaration,
+                                reflectionClass: $pluginReflectionClass,
+                                mappingClass: $mappingClass,
+                                middlewaresClass: [$plugin->middlewareClassName]
+                            );
+                        }
+                    } catch (\ReflectionException $ex) {
+                    }
+                }
             } else {
                 // group class annotation
                 $groupAnnotation = $reflectionClass->getAttributes(RequestMapping::class);
