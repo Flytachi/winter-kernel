@@ -88,6 +88,10 @@ class Mapping
                     /** @var PluginMapping $plugin */
                     $plugin = $pluginAnnotation->newInstance();
                     $mappingClass = new RequestMapping($plugin->url);
+                    $pluginMiddlewares = [];
+                    if ($plugin->middlewareClassName !== null) {
+                        $pluginMiddlewares[] = $plugin->middlewareClassName;
+                    }
                     try {
                         $pluginReflectionClass = new ReflectionClass($plugin->controllerClassName);
                         if ($pluginReflectionClass->implementsInterface(ControllerInterface::class)) {
@@ -95,7 +99,7 @@ class Mapping
                                 declaration: $declaration,
                                 reflectionClass: $pluginReflectionClass,
                                 mappingClass: $mappingClass,
-                                middlewaresClass: [$plugin->middlewareClassName]
+                                middlewaresClass: $pluginMiddlewares
                             );
                         }
                     } catch (\ReflectionException $ex) {
