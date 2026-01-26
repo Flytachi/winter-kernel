@@ -71,7 +71,7 @@ final class Kernel extends KernelStore
         LoggerRegistry::setInstance($logger !== null ? $logger : self::registryLogger());
 
         // thread
-        self::bindThreadRunner();
+        self::bindThread();
     }
 
     public static function info(): array
@@ -156,7 +156,7 @@ final class Kernel extends KernelStore
         return $logger;
     }
 
-    private static function bindThreadRunner(): void
+    private static function bindThread(): void
     {
         $pathBin = self::$pathRoot . '/vendor/bin/wKernelExecutor';
         if (!file_exists($pathBin)) {
@@ -167,5 +167,8 @@ final class Kernel extends KernelStore
         }
 
         Thread::bindRunner($pathBin);
+        Thread::bindSerSecurity(
+            env('WTR_KEY', '') ?: null
+        );
     }
 }
