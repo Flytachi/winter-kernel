@@ -129,7 +129,7 @@ class HealthIndicator implements HealthIndicatorInterface
         foreach ($refClasses as $refClass) {
             /** @var DbConfigInterface $config */
             $config = $refClass->newInstance();
-            $config->sepUp();
+            $config->setUp();
 
             try {
                 $result = $config->pingDetail();
@@ -182,7 +182,7 @@ class HealthIndicator implements HealthIndicatorInterface
         foreach ($refClasses as $refClass) {
             /** @var RedisConfigInterface $config */
             $config = $refClass->newInstance();
-            $config->sepUp();
+            $config->setUp();
 
             try {
                 $result = $config->pingDetail();

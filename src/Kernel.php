@@ -158,17 +158,31 @@ final class Kernel extends KernelStore
 
     private static function bindThread(): void
     {
-        $pathBin = self::$pathRoot . '/vendor/bin/wKernelExecutor';
-        if (!file_exists($pathBin)) {
-            $pathBin = self::$pathRoot . '/vendor/bin/wExecutor';
+        // thread runner
+        $pathBinCustom = env('WINTER_THREAD_RUNNER', '');
+        if (!empty($pathBinCustom) && file_exists($pathBinCustom)) {
+            Thread::bindRunner($pathBinCustom);
+        } else {
+            $pathBin = self::$pathRoot . '/vendor/bin/wKernelExecutor';
             if (!file_exists($pathBin)) {
-                return;
+                $pathBin = self::$pathRoot . '/vendor/bin/wExecutor';
+                if (!file_exists($pathBin)) {
+                    return;
+                }
             }
+            Thread::bindRunner($pathBin);
         }
 
-        Thread::bindRunner($pathBin);
-        Thread::bindSerSecurity(
-            env('WTR_KEY', '') ?: null
-        );
+        // thread binary path
+        $binaryPath = env('WINTER_BINARY_PATH', '');
+        if (!empty($binaryPath)) {
+            Thread::bindBinaryPath($binaryPath);
+        }
+
+        // thread security
+        $key = env('WINTER_KEY', '');
+        if (!empty($key)) {
+            Thread::bindSerSecurity($key);
+        }
     }
 }

@@ -216,7 +216,7 @@ class Db extends Cmd
         $sqlConstraints = [];
 
         foreach ($declaration->getItems() as $item) {
-            $item->config->sepUp();
+            $item->config->setUp();
 
             foreach ($item->getTables() as $structure) {
                 if ($structure instanceof Table) {

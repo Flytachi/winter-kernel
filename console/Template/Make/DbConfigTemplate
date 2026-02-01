@@ -6,7 +6,7 @@ use Flytachi\Winter\Cdo\Config\DbConfig;
 
 class __className__ extends DbConfig
 {
-    public function sepUp(): void
+    public function setUp(): void
     {
         $this->driver = env('DB_DRIVER', 'pgsql');
         $this->host = env('DB_HOST', 'localhost');
