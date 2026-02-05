@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Factory\Entity;
 
 use DateTime;
+use TypeError;
 
 trait ValidateTrait
 {
@@ -44,11 +45,16 @@ trait ValidateTrait
      *        - Custom rules: anonymous functions that accept the property value
      *          and return `true` (if validation passes) or `false`.
      * @param bool $required If false, validation is skipped for null or non-existent fields.
+     * @param string|null $message
      *
      * @return static Returns `$this` to allow method chaining.
      */
-    final protected function validate(string $field, array $rules, bool $required = true): static
-    {
+    final protected function validate(
+        string $field,
+        array $rules,
+        bool $required = true,
+        ?string $message = null,
+    ): static {
         if (!$required && (!property_exists($this, $field) || $this->$field === null)) {
             return $this;
         }
@@ -58,8 +64,16 @@ trait ValidateTrait
 
             if (is_array($values)) {
                 foreach ($values as $index => $value) {
-                    $specificFieldKey = str_replace('*', (string)$index, $field);
-                    $this->applyRules($specificFieldKey, $value, $rules);
+                    $specificFieldKey = str_replace('*', (string) $index, $field);
+                    try {
+                        $this->applyRules($specificFieldKey, $value, $rules);
+                    } catch (RequestException $e) {
+                        if (!empty($message)) {
+                            RequestException::throw($message, $e->getCode(), $e);
+                        } else {
+                            throw $e;
+                        }
+                    }
                 }
             }
             return $this;
@@ -71,7 +85,15 @@ trait ValidateTrait
             return $this;
         }
 
-        $this->applyRules($field, $value, $rules);
+        try {
+            $this->applyRules($field, $value, $rules);
+        } catch (RequestException $e) {
+            if (!empty($message)) {
+                RequestException::throw($message, $e->getCode(), $e);
+            } else {
+                throw $e;
+            }
+        }
 
         return $this;
     }
@@ -82,13 +104,14 @@ trait ValidateTrait
      * @param string $field The display name of the field for error messages.
      * @param mixed $value The actual value to validate.
      * @param array $rules The rules to apply.
+     * @throws RequestException
      */
     private function applyRules(string $field, mixed $value, array $rules): void
     {
         foreach ($rules as $rule) {
             if (is_callable($rule)) {
                 if (!$rule($value)) {
-                    RequestException::throw("Field '{$field}' failed validation check.");
+                    throw new RequestException("Field '{$field}' failed validation check.");
                 }
                 continue;
             }
@@ -120,7 +143,7 @@ trait ValidateTrait
             };
 
             if (!method_exists($this, $methodName)) {
-                RequestException::throw("Unknown validation rule '{$ruleName}'.");
+                throw new RequestException("Unknown validation rule '{$ruleName}'.");
             }
 
             $this->{$methodName}($field, $value, ...$parameters);
