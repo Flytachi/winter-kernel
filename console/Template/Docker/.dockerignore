@@ -1,0 +1,32 @@
+# Version control
+.git
+.github
+
+# IDE / OS
+.idea
+.vscode
+.fleet
+.nova
+.zed
+.DS_Store
+*.buildpath
+*.project
+.settings
+
+# Dependencies (composer)
+vendor
+
+# Environment & secrets
+.env
+
+# Storage (logs, cache)
+storage/logs
+storage/cache
+
+# Tests
+phpunit.xml
+.phpunit.result.cache
+
+# Docker files
+docker-compose.yml
+Dockerfile

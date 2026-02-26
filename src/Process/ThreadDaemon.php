@@ -121,5 +121,4 @@ abstract class ThreadDaemon extends Dispatch
             throw new DaemonException('Cluster process has not started', HttpCode::LOCKED->value);
         }
     }
-
 }

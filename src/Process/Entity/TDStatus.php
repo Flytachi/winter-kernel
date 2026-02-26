@@ -7,12 +7,12 @@ namespace Flytachi\Winter\Kernel\Process\Entity;
 final class TDStatus
 {
     public function __construct(
-        public int        $pid,
-        public string     $className,
+        public int $pid,
+        public string $className,
         public TCondition $condition,
-        public int        $startedAt,
-        public ?int       $streamRps = null,
-        public array      $info = []
+        public int $startedAt,
+        public ?int $streamRps = null,
+        public array $info = []
     ) {
     }
 

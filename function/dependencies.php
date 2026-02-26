@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use \Flytachi\Winter\Kernel\Localization\Locale;
+use Flytachi\Winter\Kernel\Localization\Locale;
 
 if (!function_exists('trans')) {
     /**

@@ -102,9 +102,9 @@ class Cfg extends Cmd
 
     private function keyShow(): void
     {
-//        self::printLabel('EXTRA KEY', 34);
-//        self::printSplit(EXTRA_KEY, 34);
-//        self::printLabel('EXTRA KEY', 34);
+        self::printLabel('EXTRA KEY', 34);
+        self::printSplit(env('WINTER_KEY', ''), 34);
+        self::printLabel('EXTRA KEY', 34);
     }
 
     private function envArg(): void
@@ -180,6 +180,7 @@ class Cfg extends Cmd
     {
         multiCopy($this->templatePath . '/Docker', Kernel::$pathRoot);
         self::printMessage("Folder 'docker' is created.", 32);
+        self::printMessage("File '.dockerignore' is created.", 32);
         self::printMessage("File 'docker-compose' is created.", 32);
         self::printMessage("File 'Dockerfile' is created.", 32);
     }

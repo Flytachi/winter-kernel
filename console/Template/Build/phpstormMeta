@@ -3,6 +3,9 @@
 namespace PHPSTORM_META;
 
 override(\env(0), map([
+    'WINTER_THREAD_RUNNER' => '',
+    'WINTER_BINARY_PATH' => '',
+    'WINTER_KEY' => 'secret-key'
     'TIME_ZONE' => 'UTC',
     'DEBUG' => 'true',
     'LOGGER_LEVEL_ALLOW' => 'DEBUG,INFO,NOTICE,WARNING,ERROR,CRITICAL,ALERT,EMERGENCY',

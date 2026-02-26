@@ -7,10 +7,10 @@ namespace Flytachi\Winter\Kernel\Process\Entity;
 final class TStatus
 {
     public function __construct(
-        public int        $pid,
+        public int $pid,
         public TCondition $condition,
-        public int        $startedAt,
-        public array      $info = []
+        public int $startedAt,
+        public array $info = []
     ) {
     }
 
