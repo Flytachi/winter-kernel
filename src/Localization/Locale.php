@@ -21,7 +21,7 @@ final class Locale
             $langPath = Kernel::$pathRoot . '/lang';
 
             $available = self::getAvailableLanguages($langPath);
-            $acceptHeader = Header::getHeader('Accept-Language') ?: 'en';
+            $acceptHeader = Header::getAcceptLanguage() ?: 'en';
 
             $bestLang = LanguageNegotiator::negotiate($acceptHeader, $available, 'en');
 
