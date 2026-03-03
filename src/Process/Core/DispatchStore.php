@@ -6,7 +6,7 @@ namespace Flytachi\Winter\Kernel\Process\Core;
 
 use Flytachi\Winter\Kernel\Kernel;
 
-final class PStore
+final class DispatchStore
 {
     private static string $ES_NAME = 'dispatcher';
 

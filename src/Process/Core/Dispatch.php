@@ -32,7 +32,7 @@ abstract class Dispatch implements Dispatchable
         $arguments = [];
         if (!empty($data)) {
             $storeKey = uniqid('cache-');
-            PStore::push($storeKey, $data);
+            DispatchStore::push($storeKey, $data);
             $arguments['storeKey'] = $storeKey;
         }
 
@@ -45,7 +45,7 @@ abstract class Dispatch implements Dispatchable
         $arguments = [];
         if (!empty($data)) {
             $storeKey = uniqid('cache-');
-            PStore::push($storeKey, $data);
+            DispatchStore::push($storeKey, $data);
             $arguments['storeKey'] = $storeKey;
         }
         $runnable->run($arguments);
@@ -56,7 +56,7 @@ abstract class Dispatch implements Dispatchable
         try {
             $this->resolutionStart();
             $this->resolution(isset($args['storeKey'])
-                ? PStore::pop($args['storeKey'])
+                ? DispatchStore::pop($args['storeKey'])
                 : null);
         } catch (\Throwable $e) {
             $this->logger->critical(

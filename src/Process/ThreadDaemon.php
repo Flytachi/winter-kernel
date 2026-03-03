@@ -6,7 +6,7 @@ namespace Flytachi\Winter\Kernel\Process;
 
 use Flytachi\FileStore\FileStorageException;
 use Flytachi\Winter\Base\HttpCode;
-use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Kernel\Process\Core\DaemonStore;
 use Flytachi\Winter\Kernel\Process\Core\Dispatch;
 use Flytachi\Winter\Kernel\Process\Entity\TCondition;
 use Flytachi\Winter\Kernel\Process\Entity\TDInfo;
@@ -25,21 +25,28 @@ abstract class ThreadDaemon extends Dispatch
     use ThreadSignalHandler;
     use ThreadDaemonStatement;
 
-    protected static string $EC_MAIN = 'daemons';
-    protected static string $EC_THREADS = 'daemons-threads';
+    protected static DaemonStore $_STORE;
     protected string $exNamespace = 'daemon';
     protected int $streamRps = 0;
 
-    final public static function stmName(): string
+    final public static function hashName(): string
     {
         return hash('xxh64', static::class);
+    }
+
+    final protected static function store(): DaemonStore
+    {
+        if (!isset(static::$_STORE)) {
+            static::$_STORE = new DaemonStore(static::class);
+        }
+        return static::$_STORE;
     }
 
     final protected function resolutionStart(): void
     {
         parent::resolutionStart();
         $this->prepareSignalHandler();
-        Kernel::runnable(static::$EC_MAIN)->write(static::stmName(), new TDStatus(
+        self::store()->main()->write(static::hashName(), new TDStatus(
             pid: $this->pid,
             className: static::class,
             condition: TCondition::STARTED,
@@ -51,7 +58,7 @@ abstract class ThreadDaemon extends Dispatch
 
     final protected function resolutionEnd(): void
     {
-        Kernel::runnable(static::$EC_MAIN)->del(static::stmName());
+        self::store()->main()->del(static::hashName());
     }
 
     /**
@@ -88,15 +95,16 @@ abstract class ThreadDaemon extends Dispatch
     final public static function status(bool $showStats = false): ?TDInfo
     {
         try {
-            $key = static::stmName();
+            $key = static::hashName();
             /** @var ?TDStatus $status */
-            $status = Kernel::runnable(static::$EC_MAIN)->read($key);
+
+            $status = self::store()->main()->read($key);
             if (!$status) {
                 return null;
             }
 
             if (!posix_getpgid($status->pid)) {
-                Kernel::runnable(static::$EC_MAIN)->del($key);
+                self::store()->main()->del($key);
                 return null;
             }
 

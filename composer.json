@@ -8,7 +8,8 @@
     "autoload": {
         "psr-4": {
             "Flytachi\\Winter\\Console\\": "console/",
-            "Flytachi\\Winter\\Kernel\\": "src/"
+            "Flytachi\\Winter\\Kernel\\": "src/",
+            "Main\\": "tests/main/"
         },
         "files": [
             "function/dependencies.php",
