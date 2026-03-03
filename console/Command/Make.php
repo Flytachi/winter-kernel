@@ -74,16 +74,16 @@ class Make extends Cmd
             if (in_array('p', $this->args['flags'])) {
                 $this->createResponse($templateName);
             }
-            if (in_array('j', $this->args['flags'])) {
+            if (in_array('J', $this->args['flags'])) {
                 $this->createJob($templateName);
             }
-            if (in_array('p', $this->args['flags'])) {
+            if (in_array('P', $this->args['flags'])) {
                 $this->createProcess($templateName);
             }
-            if (in_array('Y', $this->args['flags'])) {
+            if (in_array('N', $this->args['flags'])) {
                 $this->createDaemon($templateName);
             }
-            if (in_array('w', $this->args['flags'])) {
+            if (in_array('W', $this->args['flags'])) {
                 $this->createWebSocket($templateName);
             }
             if (in_array('D', $this->args['flags'])) {
@@ -509,10 +509,10 @@ class Make extends Cmd
         self::print("r - Template Repository, prefix Repository", $cl);
         self::print("t - Template Store, prefix Store", $cl);
         self::print("", $cl);
-        self::print("j - Template Job, prefix Job", $cl);
-        self::print("p - Template Process, prefix Process", $cl);
-        self::print("Y - Template Daemon, prefix Daemon", $cl);
-        self::print("w - Template WebSocket, prefix WebSocket", $cl);
+        self::print("J - Template Job, prefix Job", $cl);
+        self::print("P - Template Process, prefix Process", $cl);
+        self::print("N - Template Daemon, prefix Daemon", $cl);
+        self::print("W - Template WebSocket, prefix WebSocket", $cl);
         self::print("", $cl);
         self::print("D - Template DbConfig, prefix Config", $cl);
         self::print("R - Template RedisConfig, prefix RedisConfig", $cl);
