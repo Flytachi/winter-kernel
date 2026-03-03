@@ -110,20 +110,22 @@ class Db extends Cmd
             $db = $item->config->connection();
 
             // Schemes
-            if (in_array('s', $this->args['flags'])) {
-                if (count($data['sqlSchemes']) > 0) {
-                    self::printMessage("* Schemes (" . count($data['sqlSchemes']) . ")", 32);
-                    foreach ($data['sqlSchemes'] as $sql) {
-                        try {
-                            $db->exec($sql['exec']);
-                            self::print("- [ok] scheme '{$sql['title']}'", 32);
-                        } catch (\Throwable $e) {
-                            if ($e->getCode() === '42P06') {
-                                self::print("- [exist] scheme '{$sql['title']}'", 33);
-                            } else {
-                                self::print("- [failed] scheme '{$sql['title']}'", 31);
-                                if (env('DEBUG', false)) {
-                                    self::print("\t" . $e->getMessage(), 31);
+            if ($item->config->getDriver() === 'pgsql') {
+                if (in_array('s', $this->args['flags'])) {
+                    if (count($data['sqlSchemes']) > 0) {
+                        self::printMessage("* Schemes (" . count($data['sqlSchemes']) . ")", 32);
+                        foreach ($data['sqlSchemes'] as $sql) {
+                            try {
+                                $db->exec($sql['exec']);
+                                self::print("- [ok] scheme '{$sql['title']}'", 32);
+                            } catch (\Throwable $e) {
+                                if ($e->getCode() === '42P06') {
+                                    self::print("- [exist] scheme '{$sql['title']}'", 33);
+                                } else {
+                                    self::print("- [failed] scheme '{$sql['title']}'", 31);
+                                    if (env('DEBUG', false)) {
+                                        self::print("\t" . $e->getMessage(), 31);
+                                    }
                                 }
                             }
                         }
@@ -140,7 +142,10 @@ class Db extends Cmd
                             $db->exec($sql['exec']);
                             self::print("- [ok] table '{$sql['title']}'", 32);
                         } catch (\Throwable $e) {
-                            if ($e->getCode() === '42P07') {
+                            if (
+                                ($item->config->getDriver() === 'pgsql' && $e->getCode() === '42P07')
+                                || ($item->config->getDriver() === 'mysql' && $e->getCode() === '42S01')
+                            ) {
                                 self::print("- [exist] table '{$sql['title']}'", 33);
                             } else {
                                 self::print("- [failed] table '{$sql['title']}'", 31);
@@ -162,7 +167,10 @@ class Db extends Cmd
                             $db->exec($sql['exec']);
                             self::print("- [ok] " . $sql['title'], 32);
                         } catch (\Throwable $e) {
-                            if ($e->getCode() === '42P07') {
+                            if (
+                                ($item->config->getDriver() === 'pgsql' && $e->getCode() === '42P07')
+                                || ($item->config->getDriver() === 'mysql' && $e->getCode() === '42000')
+                            ) {
                                 self::print("- [exist] " . $sql['title'], 33);
                             } else {
                                 self::print("- [failed] " . $sql['title'], 31);
