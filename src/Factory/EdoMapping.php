@@ -37,6 +37,7 @@ class EdoMapping
                 $repository = $reflectionClass->newInstance();
                 /** @var DbConfigInterface $config */
                 $config = (new ReflectionClass($repository->getDbConfigClassName()))->newInstance();
+                $config->setUp();
 
                 $reflectionClassEntity = new ReflectionClass($repository->getEntityClassName());
                 $columnMap = new ColumnMapping($config->getDriver());
