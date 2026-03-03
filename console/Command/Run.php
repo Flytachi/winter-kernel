@@ -47,17 +47,38 @@ class Run extends Cmd
 
     private function serveArg(): void
     {
+        $isManual = false;
+        if (isset($this->args['options']['port']) || isset($this->args['options']['port'])) {
+            $isManual = true;
+        }
         $host = (isset($this->args['options']['host'])) ? $this->args['options']['host'] : self::HOST;
         $port = (isset($this->args['options']['port'])) ? (int) $this->args['options']['port'] : self::PORT;
-        $connection = @fsockopen($host, $port);
 
-        if (is_resource($connection)) {
-            self::printMessage("Permission denied, 'http://{$host}:{$port}' is already busy!");
-            fclose($connection);
+        if ($isManual) {
+            $connection = @fsockopen($host, $port);
+            if (is_resource($connection)) {
+                self::printMessage("Permission denied, 'http://{$host}:{$port}' is already busy!");
+                fclose($connection);
+                return;
+            }
         } else {
-            self::printMessage("Starting the server to 'http://" . $host . ':' . $port . "'", 32);
-            exec("php -S {$host}:{$port} -t " . Kernel::$pathPublic);
+            for ($i = 0; $i < 10; $i++) {
+                $port = $port + $i;
+                $connection = @fsockopen($host, $port);
+                if (is_resource($connection)) {
+                    self::printMessage("Permission denied, 'http://{$host}:{$port}' is already busy!");
+                    fclose($connection);
+                    if ($i == 9) {
+                        return;
+                    }
+                } else {
+                    break;
+                }
+            }
         }
+
+        self::printMessage("Starting the server to 'http://" . $host . ':' . $port . "'", 32);
+        exec("php -S {$host}:{$port} -t " . Kernel::$pathPublic);
     }
 
     private function scriptArg(): void
