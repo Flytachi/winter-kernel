@@ -17,6 +17,14 @@ use Flytachi\Winter\Kernel\Stereotype\ControllerInterface;
 
 final class Router extends Stereotype implements ActuatorItemInterface
 {
+    private string $pathMapping;
+
+    public function __construct()
+    {
+        parent::__construct();
+        $this->pathMapping = Kernel::$pathStorageVolatile . '/mapping.php';
+    }
+
     /**
      * An array to store registered routes in a tree structure.
      *
@@ -125,8 +133,8 @@ final class Router extends Stereotype implements ActuatorItemInterface
     private function registrar(bool $isDevelop): void
     {
         if ($isDevelop) {
-            if (file_exists(Kernel::$pathFileMapping)) {
-                unlink(Kernel::$pathFileMapping);
+            if (file_exists($this->pathMapping)) {
+                unlink($this->pathMapping);
             }
             $declaration = Mapping::scanningDeclaration();
             foreach ($declaration->getChildren() as $item) {
@@ -140,10 +148,10 @@ final class Router extends Stereotype implements ActuatorItemInterface
                 );
             }
         } else {
-            if (!file_exists(Kernel::$pathFileMapping)) {
+            if (!file_exists($this->pathMapping)) {
                 $this->generateMappingRoutes();
             } else {
-                $this->routes = require Kernel::$pathFileMapping;
+                $this->routes = require $this->pathMapping;
             }
         }
     }
@@ -238,10 +246,10 @@ final class Router extends Stereotype implements ActuatorItemInterface
         $fileData = "<?php" . PHP_EOL . PHP_EOL;
         $fileData .= "/**" . PHP_EOL . " * Mapping configurations"
             . PHP_EOL . " * - Created on: " . date(DATE_RFC822)
-            . PHP_EOL . " * - Version: 1.5"
+            . PHP_EOL . " * - Version: 2.0"
             . PHP_EOL . " */" . PHP_EOL . PHP_EOL
-            . "return {$mapString};";
-        file_put_contents(Kernel::$pathFileMapping, $fileData);
+            . "return $mapString;";
+        file_put_contents($this->pathMapping, $fileData);
         if (function_exists('opcache_reset')) {
             try {
                 opcache_reset();
@@ -322,5 +330,10 @@ final class Router extends Stereotype implements ActuatorItemInterface
                 throw $exception;
             }
         }
+    }
+
+    public function getPathMapping(): string
+    {
+        return $this->pathMapping;
     }
 }

@@ -39,7 +39,7 @@ abstract class ThreadDaemon extends Dispatch
     {
         parent::resolutionStart();
         $this->prepareSignalHandler();
-        Kernel::store(static::$EC_MAIN)->write(static::stmName(), new TDStatus(
+        Kernel::runnable(static::$EC_MAIN)->write(static::stmName(), new TDStatus(
             pid: $this->pid,
             className: static::class,
             condition: TCondition::STARTED,
@@ -51,7 +51,7 @@ abstract class ThreadDaemon extends Dispatch
 
     final protected function resolutionEnd(): void
     {
-        Kernel::store(static::$EC_MAIN)->del(static::stmName());
+        Kernel::runnable(static::$EC_MAIN)->del(static::stmName());
     }
 
     /**
@@ -90,13 +90,13 @@ abstract class ThreadDaemon extends Dispatch
         try {
             $key = static::stmName();
             /** @var ?TDStatus $status */
-            $status = Kernel::store(static::$EC_MAIN)->read($key);
+            $status = Kernel::runnable(static::$EC_MAIN)->read($key);
             if (!$status) {
                 return null;
             }
 
             if (!posix_getpgid($status->pid)) {
-                Kernel::store(static::$EC_MAIN)->del($key);
+                Kernel::runnable(static::$EC_MAIN)->del($key);
                 return null;
             }
 

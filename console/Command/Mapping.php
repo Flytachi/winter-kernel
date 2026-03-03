@@ -68,8 +68,9 @@ class Mapping extends Cmd
     private function buildIsNotExistArg(): void
     {
         try {
-            if (!file_exists(Kernel::$pathFileMapping)) {
-                (new Router())->generateMappingRoutes();
+            $router = new Router();
+            if (!file_exists($router->getPathMapping())) {
+                $router->generateMappingRoutes();
                 self::printMessage("Mapping build success.", 32);
             } else {
                 self::printMessage("Mapping already exist.", 32);
@@ -102,11 +103,12 @@ class Mapping extends Cmd
     private function cleanArg(): void
     {
         try {
-            if (file_exists(Kernel::$pathFileMapping)) {
-                unlink(Kernel::$pathFileMapping);
+            $router = new Router();
+            if (file_exists($router->getPathMapping())) {
+                unlink($router->getPathMapping());
                 self::printMessage("Mapping clean success.", 32);
             } else {
-                self::printMessage(basename(Kernel::$pathFileMapping) . " is not exists.");
+                self::printMessage(basename($router->getPathMapping()) . " is not exists.");
             }
         } catch (\Throwable $e) {
             self::printMessage("Mapping clean failed", 31);

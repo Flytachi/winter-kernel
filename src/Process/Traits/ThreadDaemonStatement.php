@@ -24,7 +24,7 @@ trait ThreadDaemonStatement
      */
     final public static function forkQty(): int
     {
-        $keys = Kernel::store(static::$EC_THREADS . '/' . static::stmName(), false)
+        $keys = Kernel::runnable(static::$EC_THREADS . '/' . static::stmName(), false)
             ->keys();
         return count($keys);
     }
@@ -35,7 +35,7 @@ trait ThreadDaemonStatement
      */
     final public static function forkList(): array
     {
-        $keys = Kernel::store(static::$EC_THREADS . '/' . static::stmName(), false)
+        $keys = Kernel::runnable(static::$EC_THREADS . '/' . static::stmName(), false)
             ->keys();
         foreach ($keys as $key => $path) {
             $keys[$key] = (int) trim($path, '_');
@@ -50,7 +50,7 @@ trait ThreadDaemonStatement
      */
     final public static function forkListInfo(bool $showStats = false): array
     {
-        $store = Kernel::store(static::$EC_THREADS . '/' . static::stmName(), false);
+        $store = Kernel::runnable(static::$EC_THREADS . '/' . static::stmName(), false);
         $keys = $store->keys();
         foreach ($keys as $key => $path) {
             $pid = (int) trim($path, '_');
@@ -70,7 +70,7 @@ trait ThreadDaemonStatement
      */
     final public static function forkInfo(int $forkPid, bool $showStats = false): ?TInfo
     {
-        $store = Kernel::store(static::$EC_THREADS . '/' . static::stmName(), false);
+        $store = Kernel::runnable(static::$EC_THREADS . '/' . static::stmName(), false);
         $status = $store->read("_{$forkPid}_");
         if (!$status) {
             return null;
@@ -84,7 +84,7 @@ trait ThreadDaemonStatement
 
     final public static function forkSetCondition(int $threadPid, TCondition $newCondition): void
     {
-        $store = Kernel::store(static::$EC_THREADS . '/' . static::stmName(), false);
+        $store = Kernel::runnable(static::$EC_THREADS . '/' . static::stmName(), false);
         /** @var TStatus $status */
         $status = $store->read("_{$threadPid}_");
         $status->condition = $newCondition;
@@ -93,7 +93,7 @@ trait ThreadDaemonStatement
 
     final protected function setCondition(TCondition $newCondition): void
     {
-        $store = Kernel::store(static::$EC_MAIN);
+        $store = Kernel::runnable(static::$EC_MAIN);
         $key = static::stmName();
         /** @var TDStatus $status */
         $status = $store->read($key);
@@ -103,7 +103,7 @@ trait ThreadDaemonStatement
 
     final protected function setInfo(array $newInfo): void
     {
-        $store = Kernel::store(static::$EC_MAIN);
+        $store = Kernel::runnable(static::$EC_MAIN);
         $key = static::stmName();
         /** @var TDStatus $status */
         $status = $store->read($key);
@@ -113,7 +113,7 @@ trait ThreadDaemonStatement
 
     final protected function prepare(int $streamRps = 0): void
     {
-        $store = Kernel::store(static::$EC_MAIN);
+        $store = Kernel::runnable(static::$EC_MAIN);
         $key = static::stmName();
         // start
         /** @var TDStatus $status */
@@ -136,7 +136,7 @@ trait ThreadDaemonStatement
 
     protected function preparationForkBefore(int $forkPid): void
     {
-        Kernel::store(static::$EC_THREADS . '/' . static::stmName(), false)
+        Kernel::runnable(static::$EC_THREADS . '/' . static::stmName(), false)
             ->write("_{$forkPid}_", new TStatus(
                 pid: $forkPid,
                 condition: TCondition::STARTED,
@@ -147,7 +147,7 @@ trait ThreadDaemonStatement
     protected function preparationForkAfter(int $forkPid): void
     {
         \Flytachi\Winter\Base\Log\Log::alert(static::$EC_THREADS . '/' . static::stmName());
-        Kernel::store(static::$EC_THREADS . '/' . static::stmName(), false)
+        Kernel::runnable(static::$EC_THREADS . '/' . static::stmName(), false)
             ->del("_{$forkPid}_");
     }
 }

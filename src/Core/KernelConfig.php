@@ -12,9 +12,10 @@ abstract class KernelConfig
     public static string $pathPublic;
     public static string $pathResource;
     public static string $pathStorage;
-    public static string $pathStorageCache;
     public static string $pathStorageLog;
-    public static string $pathFileMapping;
+    public static string $pathStorageCache;
+    public static string $pathStorageRunnable;
+    public static string $pathStorageVolatile;
 
     /**
      * @param string|null $pathRoot
@@ -23,9 +24,10 @@ abstract class KernelConfig
      * @param string|null $pathPublic
      * @param string|null $pathResource
      * @param string|null $pathStorage
-     * @param string|null $pathStorageCache
      * @param string|null $pathStorageLog
-     * @param string|null $pathFileMapping
+     * @param string|null $pathStorageCache
+     * @param string|null $pathStorageRunnable
+     * @param bool $isTmpVolatile
      * @return void
      */
     public static function init(
@@ -35,9 +37,10 @@ abstract class KernelConfig
         ?string $pathPublic = null,
         ?string $pathResource = null,
         ?string $pathStorage = null,
-        ?string $pathStorageCache = null,
         ?string $pathStorageLog = null,
-        ?string $pathFileMapping = null
+        ?string $pathStorageCache = null,
+        ?string $pathStorageRunnable = null,
+        bool $isTmpVolatile = true
     ): void {
         // root
         if ($pathRoot === null) {
@@ -69,19 +72,19 @@ abstract class KernelConfig
             $pathStorage = $pathRoot . '/storage';
         }
 
-        // storage cache
-        if ($pathStorageCache === null) {
-            $pathStorageCache = $pathStorage . '/cache';
-        }
-
         // storage log
         if ($pathStorageLog === null) {
             $pathStorageLog = $pathStorage . '/logs';
         }
 
-        // mapping
-        if ($pathFileMapping === null) {
-            $pathFileMapping = $pathStorageCache . '/mapping.php';
+        // storage cache
+        if ($pathStorageCache === null) {
+            $pathStorageCache = $pathStorage . '/cache';
+        }
+
+        // storage runnable
+        if ($pathStorageRunnable === null) {
+            $pathStorageRunnable = $pathStorage . '/runnable';
         }
 
         self::$pathRoot = $pathRoot;
@@ -90,8 +93,26 @@ abstract class KernelConfig
         self::$pathPublic = $pathPublic;
         self::$pathResource = $pathResource;
         self::$pathStorage = $pathStorage;
-        self::$pathStorageCache = $pathStorageCache;
         self::$pathStorageLog = $pathStorageLog;
-        self::$pathFileMapping = $pathFileMapping;
+        self::$pathStorageCache = $pathStorageCache;
+        self::$pathStorageRunnable = $pathStorageRunnable;
+        self::$pathStorageVolatile = self::changeVolatile($isTmpVolatile);
+    }
+
+    private static function changeVolatile(bool $isTmpVolatile): string
+    {
+        // storage volatile
+        if ($isTmpVolatile) {
+            $pathStorageVolatile = sys_get_temp_dir()
+                . '/flytachi.winter.volatile.'
+                . basename(self::$pathRoot);
+        } else {
+            $pathStorageVolatile = self::$pathStorage . '/volatile';
+        }
+        if (!is_dir($pathStorageVolatile)) {
+            mkdir($pathStorageVolatile, 0777, true);
+        }
+
+        return $pathStorageVolatile;
     }
 }

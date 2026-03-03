@@ -32,9 +32,10 @@ final class Kernel extends KernelStore
         ?string $pathPublic = null,
         ?string $pathResource = null,
         ?string $pathStorage = null,
-        ?string $pathStorageCache = null,
         ?string $pathStorageLog = null,
-        ?string $pathFileMapping = null,
+        ?string $pathStorageCache = null,
+        ?string $pathStorageRunnable = null,
+        bool $isTmpVolatile = true,
         ?LoggerInterface $logger = null
     ): void {
         defined('WINTER_STARTUP_TIME') or define('WINTER_STARTUP_TIME', microtime(true));
@@ -45,9 +46,10 @@ final class Kernel extends KernelStore
             $pathPublic,
             $pathResource,
             $pathStorage,
-            $pathStorageCache,
             $pathStorageLog,
-            $pathFileMapping
+            $pathStorageCache,
+            $pathStorageRunnable,
+            $isTmpVolatile,
         );
 
         Dotenv::createImmutable(self::$pathRoot)
