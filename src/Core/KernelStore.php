@@ -47,7 +47,7 @@ abstract class KernelStore extends KernelConfig
     /**
      * @throws FileStorageException
      */
-    public static function volatiles(string $volName, bool $isHash = true): FileStorage
+    public static function volatile(string $volName, bool $isHash = true): FileStorage
     {
         if (!is_dir(self::$pathStorageVolatile)) {
             mkdir(self::$pathStorageVolatile, 0777, true);

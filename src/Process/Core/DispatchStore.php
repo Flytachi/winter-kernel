@@ -12,13 +12,14 @@ final class DispatchStore
 
     final public static function push(string $storeKey, mixed $data): void
     {
-        Kernel::volatiles(self::$ES_NAME)->write($storeKey, $data);
+        Kernel::volatile(self::$ES_NAME)->write($storeKey, $data);
     }
 
     final public static function pop(string $storeKey): mixed
     {
-        $data = Kernel::volatiles(self::$ES_NAME)->read($storeKey);
-        Kernel::volatiles(self::$ES_NAME)->del($storeKey);
+        $fs = Kernel::volatile(self::$ES_NAME);
+        $data = $fs->read($storeKey);
+        $fs->del($storeKey);
         return $data;
     }
 }
