@@ -67,10 +67,10 @@ final class Operation
      *
      * @template TResult
      *
-     * @param callable|Closure $callback Any PHP callable: closure, named function, or invokable object.
+     * @param callable(): TResult $callback Any PHP callable: closure, named function, or invokable object.
      * @return Future<TResult> A handle to the running background operation.
      */
-    public static function async(callable|Closure $callback): Future
+    public static function async(callable $callback): Future
     {
         $runnable = new OperationRunnable($callback);
 

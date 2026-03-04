@@ -54,7 +54,8 @@ final class OperationRunnable implements Runnable
     /**
      * Creates a new OperationRunnable wrapping the given callable.
      *
-     * @param callable $callback Any PHP callable. Converted to {@see \Closure} internally.
+     * @template TResult
+     * @param callable(): TResult $callback Any PHP callable. Converted to {@see \Closure} internally.
      */
     public function __construct(callable $callback)
     {
