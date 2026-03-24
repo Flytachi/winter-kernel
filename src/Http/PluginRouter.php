@@ -20,7 +20,7 @@ class PluginRouter extends HttpRouter implements ActuatorItemInterface
     public function __construct()
     {
         parent::__construct();
-        $this->folderMapping = Kernel::$pathStorageCache . '/plugin-mapping/';
+        $this->folderMapping = Kernel::$pathStorageVolatile . '/plugin-mapping/';
     }
 
     protected function route(array $input, bool $isDevelop = false): void

@@ -20,7 +20,7 @@ final class Router extends HttpRouter implements ActuatorItemInterface
     public function __construct()
     {
         parent::__construct();
-        $this->pathMapping = Kernel::$pathStorageCache . '/mapping.php';
+        $this->pathMapping = Kernel::$pathStorageVolatile . '/mapping.php';
     }
 
     protected function route(array $input, bool $isDevelop = false): void
