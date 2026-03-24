@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Console\Command;
 
+use Composer\InstalledVersions;
 use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\Kernel\Kernel;
 
@@ -28,17 +29,14 @@ class Help extends Cmd
 
     public function list(): void
     {
-        $kernel = Kernel::info();
-        $project = Kernel::projectInfo();
+        $project = InstalledVersions::getRootPackage();
         self::printTitle("Winter Help", 34);
-        if (!empty($project['extra']) && !empty($project['extra']['project'])) {
-            $projectName = $project['extra']['project']['name'] ?? 'unknown';
-            $projectVersion = $project['extra']['project']['version']
-                ? ' (' . $project['extra']['project']['version'] . ')'
-                : '';
+        if (!empty($project['extra'])) {
+            $projectName = $project['name'] ?? 'unknown';
+            $projectVersion = $project['version'] ? ' (' . $project['version'] . ')' : '';
             self::print("Project: {$projectName}{$projectVersion}", 34);
         }
-        self::print("Kernel Version: " . $kernel['version'], 34);
+        self::print("Kernel Version: " . InstalledVersions::getPrettyVersion('flytachi/winter-kernel'), 34);
         self::print("PHP Version: " . PHP_VERSION, 34);
         self::print("OS: " . PHP_OS_FAMILY . DIRECTORY_SEPARATOR . PHP_OS, 34);
         self::print("SAPI: " . PHP_SAPI, 34);

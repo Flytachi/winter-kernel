@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Http\Health;
 
+use Composer\InstalledVersions;
 use Flytachi\Winter\Cache\Config\Common\RedisConfigInterface;
 use Flytachi\Winter\Cdo\Config\Common\DbConfigInterface;
 use Flytachi\Winter\Kernel\Factory\Mapping;
@@ -41,8 +42,7 @@ class HealthIndicator implements HealthIndicatorInterface
 
     public function info(array $args = []): array
     {
-        $framework = Kernel::info();
-        $project = Kernel::projectInfo();
+        $project = InstalledVersions::getRootPackage();
         return [
             'php' => [
                 'version' => PHP_VERSION,
@@ -50,14 +50,15 @@ class HealthIndicator implements HealthIndicatorInterface
                 'zend_version' => zend_version(),
             ],
             'framework' => [
-                'name' => $framework['name'] ?? null,
-                'version' => $framework['version'] ?? null,
+                'name' => 'flytachi/winter-kernel',
+                'version' => InstalledVersions::getPrettyVersion('flytachi/winter-kernel'),
             ],
-            'project' => isset($project['extra']['project'])
+            'project' => !empty($project)
                 ? [
-                    'name' => $project['extra']['project']['name'] ?? '',
-                    'version' => $project['extra']['project']['version'] ?? '',
-                    'description' => $project['extra']['project']['description'] ?? '',
+                    'name' => $project['name'] ?? '',
+                    'type' => $project['type'] ?? '',
+                    'version' => $project['pretty_version'] ?? '',
+                    'isDev' => $project['dev'] ?? false,
                 ]
                 : null
         ];

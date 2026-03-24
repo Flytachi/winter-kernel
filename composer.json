@@ -26,7 +26,8 @@
         "vlucas/phpdotenv": "^5.6",
         "ext-simplexml": "*",
         "ext-pcntl": "*",
-        "ext-posix": "*"
+        "ext-posix": "*",
+        "flytachi/s2w": "^1.0"
     },
     "require-dev": {
         "monolog/monolog": "^3.0",

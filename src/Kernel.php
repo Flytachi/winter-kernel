@@ -76,26 +76,6 @@ final class Kernel extends KernelStore
         self::bindThread();
     }
 
-    public static function info(): array
-    {
-        return json_decode(
-            file_get_contents(dirname(__DIR__) . '/composer.json') ?: '',
-            true
-        ) ?? [];
-    }
-
-    public static function projectInfo(): ?array
-    {
-        if (isset(self::$pathRoot)) {
-            return json_decode(
-                file_get_contents(self::$pathRoot . '/composer.json') ?: '',
-                true
-            ) ?? [];
-        } else {
-            return null;
-        }
-    }
-
     private static function registryLogger(): LoggerInterface
     {
         if (!class_exists(Logger::class)) {

@@ -25,9 +25,9 @@ class Mapping
     /**
      * @return array
      */
-    public static function scanProjectFiles(): array
+    public static function scanProjectFiles(?string $rootDir = null): array
     {
-        return scanFindAllFile(Kernel::$pathRoot, 'php', [
+        return scanFindAllFile($rootDir ?: Kernel::$pathRoot, 'php', [
             Kernel::$pathRoot . '/vendor'
         ]);
     }
@@ -37,14 +37,18 @@ class Mapping
      * @param class-string|null $interface
      * @return array<ReflectionClass>
      */
-    public static function scanRefClasses(array $resources, ?string $interface = null): array
-    {
+    public static function scanRefClasses(
+        array $resources,
+        ?string $interface = null,
+        ?string $rootPath = null
+    ): array {
+        $rootPath = $rootPath ?: Kernel::$pathRoot;
         $reflectionClasses = [];
         foreach ($resources as $resource) {
             $className = ucfirst(str_replace(
                 '.php',
                 '',
-                str_replace('/', '\\', str_replace(Kernel::$pathRoot . '/', '', $resource))
+                str_replace('/', '\\', str_replace($rootPath . '/', '', $resource))
             ));
 
             try {
@@ -61,10 +65,10 @@ class Mapping
     /**
      * @return MappingDeclaration
      */
-    public static function scanningDeclaration(): MappingDeclaration
+    public static function scanningDeclaration(?string $rootPath = null): MappingDeclaration
     {
-        $resources = self::scanProjectFiles();
-        $reflectionClasses = self::scanRefClasses($resources, ControllerInterface::class);
+        $resources = self::scanProjectFiles($rootPath);
+        $reflectionClasses = self::scanRefClasses($resources, ControllerInterface::class, $rootPath);
         return self::scanDeclarationFilter($reflectionClasses);
     }
 
