@@ -4,6 +4,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        DISABLE_OPCACHE: "true"
     environment:
       - COMPOSE_BAKE=true
     ports:

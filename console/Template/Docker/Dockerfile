@@ -47,7 +47,13 @@ RUN echo "variables_order = 'EGPCS'" > /etc/php85/conf.d/99-custom.ini
 
 COPY ./docker/nginx.conf /etc/nginx/nginx.conf
 COPY ./docker/php-fpm.conf /etc/php85/php-fpm.d/www.conf
-COPY ./docker/php-opcache.ini /etc/php85/conf.d/10-opcache.ini
+
+ARG DISABLE_OPCACHE=false
+COPY ./docker/php-opcache.ini /tmp/php-opcache.ini
+RUN if [ "$DISABLE_OPCACHE" = "false" ]; then \
+        cp /tmp/php-opcache.ini /etc/php85/conf.d/10-opcache.ini; \
+    fi && rm -f /tmp/php-opcache.ini
+
 
 # Create service directories and scripts
 RUN mkdir -p /etc/service/php-fpm /etc/service/nginx /etc/service/logs
