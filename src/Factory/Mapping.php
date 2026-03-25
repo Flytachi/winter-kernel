@@ -39,26 +39,43 @@ class Mapping
      */
     public static function scanRefClasses(
         array $resources,
-        ?string $interface = null,
-        ?string $rootPath = null
+        ?string $interface = null
     ): array {
-        $rootPath = $rootPath ?: Kernel::$pathRoot;
+        $loader = require Kernel::$pathRoot . '/vendor/autoload.php';
+        $namespaceMap = $loader->getPrefixesPsr4();
+
         $reflectionClasses = [];
+
         foreach ($resources as $resource) {
-            $className = ucfirst(str_replace(
-                '.php',
-                '',
-                str_replace('/', '\\', str_replace($rootPath . '/', '', $resource))
-            ));
+            $realPath = realpath($resource);
+            $className = null;
+
+            foreach ($namespaceMap as $prefix => $paths) {
+                foreach ($paths as $path) {
+                    $realNamespacePath = realpath($path);
+
+                    if ($realNamespacePath !== false && str_starts_with($realPath, $realNamespacePath)) {
+                        $relativePart = str_replace([$realNamespacePath, '.php'], '', $realPath);
+                        $relativePart = ltrim($relativePart, DIRECTORY_SEPARATOR);
+                        $className = $prefix . str_replace(DIRECTORY_SEPARATOR, '\\', $relativePart);
+                        break 2;
+                    }
+                }
+            }
+
+            if (!$className || !class_exists($className)) {
+                continue;
+            }
 
             try {
                 $reflectionClass = new ReflectionClass($className);
                 if ($interface === null || $reflectionClass->implementsInterface($interface)) {
                     $reflectionClasses[] = $reflectionClass;
                 }
-            } catch (\ReflectionException $ex) {
+            } catch (ReflectionException) {
             }
         }
+
         return $reflectionClasses;
     }
 
@@ -68,7 +85,7 @@ class Mapping
     public static function scanningDeclaration(?string $rootPath = null): MappingDeclaration
     {
         $resources = self::scanProjectFiles($rootPath);
-        $reflectionClasses = self::scanRefClasses($resources, ControllerInterface::class, $rootPath);
+        $reflectionClasses = self::scanRefClasses($resources, ControllerInterface::class);
         return self::scanDeclarationFilter($reflectionClasses);
     }
 
