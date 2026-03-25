@@ -4,7 +4,7 @@
     "keywords": ["Winter Kernel", "winter kernel", "framework kernel", "kernel"],
     "type": "library",
     "license": "MIT",
-    "version": "1.1.6",
+    "version": "1.1.7",
     "autoload": {
         "psr-4": {
             "Flytachi\\Winter\\Console\\": "console/",
