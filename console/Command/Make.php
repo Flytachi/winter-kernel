@@ -4,14 +4,16 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Console\Command;
 
+use Composer\Autoload\ClassLoader;
 use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\Kernel\Kernel;
 
 class Make extends Cmd
 {
-    public static string $title = "command for creating templates";
+    public static string $title = "generate framework component templates";
     private string $createPath;
     private string $templatePath;
+    private ClassLoader|false $loader = false;
 
     public function handle(): void
     {
@@ -20,13 +22,13 @@ class Make extends Cmd
         array_shift($this->args['arguments']);
 
         if (count($this->args['arguments']) == 0) {
-            self::printMessage("Enter the names of the generated templates");
-            self::print("Example: extra make example");
-            self::print("Help: extra make [--help or -h]");
+            self::printWarning("Enter the names of the generated templates");
+            self::printInfo("Example: call make .Example");
+            self::printInfo("Help:    call make [--help or -h]");
         } elseif (!count($this->args['flags'])) {
-            self::printMessage("Specify template types");
-            self::print("Example: extra make -asrm example");
-            self::print("Help: extra make [--help or -h]");
+            self::printWarning("Specify template types with flags");
+            self::printInfo("Example: call make -asrm .Example");
+            self::printInfo("Help:    call make [--help or -h]");
         } else {
             $this->resolution();
         }
@@ -36,13 +38,16 @@ class Make extends Cmd
 
     private function resolution(): void
     {
+        $total = count($this->args['arguments']);
+        $step  = 0;
         foreach ($this->args['arguments'] as $templateName) {
-            $templateName = str_replace('.', '/', $templateName);
-            if (str_starts_with($templateName, '/')) {
-                $this->createPath = Kernel::$pathRoot;
-            } else {
-                $this->createPath = Kernel::$pathMain;
+            ++$step;
+            if ($total > 1) {
+                self::printDivider();
+                self::printStep($step, $total, $templateName);
             }
+            $templateName = str_replace('.', '/', $templateName);
+            $this->createPath = Kernel::$pathRoot;
             // ---
             if (in_array('a', $this->args['flags'])) {
                 $this->createRestController($templateName);
@@ -404,8 +409,8 @@ class Make extends Cmd
 
     private function createFile(string $fName, string $path, string $code = "", ?string $prefix = null): void
     {
-        $path = rtrim($this->createPath . $path, '/');
-        $prefix = ($prefix) ? " ({$prefix})" : '';
+        $path   = rtrim($this->createPath . $path, '/');
+        $label  = $prefix ? "$fName ($prefix)" : $fName;
         if (!is_dir($path)) {
             mkdir($path, 0777, true);
         }
@@ -414,70 +419,123 @@ class Make extends Cmd
             $fp = fopen($fileName, "x");
             fwrite($fp, $code);
             fclose($fp);
-            self::printMessage("{$fName} file created successfully.{$prefix} [file://{$fileName}]", 32);
+            self::printBadge($label, 'CREATED', 33, 32);
+            self::printInfo("file://$fileName");
         } else {
-            self::printMessage("The {$fName} file already exist.{$prefix}");
+            self::printBadge($label, 'EXISTS', 33, 33);
         }
     }
 
     private function getInfo(string $way, string $prefix, string $templateName): array
     {
-        $root = ($this->createPath != Kernel::$pathRoot)
-            ? ucwords(basename($this->createPath))
-            : '';
+        if (!$this->loader) {
+            $loaders = ClassLoader::getRegisteredLoaders();
+            $this->loader = reset($loaders);
+        }
+        $namespaceMap = $this->loader->getPrefixesPsr4();
+
         $way = ltrim($this->ucWord($way) . $prefix, '/');
         $className = basename($way);
-        $way = str_replace($className, '', $way);
+        $inputPath = trim(str_replace($className, '', $way), '/');
+        // Examples:
+        //   ".Test"                             → inputPath=""
+        //   "main.zer.Test"                     → inputPath="Main/Zer"
+        //   "flytachi.winter.kernel.tests.Test" → inputPath="Flytachi/Winter/Kernel/Tests"
+
+        // Step 2: apply --mvc option (prepend category folder to inputPath)
         if (isset($this->args['options']['mvc'])) {
-            $way = '/' . rtrim($way, '/');
-            switch ($prefix) {
-                case "Controller":
-                    $way = 'Controllers' . $way;
-                    break;
-                case "Service":
-                    $way = 'Services' . $way;
-                    break;
-                case "Middleware":
-                    $way = 'Middlewares' . $way;
-                    break;
-                case "Store":
-                case "Repository":
-                    $way = 'Repositories' . $way;
-                    break;
-                case "Entity":
-                    $way = 'Entities' . $way;
-                    break;
-                case "Dto":
-                    $way = 'Dto' . $way;
-                    break;
-                case "Request":
-                    $way = 'Requests' . $way;
-                    break;
-                case "Job":
-                    $way = 'Jobs' . $way;
-                    break;
-                case "Daemon":
-                case "Process":
-                    $way = 'Processes' . $way;
-                    break;
-                case "WebSocket":
-                    $way = 'Sockets' . $way;
-                    break;
-                case "Cmd":
-                    $way = 'Commands' . $way;
-                    break;
-                default:
-                    $way = 'Utils' . $way;
+            $mvcFolder = match ($prefix) {
+                'Controller'          => 'Controllers',
+                'Service'             => 'Services',
+                'Middleware'          => 'Middlewares',
+                'Store', 'Repository' => 'Repositories',
+                'Entity'              => 'Entities',
+                'Dto'                 => 'Dto',
+                'Request'             => 'Requests',
+                'Job'                 => 'Jobs',
+                'Daemon', 'Process'   => 'Processes',
+                'WebSocket'           => 'Sockets',
+                'Cmd'                 => 'Commands',
+                default               => 'Utils',
+            };
+            $inputPath = $inputPath !== '' ? $mvcFolder . '/' . $inputPath : $mvcFolder;
+        }
+
+        // Step 3: build full class namespace string for PSR-4 lookup
+        $inputNs     = str_replace('/', '\\', $inputPath);
+        $fullClassNs = ($inputNs !== '' ? $inputNs . '\\' : '') . $className;
+
+        // Step 4: find longest PSR-4 prefix that matches the full class namespace
+        $bestNsPrefix = '';
+        $bestDir      = null;
+        foreach ($namespaceMap as $nsPrefix => $dirs) {
+            $dir = realpath($dirs[0]);
+            if (
+                $dir
+                && str_starts_with($fullClassNs, $nsPrefix)
+                && strlen($nsPrefix) > strlen($bestNsPrefix)
+            ) {
+                $bestNsPrefix = $nsPrefix;
+                $bestDir      = $dir;
             }
         }
 
+        if ($bestDir !== null) {
+            // PSR-4 match: strip prefix, compute sub-directory and namespace
+            $parts = explode('\\', trim(substr($fullClassNs, strlen($bestNsPrefix)), '\\'));
+            array_pop($parts); // remove className, keep sub-dirs
+            $subDir = implode('/', array_filter($parts));
+
+            $fileDir = $subDir !== '' ? $bestDir . '/' . $subDir : $bestDir;
+            $fileNs  = rtrim($bestNsPrefix, '\\')
+                . ($subDir !== '' ? '\\' . str_replace('/', '\\', $subDir) : '');
+
+            $this->createPath = $fileDir;
+            return [
+                'namespace' => $fileNs,
+                'className' => $className,
+                'path'      => '/',
+                'template'  => $this->templatePath . '/' . $templateName,
+            ];
+        }
+
+        // Step 5: no PSR-4 match — find first PSR-4 dir that lives under Kernel::$pathRoot
+        // This handles ".Test" / "Test" / "main.zer.Test" (relative paths without a known ns root)
+        $appDir       = null;
+        $appNsPrefix  = '';
+        foreach ($namespaceMap as $nsPrefix => $dirs) {
+            $dir = realpath($dirs[0]);
+            if ($dir && str_starts_with($dir, Kernel::$pathRoot)) {
+                $appDir      = $dir;
+                $appNsPrefix = rtrim($nsPrefix, '\\');
+                break;
+            }
+        }
+
+        if ($appDir !== null) {
+            $fileDir = $inputPath !== '' ? $appDir . '/' . $inputPath : $appDir;
+            $fileNs  = $inputNs !== '' ? $appNsPrefix . '\\' . $inputNs : $appNsPrefix;
+
+            $this->createPath = $fileDir;
+            return [
+                'namespace' => $fileNs,
+                'className' => $className,
+                'path'      => '/',
+                'template'  => $this->templatePath . '/' . $templateName,
+            ];
+        }
+
+        // Step 6: absolute fallback — no PSR-4 found under $pathRoot at all
+        $root       = ($this->createPath !== Kernel::$pathRoot)
+            ? ucwords(basename($this->createPath))
+            : '';
+        $subPathStr = $inputPath !== '' ? $inputPath . '/' : '';
+
         return [
-            'namespace' => str_replace('/', '\\', trim($root . '/' . $way, " \t\n\r\0\x0B/")),
+            'namespace' => str_replace('/', '\\', trim($root . '/' . $subPathStr, " \t\n\r\0\x0B/")),
             'className' => $className,
-            'path' => '/' . ($this->createPath != Kernel::$pathRoot
-                    ? $way : lcfirst($way)
-                ),
-            'template' => $this->templatePath . '/' . $templateName,
+            'path'      => '/' . ($this->createPath !== Kernel::$pathRoot ? $subPathStr : lcfirst($subPathStr)),
+            'template'  => $this->templatePath . '/' . $templateName,
         ];
     }
 
@@ -490,40 +548,81 @@ class Make extends Cmd
     {
         $cl = 34;
         self::printTitle("Make Help", $cl);
-        self::printLabel("extra make [args...] -[flags...] --[options...]", $cl);
-        self::printMessage("args - names of generated templates", $cl);
-        self::printMessage("flags - selection of templates to be created", $cl);
 
-        // flags
-        self::printLabel("-[flags...]", $cl);
-        self::print("a - Template RestController, prefix RestController", $cl);
-        self::print("c - Template Controller, prefix Controller", $cl);
+        // usage
+        self::printLabel("Usage", $cl);
+        self::print("call make [args...] -[flags...] --[options...]", $cl);
         self::print("", $cl);
-        self::print("e - Template Entity, prefix Model", $cl);
-        self::print("d - Template DtoObject, prefix Dto", $cl);
-        self::print("q - Template RequestObject, prefix Request", $cl);
-        self::print("p - Template Custom Response", $cl);
+        self::print("args    - one or more template names (dot-notation namespace)", $cl);
+        self::print("flags   - which template types to generate", $cl);
+        self::print("options - extra generation modifiers", $cl);
+        self::printLabel("Usage", $cl);
+
+        // args / namespace resolution
+        self::printLabel("Namespace Resolution (PSR-4 aware)", $cl);
+        self::print(".Test                   -> auto-detect: first PSR-4 dir under app root", $cl);
+        self::print("Test                    -> same as .Test", $cl);
+        self::print("api.user.Test           -> relative sub-path: appRoot/Api/User/", $cl);
+        self::print("acme.app.api.user.Test  -> full PSR-4 namespace resolved to mapped dir", $cl);
         self::print("", $cl);
-        self::print("s - Template Service, prefix Service", $cl);
-        self::print("m - Template Middleware, prefix Middleware", $cl);
-        self::print("r - Template Repository, prefix Repository", $cl);
-        self::print("t - Template Store, prefix Store", $cl);
-        self::print("", $cl);
-        self::print("J - Template Job, prefix Job", $cl);
-        self::print("P - Template Process, prefix Process", $cl);
-        self::print("N - Template Daemon, prefix Daemon", $cl);
-        self::print("W - Template WebSocket, prefix WebSocket", $cl);
-        self::print("", $cl);
-        self::print("D - Template DbConfig, prefix Config", $cl);
-        self::print("R - Template RedisConfig, prefix RedisConfig", $cl);
-        self::print("", $cl);
-        self::print("n - Template CustomCmd, dont prefix", $cl);
-        self::printLabel("-[flags...]", $cl);
+        self::print("File path and class namespace are always derived from composer PSR-4 map.", $cl);
+        self::printLabel("Namespace Resolution (PSR-4 aware)", $cl);
+
+        // flags — HTTP layer
+        self::printLabel("Flags — HTTP", $cl);
+        self::print("-a   RestController   (suffix: Controller)  REST API controller", $cl);
+        self::print("-c   Controller       (suffix: Controller)  Web/view controller", $cl);
+        self::print("-m   Middleware       (suffix: Middleware)  HTTP middleware", $cl);
+        self::printLabel("Flags — HTTP", $cl);
+
+        // flags — Data layer
+        self::printLabel("Flags — Data", $cl);
+        self::print("-e   Entity           (no suffix)           ORM entity / model", $cl);
+        self::print("-d   Dto              (suffix: Dto)         Data Transfer Object", $cl);
+        self::print("-q   Request          (suffix: Request)     Validated request object", $cl);
+        self::print("-p   Response         (no suffix)           Custom HTTP response", $cl);
+        self::printLabel("Flags — Data", $cl);
+
+        // flags — Business layer
+        self::printLabel("Flags — Business", $cl);
+        self::print("-s   Service          (suffix: Service)     Business logic service", $cl);
+        self::print("-r   Repository       (suffix: Repository)  Data access repository", $cl);
+        self::print("-t   Store            (suffix: Store)       Redis-backed store", $cl);
+        self::printLabel("Flags — Business", $cl);
+
+        // flags — Async / Process
+        self::printLabel("Flags — Async / Process", $cl);
+        self::print("-J   Job              (suffix: Job)         Async queue job", $cl);
+        self::print("-P   Process          (suffix: Process)     Long-running process", $cl);
+        self::print("-N   Daemon           (suffix: Daemon)      Background daemon", $cl);
+        self::print("-W   WebSocket        (suffix: WebSocket)   WebSocket handler", $cl);
+        self::printLabel("Flags — Async / Process", $cl);
+
+        // flags — Config / Console
+        self::printLabel("Flags — Config / Console", $cl);
+        self::print("-D   DbConfig         (suffix: DbConfig)    Database configuration", $cl);
+        self::print("-R   RedisConfig      (suffix: RedisConfig) Redis configuration", $cl);
+        self::print("-n   Cmd              (no suffix)           Custom console command", $cl);
+        self::printLabel("Flags — Config / Console", $cl);
 
         // options
-        self::printLabel("-[options...]", $cl);
-        self::print("mvc - structure", $cl);
-        self::printLabel("-[options...]", $cl);
+        self::printLabel("Options", $cl);
+        self::print("--mvc   Wrap output path in MVC category folders", $cl);
+        self::print("        e.g. Controller → Controllers/, Service → Services/, ...", $cl);
+        self::printLabel("Options", $cl);
+
+        // examples
+        self::printLabel("Examples", $cl);
+        self::print("call make .User -acsr", $cl);
+        self::print("call make api.user.Profile -a", $cl);
+        self::print("call make .Order -asr --mvc", $cl);
+        self::print("call make acme.app.http.User -a", $cl);
+        self::printLabel("Examples", $cl);
+
+        // docs
+        self::printLabel("Documentation", $cl);
+        self::print("https://winterframe.net/#", $cl);
+        self::printLabel("Documentation", $cl);
 
         self::printTitle("Make Help", $cl);
     }

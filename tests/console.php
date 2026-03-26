@@ -1,10 +1,6 @@
 <?php
 
-use Flytachi\Winter\Thread\Runnable;
-
-require_once dirname(__DIR__) . '/vendor/autoload.php';
-
-\Flytachi\Winter\Kernel\Kernel::init(__DIR__);
+require_once 'bootstrap.php';
 
 \Flytachi\Winter\Kernel\Actuator::use(
     new \Flytachi\Winter\Console\Core($argv)

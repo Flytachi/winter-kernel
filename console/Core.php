@@ -9,6 +9,12 @@ use Flytachi\Winter\Console\Inc\CoreHandle;
 
 class Core extends CoreHandle implements ActuatorItemInterface
 {
+    /** Short aliases → Command class name */
+    protected static array $aliases = [
+        'sc'  => 'Script',
+        'run' => 'Serve',
+    ];
+
     public function __construct($args)
     {
         $this->parser($args);
@@ -17,11 +23,10 @@ class Core extends CoreHandle implements ActuatorItemInterface
     public function run(): void
     {
         try {
-            if (array_key_exists(0, self::$arguments['arguments'])) {
-                $cmd = ucwords(self::$arguments['arguments'][0]);
-            } else {
-                $cmd = 'Help';
-            }
+            $input = self::$arguments['arguments'][0] ?? null;
+            $cmd   = $input !== null
+                ? (static::$aliases[$input] ?? ucwords($input))
+                : 'Help';
             ('Flytachi\Winter\Console\Command\\' . $cmd)::script(self::$arguments);
         } catch (\Throwable $exception) {
             self::printError($exception);

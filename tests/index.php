@@ -1,8 +1,6 @@
 <?php
 
-require_once dirname(__DIR__) . '/vendor/autoload.php';
-
-\Flytachi\Winter\Kernel\Kernel::init(__DIR__);
+require_once 'bootstrap.php';
 
 \Flytachi\Winter\Kernel\Actuator::use(
 //    new \Flytachi\Winter\Kernel\Http\Health\Health(

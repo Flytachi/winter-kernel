@@ -188,10 +188,12 @@ abstract class ExceptionWrapper
                 $result .=      '<meta charset="utf-8">';
                 $result .=      '<meta http-equiv="X-UA-Compatible" content="IE=edge">';
                 $result .=      '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
+                $result .=      '<link rel="icon" type="image/svg+xml" href="/static/winter/logo.svg">';
                 $result .=      "<title>{$_error['code']} {$httpMessage}</title>";
                 $result .= '</head>';
                 $result .= '<body style="background-color: #0a0f1f;color: #ffffff">';
                 $result .=      '<center>';
+                $result .=          '<div><img src="/static/winter/logo.svg" alt="logotype" width="80" height="80"></div>';
                 $result .=          '<strong style="font-size:21px;"><em>Winter ' . $_error['code'] . ' - '
                     . $httpMessage . '</em></strong>';
                 $result .=          '<hr width="50%">';

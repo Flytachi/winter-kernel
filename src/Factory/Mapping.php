@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Factory;
 
+use Composer\Autoload\ClassLoader;
 use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Kernel\Factory\Middleware\MiddlewareInterface;
 use Flytachi\Winter\Kernel\Stereotype\ControllerInterface;
@@ -41,7 +42,8 @@ class Mapping
         array $resources,
         ?string $interface = null
     ): array {
-        $loader = require Kernel::$pathRoot . '/vendor/autoload.php';
+        $loaders = ClassLoader::getRegisteredLoaders();
+        $loader = reset($loaders);
         $namespaceMap = $loader->getPrefixesPsr4();
 
         $reflectionClasses = [];

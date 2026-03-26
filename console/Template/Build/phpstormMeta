@@ -16,6 +16,7 @@ override(\env(0), map([
 
 expectedArguments(\env(), 1,
     match (arg(0)) {
+        'WINTER_KEY' => 'secret-key'
         'TIME_ZONE' => 'UTC',
         'DEBUG' => 'true', 'false',
         'LOGGER_LEVEL_ALLOW' => 'DEBUG,INFO,NOTICE,WARNING,ERROR,CRITICAL,ALERT,EMERGENCY',

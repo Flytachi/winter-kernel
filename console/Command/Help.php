@@ -10,7 +10,7 @@ use Flytachi\Winter\Kernel\Kernel;
 
 class Help extends Cmd
 {
-    public static string $title = "command reference";
+    public static string $title = "list commands and show usage information";
 
     public function handle(): void
     {
@@ -29,38 +29,56 @@ class Help extends Cmd
 
     public function list(): void
     {
+        $cl      = 34;
         $project = InstalledVersions::getRootPackage();
-        self::printTitle("Winter Help", 34);
-        if (!empty($project['extra'])) {
-            $projectName = $project['name'] ?? 'unknown';
-            $projectVersion = $project['version'] ? ' (' . $project['version'] . ')' : '';
-            self::print("Project: {$projectName}{$projectVersion}", 34);
-        }
-        self::print("Kernel Version: " . InstalledVersions::getPrettyVersion('flytachi/winter-kernel'), 34);
-        self::print("PHP Version: " . PHP_VERSION, 34);
-        self::print("OS: " . PHP_OS_FAMILY . DIRECTORY_SEPARATOR . PHP_OS, 34);
-        self::print("SAPI: " . PHP_SAPI, 34);
 
-        self::printLabel("Commands", 34);
+        self::printTitle("Winter Framework", $cl);
+
+        // Environment info
+        $projectName    = $project['name'] ?? 'unknown';
+        $projectVersion = $project['version'] ? $project['version'] : 'dev';
+        self::printKeyValue('Project', $projectName . ' (' . $projectVersion . ')', 16, $cl, 36);
+        self::printKeyValue('Kernel', InstalledVersions::getPrettyVersion('flytachi/winter-kernel'), 16, $cl, 36);
+        self::printKeyValue('PHP', PHP_VERSION, 16, $cl, 36);
+        self::printKeyValue('OS', PHP_OS_FAMILY . ' / ' . PHP_OS, 16, $cl, 36);
+        self::printKeyValue('SAPI', PHP_SAPI, 16, $cl, 36);
+        self::printKeyValue('App root', Kernel::$pathRoot, 16, $cl, 90);
+
+        self::printDivider($cl);
+
+        // Commands list
+        self::printLabel("Available Commands", $cl);
         foreach (glob(__DIR__ . '/*.php') as $cmdFile) {
-            $name = basename($cmdFile, '.php');
-            self::printMessage(
-                strtolower($name)
-                . " - " .  ('Flytachi\Winter\Console\Command\\' . $name)::$title,
-                34
-            );
+            $name  = basename($cmdFile, '.php');
+            $title = ('Flytachi\Winter\Console\Command\\' . $name)::$title;
+            self::printBadge(strtolower($name), $title, $cl, 36);
         }
-        self::printTitle("Winter Help", 34);
+        self::printDivider($cl);
+
+        self::printInfo("Run 'call help <command>' for detailed usage.");
+        self::printInfo("Docs: https://winterframe.net/#");
+
+        self::printTitle("Winter Framework", $cl);
     }
 
     public static function help(): void
     {
         $cl = 34;
-        self::printTitle("Make Help", $cl);
+        self::printTitle("Help", $cl);
 
-        self::printLabel("extra help [args...]", $cl);
-        self::printMessage("args - command name", $cl);
+        self::printLabel("Usage", $cl);
+        self::print("call help              - list all commands + environment info", $cl);
+        self::print("call help <command>    - show detailed help for a command", $cl);
 
-        self::printTitle("Make Help", $cl);
+        self::printDivider($cl);
+
+        self::printLabel("Examples", $cl);
+        self::printInfo("call help make");
+        self::printInfo("call help serve");
+
+        self::printDivider($cl);
+        self::printInfo("Docs: https://winterframe.net/#");
+
+        self::printTitle("Help", $cl);
     }
 }

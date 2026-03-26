@@ -27,6 +27,11 @@
         "ext-pcntl": "*",
         "ext-posix": "*"
     },
+    "autoload-dev": {
+        "psr-4": {
+            "Flytachi\\Winter\\Kernel\\Tests\\": "tests/main"
+        }
+    },
     "require-dev": {
         "monolog/monolog": "^3.0",
         "squizlabs/php_codesniffer": "@stable"
