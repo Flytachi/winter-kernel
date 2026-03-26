@@ -15,6 +15,7 @@ use Flytachi\Winter\Kernel\Kernel;
 final class Router extends HttpRouter implements ActuatorItemInterface
 {
     use RoutingTrait;
+
     private string $pathMapping;
 
     public function __construct()

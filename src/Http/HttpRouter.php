@@ -36,8 +36,7 @@ abstract class HttpRouter extends Stereotype
         $input = parseUrlDetail($_SERVER['REQUEST_URI']);
         $this->logger->debug(Header::getIpAddress()
             . ' - ' . $_SERVER['REQUEST_METHOD']
-            . ' ' . $_SERVER['REQUEST_URI']
-        );
+            . ' ' . $_SERVER['REQUEST_URI']);
         $this->route($input, (bool) env('DEBUG', false));
     }
 }

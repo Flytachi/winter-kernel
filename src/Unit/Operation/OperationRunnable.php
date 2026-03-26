@@ -118,7 +118,8 @@ final class OperationRunnable implements Runnable
         } finally {
             $pending = Operation::store()->read($this->id);
             if ($pending === 'pending') {
-                Operation::store()->write($this->id,
+                Operation::store()->write(
+                    $this->id,
                     new OpResult(
                         $result ?? null,
                         $throwable ?? null
