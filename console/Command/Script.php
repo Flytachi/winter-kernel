@@ -73,11 +73,16 @@ class Script extends Cmd
         $loader       = reset($loaders);
         $namespaceMap = $loader->getPrefixesPsr4();
 
+        $vendorPath = realpath(Kernel::$pathRoot . '/vendor');
+
         $scripts = [];
         foreach ($namespaceMap as $nsPrefix => $dirs) {
             foreach ($dirs as $dir) {
                 $realDir = realpath($dir);
                 if (!$realDir || !str_starts_with($realDir, Kernel::$pathRoot)) {
+                    continue;
+                }
+                if ($vendorPath && str_starts_with($realDir, $vendorPath)) {
                     continue;
                 }
                 $files = new \RecursiveIteratorIterator(
