@@ -1,0 +1,21 @@
+_php_winter_call_find() {
+    local dir="$PWD"
+    while [ "$dir" != "/" ]; do
+        [ -f "$dir/call" ] && { echo "$dir/call"; return 0; }
+        dir="$(dirname "$dir")"
+    done
+    return 1
+}
+
+_php_winter_call() {
+    local script completions words
+    script=$(_php_winter_call_find) || return
+    local IFS=$'\n'
+    completions=$(COMP_LINE="$COMP_LINE" COMP_POINT="$COMP_POINT" \
+        php "$script" complete 2>/dev/null)
+    # Strip descriptions (name:description → name)
+    words=$(echo "$completions" | sed 's/:.*$//')
+    COMPREPLY=($(compgen -W "$words" -- "${COMP_WORDS[$COMP_CWORD]}"))
+    return 0
+}
+complete -o default -F _php_winter_call call

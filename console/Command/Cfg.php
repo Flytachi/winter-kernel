@@ -45,6 +45,9 @@ class Cfg extends Cmd
                 case 'openapi':
                     $this->openapiArg();
                     break;
+                case 'completion':
+                    $this->completionArg();
+                    break;
                 default:
                     self::printWarning("Unknown argument '{$this->args['arguments'][1]}'");
                     self::printInfo("Run 'call cfg --help' to see available commands.");
@@ -214,6 +217,94 @@ class Cfg extends Cmd
         }
     }
 
+    private function completionArg(): void
+    {
+        $home  = $_SERVER['HOME'] ?? getenv('HOME') ?: '';
+        $shell = $_SERVER['SHELL'] ?? getenv('SHELL') ?: '';
+        $force = in_array('f', $this->args['flags']);
+
+        if (in_array('i', $this->args['flags'])) {
+            if (!$home) {
+                self::printWarning('Cannot detect HOME directory.');
+                self::printInfo('Add the script below manually to your shell config:');
+                echo file_get_contents($this->templatePath . '/Build/completion');
+                return;
+            }
+
+            if (str_contains($shell, 'zsh')) {
+                $this->installCompletionZsh($home, $force);
+            } else {
+                $this->installCompletionBash($home, $force);
+            }
+        } else {
+            echo file_get_contents($this->templatePath . '/Build/completion');
+        }
+    }
+
+    private function installCompletionZsh(string $home, bool $force): void
+    {
+        $completionDir  = $home . '/.zsh/completions';
+        $completionFile = $completionDir . '/_call';
+        $rcFile         = $home . '/.zshrc';
+        $fpathMarker    = '# winter-fpath';
+        $fpathLine      = 'fpath=(' . $completionDir . ' $fpath)';
+
+        if (!is_dir($completionDir)) {
+            mkdir($completionDir, 0755, true);
+        }
+
+        // Write _call completion file
+        if (!file_exists($completionFile) || $force) {
+            file_put_contents($completionFile, file_get_contents($this->templatePath . '/Build/completion_zsh'));
+            self::printBadge('_call', $force ? 'UPDATED' : 'INSTALLED', 34, 32);
+        } else {
+            self::printBadge('_call', 'EXISTS', 34, 33);
+            self::printInfo("To update: call cfg completion -if");
+        }
+        self::printKeyValue('file', $completionFile, 6, 34, 90);
+
+        // Prepend fpath to ~/.zshrc so it's set before compinit (oh-my-zsh, etc.)
+        $rcContent = file_exists($rcFile) ? file_get_contents($rcFile) : '';
+        if (!str_contains($rcContent, $fpathMarker)) {
+            file_put_contents($rcFile, $fpathMarker . PHP_EOL . $fpathLine . PHP_EOL . PHP_EOL . $rcContent);
+            self::printBadge('fpath', 'ADDED', 34, 32);
+            self::printKeyValue('rc', $rcFile, 4, 34, 90);
+        }
+
+        self::printSuccess("Run: exec zsh");
+    }
+
+    private function installCompletionBash(string $home, bool $force): void
+    {
+        $completionDir  = $home . '/.bash_completion.d';
+        $completionFile = $completionDir . '/call';
+        $rcFile         = $home . '/.bashrc';
+        $marker         = '# winter-bash-completion';
+        $sourceLine     = '[[ -d ~/.bash_completion.d ]] && for f in ~/.bash_completion.d/*; do source "$f"; done';
+
+        if (!is_dir($completionDir)) {
+            mkdir($completionDir, 0755, true);
+        }
+
+        if (!file_exists($completionFile) || $force) {
+            file_put_contents($completionFile, file_get_contents($this->templatePath . '/Build/completion_bash'));
+            self::printBadge('call', $force ? 'UPDATED' : 'INSTALLED', 34, 32);
+        } else {
+            self::printBadge('call', 'EXISTS', 34, 33);
+            self::printInfo("To update: call cfg completion -if");
+        }
+        self::printKeyValue('file', $completionFile, 6, 34, 90);
+
+        $rcContent = file_exists($rcFile) ? file_get_contents($rcFile) : '';
+        if (!str_contains($rcContent, $marker)) {
+            file_put_contents($rcFile, PHP_EOL . $marker . PHP_EOL . $sourceLine . PHP_EOL, FILE_APPEND);
+            self::printBadge('source', 'ADDED', 34, 32);
+            self::printKeyValue('rc', $rcFile, 4, 34, 90);
+        }
+
+        self::printSuccess("Run: source $rcFile");
+    }
+
     public static function help(): void
     {
         $cl = 34;
@@ -226,11 +317,12 @@ class Cfg extends Cmd
 
         // commands overview
         self::printLabel("Commands", $cl);
-        self::printBadge('init',    'initialize project: composer.json extras + .env', $cl, 36);
-        self::printBadge('key',     'manage WINTER_KEY (project security key)',         $cl, 36);
-        self::printBadge('env',     'manage .env environment file',                     $cl, 36);
-        self::printBadge('docker',  'scaffold Docker configuration files',              $cl, 36);
-        self::printBadge('openapi', 'create OpenAPI controller stub',                   $cl, 36);
+        self::printBadge('init',       'initialize project: composer.json extras + .env', $cl, 36);
+        self::printBadge('key',        'manage WINTER_KEY (project security key)',        $cl, 36);
+        self::printBadge('env',        'manage .env environment file',                    $cl, 36);
+        self::printBadge('docker',     'scaffold Docker configuration files',             $cl, 36);
+        self::printBadge('openapi',    'create OpenAPI controller stub',                  $cl, 36);
+        self::printBadge('completion', 'install shell tab completion (bash)',             $cl, 36);
         self::printLabel("Commands", $cl);
 
         // key
@@ -258,6 +350,9 @@ class Cfg extends Cmd
         self::printInfo("call cfg env -s --file");
         self::printInfo("call cfg docker");
         self::printInfo("call cfg openapi");
+        self::printInfo("call cfg completion        (print scripts to stdout)");
+        self::printInfo("call cfg completion -i     (install: ~/.zsh/completions/_call or ~/.bash_completion.d/call)");
+        self::printInfo("call cfg completion -if    (force update installed file)");
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);

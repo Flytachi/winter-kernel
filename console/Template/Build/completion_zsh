@@ -1,0 +1,22 @@
+#compdef call
+
+_php_winter_call_find() {
+    local dir="$PWD"
+    while [[ "$dir" != "/" ]]; do
+        [[ -f "$dir/call" ]] && { echo "$dir/call"; return 0; }
+        dir="${dir:h}"
+    done
+    return 1
+}
+
+_php_winter_call() {
+    local script completions
+    script=$(_php_winter_call_find) || return
+    local -a items
+    completions=$(COMP_LINE="$BUFFER" COMP_POINT="$CURSOR" \
+        php "$script" complete 2>/dev/null)
+    items=(${(f)completions})
+    _describe 'call' items
+}
+
+_php_winter_call "$@"

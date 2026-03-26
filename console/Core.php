@@ -20,6 +20,11 @@ class Core extends CoreHandle implements ActuatorItemInterface
         $this->parser($args);
     }
 
+    public static function getAliases(): array
+    {
+        return static::$aliases;
+    }
+
     public function run(): void
     {
         try {
