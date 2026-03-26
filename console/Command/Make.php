@@ -613,9 +613,9 @@ class Make extends Cmd
 
         // examples
         self::printLabel("Examples", $cl);
-        self::print("call make .User -acsr", $cl);
+        self::print("call make .User -asre", $cl);
         self::print("call make api.user.Profile -a", $cl);
-        self::print("call make .Order -asr --mvc", $cl);
+        self::print("call make .Order -asre --mvc", $cl);
         self::print("call make acme.app.http.User -a", $cl);
         self::printLabel("Examples", $cl);
 
