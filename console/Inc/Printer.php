@@ -8,7 +8,7 @@ abstract class Printer
 {
     public static function printTitle(string $message, int $cl = 33): void
     {
-        $pad  = max(2, (int)((62 - strlen($message)) / 2));
+        $pad  = max(2, (int)((72 - strlen($message)) / 2));
         $line = str_repeat('=', $pad);
         echo "\033[" . $cl . "m" . " | [{$line} {$message} {$line}]\n";
         echo "\033[0m";
@@ -76,7 +76,7 @@ abstract class Printer
 
     public static function printDivider(int $cl = 90): void
     {
-        echo "\033[" . $cl . "m" . " | - - - - - - - - - - - - - - - - - - - - \n";
+        echo "\033[" . $cl . "m" . " | - - - - - - - - - - - - - - - - - - - - - - - \n";
         echo "\033[0m";
     }
 
@@ -118,7 +118,7 @@ abstract class Printer
      */
     public static function printBadge(string $message, string $badge, int $cl = 33, int $bcl = 32): void
     {
-        $line = str_pad(" |\t $message ", 55, '.');
+        $line = str_pad(" |\t $message ", 65, '.');
         echo "\033[" . $cl . "m" . $line . " ";
         echo "\033[" . $bcl . "m" . "[$badge]";
         echo "\033[0m\n";

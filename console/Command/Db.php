@@ -33,6 +33,9 @@ class Db extends Cmd
             $this->args['flags'] = ['s', 't', 'i', 'c'];
         }
         switch ($this->args['arguments'][1] ?? '') {
+            case 'ping':
+                $this->ping();
+                break;
             case 'migrate':
                 $this->migrate();
                 break;
@@ -74,10 +77,45 @@ class Db extends Cmd
             return $plugins;
         }
 
-        return ['App' => null];
+        return ['Project' => null];
     }
 
     // --- Commands ---
+
+    private function ping(): void
+    {
+        foreach ($this->resolveTargets() as $label => $rootDir) {
+            $declaration = EdoMapping::scanningDeclaration($rootDir);
+
+            $seen = [];
+            foreach ($declaration->getItems() as $item) {
+                $configClass = $item->config::class;
+                if (isset($seen[$configClass])) {
+                    continue;
+                }
+                $seen[$configClass] = true;
+
+                $detail = $item->config->pingDetail();
+
+                self::printLabel("[$label] $configClass", 34);
+                self::printKeyValue("driver", $item->config->getDriver(), 12, 34, 36);
+                self::printKeyValue("dsn",    $item->config->getDns(),    12, 34, 36);
+                if ($detail['status']) {
+                    self::printKeyValue("latency", round($detail['latency'], 2) . ' ms', 12, 34, 36);
+                    self::printBadge($configClass, 'OK', 34, 32);
+                } else {
+                    self::printBadge($configClass, 'FAILED', 34, 31);
+                    if ($detail['error']) {
+                        self::printInfo($detail['error']);
+                    }
+                }
+            }
+
+            if (empty($seen)) {
+                self::printWarning("[$label] No repositories found — nothing to ping.");
+            }
+        }
+    }
 
     private function showSql(): void
     {
@@ -296,6 +334,7 @@ class Db extends Cmd
         self::printLabel("Usage", $cl);
 
         self::printLabel("Commands", $cl);
+        self::printBadge('ping',    'check DB connection and latency',            $cl, 36);
         self::printBadge('migrate', 'run migrations against connected databases', $cl, 36);
         self::printBadge('sql',     'preview generated SQL without executing',    $cl, 36);
         self::printLabel("Commands", $cl);
@@ -317,6 +356,8 @@ class Db extends Cmd
         self::printDivider($cl);
 
         self::printLabel("Examples", $cl);
+        self::printInfo("call db ping");
+        self::printInfo("call db ping --plugins");
         self::printInfo("call db migrate");
         self::printInfo("call db migrate -t -i");
         self::printInfo("call db migrate --plugin=bill");
