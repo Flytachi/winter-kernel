@@ -6,15 +6,11 @@ namespace Flytachi\Winter\Console\Inc;
 
 abstract class Printer
 {
-    public static function printStart(string $arg): void
-    {
-        echo "\033[32m" . " | ===> {$arg}\n";
-        echo "\033[0m";
-    }
-
     public static function printTitle(string $message, int $cl = 33): void
     {
-        echo "\033[" . $cl . "m" . " | [====================== $message ======================]\n";
+        $pad  = max(2, (int)((62 - strlen($message)) / 2));
+        $line = str_repeat('=', $pad);
+        echo "\033[" . $cl . "m" . " | [{$line} {$message} {$line}]\n";
         echo "\033[0m";
     }
 
@@ -45,14 +41,14 @@ abstract class Printer
                 echo "\033[" . $cl . "m" . " |\t $str \n";
             }
         } else {
-            echo "\033[" . $cl . "m" . " |\t Нет данных \n";
+            echo "\033[" . $cl . "m" . " |\t No data \n";
         }
         echo "\033[0m";
     }
 
     public static function printMessage(string $message, int $cl = 33): void
     {
-        echo "\033[" . $cl . "m" . " | ==> $message \n";
+        echo "\033[" . $cl . "m" . " | [→] $message \n";
         echo "\033[0m";
     }
 
@@ -122,7 +118,7 @@ abstract class Printer
      */
     public static function printBadge(string $message, string $badge, int $cl = 33, int $bcl = 32): void
     {
-        $line   = str_pad(" |\t $message ", 55, '.');
+        $line = str_pad(" |\t $message ", 55, '.');
         echo "\033[" . $cl . "m" . $line . " ";
         echo "\033[" . $bcl . "m" . "[$badge]";
         echo "\033[0m\n";

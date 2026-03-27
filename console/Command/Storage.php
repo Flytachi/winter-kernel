@@ -9,39 +9,36 @@ use Flytachi\Winter\Kernel\Kernel;
 
 class Storage extends Cmd
 {
-    public static string $title = "command storage control";
+    public static string $title = "manage storage folders (init, clean)";
     private string $templatePath;
 
     public function handle(): void
     {
-        self::printTitle("Storage", 32);
+        self::printTitle("Storage", 34);
         $this->templatePath = dirname(__DIR__) . '/Template/Storage';
 
-        if (
-            count($this->args['flags']) > 0 || count($this->args['arguments']) > 1
-        ) {
+        if (count($this->args['flags']) > 0 || count($this->args['arguments']) > 1) {
             $this->resolution();
         } else {
             self::help();
         }
 
-        self::printTitle("Storage", 32);
+        self::printTitle("Storage", 34);
     }
 
     private function resolution(): void
     {
-        if (array_key_exists(1, $this->args['arguments'])) {
-            switch ($this->args['arguments'][1]) {
-                case 'init':
-                    $this->initArg();
-                    break;
-                case 'clean':
-                    $this->cleanArg();
-                    break;
-                default:
-                    self::printMessage("Argument '{$this->args['arguments'][1]}' not found");
-                    break;
-            }
+        switch ($this->args['arguments'][1] ?? '') {
+            case 'init':
+                $this->initArg();
+                break;
+            case 'clean':
+                $this->cleanArg();
+                break;
+            default:
+                self::printWarning("Unknown argument '{$this->args['arguments'][1]}'");
+                self::printInfo("Run 'call storage --help' to see available commands.");
+                break;
         }
     }
 
@@ -64,7 +61,7 @@ class Storage extends Cmd
                         $this->storageLogInit();
                         break;
                     default:
-                        self::printMessage("Undefined flag '{$flag}'");
+                        self::printWarning("Unknown flag '-{$flag}'");
                         break;
                 }
             }
@@ -90,7 +87,7 @@ class Storage extends Cmd
                         $this->storageLogClean();
                         break;
                     default:
-                        self::printMessage("Undefined flag '{$flag}'");
+                        self::printWarning("Unknown flag '-{$flag}'");
                         break;
                 }
             }
@@ -101,16 +98,13 @@ class Storage extends Cmd
     {
         if (!is_dir(Kernel::$pathStorage)) {
             if (mkdir(Kernel::$pathStorage, 0777, true)) {
-                copy(
-                    $this->templatePath . '/gitignoreStorage',
-                    Kernel::$pathStorage . '/.gitignore'
-                );
-                self::printMessage("Folder 'storage' is created.", 32);
+                copy($this->templatePath . '/gitignoreStorage', Kernel::$pathStorage . '/.gitignore');
+                self::printBadge("storage", 'CREATED', 34, 32);
             } else {
-                self::printMessage("Folder 'storage' dont created.", 31);
+                self::printBadge("storage", 'FAILED', 34, 31);
             }
         } else {
-            self::printMessage("Folder 'storage' is already exist.");
+            self::printBadge("storage", 'EXISTS', 34, 33);
         }
     }
 
@@ -118,16 +112,13 @@ class Storage extends Cmd
     {
         if (!is_dir(Kernel::$pathStorageCache)) {
             if (mkdir(Kernel::$pathStorageCache, 0777, true)) {
-                copy(
-                    $this->templatePath . '/gitignoreStorageCache',
-                    Kernel::$pathStorageCache . '/.gitignore'
-                );
-                self::printMessage("Folder 'storage/cache' is created.", 32);
+                copy($this->templatePath . '/gitignoreStorageCache', Kernel::$pathStorageCache . '/.gitignore');
+                self::printBadge("storage/cache", 'CREATED', 34, 32);
             } else {
-                self::printMessage("Folder 'storage/cache' dont created.", 31);
+                self::printBadge("storage/cache", 'FAILED', 34, 31);
             }
         } else {
-            self::printMessage("Folder 'storage/cache' is already exist.");
+            self::printBadge("storage/cache", 'EXISTS', 34, 33);
         }
     }
 
@@ -135,16 +126,13 @@ class Storage extends Cmd
     {
         if (!is_dir(Kernel::$pathStorageLog)) {
             if (mkdir(Kernel::$pathStorageLog, 0777, true)) {
-                copy(
-                    $this->templatePath . '/gitignoreStorageLogs',
-                    Kernel::$pathStorageLog . '/.gitignore'
-                );
-                self::printMessage("Folder 'storage/logs' is created.", 32);
+                copy($this->templatePath . '/gitignoreStorageLogs', Kernel::$pathStorageLog . '/.gitignore');
+                self::printBadge("storage/logs", 'CREATED', 34, 32);
             } else {
-                self::printMessage("Folder 'storage/logs' dont created.", 31);
+                self::printBadge("storage/logs", 'FAILED', 34, 31);
             }
         } else {
-            self::printMessage("Folder 'storage/logs' is already exist.");
+            self::printBadge("storage/logs", 'EXISTS', 34, 33);
         }
     }
 
@@ -155,21 +143,21 @@ class Storage extends Cmd
                 Kernel::$pathStorage,
                 Kernel::$pathStorage,
                 [
-                str_replace(Kernel::$pathStorage, '', Kernel::$pathStorageCache),
-                str_replace(Kernel::$pathStorage, '', Kernel::$pathStorageLog)
+                    str_replace(Kernel::$pathStorage, '', Kernel::$pathStorageCache),
+                    str_replace(Kernel::$pathStorage, '', Kernel::$pathStorageLog),
                 ],
                 ['.gitignore'],
                 function ($info) {
-                    $type = $info['is_dir'] ? 'Folder' : 'File';
+                    $label = 'storage/' . ltrim($info['path'], '/');
                     if ($info['status']) {
-                        self::printMessage("STORAGE: {$type} '{$info['path']}' has been successfully deleted.", 32);
+                        self::printBadge($label, 'DELETED', 34, 32);
                     } else {
-                        self::printMessage("STORAGE: {$type} '{$info['path']}' could not be deleted.");
+                        self::printBadge($label, 'FAILED', 34, 31);
                     }
                 }
             );
         } else {
-            self::printMessage("Folder 'storage' does not exist.");
+            self::printWarning("Folder 'storage' does not exist.");
         }
     }
 
@@ -182,16 +170,16 @@ class Storage extends Cmd
                 [],
                 ['.gitignore'],
                 function ($info) {
-                    $type = $info['is_dir'] ? 'Folder' : 'File';
+                    $label = 'storage/cache/' . ltrim($info['path'], '/');
                     if ($info['status']) {
-                        self::printMessage("CACHE: {$type} '{$info['path']}' has been successfully deleted.", 32);
+                        self::printBadge($label, 'DELETED', 34, 32);
                     } else {
-                        self::printMessage("CACHE: {$type} '{$info['path']}' could not be deleted.");
+                        self::printBadge($label, 'FAILED', 34, 31);
                     }
                 }
             );
         } else {
-            self::printMessage("Folder 'cache' does not exist.");
+            self::printWarning("Folder 'storage/cache' does not exist.");
         }
     }
 
@@ -204,16 +192,16 @@ class Storage extends Cmd
                 [],
                 ['.gitignore'],
                 function ($info) {
-                    $type = $info['is_dir'] ? 'Folder' : 'File';
+                    $label = 'storage/logs/' . ltrim($info['path'], '/');
                     if ($info['status']) {
-                        self::printMessage("LOG: {$type} '{$info['path']}' has been successfully deleted.", 32);
+                        self::printBadge($label, 'DELETED', 34, 32);
                     } else {
-                        self::printMessage("LOG: {$type} '{$info['path']}' could not be deleted.");
+                        self::printBadge($label, 'FAILED', 34, 31);
                     }
                 }
             );
         } else {
-            self::printMessage("Folder 'logs' does not exist.");
+            self::printWarning("Folder 'storage/logs' does not exist.");
         }
     }
 
@@ -222,26 +210,32 @@ class Storage extends Cmd
         $cl = 34;
         self::printTitle("Storage Help", $cl);
 
-        self::printLabel("extra storage [args...] -[flags...]", $cl);
-        self::printMessage("args - command", $cl);
-        self::print("init - create storage folders", $cl);
-        self::print("clean - clean storage folders", $cl);
+        self::printLabel("Usage", $cl);
+        self::print("call storage [command] -[flags]", $cl);
+        self::printLabel("Usage", $cl);
 
-        // init
-        self::printLabel("init", $cl);
-        self::printMessage("flags - selection of folder to be action", $cl);
-        self::print("s - create folder storage", $cl);
-        self::print("c - create folder storage/cache", $cl);
-        self::print("l - create folder storage/logs", $cl);
-        self::printLabel("init", $cl);
+        self::printLabel("Commands", $cl);
+        self::printBadge('init',  'create storage folders', $cl, 36);
+        self::printBadge('clean', 'delete contents of storage folders', $cl, 36);
+        self::printLabel("Commands", $cl);
 
-        // clean
-        self::printLabel("clean", $cl);
-        self::printMessage("flags - selection of folder to be action", $cl);
-        self::print("s - clean folder storage", $cl);
-        self::print("c - clean folder storage/cache", $cl);
-        self::print("l - clean folder storage/logs", $cl);
-        self::printLabel("clean", $cl);
+        self::printLabel("Flags", $cl);
+        self::printKeyValue("-s", "target: storage",       10, $cl, 36);
+        self::printKeyValue("-c", "target: storage/cache", 10, $cl, 36);
+        self::printKeyValue("-l", "target: storage/logs",  10, $cl, 36);
+        self::printInfo("(no flags = all targets)");
+        self::printLabel("Flags", $cl);
+
+        self::printDivider($cl);
+
+        self::printLabel("Examples", $cl);
+        self::printInfo("call storage init");
+        self::printInfo("call storage init -s -c");
+        self::printInfo("call storage clean -l");
+        self::printLabel("Examples", $cl);
+
+        self::printDivider($cl);
+        self::printInfo("Docs: https://winterframe.net/#");
 
         self::printTitle("Storage Help", $cl);
     }

@@ -8,213 +8,228 @@ use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\Edo\Declaration;
 use Flytachi\Winter\Edo\Mapping\Structure\Table;
 use Flytachi\Winter\Kernel\Factory\EdoMapping;
+use Flytachi\Winter\Kernel\Factory\Plugin;
 
 class Db extends Cmd
 {
-    public static string $title = "command database control";
+    public static string $title = "manage database migrations and SQL preview";
 
     public function handle(): void
     {
-        self::printTitle("Db", 32);
+        self::printTitle("Db", 34);
 
-        if (
-            count($this->args['arguments']) > 1
-        ) {
+        if (count($this->args['arguments']) > 1) {
             $this->resolution();
         } else {
             self::help();
         }
 
-        self::printTitle("Db", 32);
+        self::printTitle("Db", 34);
     }
 
     private function resolution(): void
     {
-        if (array_key_exists(1, $this->args['arguments'])) {
-            if (empty($this->args['flags'])) {
-                $this->args['flags'] = ['s', 't', 'i', 'c'];
-            }
-            switch ($this->args['arguments'][1]) {
-                case 'migrate':
-                    $this->migrate();
-                    break;
-                case 'sql':
-                    $this->showSql();
-                    break;
-                default:
-                    self::printMessage("Argument '{$this->args['arguments'][1]}' not found");
-                    break;
-            }
+        if (empty($this->args['flags'])) {
+            $this->args['flags'] = ['s', 't', 'i', 'c'];
+        }
+        switch ($this->args['arguments'][1] ?? '') {
+            case 'migrate':
+                $this->migrate();
+                break;
+            case 'sql':
+                $this->showSql();
+                break;
+            default:
+                self::printWarning("Unknown argument '{$this->args['arguments'][1]}'");
+                self::printInfo("Run 'call db --help' to see available commands.");
+                break;
         }
     }
 
+    // --- Plugin resolution ---
+
+    /**
+     * @return array<string, string|null>  prefix => rootDir (null = app)
+     */
+    private function resolveTargets(): array
+    {
+        $options = $this->args['options'];
+
+        if (isset($options['plugin'])) {
+            $prefix = $options['plugin'];
+            $plugins = Plugin::getPlugins();
+            if (!isset($plugins[$prefix])) {
+                self::printWarning("Plugin '$prefix' is not registered.");
+                return [];
+            }
+            return [$prefix => $plugins[$prefix]];
+        }
+
+        if (isset($options['plugins'])) {
+            $plugins = Plugin::getPlugins();
+            if (empty($plugins)) {
+                self::printWarning("No plugins are registered.");
+                return [];
+            }
+            return $plugins;
+        }
+
+        return ['App' => null];
+    }
+
+    // --- Commands ---
+
     private function showSql(): void
     {
-        $declaration = EdoMapping::scanningDeclaration();
-        $data = $this->processDeclarationData($declaration);
+        foreach ($this->resolveTargets() as $label => $rootDir) {
+            $declaration = EdoMapping::scanningDeclaration($rootDir);
+            $data = $this->processDeclarationData($declaration);
 
-        foreach ($declaration->getItems() as $item) {
-            self::printLabel($item->config::class, 32);
+            foreach ($declaration->getItems() as $item) {
+                self::printLabel("[$label] " . $item->config::class, 34);
 
-            // Schemes
-            if (in_array('s', $this->args['flags'])) {
-                if (count($data['sqlSchemes']) > 0) {
-                    self::printMessage("* Schemes (" . count($data['sqlSchemes']) . ")", 32);
+                if (in_array('s', $this->args['flags']) && count($data['sqlSchemes']) > 0) {
+                    self::printLabel("Schemes (" . count($data['sqlSchemes']) . ")", 36);
                     foreach ($data['sqlSchemes'] as $sql) {
                         self::printSplit($sql['exec']);
                     }
+                    self::printLabel("Schemes", 36);
                 }
-            }
 
-            // Tables
-            if (in_array('t', $this->args['flags'])) {
-                if (count($data['sqlTables']) > 0) {
-                    self::printMessage("* Tables (" . count($data['sqlTables']) . ")", 32);
+                if (in_array('t', $this->args['flags']) && count($data['sqlTables']) > 0) {
+                    self::printLabel("Tables (" . count($data['sqlTables']) . ")", 36);
                     foreach ($data['sqlTables'] as $sql) {
                         self::printSplit($sql['exec']);
                     }
+                    self::printLabel("Tables", 36);
                 }
-            }
 
-            // Indexes
-            if (in_array('i', $this->args['flags'])) {
-                if (count($data['sqlIndexes']) > 0) {
-                    self::printMessage("* Indexes (" . count($data['sqlIndexes']) . ")", 32);
+                if (in_array('i', $this->args['flags']) && count($data['sqlIndexes']) > 0) {
+                    self::printLabel("Indexes (" . count($data['sqlIndexes']) . ")", 36);
                     foreach ($data['sqlIndexes'] as $sql) {
                         self::printSplit($sql['exec']);
                     }
+                    self::printLabel("Indexes", 36);
                 }
-            }
 
-            // Constraints
-            if (in_array('c', $this->args['flags'])) {
-                if (count($data['sqlConstraints']) > 0) {
-                    self::printMessage("* Constraints (" . count($data['sqlConstraints']) . ")", 32);
+                if (in_array('c', $this->args['flags']) && count($data['sqlConstraints']) > 0) {
+                    self::printLabel("Constraints (" . count($data['sqlConstraints']) . ")", 36);
                     foreach ($data['sqlConstraints'] as $sql) {
                         self::printSplit($sql['exec']);
                     }
+                    self::printLabel("Constraints", 36);
                 }
-            }
 
-            self::printLabel($item->config::class, 32);
+                self::printLabel("[$label] " . $item->config::class, 34);
+            }
         }
     }
 
     private function migrate(): void
     {
-        $declaration = EdoMapping::scanningDeclaration();
-        $data = $this->processDeclarationData($declaration);
+        foreach ($this->resolveTargets() as $label => $rootDir) {
+            $declaration = EdoMapping::scanningDeclaration($rootDir);
+            $data = $this->processDeclarationData($declaration);
 
-        foreach ($declaration->getItems() as $item) {
-            self::printLabel($item->config::class, 32);
-            $db = $item->config->connection();
+            foreach ($declaration->getItems() as $item) {
+                self::printLabel("[$label] " . $item->config::class, 34);
+                $db = $item->config->connection();
 
-            // Schemes
-            if ($item->config->getDriver() === 'pgsql') {
-                if (in_array('s', $this->args['flags'])) {
+                // Schemes (pgsql only)
+                if ($item->config->getDriver() === 'pgsql' && in_array('s', $this->args['flags'])) {
                     if (count($data['sqlSchemes']) > 0) {
-                        self::printMessage("* Schemes (" . count($data['sqlSchemes']) . ")", 32);
+                        self::printLabel("Schemes (" . count($data['sqlSchemes']) . ")", 36);
                         foreach ($data['sqlSchemes'] as $sql) {
                             try {
                                 $db->exec($sql['exec']);
-                                self::print("- [ok] scheme '{$sql['title']}'", 32);
+                                self::printBadge($sql['title'], 'OK', 34, 32);
                             } catch (\Throwable $e) {
                                 if ($e->getCode() === '42P06') {
-                                    self::print("- [exist] scheme '{$sql['title']}'", 33);
+                                    self::printBadge($sql['title'], 'EXIST', 34, 33);
                                 } else {
-                                    self::print("- [failed] scheme '{$sql['title']}'", 31);
+                                    self::printBadge($sql['title'], 'FAILED', 34, 31);
                                     if (env('DEBUG', false)) {
-                                        self::print("\t" . $e->getMessage(), 31);
+                                        self::printInfo($e->getMessage());
                                     }
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            // Tables
-            if (in_array('t', $this->args['flags'])) {
-                if (count($data['sqlTables']) > 0) {
-                    self::printMessage("* Tables (" . count($data['sqlTables']) . ")", 32);
+                // Tables
+                if (in_array('t', $this->args['flags']) && count($data['sqlTables']) > 0) {
+                    self::printLabel("Tables (" . count($data['sqlTables']) . ")", 36);
                     foreach ($data['sqlTables'] as $sql) {
                         try {
                             $db->exec($sql['exec']);
-                            self::print("- [ok] table '{$sql['title']}'", 32);
+                            self::printBadge($sql['title'], 'OK', 34, 32);
                         } catch (\Throwable $e) {
                             if (
                                 ($item->config->getDriver() === 'pgsql' && $e->getCode() === '42P07')
                                 || ($item->config->getDriver() === 'mysql' && $e->getCode() === '42S01')
                             ) {
-                                self::print("- [exist] table '{$sql['title']}'", 33);
+                                self::printBadge($sql['title'], 'EXIST', 34, 33);
                             } else {
-                                self::print("- [failed] table '{$sql['title']}'", 31);
+                                self::printBadge($sql['title'], 'FAILED', 34, 31);
                                 if (env('DEBUG', false)) {
-                                    self::print("\t" . $e->getMessage(), 31);
+                                    self::printInfo($e->getMessage());
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            // Indexes
-            if (in_array('i', $this->args['flags'])) {
-                if (count($data['sqlIndexes']) > 0) {
-                    self::printMessage("* Indexes (" . count($data['sqlIndexes']) . ")", 32);
+                // Indexes
+                if (in_array('i', $this->args['flags']) && count($data['sqlIndexes']) > 0) {
+                    self::printLabel("Indexes (" . count($data['sqlIndexes']) . ")", 36);
                     foreach ($data['sqlIndexes'] as $sql) {
                         try {
                             $db->exec($sql['exec']);
-                            self::print("- [ok] " . $sql['title'], 32);
+                            self::printBadge($sql['title'], 'OK', 34, 32);
                         } catch (\Throwable $e) {
                             if (
                                 ($item->config->getDriver() === 'pgsql' && $e->getCode() === '42P07')
                                 || ($item->config->getDriver() === 'mysql' && $e->getCode() === '42000')
                             ) {
-                                self::print("- [exist] " . $sql['title'], 33);
+                                self::printBadge($sql['title'], 'EXIST', 34, 33);
                             } else {
-                                self::print("- [failed] " . $sql['title'], 31);
+                                self::printBadge($sql['title'], 'FAILED', 34, 31);
                                 if (env('DEBUG', false)) {
-                                    self::print("\t" . $e->getMessage(), 31);
+                                    self::printInfo($e->getMessage());
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            // Constraints
-            if (in_array('c', $this->args['flags'])) {
-                if (count($data['sqlConstraints']) > 0) {
-                    self::printMessage("* Constraints (" . count($data['sqlConstraints']) . ")", 32);
+                // Constraints
+                if (in_array('c', $this->args['flags']) && count($data['sqlConstraints']) > 0) {
+                    self::printLabel("Constraints (" . count($data['sqlConstraints']) . ")", 36);
                     foreach ($data['sqlConstraints'] as $sql) {
                         try {
                             $db->exec($sql['exec']);
-                            self::print("- [ok] " . $sql['title'], 32);
+                            self::printBadge($sql['title'], 'OK', 34, 32);
                         } catch (\Throwable $e) {
                             if ($e->getCode() === '42710') {
-                                self::print("- [exist] " . $sql['title'], 33);
+                                self::printBadge($sql['title'], 'EXIST', 34, 33);
                             } else {
-                                self::print("- [failed] " . $sql['title'], 31);
+                                self::printBadge($sql['title'], 'FAILED', 34, 31);
                                 if (env('DEBUG', false)) {
-                                    self::print("\t" . $e->getMessage(), 31);
+                                    self::printInfo($e->getMessage());
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            self::printLabel($item->config::class, 32);
+                self::printLabel("[$label] " . $item->config::class, 34);
+            }
         }
     }
 
     /**
-     * Processes the database declaration and prepares SQL statements.
-     *
-     * @param Declaration $declaration
      * @return array{sqlSchemes: array, sqlTables: array, sqlIndexes: array, sqlConstraints: array}
-     * An associative array containing 'sqlSchemes', 'sqlTables', 'sqlIndexes', 'sqlConstraints'.
      */
     private function processDeclarationData(Declaration $declaration): array
     {
@@ -230,16 +245,9 @@ class Db extends Cmd
                 if ($structure instanceof Table) {
                     $schemaSql = $structure->createSchemaIfNotExists($item->config->getDriver());
                     if ($schemaSql !== null) {
-                        $title = str_replace(
-                            ';',
-                            '',
-                            str_replace('CREATE SCHEMA ', '', $schemaSql)
-                        );
+                        $title = str_replace(';', '', str_replace('CREATE SCHEMA ', '', $schemaSql));
                         if (!isset($sqlSchemes[$title])) {
-                            $sqlSchemes[$title] = [
-                                'title' => $title,
-                                'exec' => $schemaSql,
-                            ];
+                            $sqlSchemes[$title] = ['title' => $title, 'exec' => $schemaSql];
                         }
                     }
                     $sql = $structure->toSql($item->config->getDriver());
@@ -250,25 +258,18 @@ class Db extends Cmd
                         'exec' => (count($exp) == 1 ? $exp[0] : $exp[0] . PHP_EOL . ');')
                     ];
                     if (count($exp) > 1) {
-                        $subExp = explode(PHP_EOL, $exp[1]);
-                        for ($i = 0; $i < count($subExp); $i++) {
-                            if (str_starts_with($subExp[$i], 'ALTER TABLE')) {
-                                preg_match('/ADD\s+CONSTRAINT\s+([a-zA-Z0-9_]+)/i', $subExp[$i], $match);
-                                $title = $match[1] ?? 'unknown';
+                        foreach (explode(PHP_EOL, $exp[1]) as $line) {
+                            if (str_starts_with($line, 'ALTER TABLE')) {
+                                preg_match('/ADD\s+CONSTRAINT\s+([a-zA-Z0-9_]+)/i', $line, $match);
                                 $sqlConstraints[] = [
-                                    'title' => "constraint '{$title}'",
-                                    'exec' =>  $subExp[$i]
+                                    'title' => "constraint '" . ($match[1] ?? 'unknown') . "'",
+                                    'exec'  => $line,
                                 ];
                             } else {
-                                preg_match(
-                                    '/\bINDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_]+)/i',
-                                    $subExp[$i],
-                                    $match
-                                );
-                                $title = $match[1] ?? 'unknown';
+                                preg_match('/\bINDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_]+)/i', $line, $match);
                                 $sqlIndexes[] = [
-                                    'title' => "index '{$title}'",
-                                    'exec' =>  $subExp[$i]
+                                    'title' => "index '" . ($match[1] ?? 'unknown') . "'",
+                                    'exec'  => $line,
                                 ];
                             }
                         }
@@ -278,10 +279,10 @@ class Db extends Cmd
         }
 
         return [
-            'sqlSchemes' => $sqlSchemes,
-            'sqlTables' => $sqlTables,
-            'sqlIndexes' => $sqlIndexes,
-            'sqlConstraints' => $sqlConstraints,
+            'sqlSchemes'      => $sqlSchemes,
+            'sqlTables'       => $sqlTables,
+            'sqlIndexes'      => $sqlIndexes,
+            'sqlConstraints'  => $sqlConstraints,
         ];
     }
 
@@ -290,28 +291,41 @@ class Db extends Cmd
         $cl = 34;
         self::printTitle("Db Help", $cl);
 
-        self::printLabel("extra db [args...] -[flags...] --[options...]", $cl);
-        self::printMessage("args - command", $cl);
-        self::print("migrate - migration mapping sql in databases", $cl);
-        self::print("sql - show mapping sql", $cl);
+        self::printLabel("Usage", $cl);
+        self::print("call db [command] -[flags] --[options]", $cl);
+        self::printLabel("Usage", $cl);
 
-        // migrate
-        self::printLabel("migrate", $cl);
-        self::printMessage("flags - selection additional to be action", $cl);
-        self::print("s - migrate only schemes", $cl);
-        self::print("t - migrate only tables", $cl);
-        self::print("i - migrate only indexes", $cl);
-        self::print("c - migrate only constraints", $cl);
-        self::printLabel("migrate", $cl);
+        self::printLabel("Commands", $cl);
+        self::printBadge('migrate', 'run migrations against connected databases', $cl, 36);
+        self::printBadge('sql',     'preview generated SQL without executing',    $cl, 36);
+        self::printLabel("Commands", $cl);
 
-        // migrate
-        self::printLabel("sql", $cl);
-        self::printMessage("flags - selection additional to be action", $cl);
-        self::print("s - show only schemes", $cl);
-        self::print("t - show only tables", $cl);
-        self::print("i - show only indexes", $cl);
-        self::print("c - show only constraints", $cl);
-        self::printLabel("sql", $cl);
+        self::printLabel("Flags", $cl);
+        self::printKeyValue("-s", "schemes only",     10, $cl, 36);
+        self::printKeyValue("-t", "tables only",      10, $cl, 36);
+        self::printKeyValue("-i", "indexes only",     10, $cl, 36);
+        self::printKeyValue("-c", "constraints only", 10, $cl, 36);
+        self::printInfo("(no flags = all: -s -t -i -c)");
+        self::printLabel("Flags", $cl);
+
+        self::printLabel("Options", $cl);
+        self::printKeyValue("--plugin=<name>", "target a single registered plugin", 20, $cl, 36);
+        self::printKeyValue("--plugins",       "target all registered plugins",     20, $cl, 36);
+        self::printInfo("(no option = app)");
+        self::printLabel("Options", $cl);
+
+        self::printDivider($cl);
+
+        self::printLabel("Examples", $cl);
+        self::printInfo("call db migrate");
+        self::printInfo("call db migrate -t -i");
+        self::printInfo("call db migrate --plugin=bill");
+        self::printInfo("call db migrate --plugins");
+        self::printInfo("call db sql --plugin=bill -s");
+        self::printLabel("Examples", $cl);
+
+        self::printDivider($cl);
+        self::printInfo("Docs: https://winterframe.net/#");
 
         self::printTitle("Db Help", $cl);
     }

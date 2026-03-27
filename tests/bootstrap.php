@@ -2,4 +2,4 @@
 
 require_once dirname(__DIR__) . '/vendor/autoload.php';
 
-\Flytachi\Winter\Kernel\Kernel::init(__DIR__);
+\Flytachi\Winter\Kernel\Kernel::init(__DIR__, isTmpVolatile: false);

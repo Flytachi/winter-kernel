@@ -28,8 +28,11 @@ class PluginRouter extends HttpRouter implements ActuatorItemInterface
         $usePluginPrefix = null;
         $usePluginPath = null;
         foreach (Plugin::getPlugins() as $pluginPrefix => $pluginPath) {
-            if (str_starts_with($input['path'], "/{$pluginPrefix}/")) {
-                $input['path'] = substr($input['path'], strlen("/{$pluginPrefix}/"));
+            if (
+                str_starts_with($input['path'], "/{$pluginPrefix}/")
+                || $input['path'] === "/{$pluginPrefix}"
+            ) {
+                $input['path'] = ltrim(substr($input['path'], strlen("/{$pluginPrefix}")), '/');
                 $usePluginPrefix = $pluginPrefix;
                 $usePluginPath = $pluginPath;
                 break;

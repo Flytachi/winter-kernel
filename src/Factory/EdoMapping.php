@@ -16,9 +16,9 @@ use ReflectionException;
 
 class EdoMapping
 {
-    public static function scanningDeclaration(): Declaration
+    public static function scanningDeclaration(?string $rootDir = null): Declaration
     {
-        $resources = Mapping::scanProjectFiles();
+        $resources = Mapping::scanProjectFiles($rootDir);
         $reflectionClasses = Mapping::scanRefClasses($resources, RepositoryInterface::class);
         return self::scanDeclarationFilter($reflectionClasses);
     }
