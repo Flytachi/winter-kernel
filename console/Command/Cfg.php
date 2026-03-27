@@ -58,24 +58,21 @@ class Cfg extends Cmd
 
     private function initArg(): void
     {
-//        $filePath = Kernel::$pathRoot . '/composer.json';
-//        if (file_exists($filePath) && is_readable($filePath)) {
-//            $projectData = json_decode(
-//                file_get_contents($filePath) ?: '',
-//                true
-//            );
-//
-//            $extra = $projectData['extra'] ?? [];
-//
-//            $extra['project']['name'] = basename(Kernel::$pathRoot);
-//            $extra['project']['version'] = $extra['project']['version'] ?? '1.0.0';
-//            $extra['project']['description'] = $extra['project']['description'] ?? 'Winter framework based';
-//
-//            $projectData['extra'] = $extra;
-//
-//            $json = json_encode($projectData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-//            file_put_contents($filePath, $json . PHP_EOL);
-//        }
+        $filePath = Kernel::$pathRoot . '/composer.json';
+        if (file_exists($filePath) && is_readable($filePath)) {
+            $projectData = json_decode(
+                file_get_contents($filePath) ?: '',
+                true
+            );
+
+            $projectData['name'] = 'project/'. basename(Kernel::$pathRoot);
+            $projectData['description'] = 'My Project '. basename(Kernel::$pathRoot);
+            unset($projectData['keywords']);
+            $projectData['authors'] = [];
+
+            $json = json_encode($projectData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            file_put_contents($filePath, $json . PHP_EOL);
+        }
 
         $this->envCreate();
         $this->keyGenerate();
