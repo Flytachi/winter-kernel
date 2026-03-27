@@ -17,7 +17,7 @@ class Make extends Cmd
 
     public function handle(): void
     {
-        self::printTitle("Make", 32);
+        self::printTitle("Make", 34);
         $this->templatePath = dirname(__DIR__) . '/Template/Make';
         array_shift($this->args['arguments']);
 
@@ -33,7 +33,7 @@ class Make extends Cmd
             $this->resolution();
         }
 
-        self::printTitle("Make", 32);
+        self::printTitle("Make", 34);
     }
 
     private function resolution(): void
@@ -466,6 +466,7 @@ class Make extends Cmd
         $fullClassNs = ($inputNs !== '' ? $inputNs . '\\' : '') . $className;
 
         // Step 4: find longest PSR-4 prefix that matches the full class namespace
+        $vendorPath   = realpath(Kernel::$pathRoot . '/vendor');
         $bestNsPrefix = '';
         $bestDir      = null;
         foreach ($namespaceMap as $nsPrefix => $dirs) {
@@ -474,6 +475,7 @@ class Make extends Cmd
                 $dir
                 && str_starts_with($fullClassNs, $nsPrefix)
                 && strlen($nsPrefix) > strlen($bestNsPrefix)
+                && !($vendorPath && str_starts_with($dir, $vendorPath))
             ) {
                 $bestNsPrefix = $nsPrefix;
                 $bestDir      = $dir;
@@ -505,7 +507,11 @@ class Make extends Cmd
         $appNsPrefix  = '';
         foreach ($namespaceMap as $nsPrefix => $dirs) {
             $dir = realpath($dirs[0]);
-            if ($dir && str_starts_with($dir, Kernel::$pathRoot)) {
+            if (
+                $dir
+                && str_starts_with($dir, Kernel::$pathRoot)
+                && !($vendorPath && str_starts_with($dir, $vendorPath))
+            ) {
                 $appDir      = $dir;
                 $appNsPrefix = rtrim($nsPrefix, '\\');
                 break;
@@ -619,10 +625,8 @@ class Make extends Cmd
         self::print("call make acme.app.http.User -a", $cl);
         self::printLabel("Examples", $cl);
 
-        // docs
-        self::printLabel("Documentation", $cl);
-        self::print("https://winterframe.net/#", $cl);
-        self::printLabel("Documentation", $cl);
+        self::printDivider($cl);
+        self::printInfo("Docs: https://winterframe.net/#");
 
         self::printTitle("Make Help", $cl);
     }
