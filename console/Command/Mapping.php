@@ -49,11 +49,11 @@ class Mapping extends Cmd
     private function showArg(): void
     {
         try {
-            // App routes
+            // Project routes
             $declaration = MappingFactory::scanningDeclaration();
             $children    = $declaration->getChildren();
 
-            self::printLabel("App Routes", 34);
+            self::printLabel("Project Routes", 34);
             if (empty($children)) {
                 self::printInfo("No routes registered.");
             } else {
@@ -63,7 +63,7 @@ class Mapping extends Cmd
                     self::printKeyValue($key, $value, 45, 34, 36);
                 }
             }
-            self::printLabel("App Routes", 34);
+            self::printLabel("Project Routes", 34);
 
             // Plugin routes
             $plugins = Plugin::getPlugins();
@@ -98,7 +98,7 @@ class Mapping extends Cmd
         try {
             $router = new Router();
             $router->generateMappingRoutes();
-            self::printBadge("App", 'BUILT', 34, 32);
+            self::printBadge("Project", 'BUILT', 34, 32);
 
             $plugins = Plugin::getPlugins();
             if (!empty($plugins)) {
@@ -124,9 +124,9 @@ class Mapping extends Cmd
             $router = new Router();
             if (file_exists($router->getPathMapping())) {
                 unlink($router->getPathMapping());
-                self::printBadge("App", 'CLEANED', 34, 32);
+                self::printBadge("Project", 'CLEANED', 34, 32);
             } else {
-                self::printBadge("App", 'SKIPPED', 34, 33);
+                self::printBadge("Project", 'SKIPPED', 34, 33);
             }
 
             $plugins = Plugin::getPlugins();
@@ -176,7 +176,7 @@ class Mapping extends Cmd
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net/#");
+        self::printInfo("Docs: https://winterframe.net/docs/2.0.0/cmd-mapping");
 
         self::printTitle("Mapping Help", $cl);
     }

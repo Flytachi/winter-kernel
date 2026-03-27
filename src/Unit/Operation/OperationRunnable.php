@@ -82,7 +82,7 @@ final class OperationRunnable implements Runnable
      * Resolved at construction via reflection. Passed to {@see Thread} as the process name.
      *
      * Examples:
-     * - Closure inside a class  → "[closure] in App\Service\MyService"
+     * - Closure inside a class  → "[closure] in Main\Service\MyService"
      * - Anonymous closure       → "[closure]"
      * - Named function          → "[function] myFunctionName"
      *

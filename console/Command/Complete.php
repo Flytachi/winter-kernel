@@ -9,6 +9,7 @@ use Flytachi\Winter\Console\Core;
 use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\Console\Inc\CmdCustom;
 use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Kernel\Process\Core\Dispatchable;
 
 class Complete extends Cmd
 {
@@ -17,27 +18,31 @@ class Complete extends Cmd
     /** Static completion map: command (+ optional subcommand) → suggestions with descriptions */
     private static array $map = [
         ''          => [],   // level 1: filled dynamically (command names + titles)
-        'make'      => [
-            '-a:create all (controller, service, repository, model)',
-            '-c:create controller',
-            '-s:create service',
-            '-m:create model',
-            '-r:create repository',
-            '-t:create test',
-            '-e:create entity',
-            '-d:create DTO',
-            '-q:create query',
-            '-p:create pipe',
-            '-J:create job',
-            '-P:create policy',
-            '-N:create notification',
-            '-W:create command (Cmd)',
-            '-D:create middleware',
-            '-R:create resource',
-            '-n:use namespace only (no suffix)',
-            '--mvc:place in mvc subdirectory',
+
+        // --- make ---
+        'make' => [
+            '-a:RestController — REST API controller',
+            '-c:Controller — web/view controller',
+            '-s:Service — business logic service',
+            '-m:Middleware — HTTP middleware',
+            '-r:Repository — data access repository',
+            '-t:Store — Redis-backed store',
+            '-e:Entity — ORM entity / model',
+            '-d:Dto — Data Transfer Object',
+            '-q:Request — validated request object',
+            '-p:Response — custom HTTP response',
+            '-J:Job — async queue job',
+            '-P:Process — long-running process',
+            '-N:Daemon — background daemon',
+            '-W:WebSocket — WebSocket handler',
+            '-D:DbConfig — database configuration',
+            '-R:RedisConfig — Redis configuration',
+            '-n:Cmd — custom console command',
+            '--mvc:wrap output path in MVC category folders',
         ],
-        'cfg'       => [
+
+        // --- cfg ---
+        'cfg' => [
             'init:initialize project (.env + key)',
             'key:manage WINTER_KEY',
             'env:manage .env file',
@@ -47,12 +52,56 @@ class Complete extends Cmd
         ],
         'cfg key'        => ['-g:generate WINTER_KEY', '-s:show current key'],
         'cfg env'        => ['-i:create .env from template', '-s:show loaded env vars', '--file:show raw .env file'],
-        'cfg completion' => ['-i:install globally (once per machine)', '-if:force update', '-f:force flag'],
-        'serve'          => ['--host=:bind host', '--port=:bind port'],
-        'help'           => [],   // filled dynamically (command names + titles)
-        'sc'             => ['list:list all available scripts'],
-        'script'         => ['list:list all available scripts'],
-        'complete'       => [],
+        'cfg completion' => ['-i:install globally (once per machine)', '-if:force reinstall', '-f:force flag'],
+
+        // --- serve ---
+        'serve' => ['--host=:bind host (default: 0.0.0.0)', '--port=:bind port (default: 8000)'],
+
+        // --- mapping ---
+        'mapping' => [
+            'show:display all registered routes (app + plugins)',
+            'build:generate and cache route mapping files',
+            'clean:delete cached route mapping files',
+        ],
+
+        // --- storage ---
+        'storage' => [
+            'init:create storage folders',
+            'clean:delete contents of storage folders',
+        ],
+        'storage init'  => ['-s:storage', '-c:storage/cache', '-l:storage/logs'],
+        'storage clean' => ['-s:storage', '-c:storage/cache', '-l:storage/logs'],
+
+        // --- thread / th ---
+        'thread' => [
+            'list:list all Dispatchable classes',
+            'run:run task in foreground',
+        ],
+        'thread run' => ['-d:dispatch as background process'],
+
+        // --- db ---
+        'db' => [
+            'ping:check DB connection and latency',
+            'migrate:run migrations against connected databases',
+            'sql:preview generated SQL without executing',
+        ],
+        'db ping'    => ['--plugin=:target a single plugin', '--plugins:target all plugins'],
+        'db migrate' => [
+            '-s:schemes only', '-t:tables only', '-i:indexes only', '-c:constraints only',
+            '--plugin=:target a single plugin', '--plugins:target all plugins',
+        ],
+        'db sql' => [
+            '-s:schemes only', '-t:tables only', '-i:indexes only', '-c:constraints only',
+            '--plugin=:target a single plugin', '--plugins:target all plugins',
+        ],
+
+        // --- script / sc ---
+        'script'   => ['list:list all Cmd/CmdCustom scripts'],
+        'sc'       => ['list:list all Cmd/CmdCustom scripts'],
+
+        // --- misc ---
+        'help'     => [],   // filled dynamically (command names + titles)
+        'complete' => [],
     ];
 
     public function handle(): void
@@ -101,6 +150,11 @@ class Complete extends Cmd
         // sc/script: append discovered Cmd class names
         if (in_array($resolved, ['script', 'sc']) && $sub === null) {
             $base = array_merge($base, $this->getScriptClasses());
+        }
+
+        // thread run: append discovered Dispatchable class names
+        if ($resolved === 'thread' && $sub === 'run') {
+            $base = array_merge($this->getDispatchableClasses(), $base);
         }
 
         // help: suggest command names
@@ -176,6 +230,48 @@ class Complete extends Cmd
                             !$ref->isAbstract()
                             && ($ref->isSubclassOf(Cmd::class) || $ref->isSubclassOf(CmdCustom::class))
                         ) {
+                            $classes[] = str_replace('\\', '.', $className);
+                        }
+                    } catch (\ReflectionException) {}
+                }
+            }
+        }
+        return $classes;
+    }
+
+    private function getDispatchableClasses(): array
+    {
+        $loaders = ClassLoader::getRegisteredLoaders();
+        $loader  = reset($loaders);
+        $nsMap   = $loader->getPrefixesPsr4();
+        $vendor  = realpath(Kernel::$pathRoot . '/vendor');
+        $classes = [];
+
+        foreach ($nsMap as $nsPrefix => $dirs) {
+            foreach ($dirs as $dir) {
+                $realDir = realpath($dir);
+                if (!$realDir || !str_starts_with($realDir, Kernel::$pathRoot)) {
+                    continue;
+                }
+                if ($vendor && str_starts_with($realDir, $vendor)) {
+                    continue;
+                }
+                $files = new \RecursiveIteratorIterator(
+                    new \RecursiveDirectoryIterator($realDir, \FilesystemIterator::SKIP_DOTS)
+                );
+                foreach ($files as $file) {
+                    if ($file->getExtension() !== 'php') {
+                        continue;
+                    }
+                    $relative  = substr($file->getRealPath(), strlen($realDir));
+                    $relative  = substr(ltrim(str_replace('/', '\\', $relative), '\\'), 0, -4);
+                    $className = rtrim($nsPrefix, '\\') . '\\' . $relative;
+                    if (!class_exists($className)) {
+                        continue;
+                    }
+                    try {
+                        $ref = new \ReflectionClass($className);
+                        if (!$ref->isAbstract() && $ref->implementsInterface(Dispatchable::class)) {
                             $classes[] = str_replace('\\', '.', $className);
                         }
                     } catch (\ReflectionException) {}

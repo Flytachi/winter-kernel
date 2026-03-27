@@ -82,7 +82,7 @@ class Serve extends Cmd
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net/#");
+        self::printInfo("Docs: https://winterframe.net/docs/2.0.0/cmd-serve");
 
         self::printTitle("Serve Help", $cl);
     }

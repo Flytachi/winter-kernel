@@ -555,78 +555,64 @@ class Make extends Cmd
         $cl = 34;
         self::printTitle("Make Help", $cl);
 
-        // usage
         self::printLabel("Usage", $cl);
-        self::print("call make [args...] -[flags...] --[options...]", $cl);
-        self::print("", $cl);
-        self::print("args    - one or more template names (dot-notation namespace)", $cl);
-        self::print("flags   - which template types to generate", $cl);
-        self::print("options - extra generation modifiers", $cl);
+        self::print("call make <dot.notation.Name> -[flags] --[options]", $cl);
         self::printLabel("Usage", $cl);
 
-        // args / namespace resolution
-        self::printLabel("Namespace Resolution (PSR-4 aware)", $cl);
-        self::print(".Test                   -> auto-detect: first PSR-4 dir under app root", $cl);
-        self::print("Test                    -> same as .Test", $cl);
-        self::print("api.user.Test           -> relative sub-path: appRoot/Api/User/", $cl);
-        self::print("acme.app.api.user.Test  -> full PSR-4 namespace resolved to mapped dir", $cl);
-        self::print("", $cl);
-        self::print("File path and class namespace are always derived from composer PSR-4 map.", $cl);
-        self::printLabel("Namespace Resolution (PSR-4 aware)", $cl);
+        self::printLabel("Namespace Resolution", $cl);
+        self::printKeyValue(".Name",                 "auto-detect first PSR-4 dir under app root", 26, 36, 37);
+        self::printKeyValue("Name",                  "same as .Name",                              26, 36, 37);
+        self::printKeyValue("api.user.Name",         "relative sub-path: appRoot/Api/User/",       26, 36, 37);
+        self::printKeyValue("acme.app.api.user.Name","full PSR-4 namespace → mapped dir",          26, 36, 37);
+        self::printLabel("Namespace Resolution", $cl);
 
-        // flags — HTTP layer
         self::printLabel("Flags — HTTP", $cl);
-        self::print("-a   RestController   (suffix: Controller)  REST API controller", $cl);
-        self::print("-c   Controller       (suffix: Controller)  Web/view controller", $cl);
-        self::print("-m   Middleware       (suffix: Middleware)  HTTP middleware", $cl);
+        self::printBadge('-a', 'RestController  (suffix: Controller)',  $cl, 36);
+        self::printBadge('-c', 'Controller      (suffix: Controller)',  $cl, 36);
+        self::printBadge('-m', 'Middleware       (suffix: Middleware)', $cl, 36);
         self::printLabel("Flags — HTTP", $cl);
 
-        // flags — Data layer
         self::printLabel("Flags — Data", $cl);
-        self::print("-e   Entity           (no suffix)           ORM entity / model", $cl);
-        self::print("-d   Dto              (suffix: Dto)         Data Transfer Object", $cl);
-        self::print("-q   Request          (suffix: Request)     Validated request object", $cl);
-        self::print("-p   Response         (no suffix)           Custom HTTP response", $cl);
+        self::printBadge('-e', 'Entity           (no suffix)',          $cl, 36);
+        self::printBadge('-d', 'Dto              (suffix: Dto)',        $cl, 36);
+        self::printBadge('-q', 'Request          (suffix: Request)',    $cl, 36);
+        self::printBadge('-p', 'Response         (no suffix)',          $cl, 36);
         self::printLabel("Flags — Data", $cl);
 
-        // flags — Business layer
         self::printLabel("Flags — Business", $cl);
-        self::print("-s   Service          (suffix: Service)     Business logic service", $cl);
-        self::print("-r   Repository       (suffix: Repository)  Data access repository", $cl);
-        self::print("-t   Store            (suffix: Store)       Redis-backed store", $cl);
+        self::printBadge('-s', 'Service          (suffix: Service)',    $cl, 36);
+        self::printBadge('-r', 'Repository       (suffix: Repository)', $cl, 36);
+        self::printBadge('-t', 'Store            (suffix: Store)',      $cl, 36);
         self::printLabel("Flags — Business", $cl);
 
-        // flags — Async / Process
         self::printLabel("Flags — Async / Process", $cl);
-        self::print("-J   Job              (suffix: Job)         Async queue job", $cl);
-        self::print("-P   Process          (suffix: Process)     Long-running process", $cl);
-        self::print("-N   Daemon           (suffix: Daemon)      Background daemon", $cl);
-        self::print("-W   WebSocket        (suffix: WebSocket)   WebSocket handler", $cl);
+        self::printBadge('-J', 'Job              (suffix: Job)',        $cl, 36);
+        self::printBadge('-P', 'Process          (suffix: Process)',    $cl, 36);
+        self::printBadge('-N', 'Daemon           (suffix: Daemon)',     $cl, 36);
+        self::printBadge('-W', 'WebSocket        (suffix: WebSocket)',  $cl, 36);
         self::printLabel("Flags — Async / Process", $cl);
 
-        // flags — Config / Console
         self::printLabel("Flags — Config / Console", $cl);
-        self::print("-D   DbConfig         (suffix: DbConfig)    Database configuration", $cl);
-        self::print("-R   RedisConfig      (suffix: RedisConfig) Redis configuration", $cl);
-        self::print("-n   Cmd              (no suffix)           Custom console command", $cl);
+        self::printBadge('-D', 'DbConfig         (suffix: DbConfig)',   $cl, 36);
+        self::printBadge('-R', 'RedisConfig      (suffix: RedisConfig)',$cl, 36);
+        self::printBadge('-n', 'Cmd              (no suffix)',          $cl, 36);
         self::printLabel("Flags — Config / Console", $cl);
 
-        // options
         self::printLabel("Options", $cl);
-        self::print("--mvc   Wrap output path in MVC category folders", $cl);
-        self::print("        e.g. Controller → Controllers/, Service → Services/, ...", $cl);
+        self::printBadge('--mvc', 'wrap path in MVC folders (Controllers/, Services/, ...)', $cl, 36);
         self::printLabel("Options", $cl);
 
-        // examples
+        self::printDivider($cl);
+
         self::printLabel("Examples", $cl);
-        self::print("call make .User -asre", $cl);
-        self::print("call make api.user.Profile -a", $cl);
-        self::print("call make .Order -asre --mvc", $cl);
-        self::print("call make acme.app.http.User -a", $cl);
+        self::printInfo("call make .User -asre");
+        self::printInfo("call make api.user.Profile -a");
+        self::printInfo("call make .Order -asre --mvc");
+        self::printInfo("call make acme.app.http.User -a");
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net/#");
+        self::printInfo("Docs: https://winterframe.net/docs/2.0.0/cmd-make");
 
         self::printTitle("Make Help", $cl);
     }

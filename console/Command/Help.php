@@ -42,7 +42,7 @@ class Help extends Cmd
         self::printKeyValue('PHP', PHP_VERSION, 16, $cl, 36);
         self::printKeyValue('OS', PHP_OS_FAMILY . ' / ' . PHP_OS, 16, $cl, 36);
         self::printKeyValue('SAPI', PHP_SAPI, 16, $cl, 36);
-        self::printKeyValue('App root', Kernel::$pathRoot, 16, $cl, 90);
+        self::printKeyValue('Project root', Kernel::$pathRoot, 16, $cl, 90);
 
         self::printDivider($cl);
 
@@ -56,7 +56,7 @@ class Help extends Cmd
         self::printDivider($cl);
 
         self::printInfo("Run 'call help <command>' for detailed usage.");
-        self::printInfo("Docs: https://winterframe.net/#");
+        self::printInfo("Docs: https://winterframe.net/docs/2.0.0/cmd");
 
         self::printTitle("Winter Framework", $cl);
     }
@@ -77,7 +77,7 @@ class Help extends Cmd
         self::printInfo("call help serve");
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net/#");
+        self::printInfo("Docs: https://winterframe.net/docs/2.0.0/cmd-help");
 
         self::printTitle("Help", $cl);
     }
