@@ -9,7 +9,7 @@ override(\env(0), map([
     'TIME_ZONE' => 'UTC',
     'DEBUG' => 'true',
     'LOGGER_LEVEL_ALLOW' => 'DEBUG,INFO,NOTICE,WARNING,ERROR,CRITICAL,ALERT,EMERGENCY',
-    'LOGGER_MAX_FILES' => '0',
+    'LOGGER_FILE_MAX' => '0',
     'LOGGER_FILE_DATE_FORMAT' => 'Y-m-d',
     'LOGGER_LINE_DATE_FORMAT' => 'Y-m-d H:i:s P',
 ]));

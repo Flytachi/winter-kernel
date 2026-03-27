@@ -23,7 +23,7 @@ RUN apk update && apk add --no-cache php85 \
     php85-posix php85-mbstring php85-simplexml \
     php85-iconv php85-pdo php85-fpm php85-curl \
     php85-openssl php85-sockets inotify-tools \
-    nginx runit procps
+    nginx runit procps bash
 
 #  =>  PostgreSql
 #RUN apk add --no-cache php85-pgsql php85-pdo_pgsql
@@ -74,6 +74,9 @@ COPY . /var/www/html
 RUN chown -R winter:nginx /var/www/html \
     && chmod -R 755 /var/www/html/public \
     && chmod -R 775 /var/www/html/storage
+
+# bash
+RUN ./call cfg completion -if
 
 EXPOSE 80
 ENTRYPOINT ["runsvdir", "/etc/service"]

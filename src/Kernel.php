@@ -107,32 +107,30 @@ final class Kernel extends KernelStore
 
         // Logger
         $logger = new Logger('Kernel');
+        $maxFiles = (int) env('LOGGER_FILE_MAX', 0);
 
-        // RotatingFileHandler
-        $loggerStreamHandler = new RotatingFileHandler(
-            self::$pathStorageLog . '/frame.log',
-            maxFiles: env('LOGGER_MAX_FILES', 0),
-            dateFormat: env('LOGGER_FILE_DATE_FORMAT', 'Y-m-d')
-        );
-        $loggerStreamHandler->setFormatter(new LineFormatter(
+        // stdout — always
+        $stdoutHandler = new StreamHandler('php://stdout');
+        $stdoutHandler->setFormatter(new LineFormatter(
             dateFormat: env('LOGGER_LINE_DATE_FORMAT', 'Y-m-d H:i:s P'),
             allowInlineLineBreaks: true,
             ignoreEmptyContextAndExtra: true
         ));
+        $logger->pushHandler(new FilterHandler($stdoutHandler, $allowedLevels, Level::Emergency));
 
-        // FilterHandler
-        $filterHandler = new FilterHandler($loggerStreamHandler, $allowedLevels, Level::Emergency);
-        $logger->pushHandler($filterHandler);
-
-        // --- stdout
-        if (PHP_SAPI === 'cli-server') {
-            $stdoutHandler = new StreamHandler('php://stdout');
-            $stdoutHandler->setFormatter(new LineFormatter(
+        // file — only if LOGGER_FILE_MAX > 0
+        if ($maxFiles > 0) {
+            $fileHandler = new RotatingFileHandler(
+                self::$pathStorageLog . '/frame.log',
+                maxFiles: $maxFiles,
+                dateFormat: env('LOGGER_FILE_DATE_FORMAT', 'Y-m-d')
+            );
+            $fileHandler->setFormatter(new LineFormatter(
                 dateFormat: env('LOGGER_LINE_DATE_FORMAT', 'Y-m-d H:i:s P'),
                 allowInlineLineBreaks: true,
                 ignoreEmptyContextAndExtra: true
             ));
-            $logger->pushHandler($stdoutHandler);
+            $logger->pushHandler(new FilterHandler($fileHandler, $allowedLevels, Level::Emergency));
         }
 
         return $logger;
