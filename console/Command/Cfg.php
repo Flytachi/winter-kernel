@@ -65,10 +65,21 @@ class Cfg extends Cmd
                 true
             );
 
-            $projectData['name'] = 'project/'. basename(Kernel::$pathRoot);
-            $projectData['description'] = 'My Project '. basename(Kernel::$pathRoot);
-            unset($projectData['keywords']);
-            $projectData['authors'] = [];
+            if (isset($projectData['name'])) {
+                $projectData['name'] = 'project/'. basename(Kernel::$pathRoot);
+            }
+            if (isset($projectData['description'])) {
+                $projectData['description'] = 'My Project '. basename(Kernel::$pathRoot);
+            }
+            if (isset($projectData['keywords'])) {
+                unset($projectData['keywords']);
+            }
+            if (isset($projectData['scripts']['post-create-project-cmd'])) {
+                unset($projectData['scripts']['post-create-project-cmd']);
+            }
+            if (isset($projectData['authors'])) {
+                $projectData['authors'] = [];
+            }
 
             $json = json_encode($projectData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
             file_put_contents($filePath, $json . PHP_EOL);
