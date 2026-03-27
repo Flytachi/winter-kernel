@@ -10,6 +10,7 @@ use Monolog\Formatter\LineFormatter;
 use Monolog\Handler\FilterHandler;
 use Monolog\Handler\RotatingFileHandler;
 use Monolog\Handler\StreamHandler;
+use Monolog\Handler\SyslogHandler;
 use Monolog\Level;
 use Monolog\Logger;
 use Dotenv\Dotenv;
@@ -109,14 +110,29 @@ final class Kernel extends KernelStore
         $logger = new Logger('Kernel');
         $maxFiles = (int) env('LOGGER_FILE_MAX', 0);
 
-        // stdout — always
-        $stdoutHandler = new StreamHandler('php://stdout');
-        $stdoutHandler->setFormatter(new LineFormatter(
-            dateFormat: env('LOGGER_LINE_DATE_FORMAT', 'Y-m-d H:i:s P'),
-            allowInlineLineBreaks: true,
-            ignoreEmptyContextAndExtra: true
-        ));
-        $logger->pushHandler(new FilterHandler($stdoutHandler, $allowedLevels, Level::Emergency));
+        // stdout (local) / syslog (docker)
+        $syslog = env('LOGGER_SYSLOG');
+        $useSyslog = ($syslog !== null && $syslog !== '')
+            ? filter_var($syslog, FILTER_VALIDATE_BOOLEAN)
+            : file_exists('/.dockerenv');
+        if ($useSyslog) {
+            $formatter = new LineFormatter(
+                format: "%channel%.%level_name%: %message% %context% %extra%",
+                dateFormat: env('LOGGER_LINE_DATE_FORMAT', 'Y-m-d H:i:s P'),
+                allowInlineLineBreaks: false,
+                ignoreEmptyContextAndExtra: true
+            );
+            $outputHandler = new SyslogHandler('winter', LOG_USER, Level::Debug);
+        } else {
+            $formatter = new LineFormatter(
+                dateFormat: env('LOGGER_LINE_DATE_FORMAT', 'Y-m-d H:i:s P'),
+                allowInlineLineBreaks: true,
+                ignoreEmptyContextAndExtra: true
+            );
+            $outputHandler = new StreamHandler('php://stdout');
+        }
+        $outputHandler->setFormatter($formatter);
+        $logger->pushHandler(new FilterHandler($outputHandler, $allowedLevels, Level::Emergency));
 
         // file — only if LOGGER_FILE_MAX > 0
         if ($maxFiles > 0) {

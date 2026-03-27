@@ -17,30 +17,22 @@ final class Plugin
     {
     }
 
-    public static function registry(string $folderPath, string $routePrefix): void
+    public static function registry(string $package, string $route, bool $requared = true): void
     {
-        $prefix = trim($routePrefix, '/');
-        $path = self::getPath($folderPath);
+        $path = InstalledVersions::getInstallPath($package);
+        if ($path === null) {
+            if ($requared) {
+                Error::throw("Plugin '$package' has no install path");
+            } else {
+                return;
+            }
+        }
+
+        $prefix = trim($route, '/');
         if (isset(self::$plugins[$prefix])) {
             Error::throw("Route by prefix '$prefix' already registered");
         }
         self::$plugins[$prefix] = $path;
-    }
-
-    private static function getPath(string $folderPath): string
-    {
-        try {
-            $path = InstalledVersions::getInstallPath($folderPath);
-            if ($path === null) {
-                Error::throw("Plugin '$folderPath' has no install path");
-            }
-            return $path;
-        } catch (OutOfBoundsException) {
-            if (!is_dir($folderPath)) {
-                Error::throw("Plugin '$folderPath' not found");
-            }
-            return $folderPath;
-        }
     }
 
     public static function getPlugins(): array

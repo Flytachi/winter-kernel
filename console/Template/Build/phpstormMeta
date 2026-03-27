@@ -8,6 +8,7 @@ override(\env(0), map([
     'WINTER_KEY' => 'secret-key'
     'TIME_ZONE' => 'UTC',
     'DEBUG' => 'true',
+    'LOGGER_SYSLOG' => '',
     'LOGGER_LEVEL_ALLOW' => 'DEBUG,INFO,NOTICE,WARNING,ERROR,CRITICAL,ALERT,EMERGENCY',
     'LOGGER_FILE_MAX' => '0',
     'LOGGER_FILE_DATE_FORMAT' => 'Y-m-d',
@@ -19,6 +20,7 @@ expectedArguments(\env(), 1,
         'WINTER_KEY' => 'secret-key'
         'TIME_ZONE' => 'UTC',
         'DEBUG' => 'true', 'false',
+        'LOGGER_SYSLOG' => '', 'true', 'false',
         'LOGGER_LEVEL_ALLOW' => 'DEBUG,INFO,NOTICE,WARNING,ERROR,CRITICAL,ALERT,EMERGENCY',
             'DEBUG', 'INFO', 'NOTICE', 'WARNING', 'ERROR', 'CRITICAL', 'ALERT', 'EMERGENCY',
         'LOGGER_FILE_DATE_FORMAT' => 'Y-m-d', 'Y-m', 'Y', 'Ymd',

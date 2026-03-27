@@ -22,7 +22,7 @@ RUN apk update && apk add --no-cache php85 \
     php85-common php85-phar php85-pcntl \
     php85-posix php85-mbstring php85-simplexml \
     php85-iconv php85-pdo php85-fpm php85-curl \
-    php85-openssl php85-sockets inotify-tools \
+    php85-openssl php85-sockets \
     nginx runit procps bash
 
 #  =>  PostgreSql
@@ -44,6 +44,7 @@ RUN mkdir -p /var/run/ && touch /run/php8.5-fpm.pid
 # Setting up PHP and Nginx
 RUN test -f /usr/bin/php || ln -s /usr/bin/php85 /usr/bin/php
 RUN echo "variables_order = 'EGPCS'" > /etc/php85/conf.d/99-custom.ini
+RUN sed -i '/^\[global\]/a error_log = syslog' /etc/php85/php-fpm.conf
 
 COPY ./docker/nginx.conf /etc/nginx/nginx.conf
 COPY ./docker/php-fpm.conf /etc/php85/php-fpm.d/www.conf
@@ -56,13 +57,15 @@ RUN if [ "$DISABLE_OPCACHE" = "false" ]; then \
 
 
 # Create service directories and scripts
-RUN mkdir -p /etc/service/php-fpm /etc/service/nginx /etc/service/logs
-RUN printf '#!/bin/sh\nexec php-fpm85 -F\n' > /etc/service/php-fpm/run \
+RUN mkdir -p /etc/service/syslog /etc/service/php-fpm /etc/service/nginx
+RUN printf '#!/bin/sh\nexec syslogd -n -O /dev/stdout\n' > /etc/service/syslog/run \
+    && chmod +x /etc/service/syslog/run
+RUN printf '#!/bin/sh\nwhile [ ! -S /dev/log ]; do sleep 1; done\nexec php-fpm85 -F\n' > /etc/service/php-fpm/run \
     && chmod +x /etc/service/php-fpm/run
-RUN printf '#!/bin/sh\nexec nginx -g "daemon off;"\n' > /etc/service/nginx/run \
+RUN printf '#!/bin/sh\nwhile [ ! -S /dev/log ]; do sleep 1; done\nexec nginx -g "daemon off;"\n' > /etc/service/nginx/run \
     && chmod +x /etc/service/nginx/run
-RUN printf '#!/bin/sh\nwhile true; do\n    ls /var/www/html/storage/logs/frame*.log 1>/dev/null 2>/dev/null && tail -F /var/www/html/storage/logs/frame*.log 2>/dev/null || inotifywait -e create /var/www/html/storage/logs >/dev/null 2>&1; sleep 1;\ndone\n' > /etc/service/logs/run \
-    && chmod +x /etc/service/logs/run
+#RUN printf '#!/bin/sh\nwhile true; do\n    ls /var/www/html/storage/logs/frame*.log 1>/dev/null 2>/dev/null && tail -F /var/www/html/storage/logs/frame*.log 2>/dev/null || inotifywait -e create /var/www/html/storage/logs >/dev/null 2>&1; sleep 1;\ndone\n' > /etc/service/logs/run \
+#    && chmod +x /etc/service/logs/run
 
 # Copy vendor from builder (composer not included)
 COPY --from=builder /var/www/html/vendor ./vendor
