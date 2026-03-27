@@ -64,8 +64,6 @@ RUN printf '#!/bin/sh\nwhile [ ! -S /dev/log ]; do sleep 1; done\nexec php-fpm85
     && chmod +x /etc/service/php-fpm/run
 RUN printf '#!/bin/sh\nwhile [ ! -S /dev/log ]; do sleep 1; done\nexec nginx -g "daemon off;"\n' > /etc/service/nginx/run \
     && chmod +x /etc/service/nginx/run
-#RUN printf '#!/bin/sh\nwhile true; do\n    ls /var/www/html/storage/logs/frame*.log 1>/dev/null 2>/dev/null && tail -F /var/www/html/storage/logs/frame*.log 2>/dev/null || inotifywait -e create /var/www/html/storage/logs >/dev/null 2>&1; sleep 1;\ndone\n' > /etc/service/logs/run \
-#    && chmod +x /etc/service/logs/run
 
 # Copy vendor from builder (composer not included)
 COPY --from=builder /var/www/html/vendor ./vendor
