@@ -8,7 +8,6 @@ abstract class KernelConfig
 {
     public static string $pathRoot;
     public static string $pathEnv;
-    public static string $pathMain;
     public static string $pathPublic;
     public static string $pathResource;
     public static string $pathStorage;
@@ -19,7 +18,6 @@ abstract class KernelConfig
 
     /**
      * @param string|null $pathRoot
-     * @param string|null $pathMain
      * @param string|null $pathEnv
      * @param string|null $pathPublic
      * @param string|null $pathResource
@@ -32,7 +30,6 @@ abstract class KernelConfig
      */
     public static function init(
         ?string $pathRoot = null,
-        ?string $pathMain = null,
         ?string $pathEnv = null,
         ?string $pathPublic = null,
         ?string $pathResource = null,
@@ -45,11 +42,6 @@ abstract class KernelConfig
         // root
         if ($pathRoot === null) {
             $pathRoot = dirname(__DIR__, 5);
-        }
-
-        // app
-        if ($pathMain === null) {
-            $pathMain = $pathRoot . '/main';
         }
 
         // env
@@ -88,7 +80,6 @@ abstract class KernelConfig
         }
 
         self::$pathRoot = $pathRoot;
-        self::$pathMain = $pathMain;
         self::$pathEnv = $pathEnv;
         self::$pathPublic = $pathPublic;
         self::$pathResource = $pathResource;

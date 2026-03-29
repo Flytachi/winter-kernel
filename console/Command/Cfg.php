@@ -212,7 +212,7 @@ class Cfg extends Cmd
 
     private function openapiArg(): void
     {
-        $filePath = Kernel::$pathMain . '/OpenApiController.php';
+        $filePath = Kernel::$pathRoot . '/main/OpenApiController.php';
         if (!file_exists($filePath)) {
             $code = file_get_contents($this->templatePath . '/Packages/OpenApiTemplate');
             $fp   = fopen($filePath, "x");
