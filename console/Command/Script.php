@@ -139,8 +139,8 @@ class Script extends Cmd
         self::printLabel("Usage", $cl);
 
         self::printLabel("Commands", $cl);
-        self::printBadge('<dot.notation.ClassName>', 'run script directly',              $cl, 36);
-        self::printBadge('list',                    'list all Cmd/CmdCustom scripts',   $cl, 36);
+        self::printBadge('<dot.notation.ClassName>', 'run script directly', $cl, 36);
+        self::printBadge('list', 'list all Cmd/CmdCustom scripts', $cl, 36);
         self::printLabel("Commands", $cl);
 
         self::printDivider($cl);

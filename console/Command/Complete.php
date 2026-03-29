@@ -232,7 +232,8 @@ class Complete extends Cmd
                         ) {
                             $classes[] = str_replace('\\', '.', $className);
                         }
-                    } catch (\ReflectionException) {}
+                    } catch (\ReflectionException) {
+                    }
                 }
             }
         }
@@ -274,12 +275,15 @@ class Complete extends Cmd
                         if (!$ref->isAbstract() && $ref->implementsInterface(Dispatchable::class)) {
                             $classes[] = str_replace('\\', '.', $className);
                         }
-                    } catch (\ReflectionException) {}
+                    } catch (\ReflectionException) {
+                    }
                 }
             }
         }
         return $classes;
     }
 
-    public static function help(): void {}
+    public static function help(): void
+    {
+    }
 }

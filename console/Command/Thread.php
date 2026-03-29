@@ -168,9 +168,9 @@ class Thread extends Cmd
         self::printLabel("Usage", $cl);
 
         self::printLabel("Commands", $cl);
-        self::printBadge('list',                        'list all Dispatchable classes',  $cl, 36);
-        self::printBadge('run <dot.notation.Class>',    'run task in foreground',         $cl, 36);
-        self::printBadge('run <dot.notation.Class> -d', 'dispatch to background',         $cl, 36);
+        self::printBadge('list', 'list all Dispatchable classes', $cl, 36);
+        self::printBadge('run <dot.notation.Class>', 'run task in foreground', $cl, 36);
+        self::printBadge('run <dot.notation.Class> -d', 'dispatch to background', $cl, 36);
         self::printLabel("Commands", $cl);
 
         self::printLabel("Flags", $cl);

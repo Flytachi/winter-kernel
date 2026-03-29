@@ -162,9 +162,9 @@ class Mapping extends Cmd
         self::printLabel("Usage", $cl);
 
         self::printLabel("Commands", $cl);
-        self::printBadge('show',  'display all registered routes (app + plugins)', $cl, 36);
-        self::printBadge('build', 'generate and cache route mapping files',        $cl, 36);
-        self::printBadge('clean', 'delete cached route mapping files',             $cl, 36);
+        self::printBadge('show', 'display all registered routes (app + plugins)', $cl, 36);
+        self::printBadge('build', 'generate and cache route mapping files', $cl, 36);
+        self::printBadge('clean', 'delete cached route mapping files', $cl, 36);
         self::printLabel("Commands", $cl);
 
         self::printDivider($cl);

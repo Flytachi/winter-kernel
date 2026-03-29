@@ -99,7 +99,7 @@ class Db extends Cmd
 
                 self::printLabel("[$label] $configClass", 34);
                 self::printKeyValue("driver", $item->config->getDriver(), 12, 34, 36);
-                self::printKeyValue("dsn",    $item->config->getDns(),    12, 34, 36);
+                self::printKeyValue("dsn", $item->config->getDns(), 12, 34, 36);
                 if ($detail['status']) {
                     self::printKeyValue("latency", round($detail['latency'], 2) . ' ms', 12, 34, 36);
                     self::printBadge($configClass, 'OK', 34, 32);
@@ -334,22 +334,22 @@ class Db extends Cmd
         self::printLabel("Usage", $cl);
 
         self::printLabel("Commands", $cl);
-        self::printBadge('ping',    'check DB connection and latency',            $cl, 36);
+        self::printBadge('ping', 'check DB connection and latency', $cl, 36);
         self::printBadge('migrate', 'run migrations against connected databases', $cl, 36);
-        self::printBadge('sql',     'preview generated SQL without executing',    $cl, 36);
+        self::printBadge('sql', 'preview generated SQL without executing', $cl, 36);
         self::printLabel("Commands", $cl);
 
         self::printLabel("Flags", $cl);
-        self::printKeyValue("-s", "schemes only",     10, $cl, 36);
-        self::printKeyValue("-t", "tables only",      10, $cl, 36);
-        self::printKeyValue("-i", "indexes only",     10, $cl, 36);
+        self::printKeyValue("-s", "schemes only", 10, $cl, 36);
+        self::printKeyValue("-t", "tables only", 10, $cl, 36);
+        self::printKeyValue("-i", "indexes only", 10, $cl, 36);
         self::printKeyValue("-c", "constraints only", 10, $cl, 36);
         self::printInfo("(no flags = all: -s -t -i -c)");
         self::printLabel("Flags", $cl);
 
         self::printLabel("Options", $cl);
         self::printKeyValue("--plugin=<name>", "target a single registered plugin", 20, $cl, 36);
-        self::printKeyValue("--plugins",       "target all registered plugins",     20, $cl, 36);
+        self::printKeyValue("--plugins", "target all registered plugins", 20, $cl, 36);
         self::printInfo("(no option = app)");
         self::printLabel("Options", $cl);
 

@@ -560,42 +560,42 @@ class Make extends Cmd
         self::printLabel("Usage", $cl);
 
         self::printLabel("Namespace Resolution", $cl);
-        self::printKeyValue(".Name",                 "auto-detect first PSR-4 dir under app root", 26, 36, 37);
-        self::printKeyValue("Name",                  "same as .Name",                              26, 36, 37);
-        self::printKeyValue("api.user.Name",         "relative sub-path: appRoot/Api/User/",       26, 36, 37);
-        self::printKeyValue("acme.app.api.user.Name","full PSR-4 namespace → mapped dir",          26, 36, 37);
+        self::printKeyValue(".Name", "auto-detect first PSR-4 dir under app root", 26, 36, 37);
+        self::printKeyValue("Name", "same as .Name", 26, 36, 37);
+        self::printKeyValue("api.user.Name", "relative sub-path: appRoot/Api/User/", 26, 36, 37);
+        self::printKeyValue("acme.app.api.user.Name", "full PSR-4 namespace → mapped dir", 26, 36, 37);
         self::printLabel("Namespace Resolution", $cl);
 
         self::printLabel("Flags — HTTP", $cl);
-        self::printBadge('-a', 'RestController  (suffix: Controller)',  $cl, 36);
-        self::printBadge('-c', 'Controller      (suffix: Controller)',  $cl, 36);
+        self::printBadge('-a', 'RestController  (suffix: Controller)', $cl, 36);
+        self::printBadge('-c', 'Controller      (suffix: Controller)', $cl, 36);
         self::printBadge('-m', 'Middleware       (suffix: Middleware)', $cl, 36);
         self::printLabel("Flags — HTTP", $cl);
 
         self::printLabel("Flags — Data", $cl);
-        self::printBadge('-e', 'Entity           (no suffix)',          $cl, 36);
-        self::printBadge('-d', 'Dto              (suffix: Dto)',        $cl, 36);
-        self::printBadge('-q', 'Request          (suffix: Request)',    $cl, 36);
-        self::printBadge('-p', 'Response         (no suffix)',          $cl, 36);
+        self::printBadge('-e', 'Entity           (no suffix)', $cl, 36);
+        self::printBadge('-d', 'Dto              (suffix: Dto)', $cl, 36);
+        self::printBadge('-q', 'Request          (suffix: Request)', $cl, 36);
+        self::printBadge('-p', 'Response         (no suffix)', $cl, 36);
         self::printLabel("Flags — Data", $cl);
 
         self::printLabel("Flags — Business", $cl);
-        self::printBadge('-s', 'Service          (suffix: Service)',    $cl, 36);
+        self::printBadge('-s', 'Service          (suffix: Service)', $cl, 36);
         self::printBadge('-r', 'Repository       (suffix: Repository)', $cl, 36);
-        self::printBadge('-t', 'Store            (suffix: Store)',      $cl, 36);
+        self::printBadge('-t', 'Store            (suffix: Store)', $cl, 36);
         self::printLabel("Flags — Business", $cl);
 
         self::printLabel("Flags — Async / Process", $cl);
-        self::printBadge('-J', 'Job              (suffix: Job)',        $cl, 36);
-        self::printBadge('-P', 'Process          (suffix: Process)',    $cl, 36);
-        self::printBadge('-N', 'Daemon           (suffix: Daemon)',     $cl, 36);
-        self::printBadge('-W', 'WebSocket        (suffix: WebSocket)',  $cl, 36);
+        self::printBadge('-J', 'Job              (suffix: Job)', $cl, 36);
+        self::printBadge('-P', 'Process          (suffix: Process)', $cl, 36);
+        self::printBadge('-N', 'Daemon           (suffix: Daemon)', $cl, 36);
+        self::printBadge('-W', 'WebSocket        (suffix: WebSocket)', $cl, 36);
         self::printLabel("Flags — Async / Process", $cl);
 
         self::printLabel("Flags — Config / Console", $cl);
-        self::printBadge('-D', 'DbConfig         (suffix: DbConfig)',   $cl, 36);
-        self::printBadge('-R', 'RedisConfig      (suffix: RedisConfig)',$cl, 36);
-        self::printBadge('-n', 'Cmd              (no suffix)',          $cl, 36);
+        self::printBadge('-D', 'DbConfig         (suffix: DbConfig)', $cl, 36);
+        self::printBadge('-R', 'RedisConfig      (suffix: RedisConfig)', $cl, 36);
+        self::printBadge('-n', 'Cmd              (no suffix)', $cl, 36);
         self::printLabel("Flags — Config / Console", $cl);
 
         self::printLabel("Options", $cl);

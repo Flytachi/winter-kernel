@@ -215,14 +215,14 @@ class Storage extends Cmd
         self::printLabel("Usage", $cl);
 
         self::printLabel("Commands", $cl);
-        self::printBadge('init',  'create storage folders', $cl, 36);
+        self::printBadge('init', 'create storage folders', $cl, 36);
         self::printBadge('clean', 'delete contents of storage folders', $cl, 36);
         self::printLabel("Commands", $cl);
 
         self::printLabel("Flags", $cl);
-        self::printKeyValue("-s", "target: storage",       10, $cl, 36);
+        self::printKeyValue("-s", "target: storage", 10, $cl, 36);
         self::printKeyValue("-c", "target: storage/cache", 10, $cl, 36);
-        self::printKeyValue("-l", "target: storage/logs",  10, $cl, 36);
+        self::printKeyValue("-l", "target: storage/logs", 10, $cl, 36);
         self::printInfo("(no flags = all targets)");
         self::printLabel("Flags", $cl);
 

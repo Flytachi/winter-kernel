@@ -66,10 +66,10 @@ class Cfg extends Cmd
             );
 
             if (isset($projectData['name'])) {
-                $projectData['name'] = 'project/'. basename(Kernel::$pathRoot);
+                $projectData['name'] = 'project/' . basename(Kernel::$pathRoot);
             }
             if (isset($projectData['description'])) {
-                $projectData['description'] = 'My Project '. basename(Kernel::$pathRoot);
+                $projectData['description'] = 'My Project ' . basename(Kernel::$pathRoot);
             }
             if (isset($projectData['keywords'])) {
                 unset($projectData['keywords']);
@@ -325,12 +325,12 @@ class Cfg extends Cmd
 
         // commands overview
         self::printLabel("Commands", $cl);
-        self::printBadge('init',       'initialize project: composer.json extras + .env', $cl, 36);
-        self::printBadge('key',        'manage WINTER_KEY (project security key)',        $cl, 36);
-        self::printBadge('env',        'manage .env environment file',                    $cl, 36);
-        self::printBadge('docker',     'scaffold Docker configuration files',             $cl, 36);
-        self::printBadge('openapi',    'create OpenAPI controller stub',                  $cl, 36);
-        self::printBadge('completion', 'install shell tab completion (bash)',             $cl, 36);
+        self::printBadge('init', 'initialize project: composer.json extras + .env', $cl, 36);
+        self::printBadge('key', 'manage WINTER_KEY (project security key)', $cl, 36);
+        self::printBadge('env', 'manage .env environment file', $cl, 36);
+        self::printBadge('docker', 'scaffold Docker configuration files', $cl, 36);
+        self::printBadge('openapi', 'create OpenAPI controller stub', $cl, 36);
+        self::printBadge('completion', 'install shell tab completion (bash)', $cl, 36);
         self::printLabel("Commands", $cl);
 
         // key
