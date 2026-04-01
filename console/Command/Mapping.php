@@ -76,7 +76,8 @@ class Mapping extends Cmd
                     self::printInfo("No routes registered.");
                 } else {
                     foreach ($pluginChildren as $item) {
-                        $key   = str_pad($item->getMethod() ?: '*', 7) . " /{$pluginPrefix}/" . ltrim($item->getUrl(), '/');
+                        $key   = str_pad($item->getMethod() ?: '*', 7)
+                            . " /{$pluginPrefix}/" . ltrim($item->getUrl(), '/');
                         $value = '→ ' . $item->getClassName() . '->' . $item->getClassMethod() . '()';
                         self::printKeyValue($key, $value, 45, 36, 37);
                     }

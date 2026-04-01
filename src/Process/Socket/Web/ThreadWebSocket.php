@@ -236,7 +236,9 @@ abstract class ThreadWebSocket extends Dispatch
 
                     if ($msg->type === 'error' || $msg->type === 'close') {
                         if ($msg->type === 'error') {
-                            $this->logger->warning("Received '{$msg->type}' frame from {$resource}. Closing connection.");
+                            $this->logger->warning(
+                                "Received '{$msg->type}' frame from {$resource}. Closing connection."
+                            );
                         }
                         $this->disconnectClient($resource);
                         break;

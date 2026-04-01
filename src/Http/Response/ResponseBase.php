@@ -9,9 +9,10 @@ use Flytachi\Winter\Base\HttpCode;
 
 abstract class ResponseBase implements ResponseInterface
 {
-    protected array $headers = [];
-    protected mixed $content;
+    use ResponseTrait;
+
     protected HttpCode $httpCode;
+    protected mixed $content;
 
     public function __construct(mixed $content, HttpCode $httpCode = HttpCode::OK)
     {
@@ -19,19 +20,9 @@ abstract class ResponseBase implements ResponseInterface
         $this->httpCode = $httpCode;
     }
 
-    final public function addHeader(string $key, string $value): void
-    {
-        $this->headers[$key] = $value;
-    }
-
     final public function getHttpCode(): HttpCode
     {
         return $this->httpCode;
-    }
-
-    final public function getHeader(): array
-    {
-        return $this->headers;
     }
 
     public function getBody(): string
@@ -42,7 +33,12 @@ abstract class ResponseBase implements ResponseInterface
         if ($contentType !== ContentType::UNDEFINED) {
             $this->addHeader('Content-Type', $contentType->headerFullValue());
         }
-        return $contentType->serialize($this->content);
+        return $contentType->serialize($this->content());
+    }
+
+    protected function content(): mixed
+    {
+        return $this->content;
     }
 
     final protected function debugger(): array

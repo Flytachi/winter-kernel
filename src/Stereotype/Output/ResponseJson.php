@@ -13,6 +13,6 @@ class ResponseJson extends ResponseBase
     {
         $contentType = ContentType::JSON;
         $this->addHeader('Content-Type', $contentType->headerFullValue());
-        return $contentType->serialize($this->content);
+        return $contentType->serialize($this->content());
     }
 }

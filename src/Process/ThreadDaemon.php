@@ -25,7 +25,7 @@ abstract class ThreadDaemon extends Dispatch
     use ThreadSignalHandler;
     use ThreadDaemonStatement;
 
-    protected static DaemonStore $_STORE;
+    protected static DaemonStore $STORE;
     protected string $exNamespace = 'daemon';
     protected int $streamRps = 0;
 
@@ -36,10 +36,10 @@ abstract class ThreadDaemon extends Dispatch
 
     final protected static function store(): DaemonStore
     {
-        if (!isset(static::$_STORE)) {
-            static::$_STORE = new DaemonStore(static::class);
+        if (!isset(static::$STORE)) {
+            static::$STORE = new DaemonStore(static::class);
         }
-        return static::$_STORE;
+        return static::$STORE;
     }
 
     final protected function resolutionStart(): void

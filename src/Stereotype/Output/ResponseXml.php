@@ -13,6 +13,6 @@ class ResponseXml extends ResponseBase
     {
         $contentType = ContentType::XML;
         $this->addHeader('Content-Type', $contentType->headerFullValue());
-        return $contentType->serialize($this->content);
+        return $contentType->serialize($this->content());
     }
 }

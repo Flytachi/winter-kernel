@@ -6,116 +6,55 @@ namespace Flytachi\Winter\Kernel\Http\Response;
 
 use Flytachi\Winter\Base\Header;
 use Flytachi\Winter\Base\HttpCode;
-use Flytachi\Winter\Kernel\File\XML;
 use Flytachi\Winter\Kernel\Kernel;
 
-abstract class ExceptionWrapper
+abstract class ExceptionResponseBase implements ResponseInterface
 {
-    private static $instance = self::class;
-    private static $headers = [];
+    use ResponseTrait;
 
-    public static function getHeader(): array
+    protected HttpCode $httpCode;
+    protected \Throwable $throwable;
+
+    public function __construct(\Throwable $throwable, HttpCode $httpCode = HttpCode::OK)
     {
-        return self::$headers;
+        $this->throwable = $throwable;
+        $this->httpCode = $httpCode;
     }
 
-    final public static function addHeader(string $key, string $value): void
+    final public function getHttpCode(): HttpCode
     {
-        self::$headers[$key] = $value;
+        return $this->httpCode;
     }
 
-    public static function getBody(\Throwable $throwable): string
+    public function getBody(): string
     {
         $contentType = AcceptHeaderParser::getBestMatch(
             Header::getHeader('Accept')
         );
         if ($contentType !== ContentType::UNDEFINED) {
-            self::addHeader('Content-Type', $contentType->headerFullValue());
+            $this->addHeader('Content-Type', $contentType->headerFullValue());
         }
-        return match ($contentType) {
-            ContentType::JSON => self::constructJson($throwable),
-            ContentType::XML => self::constructXml($throwable),
-            default => self::constructDefault($throwable)
-        };
+        if (in_array($contentType, [ContentType::JSON, ContentType::XML])) {
+            return $contentType->serialize($this->content());
+        } else {
+            return $contentType->serialize($this->contentText());
+        }
     }
 
-    final public static function wrapHeader(): array
+    protected function content(): array
     {
-        /** @var ExceptionWrapper $newInstance */
-        $newInstance = self::wrapperInstance();
-        return $newInstance::getHeader();
-    }
-
-    final public static function wrapBody(\Throwable $throwable): string
-    {
-        /** @var ExceptionWrapper $newInstance */
-        $newInstance = self::wrapperInstance();
-        return $newInstance::getBody($throwable);
-    }
-
-    final protected static function constructJson(\Throwable $throwable): string
-    {
-        $context = [
-            'code' => $throwable->getCode(),
-            'message' => $throwable->getMessage()
+        return [
+            'code' => $this->throwable->getCode(),
+            'message' => $this->throwable->getMessage(),
+            ...$this->debugger(),
         ];
-
-        if (env('DEBUG', false)) {
-            $delta = round(microtime(true) - WINTER_STARTUP_TIME, 3);
-            $memory = memory_get_usage();
-
-            $context['debug'] = [
-                'time' => ($delta < 0.001) ? 0.001 : $delta,
-                'date' => date(DATE_ATOM),
-                'timezone' => date_default_timezone_get(),
-                'sapi' => PHP_SAPI,
-                'memory' => bytes($memory, ($memory >= 1048576 ? 'MiB' : 'KiB')),
-            ];
-            $context['exception'] = [
-                'name' => $throwable::class,
-                'file' => $throwable->getFile(),
-                'line' => $throwable->getLine(),
-                'trace' => $throwable->getTrace(),
-            ];
-        }
-
-        return json_encode($context);
     }
 
-    final protected static function constructXml(\Throwable $throwable): string
-    {
-        $context = [
-            'code' => $throwable->getCode(),
-            'message' => $throwable->getMessage()
-        ];
-
-        if (env('DEBUG', false)) {
-            $delta = round(microtime(true) - WINTER_STARTUP_TIME, 3);
-            $memory = memory_get_usage();
-
-            $context['debug'] = [
-                'time' => ($delta < 0.001) ? 0.001 : $delta,
-                'date' => date(DATE_ATOM),
-                'timezone' => date_default_timezone_get(),
-                'sapi' => PHP_SAPI,
-                'memory' => bytes($memory, ($memory >= 1048576 ? 'MiB' : 'KiB')),
-            ];
-            $context['exception'] = [
-                'name' => $throwable::class,
-                'file' => $throwable->getFile(),
-                'line' => $throwable->getLine(),
-                'trace' => $throwable->getTrace(),
-            ];
-        }
-
-        return XML::arrayToXml($context);
-    }
-
-    final protected static function constructDefault(\Throwable $throwable): string
+    protected function contentText(): string
     {
         if (env('DEBUG', false)) {
-            $shortCode = is_numeric($throwable->getCode())
-                ? (int) $throwable->getCode() / 100
+            $shortCode = is_numeric($this->throwable->getCode())
+                ? (int) $this->throwable->getCode() / 100
                 : 0;
             $tColor = match ($shortCode) {
                 1 => "00ffff",
@@ -134,7 +73,7 @@ abstract class ExceptionWrapper
             }
 
             $message = [];
-            self::forThrow($message, $throwable);
+            $this->forThrow($message, $this->throwable);
 
             $result  = '<body style="background-color: #0a0f1f">';
             $result .= '<div style="border: 2px solid #' . $tColor
@@ -142,8 +81,9 @@ abstract class ExceptionWrapper
             $result .=    '<div style="display: flex;justify-content: space-between;'
                 . 'margin-top: 8px;margin-bottom: 17px">';
             $result .=        '<span style="float: left;font-size: 1.2rem; color: #ffffff;">';
-            $result .=            '<span style="color: #' . $tColor . ';font-weight: bold;">[' . $throwable->getCode()
-                . '] Winter Debug Message:</span> ' . $throwable::class;
+            $result .=            '<span style="color: #' . $tColor . ';font-weight: bold;">['
+                . $this->throwable->getCode()
+                . '] Winter Debug Message:</span> ' . $this->throwable::class;
             $result .=        '</span>';
             $result .=        '<span style="float: right;font-style: italic;">';
             $result .=            '<span style="color: #adadad">' . date(DATE_ATOM) . '</span> ';
@@ -154,12 +94,12 @@ abstract class ExceptionWrapper
             $result .=    '<pre style="margin:10px; white-space: pre-wrap; '
                 . 'white-space: -moz-pre-wrap;white-space: -o-pre-wrap;word-wrap: break-word;">';
             $result .=      '<span style="color: #' . $tColor . ';font-size: 1.1rem;font-weight: bold;">'
-                . $throwable->getMessage() . '</span><br>';
+                . $this->throwable->getMessage() . '</span><br>';
             foreach ($message as $msg) {
                 $result .=  '<span style="color: #f1f1f1;">' . print_r($msg, true) . '</span><br>';
             }
             $result .=      '<span style="color: #fd2929;font-size: 1.2rem;font-weight: bold;">DETAIL</span><br>';
-            $result .=      '<span style="color: #fa5151;">' . print_r($throwable, true) . '</span><br>';
+            $result .=      '<span style="color: #fa5151;">' . print_r($this->throwable, true) . '</span><br>';
             $result .=    '</pre>';
             $result .=    '<hr style="border: 1px solid #999999;">';
             $result .=    '<div style="display: flex;justify-content: space-between;">';
@@ -171,8 +111,8 @@ abstract class ExceptionWrapper
             $result .= '</div>';
             $result .= '</body>';
         } else {
-            $_error['code'] = $throwable->getCode() ?: HttpCode::UNKNOWN_ERROR->value;
-            $_error['message'] = $throwable->getMessage();
+            $_error['code'] = $this->throwable->getCode() ?: HttpCode::UNKNOWN_ERROR->value;
+            $_error['message'] = $this->throwable->getMessage();
             if (file_exists(Kernel::$pathResource . '/exception/' . $_error['code'] . '.php')) {
                 ob_start();
                 include Kernel::$pathResource . '/exception/' . $_error['code'] . '.php';
@@ -194,10 +134,10 @@ abstract class ExceptionWrapper
                 $result .= '<body style="background-color: #0a0f1f;color: #ffffff">';
                 $result .=      '<center>';
                 $result .=      '<div><img src="/static/winter/logo.svg" alt="logotype" width="80" height="80"></div>';
-                $result .=          '<strong style="font-size:21px;"><em>Winter ' . $_error['code'] . ' - '
+                $result .=      '<strong style="font-size:21px;"><em>Winter ' . $_error['code'] . ' - '
                     . $httpMessage . '</em></strong>';
-                $result .=          '<hr width="50%">';
-                $result .=          "<h2 style=\"color:#676980FF\">{$_error['message']}</h2>";
+                $result .=      '<hr width="50%">';
+                $result .=      "<h2 style=\"color:#676980FF\">{$_error['message']}</h2>";
                 $result .=      '</center>';
                 $result .= '</body>';
             }
@@ -205,11 +145,36 @@ abstract class ExceptionWrapper
         return $result;
     }
 
-    private static function forThrow(array &$message, \Throwable $throwable): void
+    final protected function debugger(): array
+    {
+        if (!env('DEBUG', false)) {
+            return [];
+        }
+
+        $delta = round(microtime(true) - WINTER_STARTUP_TIME, 3);
+        $memory = memory_get_usage();
+        return [
+            'debug' => [
+                'time' => ($delta < 0.001) ? 0.001 : $delta,
+                'date' => date(DATE_ATOM),
+                'timezone' => date_default_timezone_get(),
+                'sapi' => PHP_SAPI,
+                'memory' => bytes($memory, ($memory >= 1048576 ? 'MiB' : 'KiB')),
+            ],
+            'exception' => [
+                'name' => $this->throwable::class,
+                'file' => $this->throwable->getFile(),
+                'line' => $this->throwable->getLine(),
+                'trace' => $this->throwable->getTrace(),
+            ]
+        ];
+    }
+
+    private function forThrow(array &$message, \Throwable $throwable): void
     {
         $previous = $throwable->getPrevious();
         if ($previous) {
-            self::forThrow($message, $previous);
+            $this->forThrow($message, $previous);
         }
         foreach ($throwable->getTrace() as $key => $value) {
             $ms = "#{$key} ";
@@ -235,18 +200,5 @@ abstract class ExceptionWrapper
             }
             $message[] = $ms;
         }
-    }
-
-    private static function wrapperInstance(): string
-    {
-        if (self::$instance === self::class) {
-            foreach (get_declared_classes() as $class) {
-                if (is_subclass_of($class, self::class)) {
-                    self::$instance = $class;
-                    break;
-                }
-            }
-        }
-        return self::$instance;
     }
 }
