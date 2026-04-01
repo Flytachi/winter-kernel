@@ -8,6 +8,7 @@ use Flytachi\Winter\Base\Exception\Exception;
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\Base\Log\LoggerRegistry;
 use Flytachi\Winter\Kernel\Http\Res\ResourceTree;
+use Flytachi\Winter\Kernel\Http\Response\AdviceException;
 use Flytachi\Winter\Kernel\Http\Response\ExceptionWrapper;
 use Flytachi\Winter\Kernel\Http\Response\ResponseFileContentInterface;
 use Flytachi\Winter\Kernel\Http\Response\ResponseInterface;
