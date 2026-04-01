@@ -34,10 +34,7 @@ final class Router extends HttpRouter implements ActuatorItemInterface
 
             $resolve = $this->resolveActions($input['path']);
             if (!$resolve) {
-                throw new ClientError(
-                    "{$_SERVER['REQUEST_METHOD']} '{$input['path']}' url not found",
-                    HttpCode::NOT_FOUND->value
-                );
+                return;
             }
 
             // options
@@ -47,15 +44,12 @@ final class Router extends HttpRouter implements ActuatorItemInterface
 
             $resolve = $this->resolveActionSelect($resolve, $_SERVER['REQUEST_METHOD']);
             if (!$resolve) {
-                throw new ClientError(
-                    "{$_SERVER['REQUEST_METHOD']} '{$input['path']}' url not found",
-                    HttpCode::NOT_FOUND->value
-                );
+                return;
             }
             $result = $this->callResolveAction($resolve['action'], $resolve['params'], $resolve['url'] ?? '');
         } catch (\Throwable $result) {
         } finally {
-            $render->setResource($result);
+            $render->setResource($result ?? null);
         }
 
         $render->render();

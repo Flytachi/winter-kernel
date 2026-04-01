@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Flytachi\Winter\Kernel\Http;
 
 use Flytachi\Winter\Base\HttpCode;
@@ -51,10 +53,7 @@ class PluginRouter extends HttpRouter implements ActuatorItemInterface
 
             $resolve = $this->resolveActions($input['path']);
             if (!$resolve) {
-                throw new ClientError(
-                    "{$_SERVER['REQUEST_METHOD']} '/$usePluginPrefix/{$input['path']}' url not found",
-                    HttpCode::NOT_FOUND->value
-                );
+                return;
             }
             // options
             if ($_SERVER['REQUEST_METHOD'] == Method::OPTIONS->name) {
@@ -63,15 +62,12 @@ class PluginRouter extends HttpRouter implements ActuatorItemInterface
 
             $resolve = $this->resolveActionSelect($resolve, $_SERVER['REQUEST_METHOD']);
             if (!$resolve) {
-                throw new ClientError(
-                    "{$_SERVER['REQUEST_METHOD']} '/$usePluginPrefix/{$input['path']}' url not found",
-                    HttpCode::NOT_FOUND->value
-                );
+                return;
             }
             $result = $this->callResolveAction($resolve['action'], $resolve['params'], $resolve['url'] ?? '');
         } catch (\Throwable $result) {
         } finally {
-            $render->setResource($result);
+            $render->setResource($result ?? null);
         }
 
         $render->render();
