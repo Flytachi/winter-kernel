@@ -43,7 +43,9 @@ final class ExceptionWrapper
         $advices = [];
         foreach ($resources as $resource) {
             $adviceException = $resource->getAttributes(AdviceException::class);
-            if (empty($adviceException)) {continue;}
+            if (empty($adviceException)) {
+                continue;
+            }
             $adviceException = $adviceException[0]->newInstance();
             $data = [
                 'className' => $resource->getName(),
