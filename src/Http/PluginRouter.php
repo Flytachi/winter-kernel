@@ -123,9 +123,9 @@ class PluginRouter extends HttpRouter implements ActuatorItemInterface
             . PHP_EOL . " */" . PHP_EOL . PHP_EOL
             . "return $mapString;";
         file_put_contents($this->folderMapping . $prefix . '.php', $fileData);
-        if (function_exists('opcache_reset')) {
+        if (function_exists('opcache_invalidate')) {
             try {
-                opcache_reset();
+                opcache_invalidate($this->folderMapping . $prefix . '.php', true);
             } catch (\Throwable $e) {
             }
         }
