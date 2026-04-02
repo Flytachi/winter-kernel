@@ -8,17 +8,17 @@ use Flytachi\Winter\Base\Header;
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\Kernel\Kernel;
 
-abstract class ExceptionResponseBase implements ResponseInterface
+abstract class ExceptionResponseBase implements ResponseExceptionInterface
 {
     use ResponseTrait;
 
     protected HttpCode $httpCode;
     protected \Throwable $throwable;
 
-    public function __construct(\Throwable $throwable, HttpCode $httpCode = HttpCode::OK)
+    public function __construct(\Throwable $throwable)
     {
         $this->throwable = $throwable;
-        $this->httpCode = $httpCode;
+        $this->httpCode = HttpCode::tryFrom((int) $throwable->getCode()) ?: HttpCode::UNKNOWN_ERROR;
     }
 
     final public function getHttpCode(): HttpCode

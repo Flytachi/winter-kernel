@@ -8,7 +8,6 @@ use Flytachi\Winter\Base\Exception\Exception;
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\Base\Log\LoggerRegistry;
 use Flytachi\Winter\Kernel\Http\Res\ResourceTree;
-use Flytachi\Winter\Kernel\Http\Response\AdviceException;
 use Flytachi\Winter\Kernel\Http\Response\ExceptionWrapper;
 use Flytachi\Winter\Kernel\Http\Response\ResponseFileContentInterface;
 use Flytachi\Winter\Kernel\Http\Response\ResponseInterface;
@@ -48,10 +47,11 @@ final class Rendering
                 $resource->getResource()
             );
         } elseif ($resource instanceof \Throwable) {
-            $this->httpCode = HttpCode::tryFrom((int) $resource->getCode()) ?: HttpCode::UNKNOWN_ERROR;
+            $response = ExceptionWrapper::wrap($resource);
+            $this->httpCode = $response->getHttpCode();
             $this->logging($resource);
-            $this->body = ExceptionWrapper::wrapBody($resource);
-            $this->header = ExceptionWrapper::wrapHeader();
+            $this->body = $response->getBody();
+            $this->header = $response->getHeader();
         } else {
             $this->httpCode = empty($resource) ? HttpCode::NO_CONTENT : HttpCode::OK;
             $this->body = $resource;
