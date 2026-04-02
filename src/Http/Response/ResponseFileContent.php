@@ -29,7 +29,7 @@ abstract class ResponseFileContent implements ResponseFileContentInterface
         int $maxAgeSeconds = 0,
     ) {
         if (!in_array($resourceType, ['binary', 'txt', 'csv', 'xml', 'json'])) {
-            throw new ResponseException("Unsupported resource type: {$resourceType}");
+            throw new ExceptionResponse("Unsupported resource type: {$resourceType}");
         }
         $this->resourceType = $resourceType;
         $this->httpCode = $httpCode;
@@ -49,7 +49,7 @@ abstract class ResponseFileContent implements ResponseFileContentInterface
                 $this->data = print_r($data, true);
             }
         } catch (\Exception $ex) {
-            throw new ResponseException($ex->getMessage(), previous: $ex);
+            throw new ExceptionResponse($ex->getMessage(), previous: $ex);
         }
     }
 

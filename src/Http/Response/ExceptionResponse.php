@@ -8,7 +8,7 @@ use Flytachi\Winter\Base\Exception\Exception;
 use Flytachi\Winter\Base\HttpCode;
 use Psr\Log\LogLevel;
 
-class ResponseException extends Exception
+class ExceptionResponse extends Exception
 {
     protected $code = HttpCode::INTERNAL_SERVER_ERROR->value;
     protected string $logLevel = LogLevel::CRITICAL;

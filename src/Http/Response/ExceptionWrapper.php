@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Http\Response;
 
 use Flytachi\Winter\Kernel\Factory\Mapping;
+use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Kernel\Stereotype\Output\ResponseException;
 
 final class ExceptionWrapper
 {
@@ -16,7 +18,7 @@ final class ExceptionWrapper
     {
         $advices = self::advices();
         if (empty($advices)) {
-            return new \Flytachi\Winter\Kernel\Stereotype\Output\ResponseException($throwable);
+            return new ResponseException($throwable);
         }
 
         foreach ($advices as $advice) {
@@ -28,12 +30,44 @@ final class ExceptionWrapper
             }
         }
 
-        return new \Flytachi\Winter\Kernel\Stereotype\Output\ResponseException($throwable);
+        return new ResponseException($throwable);
     }
 
     private static function advices(): array
     {
-        // information
+        $isDevelop = (bool) env('DEBUG', false);
+        $path = Kernel::$pathStorageVolatile . '/exception-wrapper.php';
+        if ($isDevelop) {
+            if (file_exists($path)) {
+                unlink($path);
+            }
+            return self::generateAdvices();
+        } else {
+            if (file_exists($path)) {
+                return require $path;
+            } else {
+                $advices = self::generateAdvices();
+                $mapString = var_export(json_decode(json_encode($advices), true), true);
+                $fileData = "<?php" . PHP_EOL . PHP_EOL;
+                $fileData .= "/**" . PHP_EOL . " * Exception wrapper configurations"
+                    . PHP_EOL . " * - Created on: " . date(DATE_RFC822)
+                    . PHP_EOL . " * - Version: 1.0"
+                    . PHP_EOL . " */" . PHP_EOL . PHP_EOL
+                    . "return $mapString;";
+                file_put_contents($path, $fileData);
+                if (function_exists('opcache_reset')) {
+                    try {
+                        opcache_reset();
+                    } catch (\Throwable $e) {
+                    }
+                }
+                return $advices;
+            }
+        }
+    }
+
+    private static function generateAdvices(): array
+    {
         $resources = Mapping::scanProjectFiles();
         $resources = Mapping::scanRefClasses($resources, ResponseExceptionInterface::class);
         if (empty($resources)) {
