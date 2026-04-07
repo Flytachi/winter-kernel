@@ -4,6 +4,15 @@
     "keywords": ["Winter Kernel", "winter kernel", "framework kernel", "kernel"],
     "type": "library",
     "license": "MIT",
+    "homepage": "https://winterframe.net",
+    "scripts": {
+        "test": "vendor/bin/phpunit",
+        "test-detail": "vendor/bin/phpunit --testdox"
+    },
+    "support": {
+        "source": "https://github.com/flytachi/winter-kernel",
+        "docs": "https://winterframe.net/docs"
+    },
     "autoload": {
         "psr-4": {
             "Flytachi\\Winter\\Console\\": "console/",
@@ -18,7 +27,7 @@
         "php": ">=8.3",
         "flytachi/winter-thread": "^1.0",
         "flytachi/winter-mapping": "^1.0",
-        "flytachi/winter-edo": "^1.0",
+        "flytachi/winter-edo": "^2.0",
         "flytachi/winter-cache": "^1.0",
         "flytachi/file-store": "^1.0",
         "vlucas/phpdotenv": "^5.6",
@@ -32,7 +41,8 @@
         }
     },
     "require-dev": {
-        "monolog/monolog": "^3.0",
+        "monolog/monolog": "@stable",
+        "phpunit/phpunit": "@stable",
         "squizlabs/php_codesniffer": "@stable"
     },
     "bin": ["wKernelExecutor"],
