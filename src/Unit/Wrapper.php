@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Unit;
 
+use Flytachi\Winter\Cdo\Connection\CDOStatement;
 use Flytachi\Winter\Edo\Entity\RepositoryInterface;
 use TypeError;
 
@@ -167,15 +168,16 @@ final class Wrapper
         self::$limitPage = (int) $repo->getSql('limit');
         self::$currentPage = (self::$limitPage + $repo->getSql('offset')) / self::$limitPage;
 
-        $stmt = $repo->db()->prepare($countSql);
+        $stmt = new CDOStatement($repo->db()->prepare($countSql));
         if ($repo->getSql('binds')) {
-            foreach ($repo->getSql('binds') as $hash => $value) {
-                $stmt->bindValue($hash, $value);
+            $method = method_exists($stmt, 'bindTypedValue') ? 'bindTypedValue' : 'bindValue';
+            foreach ($repo->getSql('binds') as $bind) {
+                $stmt->{$method}($bind->getName(), $bind->getValue());
             }
         }
 
-        $stmt->execute();
-        self::$totalItem = (int) $stmt->fetchColumn();
+        $stmt->getStmt()->execute();
+        self::$totalItem = (int) $stmt->getStmt()->fetchColumn();
         self::$totalPages = (int) ceil(self::$totalItem / self::$limitPage);
     }
 

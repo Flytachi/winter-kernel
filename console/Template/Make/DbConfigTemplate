@@ -3,9 +3,12 @@
 namespace __namespace__;
 
 use Flytachi\Winter\Cdo\Config\DbConfig;
+use Flytachi\Winter\Edo\EntityCallEdoTrait;
 
 class __className__ extends DbConfig
 {
+    use EntityCallEdoTrait;
+
     public function setUp(): void
     {
         $this->driver = env('DB_DRIVER', 'pgsql');
