@@ -6,6 +6,7 @@ namespace Flytachi\Winter\K2\Route;
 
 use Composer\Autoload\ClassLoader;
 use Flytachi\Winter\K2\Route\Annotation\AbstractMapping;
+use Flytachi\Winter\K2\Route\Annotation\CrossOrigin;
 use Flytachi\Winter\K2\Route\Annotation\RequestMapping;
 use Flytachi\Winter\K2\Stereotype\ControllerInterface;
 use Flytachi\Winter\K2\Stereotype\Middleware;
@@ -150,6 +151,9 @@ class MappingScanner
             $ref->getAttributes(Middleware::class, ReflectionAttribute::IS_INSTANCEOF)
         );
 
+        // Class-level #[CrossOrigin] (can be overridden per method)
+        $classCors = self::collectCrossOrigin($ref->getAttributes(CrossOrigin::class));
+
         foreach ($ref->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
             if ($method->name === '__construct') {
                 continue;
@@ -175,11 +179,14 @@ class MappingScanner
                 );
                 $middlewares = array_merge($classMiddlewares, $methodMiddlewares);
 
+                // Method-level #[CrossOrigin] overrides class-level
+                $cors = self::collectCrossOrigin($method->getAttributes(CrossOrigin::class)) ?? $classCors;
+
                 if ($httpMethod !== null) {
-                    $router->add($httpMethod, $url, $handler, $middlewares);
+                    $router->add($httpMethod, $url, $handler, $middlewares, $cors);
                 } else {
                     foreach (['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as $m) {
-                        $router->add($m, $url, $handler, $middlewares);
+                        $router->add($m, $url, $handler, $middlewares, $cors);
                     }
                 }
             }
@@ -200,5 +207,28 @@ class MappingScanner
             $result[] = ['class' => $attr->getName(), 'args' => $attr->getArguments()];
         }
         return $result;
+    }
+
+    /**
+     * Extract CORS config from a single #[CrossOrigin] attribute, or null if absent.
+     *
+     * @param  ReflectionAttribute[] $attrs
+     * @return array{origins:string[],allowHeaders:string[],exposeHeaders:string[],credentials:bool,maxAge:int,vary:string[]}|null
+     */
+    private static function collectCrossOrigin(array $attrs): ?array
+    {
+        if (empty($attrs)) {
+            return null;
+        }
+        /** @var CrossOrigin $inst */
+        $inst = $attrs[0]->newInstance();
+        return [
+            'origins'       => $inst->origins,
+            'allowHeaders'  => $inst->allowHeaders,
+            'exposeHeaders' => $inst->exposeHeaders,
+            'credentials'   => $inst->credentials,
+            'maxAge'        => $inst->maxAge,
+            'vary'          => $inst->vary,
+        ];
     }
 }

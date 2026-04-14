@@ -28,7 +28,10 @@ use Flytachi\Winter\Base\HttpCode;
  * Attribute-based (preferred):
  *   $router = Router::fromScan(__DIR__ . '/src');
  *
- *   // Dispatch a request (works identically in Swoole and FPM):
+ * Global CORS:
+ *   $router->cors(origins: ['https://app.example.com'], credentials: true, maxAge: 3600);
+ *
+ * Dispatch a request (works identically in Swoole and FPM):
  *   $router->handle(new SwooleRequest($req), new SwooleResponse($res));
  *   $router->handle(new FpmRequest(),        new FpmResponse());
  */
@@ -42,20 +45,70 @@ class Router
 
     private ?Dispatcher $dispatcher = null;
 
+    /**
+     * Global CORS configuration — applied to every route unless overridden
+     * by a per-route #[CrossOrigin] attribute.
+     *
+     * @var array{
+     *   origins: string[],
+     *   allowHeaders: string[],
+     *   exposeHeaders: string[],
+     *   credentials: bool,
+     *   maxAge: int,
+     *   vary: string[],
+     * }|null
+     */
+    private ?array $globalCors = null;
+
+    // ── CORS configuration ────────────────────────────────────────────────────
+
+    /**
+     * Enable CORS globally for all routes.
+     *
+     * Per-route #[CrossOrigin] will override this config for that specific route.
+     *
+     * @param string[] $origins        Allowed origins. Empty = '*'.
+     * @param string[] $allowHeaders   Allowed request headers. Empty = reflect Access-Control-Request-Headers.
+     * @param string[] $exposeHeaders  Response headers exposed to JavaScript.
+     * @param bool     $credentials    Allow cookies/Authorization. Requires explicit origins (not '*').
+     * @param int      $maxAge         Preflight cache TTL in seconds.
+     * @param string[] $vary           Extra Vary header values.
+     */
+    public function cors(
+        array $origins       = [],
+        array $allowHeaders  = [],
+        array $exposeHeaders = [],
+        bool  $credentials   = false,
+        int   $maxAge        = 0,
+        array $vary          = [],
+    ): static {
+        $this->globalCors = compact('origins', 'allowHeaders', 'exposeHeaders', 'credentials', 'maxAge', 'vary');
+        return $this;
+    }
+
     // ── Route registration ────────────────────────────────────────────────────
 
     /**
      * @param list<array{class: class-string<Middleware>, args: array}> $middlewares
+     * @param array{origins:string[],allowHeaders:string[],exposeHeaders:string[],credentials:bool,maxAge:int,vary:string[]}|null $cors
      */
-    public function add(string $method, string $path, mixed $handler, array $middlewares = []): static
+    public function add(string $method, string $path, mixed $handler, array $middlewares = [], ?array $cors = null): static
     {
         $this->dispatcher = null;
 
         $method = strtoupper($method);
 
-        $stored = $middlewares !== []
-            ? ['__handler' => $handler, '__middlewares' => $middlewares]
-            : $handler;
+        if ($middlewares !== [] || $cors !== null) {
+            $stored = ['__handler' => $handler];
+            if ($middlewares !== []) {
+                $stored['__middlewares'] = $middlewares;
+            }
+            if ($cors !== null) {
+                $stored['__cors'] = $cors;
+            }
+        } else {
+            $stored = $handler;
+        }
 
         $route = new Route($method, $path, $stored);
 
@@ -137,7 +190,28 @@ class Router
         Locale::initFromRequest();
 
         try {
-            $result = $this->dispatch($request->getMethod(), $request->getUri());
+            $method = $request->getMethod();
+
+            // ── Global CORS applied eagerly (covers 404, 405, and errors too) ─
+            if ($this->globalCors !== null) {
+                $this->writeCorsHeaders($request, $response, $this->globalCors);
+            }
+
+            // ── OPTIONS preflight — intercept before route dispatch ───────────
+            if ($method === 'OPTIONS') {
+                $this->handlePreflight($request, $response);
+                return;
+            }
+
+            $result = $this->dispatch($method, $request->getUri());
+
+            // ── Per-route #[CrossOrigin] overrides global CORS ────────────────
+            if ($this->globalCors !== null && $result->status === RouteResult::FOUND) {
+                $routeCors = $this->extractRouteCors($result->handler);
+                if ($routeCors !== null) {
+                    $this->writeCorsHeaders($request, $response, $routeCors);
+                }
+            }
 
             match ($result->status) {
                 RouteResult::FOUND => $this->invoke($result->handler, $request, $response, $result->params),
@@ -161,7 +235,7 @@ class Router
             // ── Unpack middleware wrapper ─────────────────────────────────────
             $middlewareDefs = [];
             if (is_array($stored) && array_key_exists('__handler', $stored)) {
-                $middlewareDefs = $stored['__middlewares'];
+                $middlewareDefs = $stored['__middlewares'] ?? [];
                 $handler        = $stored['__handler'];
             } else {
                 $handler = $stored;
@@ -223,6 +297,128 @@ class Router
         }
         $res->end($body);
     }
+
+    // ── CORS internals ────────────────────────────────────────────────────────
+
+    /**
+     * Handle an OPTIONS preflight request.
+     *
+     * Probes the dispatcher with the browser's Access-Control-Request-Method to:
+     * 1. Find what HTTP methods are registered for this URI.
+     * 2. Retrieve any per-route #[CrossOrigin] config from the matched handler.
+     * 3. Respond 204 No Content with the merged CORS headers.
+     */
+    private function handlePreflight(HttpRequest $req, HttpResponse $res): void
+    {
+        $requestedMethod = strtoupper(Header::get('Access-Control-Request-Method') ?? 'GET');
+
+        // Probe with the browser's intended method to retrieve handler + CORS config
+        $probe     = $this->dispatch($requestedMethod, $req->getUri());
+        $routeCors = null;
+        $methods   = ['OPTIONS'];
+
+        if ($probe->status === RouteResult::FOUND) {
+            $routeCors = $this->extractRouteCors($probe->handler);
+            // Find all methods registered for this path via a dummy-method probe
+            $all     = $this->dispatch('__CORS__', $req->getUri());
+            $methods = $all->status === RouteResult::METHOD_NOT_ALLOWED
+                ? array_unique([...$all->allowedMethods, 'OPTIONS'])
+                : [$requestedMethod, 'OPTIONS'];
+        } elseif ($probe->status === RouteResult::METHOD_NOT_ALLOWED) {
+            $methods = array_unique([...$probe->allowedMethods, 'OPTIONS']);
+        }
+        // else NOT_FOUND: path doesn't exist — respond 204 with minimal headers
+
+        $cors = $routeCors ?? $this->globalCors;
+        if ($cors !== null) {
+            $this->writeCorsHeaders($req, $res, $cors, $methods, preflight: true);
+        }
+
+        $res->status(204);
+        $res->end('');
+    }
+
+    /**
+     * Write CORS headers onto a response.
+     *
+     * @param array    $cors      CORS config array (same shape as globalCors)
+     * @param string[] $methods   HTTP methods to advertise (preflight only)
+     * @param bool     $preflight true → also write Allow-Methods / Allow-Headers / Max-Age
+     */
+    private function writeCorsHeaders(HttpRequest $req, HttpResponse $res, array $cors, array $methods = [], bool $preflight = false): void
+    {
+        $origins = $cors['origins'];
+
+        // ── Access-Control-Allow-Origin ──────────────────────────────────────
+        if (empty($origins)) {
+            $res->header('Access-Control-Allow-Origin', '*');
+        } elseif (count($origins) === 1) {
+            $res->header('Access-Control-Allow-Origin', $origins[0]);
+        } else {
+            // Reflect the request Origin if it is in the allowlist
+            $origin = Header::get('Origin') ?? '';
+            if ($origin !== '' && in_array($origin, $origins, true)) {
+                $res->header('Access-Control-Allow-Origin', $origin);
+                $res->header('Vary', 'Origin');
+            }
+            // else: no header — browser will block (intentional)
+        }
+
+        // ── Credentials ──────────────────────────────────────────────────────
+        // credentials: true + wildcard '*' is forbidden by the spec
+        if ($cors['credentials'] && !empty($origins)) {
+            $res->header('Access-Control-Allow-Credentials', 'true');
+        }
+
+        // ── Expose-Headers (regular responses + preflight) ───────────────────
+        if (!empty($cors['exposeHeaders'])) {
+            $res->header('Access-Control-Expose-Headers', implode(', ', $cors['exposeHeaders']));
+        }
+
+        // ── Vary (custom additions) ───────────────────────────────────────────
+        if (!empty($cors['vary'])) {
+            $res->header('Vary', implode(', ', $cors['vary']));
+        }
+
+        if (!$preflight) {
+            return;
+        }
+
+        // ── Preflight-only headers ────────────────────────────────────────────
+
+        if (!empty($methods)) {
+            $res->header('Access-Control-Allow-Methods', implode(', ', $methods));
+        }
+
+        if (!empty($cors['allowHeaders'])) {
+            $res->header('Access-Control-Allow-Headers', implode(', ', $cors['allowHeaders']));
+        } else {
+            // Reflect the browser's requested headers (safe default)
+            $requested = Header::get('Access-Control-Request-Headers') ?? '';
+            if ($requested !== '') {
+                $res->header('Access-Control-Allow-Headers', $requested);
+            }
+        }
+
+        if ($cors['maxAge'] > 0) {
+            $res->header('Access-Control-Max-Age', (string) $cors['maxAge']);
+        }
+    }
+
+    /**
+     * Extract per-route CORS config stored by MappingScanner under '__cors'.
+     *
+     * @return array|null  null if the route has no #[CrossOrigin]
+     */
+    private function extractRouteCors(mixed $stored): ?array
+    {
+        if (is_array($stored) && array_key_exists('__cors', $stored)) {
+            return $stored['__cors'];
+        }
+        return null;
+    }
+
+    // ── Debug dump renderer ───────────────────────────────────────────────────
 
     private function renderDump(\Flytachi\Winter\Base\Exception\DebugDumpException $e): string
     {
