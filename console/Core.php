@@ -11,9 +11,8 @@ class Core extends CoreHandle implements ActuatorItemInterface
 {
     /** Short aliases → Command class name */
     protected static array $aliases = [
-        'sc'  => 'Script',
-        'th'  => 'Thread',
-        'run' => 'Serve',
+        'sc' => 'Script',
+        'th' => 'Thread',
     ];
 
     public function __construct($args)

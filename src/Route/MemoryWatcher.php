@@ -11,23 +11,32 @@ use Swoole\Http\Server;
 /**
  * Swoole-specific per-request memory reporter.
  *
- * Usage:
+ * Usage (standalone):
  *   $watcher = new MemoryWatcher();
- *   $watcher->attach($server);                    // logs worker start
- *   $server->on('request', $watcher->wrap(
- *       function (Request $req, Response $res) use ($router) {
- *           $router->handle(new SwooleRequest($req), new SwooleResponse($res));
- *       }
- *   ));
+ *   $watcher->attach($server);
+ *   $server->on('request', $watcher->wrap($handler));
+ *
+ * Usage (with custom workerStart logic):
+ *   $watcher->attach($server, function (Server $server, int $workerId): void {
+ *       // your onWorkerStart code here
+ *   });
  */
 class MemoryWatcher
 {
     private int $workerId = 0;
     private int $baseline = 0;
 
-    public function attach(Server $server): void
+    /**
+     * Registers the workerStart handler.
+     *
+     * @param Server        $server          Swoole HTTP server
+     * @param callable|null $onWorkerStart   Optional extra callback — called after MemoryWatcher
+     *                                       initialises, inside the same workerStart event.
+     *                                       Signature: function(Server $server, int $workerId): void
+     */
+    public function attach(Server $server, ?callable $onWorkerStart = null): void
     {
-        $server->on('workerStart', function (Server $server, int $workerId): void {
+        $server->on('workerStart', function (Server $server, int $workerId) use ($onWorkerStart): void {
             $this->workerId = $workerId;
             $this->baseline = memory_get_usage(false);
             echo sprintf(
@@ -35,6 +44,9 @@ class MemoryWatcher
                 $this->workerId,
                 $this->format($this->baseline)
             );
+            if ($onWorkerStart !== null) {
+                $onWorkerStart($server, $workerId);
+            }
         });
     }
 

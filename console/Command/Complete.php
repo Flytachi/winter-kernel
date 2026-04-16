@@ -54,6 +54,22 @@ class Complete extends Cmd
         'cfg env'        => ['-i:create .env from template', '-s:show loaded env vars', '--file:show raw .env file'],
         'cfg completion' => ['-i:install globally (once per machine)', '-if:force reinstall', '-f:force flag'],
 
+        // --- run ---
+        'run' => [
+            'dev:start PHP built-in dev server',
+            '--host=:bind host (default: 0.0.0.0)',
+            '--port=:bind port (default: 9501)',
+            '--workers=:number of Swoole workers',
+            '--tasks=:number of Swoole task workers',
+            '--max_request=:max requests per worker',
+            '--max_request_grace=:graceful drain count',
+            '-w:enable MemoryWatcher',
+        ],
+        'run dev' => [
+            '--host=:bind host (default: 0.0.0.0)',
+            '--port=:bind port (default: 8000)',
+        ],
+
         // --- serve ---
         'serve' => ['--host=:bind host (default: 0.0.0.0)', '--port=:bind port (default: 8000)'],
 
