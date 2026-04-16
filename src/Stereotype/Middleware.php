@@ -12,8 +12,10 @@ use Flytachi\Winter\K2\Http\Middleware\MiddlewareInterface;
  * Base middleware — extend and override before() / after() as needed.
  *
  * Apply to controller class or method via attribute:
+ * ```
  *   #[AuthMiddleware]
  *   class UserController extends Controller { ... }
+ * ```
  */
 abstract class Middleware implements MiddlewareInterface
 {

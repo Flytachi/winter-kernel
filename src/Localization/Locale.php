@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\K2\Localization;
 
 use Flytachi\Winter\K2\Http\Header;
+use Flytachi\Winter\Base\Runtime;
 
 /**
  * Static facade for per-request localization.
@@ -122,8 +123,7 @@ final class Locale
 
     private static function isSwoole(): bool
     {
-        return class_exists(\Swoole\Coroutine::class, false)
-            && \Swoole\Coroutine::getCid() >= 0;
+        return Runtime::isSwooleCoroutine();
     }
 
     /** Scan lang/ directory for available locale files. */

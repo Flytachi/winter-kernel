@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Flytachi\Winter\K2\Route;
 
 use Flytachi\Winter\Base\DebugDump;
+use Flytachi\Winter\Base\Exception\DebugDumpException;
 use Flytachi\Winter\Base\ReflectionCache;
+use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 use Flytachi\Winter\K2\Http\Header;
@@ -420,7 +422,7 @@ class Router
 
     // ── Debug dump renderer ───────────────────────────────────────────────────
 
-    private function renderDump(\Flytachi\Winter\Base\Exception\DebugDumpException $e): string
+    private function renderDump(DebugDumpException $e): string
     {
         $info   = $e->getInfo();
         $values = $e->getValues();
@@ -449,6 +451,7 @@ class Router
         $delta  = htmlspecialchars((string) ($info['delta'] ?? ''), ENT_QUOTES);
         $time   = htmlspecialchars($info['time'] ?? '', ENT_QUOTES);
         $tz     = htmlspecialchars($info['timezone'] ?? '', ENT_QUOTES);
+        $runtimeMode = htmlspecialchars(Runtime::mode()->name ?? '', ENT_QUOTES);
 
         return <<<HTML
             <body style="background-color:#0a0f1f">
@@ -467,7 +470,9 @@ class Router
                 <pre style="margin:10px;white-space:pre-wrap;word-wrap:break-word">{$rows}</pre>
                 <hr style="border:1px solid #999">
                 <div style="display:flex;justify-content:space-between">
-                    <span style="color:#9e9e9e;font-weight:bold">Memory {$memory}</span>
+                    <span style="color:#9e9e9e;font-weight:bold">
+                        ({$runtimeMode}) Memory {$memory}
+                    </span>
                     <span style="color:#9e9e9e;font-style:italic">Time {$delta}</span>
                 </div>
             </div>

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\K2\Http;
 
 use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
-use Swoole\Coroutine;
+use Flytachi\Winter\Base\Runtime;
 
 /**
  * Unified HTTP header accessor — dual-mode, same API for Swoole and FPM.
@@ -38,8 +38,8 @@ final class Header
         $headers = self::normalizeMap($request->getHeaders());
         $headers['Ip-Address'] = $request->getClientIp();
 
-        if (class_exists(Coroutine::class) && Coroutine::getCid() >= 0) {
-            Coroutine::getContext()[self::CTX_KEY] = $headers;
+        if (Runtime::isSwooleCoroutine()) {
+            \Swoole\Coroutine::getContext()[self::CTX_KEY] = $headers;
         } else {
             self::$bag = $headers;
         }
@@ -102,8 +102,8 @@ final class Header
 
     private static function storage(): array
     {
-        if (class_exists(Coroutine::class) && Coroutine::getCid() >= 0) {
-            return Coroutine::getContext()[self::CTX_KEY] ?? [];
+        if (Runtime::isSwooleCoroutine()) {
+            return \Swoole\Coroutine::getContext()[self::CTX_KEY] ?? [];
         }
         return self::$bag;
     }

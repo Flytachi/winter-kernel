@@ -13,6 +13,7 @@ use Flytachi\Winter\K2\Ppa\Entity\EntityInterface;
 use Flytachi\Winter\K2\Ppa\Entity\RepositoryInterface;
 use Flytachi\Winter\K2\Ppa\Mapping\RepositoryMappingInterface;
 use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Base\Runtime;
 use stdClass;
 
 /**
@@ -94,13 +95,6 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
     // Coroutine-safe state
     // -------------------------------------------------------------------------
 
-    /** @return bool True when called from inside an active Swoole coroutine. */
-    private static function inCoroutine(): bool
-    {
-        return class_exists(\Swoole\Coroutine::class, false)
-            && \Swoole\Coroutine::getCid() >= 0;
-    }
-
     /**
      * Returns the per-coroutine mutable state object.
      *
@@ -116,7 +110,7 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
      */
     protected function state(): object
     {
-        if (!self::inCoroutine()) {
+        if (!Runtime::isSwooleCoroutine()) {
             return $this;
         }
         $ctx = \Swoole\Coroutine::getContext();
@@ -272,7 +266,7 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
      */
     final public function cleanCache(?string $param = null): void
     {
-        if (self::inCoroutine()) {
+        if (Runtime::isSwooleCoroutine()) {
             $ctx = \Swoole\Coroutine::getContext();
             $key = '__rp_' . spl_object_id($this);
             if ($param) {

@@ -7,6 +7,7 @@ namespace Flytachi\Winter\K2\Ppa\Pool;
 use Flytachi\Winter\Base\Log\LoggerRegistry;
 use Flytachi\Winter\Cdo\Config\Common\DbConfigInterface;
 use Flytachi\Winter\Cdo\Connection\CDO;
+use Flytachi\Winter\Base\Runtime;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -98,7 +99,7 @@ final class PpaConnectionPool
      */
     public static function db(string $configClass): CDO
     {
-        if (!self::inCoroutine()) {
+        if (!Runtime::isSwooleCoroutine()) {
             return self::staticDb($configClass);
         }
 
@@ -118,13 +119,6 @@ final class PpaConnectionPool
     // -------------------------------------------------------------------------
     // Internals
     // -------------------------------------------------------------------------
-
-    /** @return bool True when called from inside an active Swoole coroutine. */
-    private static function inCoroutine(): bool
-    {
-        return class_exists(\Swoole\Coroutine::class, false)
-            && \Swoole\Coroutine::getCid() >= 0;
-    }
 
     /**
      * FPM path: singleton CDO per config class for the process lifetime.
