@@ -33,10 +33,10 @@
         "vlucas/phpdotenv": "^5.6",
         "ext-simplexml": "*",
         "ext-pcntl": "*",
-        "ext-posix": "*",
-
-        "ext-swoole": "*",
-        "swoole/ide-helper": "^6.0"
+        "ext-posix": "*"
+    },
+    "suggest": {
+        "ext-swoole": "Required for coroutine-based connection pooling (PpaConnectionPool Swoole mode)"
     },
     "autoload-dev": {
         "psr-4": {
@@ -46,7 +46,8 @@
     "require-dev": {
         "monolog/monolog": "@stable",
         "phpunit/phpunit": "@stable",
-        "squizlabs/php_codesniffer": "@stable"
+        "squizlabs/php_codesniffer": "@stable",
+        "swoole/ide-helper": "^6.0"
     },
     "bin": ["wKernelExecutor"],
     "authors": [

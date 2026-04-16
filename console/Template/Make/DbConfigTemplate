@@ -3,11 +3,14 @@
 namespace __namespace__;
 
 use Flytachi\Winter\Cdo\Config\DbConfig;
-use Flytachi\Winter\K2\Ppa\EntityCallEdoTrait;
+use Flytachi\Winter\K2\Ppa\PpaCallTrait;
+use Flytachi\Winter\K2\Ppa\Pool\PpaPoolConfigInterface;
+use Flytachi\Winter\K2\Ppa\Pool\PpaPoolTrait;
 
-class __className__ extends DbConfig
+class __className__ extends DbConfig implements PpaPoolConfigInterface
 {
-    use EntityCallEdoTrait;
+    use PpaCallTrait;
+    use PpaPoolTrait; // poolMaxConnections = 5, poolWaitTimeout = 3.0 (override if needed)
 
     public function setUp(): void
     {

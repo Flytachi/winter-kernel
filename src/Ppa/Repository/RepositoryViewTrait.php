@@ -27,9 +27,6 @@ use PDO;
  * }
  * ```
  *
- * @property string $entityClassName
- * @property array  $sqlParts sql parameters
- *
  * @mixin RepositoryViewInterface
  */
 trait RepositoryViewTrait
@@ -53,7 +50,7 @@ trait RepositoryViewTrait
             $stmt->getStmt()->execute();
             return $stmt->getStmt()->fetchAll(
                 PDO::FETCH_CLASS,
-                $entityClassName ?: $this->entityClassName
+                $entityClassName ?: $this->state()->entityClassName
             );
         } catch (\Throwable $th) {
             throw new RepositoryException($th->getMessage(), previous: $th);
@@ -72,17 +69,17 @@ trait RepositoryViewTrait
     final public function find(?string $entityClassName = null): ?object
     {
         try {
+            $state = $this->state();
             if ($entityClassName) {
-                $this->entityClassName = $entityClassName;
+                $state->entityClassName = $entityClassName;
             }
             $this->limit(1);
             $stmt = new CDOStatement($this->db()->prepare($this->buildSql()));
             $this->useBind($stmt);
             $stmt->getStmt()->execute();
+            $resolvedClass = $entityClassName ?: $state->entityClassName;
             $this->cleanCache();
-            return $stmt->getStmt()->fetchObject(
-                $entityClassName ?: $this->entityClassName
-            ) ?: null;
+            return $stmt->getStmt()->fetchObject($resolvedClass) ?: null;
         } catch (\Throwable $th) {
             throw new RepositoryException($th->getMessage(), previous: $th);
         }
@@ -123,18 +120,17 @@ trait RepositoryViewTrait
     final public function findAll(?string $entityClassName = null): array
     {
         try {
+            $state = $this->state();
             if ($entityClassName) {
-                $this->entityClassName = $entityClassName;
+                $state->entityClassName = $entityClassName;
             }
 
             $stmt = new CDOStatement($this->db()->prepare($this->buildSql()));
             $this->useBind($stmt);
             $stmt->getStmt()->execute();
+            $resolvedClass = $entityClassName ?: $state->entityClassName;
             $this->cleanCache();
-            return $stmt->getStmt()->fetchAll(
-                PDO::FETCH_CLASS,
-                $entityClassName ?: $this->entityClassName
-            );
+            return $stmt->getStmt()->fetchAll(PDO::FETCH_CLASS, $resolvedClass);
         } catch (\Throwable $th) {
             throw new RepositoryException($th->getMessage(), previous: $th);
         }
@@ -152,7 +148,8 @@ trait RepositoryViewTrait
     final public function count(): int
     {
         try {
-            $this->sqlParts['option'] = 'COUNT(' . ($this->sqlParts['option'] ?? '*') . ')';
+            $state = $this->state();
+            $state->sqlParts['option'] = 'COUNT(' . ($state->sqlParts['option'] ?? '*') . ')';
             $stmt = new CDOStatement($this->db()->prepare($this->buildSql()));
             $this->useBind($stmt);
             $stmt->getStmt()->execute();
@@ -175,7 +172,8 @@ trait RepositoryViewTrait
     final public function exists(): bool
     {
         try {
-            $this->sqlParts['option'] = '1';
+            $state = $this->state();
+            $state->sqlParts['option'] = '1';
             $this->limit(1);
             $stmt = new CDOStatement($this->db()->prepare($this->buildSql()));
             $this->useBind($stmt);

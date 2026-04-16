@@ -8,11 +8,11 @@ use Flytachi\Winter\Base\Interface\Stereotype;
 use Flytachi\Winter\Cdo\CDOBind;
 use Flytachi\Winter\Cdo\Connection\CDO;
 use Flytachi\Winter\Cdo\Connection\CDOStatement;
-use Flytachi\Winter\Cdo\ConnectionPool;
 use Flytachi\Winter\Cdo\Qb;
 use Flytachi\Winter\K2\Ppa\Entity\EntityInterface;
 use Flytachi\Winter\K2\Ppa\Entity\RepositoryInterface;
 use Flytachi\Winter\K2\Ppa\Mapping\RepositoryMappingInterface;
+use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
 use stdClass;
 
 /**
@@ -56,7 +56,7 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
     protected ?string $schema = null;
     /** @var string $table name of the table in the database */
     public static string $table = '';
-    /** @var array $sqlParts sql parameters */
+    /** @var array $sqlParts sql parameters (FPM backing store; Swoole uses per-coroutine state) */
     protected array $sqlParts = [];
 
     // -------------------------------------------------------------------------
@@ -69,7 +69,7 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
         if (!isset($this->dbConfigClassName)) {
             RepositoryException::throw(static::class . ' $dbConfigClassName must be set by the child class');
         }
-        $config = ConnectionPool::getConfigDb($this->dbConfigClassName);
+        $config = PpaConnectionPool::getConfigDb($this->dbConfigClassName);
         if ($this->schema == null) {
             $this->schema = $config->getSchema();
         }
@@ -88,6 +88,46 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
             $repository->as($as);
         }
         return $repository;
+    }
+
+    // -------------------------------------------------------------------------
+    // Coroutine-safe state
+    // -------------------------------------------------------------------------
+
+    /** @return bool True when called from inside an active Swoole coroutine. */
+    private static function inCoroutine(): bool
+    {
+        return class_exists(\Swoole\Coroutine::class, false)
+            && \Swoole\Coroutine::getCid() >= 0;
+    }
+
+    /**
+     * Returns the per-coroutine mutable state object.
+     *
+     * **FPM** (no active coroutine): returns `$this` directly, so that
+     * `$this->state()->sqlParts` is identical to `$this->sqlParts` — zero
+     * overhead and identical semantics to the original code.
+     *
+     * **Swoole coroutine**: returns a `stdClass` stored in the current
+     * coroutine's context keyed by this object's identity.  Each coroutine gets
+     * its own isolated copy of `sqlParts` and `entityClassName`, preventing
+     * cross-coroutine state corruption when the DI container reuses the same
+     * Repository singleton across concurrent requests.
+     */
+    protected function state(): object
+    {
+        if (!self::inCoroutine()) {
+            return $this;
+        }
+        $ctx = \Swoole\Coroutine::getContext();
+        $key = '__rp_' . spl_object_id($this);
+        if (!isset($ctx[$key])) {
+            $state                  = new \stdClass();
+            $state->sqlParts        = [];
+            $state->entityClassName = $this->entityClassName;
+            $ctx[$key]              = $state;
+        }
+        return $ctx[$key];
     }
 
     // -------------------------------------------------------------------------
@@ -111,7 +151,7 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
      */
     final public function getEntityClassName(): string
     {
-        return $this->entityClassName;
+        return $this->state()->entityClassName;
     }
 
     /**
@@ -119,7 +159,7 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
      */
     public function db(): CDO
     {
-        return ConnectionPool::db($this->dbConfigClassName);
+        return PpaConnectionPool::db($this->dbConfigClassName);
     }
 
     /**
@@ -151,35 +191,36 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
     public function buildSql(): string
     {
         try {
+            $state = $this->state();
             $parts = ['SELECT ' . $this->prepareSelect()];
-            if (!empty(($this->sqlParts['from'] ?? $this->originTable()))) {
-                $parts[] = 'FROM ' . ($this->sqlParts['from'] ?? $this->originTable());
+            if (!empty(($state->sqlParts['from'] ?? $this->originTable()))) {
+                $parts[] = 'FROM ' . ($state->sqlParts['from'] ?? $this->originTable());
             }
 
             foreach (['as', 'join', 'where', 'group', 'having'] as $key) {
-                if (isset($this->sqlParts[$key])) {
-                    $parts[] = trim($this->sqlParts[$key]);
+                if (isset($state->sqlParts[$key])) {
+                    $parts[] = trim($state->sqlParts[$key]);
                 }
             }
-            if (isset($this->sqlParts['union'])) {
-                $parts[] = $this->sqlParts['union'];
+            if (isset($state->sqlParts['union'])) {
+                $parts[] = $state->sqlParts['union'];
             }
-            if (isset($this->sqlParts['order'])) {
-                $parts[] = trim($this->sqlParts['order']);
+            if (isset($state->sqlParts['order'])) {
+                $parts[] = trim($state->sqlParts['order']);
             }
-            if (isset($this->sqlParts['limit'])) {
-                $parts[] = 'LIMIT ' . $this->sqlParts['limit'];
+            if (isset($state->sqlParts['limit'])) {
+                $parts[] = 'LIMIT ' . $state->sqlParts['limit'];
             }
-            if (isset($this->sqlParts['offset'])) {
-                $parts[] = 'OFFSET ' . $this->sqlParts['offset'];
+            if (isset($state->sqlParts['offset'])) {
+                $parts[] = 'OFFSET ' . $state->sqlParts['offset'];
             }
-            if (isset($this->sqlParts['for'])) {
-                $parts[] = 'FOR ' . $this->sqlParts['for'];
+            if (isset($state->sqlParts['for'])) {
+                $parts[] = 'FOR ' . $state->sqlParts['for'];
             }
 
-            if (isset($this->sqlParts['with'])) {
-                $withKeyword = isset($this->sqlParts['with_recursive']) ? 'WITH RECURSIVE' : 'WITH';
-                array_unshift($parts, $withKeyword . ' ' . $this->sqlParts['with']);
+            if (isset($state->sqlParts['with'])) {
+                $withKeyword = isset($state->sqlParts['with_recursive']) ? 'WITH RECURSIVE' : 'WITH';
+                array_unshift($parts, $withKeyword . ' ' . $state->sqlParts['with']);
             }
 
             $query = implode(' ', $parts);
@@ -200,26 +241,55 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
     final public function getSql(?string $param = null): mixed
     {
         if ($param) {
-            return (isset($this->sqlParts[$param])) ? $this->sqlParts[$param] : null;
+            $state = $this->state();
+            return isset($state->sqlParts[$param]) ? $state->sqlParts[$param] : null;
         } else {
             return $this->buildSql();
         }
     }
 
     /**
+     * Returns the number of accumulated SQL parts.
+     *
+     * Used internally when composing JOIN subqueries to decide whether
+     * a sibling repository needs to be rendered as a subquery.
+     */
+    final public function sqlPartsCount(): int
+    {
+        return count($this->state()->sqlParts);
+    }
+
+    /**
      * Clears one specific SQL part (by key) or all accumulated SQL parts.
+     *
+     * In Swoole coroutine mode a full reset (`$param === null`) discards the
+     * entire per-coroutine state object so the next {@see state()} call
+     * re-initialises it from the class-defined defaults — including
+     * `entityClassName`.
      *
      * @param string|null $param Part key to remove (e.g. `'where'`, `'order'`), or null to reset all
      * @return void
      */
     final public function cleanCache(?string $param = null): void
     {
-        if ($param) {
-            if (isset($this->sqlParts[$param])) {
-                unset($this->sqlParts[$param]);
-            };
+        if (self::inCoroutine()) {
+            $ctx = \Swoole\Coroutine::getContext();
+            $key = '__rp_' . spl_object_id($this);
+            if ($param) {
+                if (isset($ctx[$key]->sqlParts[$param])) {
+                    unset($ctx[$key]->sqlParts[$param]);
+                }
+            } else {
+                unset($ctx[$key]); // full reset: re-init from defaults on next state() call
+            }
         } else {
-            $this->sqlParts = [];
+            if ($param) {
+                if (isset($this->sqlParts[$param])) {
+                    unset($this->sqlParts[$param]);
+                }
+            } else {
+                $this->sqlParts = [];
+            }
         }
     }
 
@@ -235,15 +305,16 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
      */
     final public function with(string $name, RepositoryInterface $repository, ?string $modifier = null): static
     {
+        $state = $this->state();
         $this->binding($repository->getSql('binds'));
         $cte = $modifier !== null
             ? $name . ' AS ' . $modifier . ' (' . $repository->buildSql() . ')'
             : $name . ' AS (' . $repository->buildSql() . ')';
 
-        if (isset($this->sqlParts['with'])) {
-            $this->sqlParts['with'] .= ', ' . $cte;
+        if (isset($state->sqlParts['with'])) {
+            $state->sqlParts['with'] .= ', ' . $cte;
         } else {
-            $this->sqlParts['with'] = $cte;
+            $state->sqlParts['with'] = $cte;
         }
         return $this;
     }
@@ -255,7 +326,7 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
      */
     final public function withRecursive(string $name, RepositoryInterface $repository): static
     {
-        $this->sqlParts['with_recursive'] = true;
+        $this->state()->sqlParts['with_recursive'] = true;
         return $this->with($name, $repository);
     }
 
@@ -270,27 +341,28 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
     final public function select(string $option): static
     {
         if (!empty($option)) {
-            $this->sqlParts['option'] = $option;
+            $this->state()->sqlParts['option'] = $option;
         }
         return $this;
     }
 
     private function prepareSelect(): string
     {
-        if (isset($this->sqlParts['option'])) {
-            $this->entityClassName = stdClass::class;
-            return $this->sqlParts['option'];
-        } elseif ($this->entityClassName === 'stdClass' || is_subclass_of($this->entityClassName, stdClass::class)) {
+        $state = $this->state();
+        if (isset($state->sqlParts['option'])) {
+            $state->entityClassName = stdClass::class;
+            return $state->sqlParts['option'];
+        } elseif ($state->entityClassName === 'stdClass' || is_subclass_of($state->entityClassName, stdClass::class)) {
             return '*';
         } else {
-            $prefix = isset($this->sqlParts['as']) ? $this->sqlParts['as'] . '.' : '';
+            $prefix = isset($state->sqlParts['as']) ? $state->sqlParts['as'] . '.' : '';
             $values = [];
             $selection = [];
-            if (is_subclass_of($this->entityClassName, EntityInterface::class)) {
-                $selection = $this->entityClassName::selection();
+            if (is_subclass_of($state->entityClassName, EntityInterface::class)) {
+                $selection = $state->entityClassName::selection();
             }
 
-            foreach (get_class_vars($this->entityClassName) as $name => $val) {
+            foreach (get_class_vars($state->entityClassName) as $name => $val) {
                 $values[] = $selection[$name] ?? ($prefix . $name);
             }
 
@@ -308,17 +380,18 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
      */
     final public function from(string|RepositoryInterface $repository): static
     {
-        if (isset($this->sqlParts['from'])) {
+        $state = $this->state();
+        if (isset($state->sqlParts['from'])) {
             RepositoryException::throw('FROM clause already set: only one FROM source is allowed');
         }
         if (is_string($repository)) {
-            $this->sqlParts['from'] = $repository;
+            $state->sqlParts['from'] = $repository;
         } else {
-            if (!isset($this->sqlParts['as'])) {
+            if (!isset($state->sqlParts['as'])) {
                 RepositoryException::throw('FROM subquery requires an alias: call ->as() before ->from()');
             }
             $this->binding($repository->getSql('binds'));
-            $this->sqlParts['from'] = '(' . $repository->getSql() . ')';
+            $state->sqlParts['from'] = '(' . $repository->getSql() . ')';
         }
         return $this;
     }
@@ -334,7 +407,7 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
     final public function as(string $alias): static
     {
         if (!empty($alias)) {
-            $this->sqlParts['as'] = $alias;
+            $this->state()->sqlParts['as'] = $alias;
         }
         return $this;
     }
@@ -354,7 +427,7 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
         if (is_string($repository)) {
             return $repository . " ON(" . $onSql . ")";
         }
-        if (count($repository->sqlParts) > 1) {
+        if ($repository->sqlPartsCount() > 1) {
             $this->binding($repository->getSql('binds'));
             return '(' . $repository->getSql() . ') '
                 . $repository->getSql('as') . " ON(" . $onSql . ")";
@@ -371,17 +444,18 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
     final public function joinCross(string|RepositoryInterface $repository): static
     {
         if (!is_string($repository)) {
-            if (count($repository->sqlParts) > 1) {
+            if ($repository->sqlPartsCount() > 1) {
                 $this->binding($repository->getSql('binds'));
                 $repository = '(' . $repository->getSql() . ') ' . $repository->getSql('as');
             } else {
                 $repository = $repository->originTable() . ' ' . $repository->getSql('as');
             }
         }
-        if (isset($this->sqlParts['join'])) {
-            $this->sqlParts['join'] .= ' CROSS JOIN ' . $repository;
+        $state = $this->state();
+        if (isset($state->sqlParts['join'])) {
+            $state->sqlParts['join'] .= ' CROSS JOIN ' . $repository;
         } else {
-            $this->sqlParts['join'] = 'CROSS JOIN ' . $repository;
+            $state->sqlParts['join'] = 'CROSS JOIN ' . $repository;
         }
         return $this;
     }
@@ -393,10 +467,11 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
      */
     final public function join(string|RepositoryInterface $repository, string|Qb $on): static
     {
-        if (isset($this->sqlParts['join'])) {
-            $this->sqlParts['join'] .= ' JOIN ' . $this->joinedContext($repository, $on);
+        $state = $this->state();
+        if (isset($state->sqlParts['join'])) {
+            $state->sqlParts['join'] .= ' JOIN ' . $this->joinedContext($repository, $on);
         } else {
-            $this->sqlParts['join'] = 'JOIN ' . $this->joinedContext($repository, $on);
+            $state->sqlParts['join'] = 'JOIN ' . $this->joinedContext($repository, $on);
         }
         return $this;
     }
@@ -408,10 +483,11 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
      */
     final public function joinInner(string|RepositoryInterface $repository, string|Qb $on): static
     {
-        if (isset($this->sqlParts['join'])) {
-            $this->sqlParts['join'] .= ' INNER JOIN ' . $this->joinedContext($repository, $on);
+        $state = $this->state();
+        if (isset($state->sqlParts['join'])) {
+            $state->sqlParts['join'] .= ' INNER JOIN ' . $this->joinedContext($repository, $on);
         } else {
-            $this->sqlParts['join'] = 'INNER JOIN ' . $this->joinedContext($repository, $on);
+            $state->sqlParts['join'] = 'INNER JOIN ' . $this->joinedContext($repository, $on);
         }
         return $this;
     }
@@ -423,10 +499,11 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
      */
     final public function joinLeft(string|RepositoryInterface $repository, string|Qb $on): static
     {
-        if (isset($this->sqlParts['join'])) {
-            $this->sqlParts['join'] .= ' LEFT JOIN ' . $this->joinedContext($repository, $on);
+        $state = $this->state();
+        if (isset($state->sqlParts['join'])) {
+            $state->sqlParts['join'] .= ' LEFT JOIN ' . $this->joinedContext($repository, $on);
         } else {
-            $this->sqlParts['join'] = 'LEFT JOIN ' . $this->joinedContext($repository, $on);
+            $state->sqlParts['join'] = 'LEFT JOIN ' . $this->joinedContext($repository, $on);
         }
         return $this;
     }
@@ -438,10 +515,11 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
      */
     final public function joinRight(string|RepositoryInterface $repository, string|Qb $on): static
     {
-        if (isset($this->sqlParts['join'])) {
-            $this->sqlParts['join'] .= ' RIGHT JOIN ' . $this->joinedContext($repository, $on);
+        $state = $this->state();
+        if (isset($state->sqlParts['join'])) {
+            $state->sqlParts['join'] .= ' RIGHT JOIN ' . $this->joinedContext($repository, $on);
         } else {
-            $this->sqlParts['join'] = 'RIGHT JOIN ' . $this->joinedContext($repository, $on);
+            $state->sqlParts['join'] = 'RIGHT JOIN ' . $this->joinedContext($repository, $on);
         }
         return $this;
     }
@@ -458,7 +536,8 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
     {
         if (!is_null($qb)) {
             if ($qb->getQuery()) {
-                $this->sqlParts['where'] = 'WHERE ' . $qb->getQuery();
+                $state = $this->state();
+                $state->sqlParts['where'] = 'WHERE ' . $qb->getQuery();
                 $this->binding($qb->getBinds());
             }
         }
@@ -507,10 +586,11 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
     private function addWhere(Qb $qb, string $operator): static
     {
         if ($qb->getQuery()) {
-            if (empty($this->sqlParts['where'])) {
-                $this->sqlParts['where'] = 'WHERE ' . $qb->getQuery();
+            $state = $this->state();
+            if (empty($state->sqlParts['where'])) {
+                $state->sqlParts['where'] = 'WHERE ' . $qb->getQuery();
             } else {
-                $this->sqlParts['where'] .= " $operator " . $qb->getQuery();
+                $state->sqlParts['where'] .= " $operator " . $qb->getQuery();
             }
             $this->binding($qb->getBinds());
         }
@@ -528,7 +608,7 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
     final public function groupBy(string $context): static
     {
         if (!empty($context)) {
-            $this->sqlParts['group'] = 'GROUP BY ' . $context;
+            $this->state()->sqlParts['group'] = 'GROUP BY ' . $context;
         }
         return $this;
     }
@@ -540,7 +620,7 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
     final public function having(string $context): static
     {
         if (!empty($context)) {
-            $this->sqlParts['having'] = 'HAVING ' . $context;
+            $this->state()->sqlParts['having'] = 'HAVING ' . $context;
         }
         return $this;
     }
@@ -569,13 +649,14 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
 
     private function addUnion(RepositoryInterface $repository, string $keyword): static
     {
+        $state = $this->state();
         $this->binding($repository->getSql('binds'));
         $unionPart = $keyword . ' ' . $repository->buildSql();
 
-        if (isset($this->sqlParts['union'])) {
-            $this->sqlParts['union'] .= ' ' . $unionPart;
+        if (isset($state->sqlParts['union'])) {
+            $state->sqlParts['union'] .= ' ' . $unionPart;
         } else {
-            $this->sqlParts['union'] = $unionPart;
+            $state->sqlParts['union'] = $unionPart;
         }
         return $this;
     }
@@ -591,7 +672,7 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
     final public function orderBy(string $context): static
     {
         if (!empty($context)) {
-            $this->sqlParts['order'] = 'ORDER BY ' . $context;
+            $this->state()->sqlParts['order'] = 'ORDER BY ' . $context;
         }
         return $this;
     }
@@ -609,9 +690,10 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
         if ($offset < 0) {
             throw new \TypeError('offset < 0');
         }
-        $this->sqlParts['limit'] = $limit;
+        $state = $this->state();
+        $state->sqlParts['limit'] = $limit;
         if ($offset > 0) {
-            $this->sqlParts['offset'] = $offset;
+            $state->sqlParts['offset'] = $offset;
         }
         return $this;
     }
@@ -622,7 +704,7 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
      */
     final public function forBy(string $context): static
     {
-        $this->sqlParts['for'] = $context;
+        $this->state()->sqlParts['for'] = $context;
         return $this;
     }
 
@@ -647,8 +729,9 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
         if (empty($binds)) {
             return $this;
         }
+        $state = $this->state();
         foreach ($binds as $bind) {
-            $this->sqlParts['binds'][$bind->getName()] = $bind;
+            $state->sqlParts['binds'][$bind->getName()] = $bind;
         }
         return $this;
     }
@@ -665,11 +748,12 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
      */
     final protected function useBind(CDOStatement|\PDOStatement $stmt): void
     {
-        if (empty($this->sqlParts['binds'])) {
+        $state = $this->state();
+        if (empty($state->sqlParts['binds'])) {
             return;
         }
         $method = method_exists($stmt, 'bindTypedValue') ? 'bindTypedValue' : 'bindValue';
-        foreach ($this->sqlParts['binds'] as $bind) {
+        foreach ($state->sqlParts['binds'] as $bind) {
             $stmt->{$method}($bind->getName(), $bind->getValue());
         }
     }
