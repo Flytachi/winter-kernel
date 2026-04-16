@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\Edo\Declaration;
-use Flytachi\Winter\Edo\Mapping\Structure\Table;
-use Flytachi\Winter\Kernel\Factory\EdoMapping;
+use Flytachi\Winter\K2\Ppa\Declaration;
+use Flytachi\Winter\K2\Ppa\PPAMapping;
+use Flytachi\Winter\K2\Ppa\Mapping\Structure\Table;
 use Flytachi\Winter\Kernel\Factory\Plugin;
 
 class Db extends Cmd
@@ -85,7 +85,7 @@ class Db extends Cmd
     private function ping(): void
     {
         foreach ($this->resolveTargets() as $label => $rootDir) {
-            $declaration = EdoMapping::scanningDeclaration($rootDir);
+            $declaration = PPAMapping::scanningDeclaration($rootDir);
 
             $seen = [];
             foreach ($declaration->getItems() as $item) {
@@ -120,7 +120,7 @@ class Db extends Cmd
     private function showSql(): void
     {
         foreach ($this->resolveTargets() as $label => $rootDir) {
-            $declaration = EdoMapping::scanningDeclaration($rootDir);
+            $declaration = PPAMapping::scanningDeclaration($rootDir);
             $data = $this->processDeclarationData($declaration);
 
             foreach ($declaration->getItems() as $item) {
@@ -166,7 +166,7 @@ class Db extends Cmd
     private function migrate(): void
     {
         foreach ($this->resolveTargets() as $label => $rootDir) {
-            $declaration = EdoMapping::scanningDeclaration($rootDir);
+            $declaration = PPAMapping::scanningDeclaration($rootDir);
             $data = $this->processDeclarationData($declaration);
 
             foreach ($declaration->getItems() as $item) {

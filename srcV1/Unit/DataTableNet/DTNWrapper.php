@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Unit\DataTableNet;
 
 use Flytachi\Winter\Cdo\Qb;
-use Flytachi\Winter\Edo\Entity\RepositoryInterface;
+use Flytachi\Winter\K2\Ppa\Entity\RepositoryInterface;
 
 class DTNWrapper
 {

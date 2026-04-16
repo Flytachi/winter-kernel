@@ -2,7 +2,7 @@
 
 namespace __namespace__;
 
-use Flytachi\Winter\Edo\Stereotype\Repository;
+use Flytachi\Winter\K2\Ppa\Stereotype\Repository;
 
 class __className__ extends Repository
 {

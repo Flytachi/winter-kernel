@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\Kernel\Factory;
+namespace Flytachi\Winter\K2\Ppa;
 
 use Flytachi\Winter\Cdo\Config\Common\DbConfigInterface;
-use Flytachi\Winter\Edo\Declaration;
-use Flytachi\Winter\Edo\Entity\RepositoryInterface;
-use Flytachi\Winter\Edo\Mapping\Attributes\Entity\Table as EntityTable;
-use Flytachi\Winter\Edo\Mapping\Structure\Table;
-use Flytachi\Winter\Edo\Mapping\Tools\ColumnMapping;
+use Flytachi\Winter\K2\Ppa\Entity\RepositoryInterface;
+use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Entity\Table as EntityTable;
+use Flytachi\Winter\K2\Ppa\Mapping\ColumnMapping;
+use Flytachi\Winter\K2\Ppa\Mapping\Structure\Table;
+use Flytachi\Winter\Kernel\Factory\Mapping;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionException;
 
-class EdoMapping
+class PPAMapping
 {
     public static function scanningDeclaration(?string $rootDir = null): Declaration
     {

@@ -3,7 +3,7 @@
 namespace __namespace__;
 
 use Flytachi\Winter\Cdo\Config\DbConfig;
-use Flytachi\Winter\Edo\EntityCallEdoTrait;
+use Flytachi\Winter\K2\Ppa\EntityCallEdoTrait;
 
 class __className__ extends DbConfig
 {

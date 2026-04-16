@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Unit;
 
 use Flytachi\Winter\Cdo\Connection\CDOStatement;
-use Flytachi\Winter\Edo\Entity\RepositoryInterface;
+use Flytachi\Winter\K2\Ppa\Entity\RepositoryInterface;
 use TypeError;
 
 /**
