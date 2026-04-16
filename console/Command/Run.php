@@ -144,7 +144,9 @@ class Run extends Cmd
 
         self::printSuccess("Dev server started at http://$host:$port");
         self::printKeyValue('Root', Kernel::$pathPublic, 6, 34, 90);
-        passthru('php -S ' . escapeshellarg("$host:$port") . ' -t ' . escapeshellarg(Kernel::$pathPublic));
+        passthru('php -S ' . escapeshellarg("$host:$port")
+            . ' -t ' . escapeshellarg(Kernel::$pathPublic)
+        );
     }
 
     // ── Help ──────────────────────────────────────────────────────────────────

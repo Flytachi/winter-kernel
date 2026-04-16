@@ -2,7 +2,7 @@
 
 namespace __namespace__;
 
-use Flytachi\Winter\Kernel\Stereotype\RequestObject;
+use Flytachi\Winter\K2\Http\Request\RequestObject;
 
 class __className__ extends RequestObject
 {
