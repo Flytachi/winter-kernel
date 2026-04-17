@@ -228,8 +228,10 @@ class Make extends Cmd
         $this->smartInfo(
             $info,
             'Dto',
+            'DTOs',
             'Entity/Dto',
-            'Entities/Dto',
+            'Entity/DTOs',
+            'Entities/DTOs',
             'Entity',
             'Entities'
         );
