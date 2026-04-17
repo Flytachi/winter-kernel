@@ -8,7 +8,9 @@ use ArgumentCountError;
 use Error;
 use Flytachi\Winter\Base\Header;
 use TypeError;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 abstract class RequestBase implements RequestInterface
 {
     use ValidateTrait;

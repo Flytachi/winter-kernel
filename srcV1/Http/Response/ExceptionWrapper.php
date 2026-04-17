@@ -7,7 +7,9 @@ namespace Flytachi\Winter\Kernel\Http\Response;
 use Flytachi\Winter\Kernel\Factory\Mapping;
 use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Kernel\Stereotype\Output\ResponseException;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 final class ExceptionWrapper
 {
     private function __construct()

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\File;
 
 use SimpleXMLElement;
+use JetBrains\PhpStorm\Deprecated;
 
 /**
  * Class XML
@@ -22,6 +23,7 @@ use SimpleXMLElement;
  * @version 1.4
  * @author Flytachi
  */
+#[Deprecated]
 abstract class XML
 {
     /**

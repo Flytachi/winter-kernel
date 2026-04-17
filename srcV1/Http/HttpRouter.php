@@ -6,7 +6,9 @@ namespace Flytachi\Winter\Kernel\Http;
 
 use Flytachi\Winter\Base\Header;
 use Flytachi\Winter\Base\Interface\Stereotype;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 abstract class HttpRouter extends Stereotype
 {
     private bool $initHeader = false;

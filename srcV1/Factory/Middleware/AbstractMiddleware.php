@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Factory\Middleware;
 
+use JetBrains\PhpStorm\Deprecated;
+
+#[Deprecated]
 abstract class AbstractMiddleware implements MiddlewareInterface
 {
     final public function __construct()

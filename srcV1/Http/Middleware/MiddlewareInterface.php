@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Http\Middleware;
 
+use JetBrains\PhpStorm\Deprecated;
 use Swoole\Http\Request;
 use Swoole\Http\Response;
 
+#[Deprecated]
 interface MiddlewareInterface
 {
     /**

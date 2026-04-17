@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\File;
 
+use JetBrains\PhpStorm\Deprecated;
+
 /**
  * Class JSON
  *
@@ -18,6 +20,7 @@ namespace Flytachi\Winter\Kernel\File;
  * @version 1.3
  * @author Flytachi
  */
+#[Deprecated]
 abstract class JSON
 {
     /**

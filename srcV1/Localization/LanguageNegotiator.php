@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Localization;
 
+use JetBrains\PhpStorm\Deprecated;
+
+#[Deprecated]
 final class LanguageNegotiator
 {
     /**

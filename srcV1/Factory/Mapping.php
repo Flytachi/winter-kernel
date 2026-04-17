@@ -20,7 +20,9 @@ use ReflectionEnum;
 use ReflectionException;
 use ReflectionMethod;
 use ReflectionUnionType;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 class Mapping
 {
     /**

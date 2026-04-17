@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Factory\Middleware\Cors;
 
+use JetBrains\PhpStorm\Deprecated;
+
+#[Deprecated]
 trait AccessControlTrait
 {
     private function useHeaders(): void

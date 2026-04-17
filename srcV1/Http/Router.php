@@ -11,7 +11,9 @@ use Flytachi\Winter\Kernel\Exception\ClientError;
 use Flytachi\Winter\Kernel\Factory\Mapping;
 use Flytachi\Winter\Kernel\Factory\Middleware\Cors\AccessControl;
 use Flytachi\Winter\Kernel\Kernel;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 final class Router extends HttpRouter implements ActuatorItemInterface
 {
     use RoutingTrait;

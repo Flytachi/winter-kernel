@@ -6,7 +6,9 @@ namespace Flytachi\Winter\Kernel\Http\Response;
 
 use Flytachi\Winter\Base\Header;
 use Flytachi\Winter\Base\HttpCode;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 abstract class ResponseBase implements ResponseInterface
 {
     use ResponseTrait;

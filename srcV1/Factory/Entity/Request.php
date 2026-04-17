@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Factory\Entity;
 
+use JetBrains\PhpStorm\Deprecated;
+
+#[Deprecated]
 class Request extends \stdClass implements RequestInterface
 {
     use ValidateTrait;

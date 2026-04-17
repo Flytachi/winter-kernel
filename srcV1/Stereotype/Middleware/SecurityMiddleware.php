@@ -7,7 +7,9 @@ namespace Flytachi\Winter\Kernel\Stereotype\Middleware;
 use Flytachi\Winter\Base\Header;
 use Flytachi\Winter\Kernel\Factory\Middleware\AbstractMiddleware;
 use Flytachi\Winter\Kernel\Factory\Middleware\MiddlewareException;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 #[\Attribute(\Attribute::TARGET_CLASS | \Attribute::TARGET_METHOD)]
 class SecurityMiddleware extends AbstractMiddleware
 {

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Http\Response;
 
 use Flytachi\Winter\Kernel\File\XML;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 enum ContentType: string
 {
     case UNDEFINED = '';

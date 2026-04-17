@@ -6,7 +6,9 @@ namespace Flytachi\Winter\Kernel\Stereotype\Output;
 
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\Kernel\Http\Response\ResponseFileContent;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 class ResponseContent extends ResponseFileContent
 {
     public static function binary(

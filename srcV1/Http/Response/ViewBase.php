@@ -6,7 +6,9 @@ namespace Flytachi\Winter\Kernel\Http\Response;
 
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\Kernel\Kernel;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 abstract class ViewBase implements ViewInterface
 {
     protected array $headers = [];

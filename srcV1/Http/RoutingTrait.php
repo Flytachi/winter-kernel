@@ -7,7 +7,9 @@ namespace Flytachi\Winter\Kernel\Http;
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\Kernel\Exception\ClientError;
 use Flytachi\Winter\Kernel\Stereotype\ControllerInterface;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 trait RoutingTrait
 {
     private array $routes = [];

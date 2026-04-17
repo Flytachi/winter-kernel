@@ -6,7 +6,9 @@ namespace Flytachi\Winter\Kernel\Stereotype\Output;
 
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\Kernel\Http\Response\ViewBase;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 class View extends ViewBase
 {
     public static function render(

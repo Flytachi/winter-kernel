@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Http\Response;
 
 use Flytachi\Winter\Base\HttpCode;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 interface ResponseInterface
 {
     public function addHeader(string $key, string $value): void;

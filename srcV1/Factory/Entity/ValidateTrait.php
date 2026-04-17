@@ -6,7 +6,9 @@ namespace Flytachi\Winter\Kernel\Factory\Entity;
 
 use DateTime;
 use TypeError;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 trait ValidateTrait
 {
     /**

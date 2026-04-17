@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Http\Middleware;
 
 use Flytachi\Winter\Base\HttpCode;
+use JetBrains\PhpStorm\Deprecated;
 
 /**
  * Throw from any middleware to abort the request with a specific HTTP status.
@@ -14,6 +15,7 @@ use Flytachi\Winter\Base\HttpCode;
  * Example:
  *   throw new MiddlewareException('Token expired', HttpCode::UNAUTHORIZED);
  */
+#[Deprecated]
 class MiddlewareException extends \RuntimeException
 {
     public function __construct(

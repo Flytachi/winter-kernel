@@ -7,7 +7,9 @@ namespace Flytachi\Winter\Kernel\Http;
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\Base\Interface\ActuatorItemInterface;
 use Flytachi\Winter\Kernel\Exception\ClientError;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 class RouteNotFound extends HttpRouter implements ActuatorItemInterface
 {
     protected function route(array $input, bool $isDevelop = false): never

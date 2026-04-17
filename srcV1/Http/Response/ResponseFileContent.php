@@ -6,8 +6,10 @@ namespace Flytachi\Winter\Kernel\Http\Response;
 
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\Kernel\File\XML;
+use JetBrains\PhpStorm\Deprecated;
 use SimpleXMLElement;
 
+#[Deprecated]
 abstract class ResponseFileContent implements ResponseFileContentInterface
 {
     protected array $headers = [];

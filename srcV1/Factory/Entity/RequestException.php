@@ -7,7 +7,9 @@ namespace Flytachi\Winter\Kernel\Factory\Entity;
 use Flytachi\Winter\Base\Exception\Exception;
 use Flytachi\Winter\Base\HttpCode;
 use Psr\Log\LogLevel;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 class RequestException extends Exception
 {
     protected $code = HttpCode::BAD_REQUEST->value;

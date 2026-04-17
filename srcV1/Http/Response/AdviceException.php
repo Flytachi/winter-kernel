@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Http\Response;
 
 use Attribute;
+use JetBrains\PhpStorm\Deprecated;
 use Throwable;
 
+#[Deprecated]
 #[Attribute(Attribute::TARGET_CLASS)]
 readonly class AdviceException
 {

@@ -13,9 +13,7 @@ use Flytachi\Winter\K2\Exception\LogLevelException;
 use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 use Flytachi\Winter\K2\Http\Header;
-use Flytachi\Winter\K2\Http\Middleware\MiddlewareException;
 use Flytachi\Winter\K2\Http\ParameterResolver;
-use Flytachi\Winter\K2\Http\Request\RequestException;
 use Flytachi\Winter\K2\Localization\Locale;
 use Flytachi\Winter\K2\Http\Response\ExceptionWrapper;
 use Flytachi\Winter\K2\Http\Response\ResponseEntity;
@@ -198,6 +196,13 @@ class Router
         try {
             $method = $request->getMethod();
 
+            if (env('DEBUG', false)) {
+                LoggerRegistry::instance('Router')->debug(
+                    "Handle ". $request->getClientIp()
+                    . " [$method] " . $request->getUri()
+                );
+            }
+
             // ── Global CORS applied eagerly (covers 404, 405, and errors too) ─
             if ($this->globalCors !== null) {
                 $this->writeCorsHeaders($request, $response, $this->globalCors);
@@ -287,7 +292,6 @@ class Router
 
     private function sendError(\Throwable $e, HttpResponse $res): void
     {
-        // dd() — перехватываем до ExceptionWrapper, рендерим без die()
         if ($e instanceof DebugDumpException) {
             $res->status(200);
             $res->header('Content-Type', 'text/html; charset=utf-8');
@@ -322,13 +326,8 @@ class Router
             return;
         }
 
-        // 4xx client errors — warning (expected, no stack trace needed)
-        $is4xx = $code >= 400 && $code < 500;
-        if (
-            $e instanceof MiddlewareException
-            || $e instanceof RequestException
-            || ($e instanceof ResponseException && $is4xx)
-        ) {
+        // 4xx signals (ResponseException + subclasses: MiddlewareException, RequestException)
+        if ($e instanceof ResponseException && $code >= 400 && $code < 500) {
             $logger->warning($e->getMessage(), [
                 'exception' => $e::class,
                 'code'      => $code,

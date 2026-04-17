@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Factory\Middleware\Cors;
 
 use Flytachi\Winter\Base\Method;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 final class AccessControl
 {
     use AccessControlTrait;

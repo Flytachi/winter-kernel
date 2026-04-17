@@ -6,7 +6,9 @@ namespace Flytachi\Winter\Kernel\Stereotype\Output;
 
 use Flytachi\Winter\Kernel\Http\Response\ContentType;
 use Flytachi\Winter\Kernel\Http\Response\ResponseBase;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 class ResponseXml extends ResponseBase
 {
     public function getBody(): string

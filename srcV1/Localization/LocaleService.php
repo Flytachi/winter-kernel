@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Localization;
 
 use Flytachi\Winter\Base\Tool;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 class LocaleService
 {
     private string $langPath;

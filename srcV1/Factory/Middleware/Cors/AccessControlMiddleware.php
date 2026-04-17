@@ -6,7 +6,9 @@ namespace Flytachi\Winter\Kernel\Factory\Middleware\Cors;
 
 use Flytachi\Winter\Kernel\Factory\Middleware\AbstractMiddleware;
 use Flytachi\Winter\Kernel\Factory\Middleware\MiddlewareInterface;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 abstract class AccessControlMiddleware extends AbstractMiddleware implements MiddlewareInterface
 {
     use AccessControlTrait;
