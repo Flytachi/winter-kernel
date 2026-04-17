@@ -21,8 +21,7 @@ class Complete extends Cmd
 
         // --- make ---
         'make' => [
-            '-a:RestController — REST API controller',
-            '-c:Controller — web/view controller',
+            '-c:Controller — API controller',
             '-s:Service — business logic service',
             '-m:Middleware — HTTP middleware',
             '-r:Repository — data access repository',

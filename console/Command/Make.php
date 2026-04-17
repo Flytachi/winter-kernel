@@ -569,7 +569,6 @@ class Make extends Cmd
         self::printLabel("Namespace Resolution", $cl);
 
         self::printLabel("Flags — HTTP", $cl);
-        self::printBadge('-a', 'RestController  (suffix: Controller)', $cl, 36);
         self::printBadge('-c', 'Controller      (suffix: Controller)', $cl, 36);
         self::printBadge('-m', 'Middleware       (suffix: Middleware)', $cl, 36);
         self::printLabel("Flags — HTTP", $cl);

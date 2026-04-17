@@ -2,13 +2,15 @@
 
 namespace __namespace__;
 
-use Flytachi\Winter\Kernel\Stereotype\Middleware;
+use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
+use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
+use Flytachi\Winter\K2\Stereotype\Middleware;
 
 #[\Attribute(\Attribute::TARGET_CLASS | \Attribute::TARGET_METHOD)]
 class __className__ extends Middleware
 {
-    public function optionBefore(): void
+    public function before(HttpRequest $request, HttpResponse $response): void
     {
-        // TODO: Implement optionBefore() method.
+        // middleware logic
     }
 }
