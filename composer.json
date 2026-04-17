@@ -37,7 +37,7 @@
         "ext-posix": "*"
     },
     "suggest": {
-        "ext-swoole": "Required for coroutine-based connection pooling (PpaConnectionPool Swoole mode)"
+        "ext-swoole": "Required for coroutine-based connection pooling (Swoole mode)"
     },
     "autoload-dev": {
         "psr-4": {

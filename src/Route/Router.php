@@ -6,12 +6,16 @@ namespace Flytachi\Winter\K2\Route;
 
 use Flytachi\Winter\Base\DebugDump;
 use Flytachi\Winter\Base\Exception\DebugDumpException;
+use Flytachi\Winter\Base\Log\LoggerRegistry;
 use Flytachi\Winter\Base\ReflectionCache;
 use Flytachi\Winter\Base\Runtime;
+use Flytachi\Winter\K2\Exception\LogLevelException;
 use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 use Flytachi\Winter\K2\Http\Header;
+use Flytachi\Winter\K2\Http\Middleware\MiddlewareException;
 use Flytachi\Winter\K2\Http\ParameterResolver;
+use Flytachi\Winter\K2\Http\Request\RequestException;
 use Flytachi\Winter\K2\Localization\Locale;
 use Flytachi\Winter\K2\Http\Response\ExceptionWrapper;
 use Flytachi\Winter\K2\Http\Response\ResponseEntity;
@@ -284,12 +288,14 @@ class Router
     private function sendError(\Throwable $e, HttpResponse $res): void
     {
         // dd() — перехватываем до ExceptionWrapper, рендерим без die()
-        if ($e instanceof \Flytachi\Winter\Base\Exception\DebugDumpException) {
+        if ($e instanceof DebugDumpException) {
             $res->status(200);
             $res->header('Content-Type', 'text/html; charset=utf-8');
             $res->end($this->renderDump($e));
             return;
         }
+
+        $this->logException($e);
 
         $exc  = ExceptionWrapper::wrap($e);
         $body = $exc->getBody(); // must be first — sets Content-Type via addHeader()
@@ -298,6 +304,45 @@ class Router
             $res->header($key, $value);
         }
         $res->end($body);
+    }
+
+    private function logException(\Throwable $e): void
+    {
+        $code   = (int) $e->getCode();
+        $logger = LoggerRegistry::instance('Router');
+
+        // Exception carries its own declared log level — highest priority
+        if ($e instanceof LogLevelException) {
+            $logger->log($e->getLogLevel(), $e->getMessage(), [
+                'exception' => $e::class,
+                'code'      => $code,
+                'file'      => $e->getFile(),
+                'line'      => $e->getLine(),
+            ]);
+            return;
+        }
+
+        // 4xx client errors — warning (expected, no stack trace needed)
+        $is4xx = $code >= 400 && $code < 500;
+        if (
+            $e instanceof MiddlewareException
+            || $e instanceof RequestException
+            || ($e instanceof ResponseException && $is4xx)
+        ) {
+            $logger->warning($e->getMessage(), [
+                'exception' => $e::class,
+                'code'      => $code,
+            ]);
+            return;
+        }
+
+        // 5xx and infrastructure failures — error with location
+        $logger->error($e->getMessage(), [
+            'exception' => $e::class,
+            'code'      => $code,
+            'file'      => $e->getFile(),
+            'line'      => $e->getLine(),
+        ]);
     }
 
     // ── CORS internals ────────────────────────────────────────────────────────
