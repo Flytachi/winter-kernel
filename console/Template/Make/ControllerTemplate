@@ -2,15 +2,15 @@
 
 namespace __namespace__;
 
-use Flytachi\Winter\Kernel\Stereotype\Output\View;
-use Flytachi\Winter\Kernel\Stereotype\Controller;
-use Flytachi\Winter\Mapping\Annotation\RequestMapping;
+use Flytachi\Winter\K2\Http\Response\ResponseEntity;
+use Flytachi\Winter\K2\Route\Annotation\RequestMapping;
+use Flytachi\Winter\K2\Stereotype\Controller;
 
 class __className__ extends Controller
 {
-    #[RequestMapping('/__shortName__')]
-    public function index(): View
+    #[RequestMapping('__shortName__')]
+    public function hello(): ResponseEntity
     {
-        return new View('index');
+        return ResponseEntity::ok("hello");
     }
 }

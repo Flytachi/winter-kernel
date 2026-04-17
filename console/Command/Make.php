@@ -49,9 +49,6 @@ class Make extends Cmd
             $templateName = str_replace('.', '/', $templateName);
             $this->createPath = Kernel::$pathRoot;
             // ---
-            if (in_array('a', $this->args['flags'])) {
-                $this->createRestController($templateName);
-            }
             if (in_array('c', $this->args['flags'])) {
                 $this->createController($templateName);
             }
@@ -103,9 +100,9 @@ class Make extends Cmd
         }
     }
 
-    private function createRestController(string $name): void
+    private function createController(string $name): void
     {
-        $info = $this->getInfo($name, 'Controller', 'RestControllerTemplate');
+        $info = $this->getInfo($name, 'Controller', 'ControllerTemplate');
         $this->smartInfo(
             $info,
             'Rests',
@@ -122,27 +119,6 @@ class Make extends Cmd
         $code = str_replace("__className__", $info['className'], $code);
         $code = str_replace("__shortName__", lcfirst(str_replace('Controller', '', $info['className'])), $code);
         $this->createFile($info['className'], $info['path'], $code, 'rest');
-    }
-
-    private function createController(string $name): void
-    {
-        $info = $this->getInfo($name, 'Controller', 'ControllerTemplate');
-        $this->smartInfo(
-            $info,
-            'Webs',
-            'Web',
-            'Controllers/Webs',
-            'Controllers/Web',
-            'Controller/Webs',
-            'Controller/Web',
-            'Controllers',
-            'Controller'
-        );
-        $code = file_get_contents($info['template']);
-        $code = str_replace("__namespace__", $info['namespace'], $code);
-        $code = str_replace("__className__", $info['className'], $code);
-        $code = str_replace("__shortName__", lcfirst(str_replace('Controller', '', $info['className'])), $code);
-        $this->createFile($info['className'], $info['path'], $code, 'controller');
     }
 
     private function createService(string $name): void
