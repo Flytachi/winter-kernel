@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Route;
 
-use Flytachi\Winter\Base\DebugDump;
 use Flytachi\Winter\Base\Exception\DebugDumpException;
 use Flytachi\Winter\Base\Log\LoggerRegistry;
 use Flytachi\Winter\Base\ReflectionCache;

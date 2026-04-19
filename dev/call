@@ -1,0 +1,16 @@
+#!/usr/bin/env php
+<?php
+
+// Version PHP 8.3
+if (PHP_VERSION_ID >= 80300) {
+    chdir(__DIR__);
+
+    require './bootstrap.php';
+
+    $code = new \Flytachi\Winter\Console\Core($argv);
+    $code->run();
+
+} else {
+    echo "\033[33m"." Please use PHP version 8.3 or higher.\n";
+    echo "\033[34m"." Current PHP version => " . PHP_VERSION . "\n";
+}

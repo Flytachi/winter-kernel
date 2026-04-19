@@ -41,14 +41,15 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Flytachi\\Winter\\Kernel\\Tests\\": "tests/main"
+            "Flytachi\\Winter\\Kernel\\Tests\\": "tests",
+            "Flytachi\\Winter\\Kernel\\Dev\\Main\\": "dev/main"
         }
     },
     "require-dev": {
-        "monolog/monolog": "@stable",
         "phpunit/phpunit": "@stable",
         "squizlabs/php_codesniffer": "@stable",
-        "swoole/ide-helper": "^6.0"
+        "swoole/ide-helper": "^6.0",
+        "monolog/monolog": "@stable"
     },
     "bin": ["wKernelExecutor"],
     "authors": [

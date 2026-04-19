@@ -6,6 +6,7 @@ namespace Flytachi\Winter\K2\Http\Response;
 
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Kernel;
 
 /**
  * PHP template response — port of ViewBase + View.
@@ -24,18 +25,21 @@ class ResponseView implements Sendable
 {
     private static string $basePath = '';
 
-    private ?string  $templateName;
-    private string   $resourceName;
-    private array    $data;
+    private ?string $templateName;
+    private string $resourceName;
+    private array $data;
     private HttpCode $httpCode;
-    private array    $extraHeaders = [];
+    private array $extraHeaders = [];
 
     private function __construct(
-        ?string  $templateName,
-        string   $resourceName,
-        array    $data,
+        ?string $templateName,
+        string $resourceName,
+        array $data,
         HttpCode $httpCode,
     ) {
+        if (empty(self::getBasePath())) {
+            self::setBasePath(Kernel::$pathResource);
+        }
         $this->templateName = $templateName;
         $this->resourceName = $resourceName;
         $this->data         = $data;
@@ -67,8 +71,8 @@ class ResponseView implements Sendable
      * Render a resource without a layout template.
      */
     public static function view(
-        string   $resourceName,
-        array    $data     = [],
+        string $resourceName,
+        array $data = [],
         HttpCode $httpCode = HttpCode::OK,
     ): static {
         return new static(null, $resourceName, $data, $httpCode);
@@ -79,9 +83,9 @@ class ResponseView implements Sendable
      * Inside the template, $content holds the already-rendered resource HTML.
      */
     public static function render(
-        string   $templateName,
-        string   $resourceName,
-        array    $data     = [],
+        string $templateName,
+        string $resourceName,
+        array $data = [],
         HttpCode $httpCode = HttpCode::OK,
     ): static {
         return new static($templateName, $resourceName, $data, $httpCode);
