@@ -153,7 +153,8 @@ class Router
      */
     public static function fromScan(string $rootDir, array $exclude = []): static
     {
-        $router = new static();
+        $router  = new static();
+        $exclude = array_merge([$rootDir . '/vendor'], $exclude);
         MappingScanner::scan($rootDir, $router, $exclude);
 
         foreach (Plugin::getPlugins() as $prefix => $path) {

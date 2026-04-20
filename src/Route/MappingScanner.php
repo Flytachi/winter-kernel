@@ -47,7 +47,7 @@ class MappingScanner
      */
     public static function scanImplementors(string $rootDir, string $interface): array
     {
-        $files        = self::findPhpFiles($rootDir, []);
+        $files        = self::findPhpFiles($rootDir, [$rootDir . '/vendor']);
         $loaders      = ClassLoader::getRegisteredLoaders();
         $loader       = reset($loaders);
         $namespaceMap = $loader->getPrefixesPsr4();
