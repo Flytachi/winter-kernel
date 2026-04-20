@@ -8,4 +8,6 @@ use Attribute;
 
 /** Class-level route prefix or a method-level route with no specific HTTP method. */
 #[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_METHOD)]
-class RequestMapping extends AbstractMapping {}
+class RequestMapping extends AbstractMapping
+{
+}

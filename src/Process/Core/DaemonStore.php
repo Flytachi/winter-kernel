@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\K2\Process\Core;
 
 use Flytachi\FileStore\FileStorage;
-use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\K2\Kernel;
 
 final class DaemonStore
 {

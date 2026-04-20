@@ -2,7 +2,7 @@
 
 namespace __namespace__;
 
-use Flytachi\Winter\Kernel\Stereotype\Daemon;
+use Flytachi\Winter\K2\Stereotype\Daemon;
 
 class __className__ extends Daemon
 {

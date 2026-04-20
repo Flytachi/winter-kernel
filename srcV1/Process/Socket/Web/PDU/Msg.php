@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Process\Socket\Web\PDU;
 
+use JetBrains\PhpStorm\Deprecated;
+
 /**
  * A Data Transfer Object representing a WebSocket message.
  * This object is immutable.
  */
+#[Deprecated]
 readonly class Msg
 {
     public string $type;

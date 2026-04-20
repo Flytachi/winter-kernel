@@ -2,9 +2,9 @@
 
 namespace __namespace__;
 
-use Flytachi\Winter\Kernel\Process\Socket\Web\PDU\Msg;
-use Flytachi\Winter\Kernel\Process\Socket\Web\PDU\WSResource;
-use Flytachi\Winter\Kernel\Stereotype\WebSocket;
+use Flytachi\Winter\K2\Process\Socket\Web\PDU\Msg;
+use Flytachi\Winter\K2\Process\Socket\Web\PDU\WSResource;
+use Flytachi\Winter\K2\Stereotype\WebSocket;
 
 class __className__ extends WebSocket
 {

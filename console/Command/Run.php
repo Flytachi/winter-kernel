@@ -11,7 +11,7 @@ use Flytachi\Winter\K2\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\K2\Http\Adapter\SwooleResponse;
 use Flytachi\Winter\K2\Route\MemoryWatcher;
 use Flytachi\Winter\K2\Route\Router;
-use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\K2\Kernel;
 
 class Run extends Cmd
 {
@@ -60,12 +60,12 @@ class Run extends Cmd
         }
 
         self::printSuccess("Swoole server starting at http://$host:$port");
-        self::printKeyValue('Root',              Kernel::$pathRoot,          6, 34, 90);
-        self::printKeyValue('Workers',           $workerNum    ?? 'auto', 6, 34, 36);
-        self::printKeyValue('Task-workers',      $taskWorkers  ?? 'off',  6, 34, 36);
-        self::printKeyValue('Max-request',       $maxRequest   ?? 'off',  6, 34, 36);
+        self::printKeyValue('Root', Kernel::$pathRoot, 6, 34, 90);
+        self::printKeyValue('Workers', $workerNum    ?? 'auto', 6, 34, 36);
+        self::printKeyValue('Task-workers', $taskWorkers  ?? 'off', 6, 34, 36);
+        self::printKeyValue('Max-request', $maxRequest   ?? 'off', 6, 34, 36);
         self::printKeyValue('Max-request-grace', $maxRequestGrace ?? 'off', 6, 34, 36);
-        self::printKeyValue('Watcher',           $watcher ? 'on' : 'off', 6, 34, 36);
+        self::printKeyValue('Watcher', $watcher ? 'on' : 'off', 6, 34, 36);
 
         $router = Router::fromScan(Kernel::$pathRoot);
 
@@ -75,11 +75,21 @@ class Run extends Cmd
 
         $server = new \Swoole\Http\Server($host, $port);
         $config = [];
-        if ($workerNum !== null)       $config['worker_num']         = (int) $workerNum;
-        if ($taskWorkers !== null)     $config['task_worker_num']    = (int) $taskWorkers;
-        if ($maxRequest !== null)      $config['max_request']        = (int) $maxRequest;
-        if ($maxRequestGrace !== null) $config['max_request_grace']  = (int) $maxRequestGrace;
-        if (!empty($config))           $server->set($config);
+        if ($workerNum !== null) {
+            $config['worker_num']         = (int) $workerNum;
+        }
+        if ($taskWorkers !== null) {
+            $config['task_worker_num']    = (int) $taskWorkers;
+        }
+        if ($maxRequest !== null) {
+            $config['max_request']        = (int) $maxRequest;
+        }
+        if ($maxRequestGrace !== null) {
+            $config['max_request_grace']  = (int) $maxRequestGrace;
+        }
+        if (!empty($config)) {
+            $server->set($config);
+        }
 
         cli_set_process_title(
             "Winter swoole -> server"
@@ -146,8 +156,7 @@ class Run extends Cmd
         self::printSuccess("Dev server started at http://$host:$port");
         self::printKeyValue('Root', Kernel::$pathPublic, 6, 34, 90);
         passthru('php -S ' . escapeshellarg("$host:$port")
-            . ' -t ' . escapeshellarg(Kernel::$pathPublic)
-        );
+            . ' -t ' . escapeshellarg(Kernel::$pathPublic));
     }
 
     // ── Help ──────────────────────────────────────────────────────────────────

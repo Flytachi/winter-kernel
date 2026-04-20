@@ -34,11 +34,12 @@ readonly class CrossOrigin
      * @param string[] $vary           Extra values for the Vary header.
      */
     public function __construct(
-        public array $origins       = [],
-        public array $allowHeaders  = [],
+        public array $origins = [],
+        public array $allowHeaders = [],
         public array $exposeHeaders = [],
-        public bool  $credentials   = false,
-        public int   $maxAge        = 0,
-        public array $vary          = [],
-    ) {}
+        public bool $credentials = false,
+        public int $maxAge = 0,
+        public array $vary = [],
+    ) {
+    }
 }

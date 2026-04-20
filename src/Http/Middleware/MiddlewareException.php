@@ -22,8 +22,8 @@ use Flytachi\Winter\K2\Http\Response\ResponseException;
 class MiddlewareException extends ResponseException
 {
     public function __construct(
-        string      $message  = '',
-        HttpCode    $httpCode = HttpCode::UNAUTHORIZED,
+        string $message = '',
+        HttpCode $httpCode = HttpCode::UNAUTHORIZED,
         ?\Throwable $previous = null,
     ) {
         parent::__construct($message, $httpCode, $previous);

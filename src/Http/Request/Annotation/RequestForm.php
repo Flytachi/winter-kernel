@@ -16,4 +16,6 @@ use Attribute;
  *   public function store(#[RequestForm] UserCreateRequest $body): ResponseEntity { ... }
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-readonly class RequestForm {}
+readonly class RequestForm
+{
+}

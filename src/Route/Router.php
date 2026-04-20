@@ -19,6 +19,11 @@ use Flytachi\Winter\K2\Http\Response\RenderContext;
 use Flytachi\Winter\K2\Http\Response\ResponseEntity;
 use Flytachi\Winter\K2\Http\Response\ResponseException;
 use Flytachi\Winter\K2\Http\Response\Sendable;
+use Flytachi\Winter\K2\Http\Cors;
+use Flytachi\Winter\K2\Http\Health\Health;
+use Flytachi\Winter\K2\Http\Health\HealthIndicatorInterface;
+use Flytachi\Winter\K2\Plugin;
+use Flytachi\Winter\K2\Exception\ServerError;
 use Flytachi\Winter\K2\Stereotype\Middleware;
 use Flytachi\Winter\Base\HttpCode;
 
@@ -51,21 +56,6 @@ class Router
 
     private ?string $publicDir = null;
 
-    /**
-     * Global CORS configuration — applied to every route unless overridden
-     * by a per-route #[CrossOrigin] attribute.
-     *
-     * @var array{
-     *   origins: string[],
-     *   allowHeaders: string[],
-     *   exposeHeaders: string[],
-     *   credentials: bool,
-     *   maxAge: int,
-     *   vary: string[],
-     * }|null
-     */
-    private ?array $globalCors = null;
-
     // ── Static file serving ───────────────────────────────────────────────────
 
     /**
@@ -81,40 +71,26 @@ class Router
         return $this;
     }
 
-    // ── CORS configuration ────────────────────────────────────────────────────
-
-    /**
-     * Enable CORS globally for all routes.
-     *
-     * Per-route #[CrossOrigin] will override this config for that specific route.
-     *
-     * @param string[] $origins        Allowed origins. Empty = '*'.
-     * @param string[] $allowHeaders   Allowed request headers. Empty = reflect Access-Control-Request-Headers.
-     * @param string[] $exposeHeaders  Response headers exposed to JavaScript.
-     * @param bool     $credentials    Allow cookies/Authorization. Requires explicit origins (not '*').
-     * @param int      $maxAge         Preflight cache TTL in seconds.
-     * @param string[] $vary           Extra Vary header values.
-     */
-    public function cors(
-        array $origins       = [],
-        array $allowHeaders  = [],
-        array $exposeHeaders = [],
-        bool  $credentials   = false,
-        int   $maxAge        = 0,
-        array $vary          = [],
-    ): static {
-        $this->globalCors = compact('origins', 'allowHeaders', 'exposeHeaders', 'credentials', 'maxAge', 'vary');
-        return $this;
-    }
-
     // ── Route registration ────────────────────────────────────────────────────
 
     /**
      * @param list<array{class: class-string<Middleware>, args: array}> $middlewares
-     * @param array{origins:string[],allowHeaders:string[],exposeHeaders:string[],credentials:bool,maxAge:int,vary:string[]}|null $cors
+     * @param array{
+     *     origins:string[],
+     *     allowHeaders:string[],
+     *     exposeHeaders:string[],
+     *     credentials:bool,
+     *     maxAge:int,
+     *     vary:string[]
+     * }|null $cors
      */
-    public function add(string $method, string $path, mixed $handler, array $middlewares = [], ?array $cors = null): static
-    {
+    public function add(
+        string $method,
+        string $path,
+        mixed $handler,
+        array $middlewares = [],
+        ?array $cors = null
+    ): static {
         $this->dispatcher = null;
 
         $method = strtoupper($method);
@@ -142,12 +118,30 @@ class Router
         return $this;
     }
 
-    public function get(string $path, mixed $handler): static    { return $this->add('GET',    $path, $handler); }
-    public function post(string $path, mixed $handler): static   { return $this->add('POST',   $path, $handler); }
-    public function put(string $path, mixed $handler): static    { return $this->add('PUT',    $path, $handler); }
-    public function patch(string $path, mixed $handler): static  { return $this->add('PATCH',  $path, $handler); }
-    public function delete(string $path, mixed $handler): static { return $this->add('DELETE', $path, $handler); }
-    public function options(string $path, mixed $handler): static{ return $this->add('OPTIONS',$path, $handler); }
+    public function get(string $path, mixed $handler): static
+    {
+        return $this->add('GET', $path, $handler);
+    }
+    public function post(string $path, mixed $handler): static
+    {
+        return $this->add('POST', $path, $handler);
+    }
+    public function put(string $path, mixed $handler): static
+    {
+        return $this->add('PUT', $path, $handler);
+    }
+    public function patch(string $path, mixed $handler): static
+    {
+        return $this->add('PATCH', $path, $handler);
+    }
+    public function delete(string $path, mixed $handler): static
+    {
+        return $this->add('DELETE', $path, $handler);
+    }
+    public function options(string $path, mixed $handler): static
+    {
+        return $this->add('OPTIONS', $path, $handler);
+    }
 
     // ── Factory methods ───────────────────────────────────────────────────────
 
@@ -161,6 +155,20 @@ class Router
     {
         $router = new static();
         MappingScanner::scan($rootDir, $router, $exclude);
+
+        foreach (Plugin::getPlugins() as $prefix => $path) {
+            $pluginSrc = $path . '/src';
+            if (is_dir($pluginSrc)) {
+                MappingScanner::scan($pluginSrc, $router, [], $prefix);
+            }
+        }
+
+        if ($health = Health::getConfig()) {
+            Health::setRootDir($rootDir);
+            Health::setMappings($router->getRoutesSummary());
+            $router->registerHealth($health['indicator'], $health['middleware']);
+        }
+
         ExceptionWrapper::configure($rootDir);
         return $router;
     }
@@ -181,6 +189,35 @@ class Router
         $router = new static();
         MappingScanner::scanDeclared($router);
         return $router;
+    }
+
+    // ── Health / Actuator ─────────────────────────────────────────────────────
+
+    private function registerHealth(string $indicatorClass, ?string $middlewareClass): void
+    {
+        $middlewares = $middlewareClass !== null
+            ? [['class' => $middlewareClass, 'args' => []]]
+            : [];
+
+        $handler = static function (
+            HttpRequest $req,
+            HttpResponse $res,
+            array $params
+        ) use ($indicatorClass): ResponseEntity {
+            $method = $params['method'] ?? 'health';
+
+            /** @var HealthIndicatorInterface $indicator */
+            $indicator = new $indicatorClass();
+
+            if (!method_exists($indicator, $method)) {
+                throw new ResponseException('Actuator endpoint not found', HttpCode::NOT_FOUND);
+            }
+
+            return ResponseEntity::ok($indicator->{$method}());
+        };
+
+        $this->add('GET', '/actuator', $handler, $middlewares);
+        $this->add('GET', '/actuator/{method}', $handler, $middlewares);
     }
 
     // ── Dispatch ──────────────────────────────────────────────────────────────
@@ -211,7 +248,10 @@ class Router
         Locale::initFromRequest();
 
         if (Runtime::isSwooleCoroutine()) {
-            \Swoole\Coroutine::getContext()['__request_start'] = microtime(true);
+            $ctx = \Swoole\Coroutine::getContext();
+            $ctx['__request_start']  = microtime(true);
+            $ctx['__request_method'] = $request->getMethod();
+            $ctx['__request_uri']    = $request->getUri();
         }
 
         if ($this->publicDir !== null && strtoupper($request->getMethod()) === 'GET') {
@@ -233,14 +273,14 @@ class Router
 
             if (env('DEBUG', false)) {
                 LoggerRegistry::instance('Router')->debug(
-                    "Handle ". $request->getClientIp()
+                    "Handle " . $request->getClientIp()
                     . " [$method] " . $request->getUri()
                 );
             }
 
             // ── Global CORS applied eagerly (covers 404, 405, and errors too) ─
-            if ($this->globalCors !== null) {
-                $this->writeCorsHeaders($request, $response, $this->globalCors);
+            if (Cors::getConfig() !== null) {
+                $this->writeCorsHeaders($request, $response, Cors::getConfig());
             }
 
             // ── OPTIONS preflight — intercept before route dispatch ───────────
@@ -252,7 +292,7 @@ class Router
             $result = $this->dispatch($method, $request->getUri());
 
             // ── Per-route #[CrossOrigin] overrides global CORS ────────────────
-            if ($this->globalCors !== null && $result->status === RouteResult::FOUND) {
+            if (Cors::getConfig() !== null && $result->status === RouteResult::FOUND) {
                 $routeCors = $this->extractRouteCors($result->handler);
                 if ($routeCors !== null) {
                     $this->writeCorsHeaders($request, $response, $routeCors);
@@ -263,7 +303,8 @@ class Router
                 RouteResult::FOUND => $this->invoke($result->handler, $request, $response, $result->params),
 
                 RouteResult::METHOD_NOT_ALLOWED => throw (new ResponseException(
-                    'Method Not Allowed', HttpCode::METHOD_NOT_ALLOWED
+                    'Method Not Allowed',
+                    HttpCode::METHOD_NOT_ALLOWED
                 ))->withHeader('Allow', implode(', ', $result->allowedMethods)),
 
                 default => throw new ResponseException('Not Found', HttpCode::NOT_FOUND),
@@ -303,7 +344,7 @@ class Router
                 $object    = ReflectionCache::controller($class);
                 $refMethod = ReflectionCache::method($class, $methodName);
                 $args      = ParameterResolver::resolve($refMethod, $req, $res, $params);
-                    if (env('DEBUG', false)) {
+                if (env('DEBUG', false)) {
                     RenderContext::setMeta($class, $methodName);
                 }
                 $result    = $refMethod->invokeArgs($object, $args);
@@ -322,7 +363,6 @@ class Router
             } elseif ($result !== null) {
                 ResponseEntity::ok($result)->send($res);
             }
-
         } catch (\Throwable $e) {
             $this->sendError($e, $res);
         }
@@ -413,7 +453,7 @@ class Router
         }
         // else NOT_FOUND: path doesn't exist — respond 204 with minimal headers
 
-        $cors = $routeCors ?? $this->globalCors;
+        $cors = $routeCors ?? Cors::getConfig();
         if ($cors !== null) {
             $this->writeCorsHeaders($req, $res, $cors, $methods, preflight: true);
         }
@@ -425,12 +465,17 @@ class Router
     /**
      * Write CORS headers onto a response.
      *
-     * @param array    $cors      CORS config array (same shape as globalCors)
+     * @param array    $cors      CORS config array (same shape as Cors::getConfig())
      * @param string[] $methods   HTTP methods to advertise (preflight only)
      * @param bool     $preflight true → also write Allow-Methods / Allow-Headers / Max-Age
      */
-    private function writeCorsHeaders(HttpRequest $req, HttpResponse $res, array $cors, array $methods = [], bool $preflight = false): void
-    {
+    private function writeCorsHeaders(
+        HttpRequest $req,
+        HttpResponse $res,
+        array $cors,
+        array $methods = [],
+        bool $preflight = false
+    ): void {
         $origins = $cors['origins'];
 
         // ── Access-Control-Allow-Origin ──────────────────────────────────────
@@ -516,7 +561,7 @@ class Router
     // ── Debug helpers ─────────────────────────────────────────────────────────
 
     /** @return list<array{method:string, path:string, handler:string}> */
-    private function getRoutesSummary(): array
+    public function getRoutesSummary(): array
     {
         $routes = [];
 
@@ -527,7 +572,11 @@ class Router
         }
 
         foreach ($this->dynamicRoutes as $route) {
-            $routes[] = ['method' => $route->method, 'path' => $route->path, 'handler' => $this->formatHandler($route->handler)];
+            $routes[] = [
+                'method' => $route->method,
+                'path' => $route->path,
+                'handler' => $this->formatHandler($route->handler)
+            ];
         }
 
         usort($routes, static fn($a, $b) => strcmp($a['path'], $b['path']));
@@ -561,10 +610,14 @@ class Router
                 'NULL'              => '<span style="color:#999">null</span>',
                 'boolean'           => '<span style="color:#00ff00">' . var_export($value, true) . '</span>',
                 'integer', 'double' => '<span style="color:#00ffff">' . var_export($value, true) . '</span>',
-                'object'            => '<span style="color:#ff7033">' . htmlspecialchars(print_r($value, true), ENT_QUOTES) . '</span>',
-                'array'             => '<span style="color:#cb71ff">' . htmlspecialchars(print_r($value, true), ENT_QUOTES) . '</span>',
-                'string'            => '<span style="color:#e4ff6c">' . htmlspecialchars(var_export($value, true), ENT_QUOTES) . '</span>',
-                default             => '<span style="color:#fa5151">' . htmlspecialchars(var_export($value, true), ENT_QUOTES) . '</span>',
+                'object'            => '<span style="color:#ff7033">'
+                        . htmlspecialchars(print_r($value, true), ENT_QUOTES) . '</span>',
+                'array'             => '<span style="color:#cb71ff">'
+                        . htmlspecialchars(print_r($value, true), ENT_QUOTES) . '</span>',
+                'string'            => '<span style="color:#e4ff6c">'
+                        . htmlspecialchars(var_export($value, true), ENT_QUOTES) . '</span>',
+                default             => '<span style="color:#fa5151">'
+                        . htmlspecialchars(var_export($value, true), ENT_QUOTES) . '</span>',
             };
             $rows .= $rendered;
             if ($i < $count - 1) {

@@ -6,7 +6,9 @@ namespace Flytachi\Winter\K2\Route\Annotation;
 
 abstract class AbstractMapping
 {
-    public function __construct(public readonly string $url = '') {}
+    public function __construct(public readonly string $url = '')
+    {
+    }
 
     public function getMethod(): ?string
     {

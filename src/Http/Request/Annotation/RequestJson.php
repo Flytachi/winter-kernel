@@ -16,4 +16,6 @@ use Attribute;
  *   public function store(#[RequestJson] UserCreateRequest $body): ResponseEntity { ... }
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-readonly class RequestJson {}
+readonly class RequestJson
+{
+}

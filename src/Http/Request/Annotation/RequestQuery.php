@@ -24,4 +24,6 @@ use Attribute;
  *   }
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-readonly class RequestQuery {}
+readonly class RequestQuery
+{
+}

@@ -4,7 +4,9 @@ namespace Flytachi\Winter\Kernel\Core;
 
 use Flytachi\FileStore\FileStorage;
 use Flytachi\FileStore\FileStorageException;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 abstract class KernelStore extends KernelConfig
 {
     /* @var array<string, FileStorage> $storages */

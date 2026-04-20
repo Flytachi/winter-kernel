@@ -9,7 +9,9 @@ use Flytachi\Winter\Cache\Config\Common\RedisConfigInterface;
 use Flytachi\Winter\Cdo\Config\Common\DbConfigInterface;
 use Flytachi\Winter\Kernel\Factory\Mapping;
 use Flytachi\Winter\Kernel\Kernel;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 class HealthIndicator implements HealthIndicatorInterface
 {
     private const int DEGRADED_THRESHOLD_MS = 500;

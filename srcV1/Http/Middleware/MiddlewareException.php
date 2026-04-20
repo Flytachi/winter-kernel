@@ -19,9 +19,9 @@ use JetBrains\PhpStorm\Deprecated;
 class MiddlewareException extends \RuntimeException
 {
     public function __construct(
-        string           $message  = '',
+        string $message = '',
         private HttpCode $httpCode = HttpCode::UNAUTHORIZED,
-        ?\Throwable      $previous = null,
+        ?\Throwable $previous = null,
     ) {
         parent::__construct($message, $httpCode->value, $previous);
     }

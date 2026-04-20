@@ -6,7 +6,7 @@ namespace Flytachi\Winter\Console\Command;
 
 use Composer\InstalledVersions;
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\K2\Kernel;
 
 class Help extends Cmd
 {
@@ -56,7 +56,7 @@ class Help extends Cmd
         self::printDivider($cl);
 
         self::printInfo("Run 'call help <command>' for detailed usage.");
-        self::printInfo("Docs: https://winterframe.net/docs/2.0.0/cmd");
+        self::printInfo("Docs: https://winterframe.net/docs/3.0.0/cmd");
 
         self::printTitle("Winter Framework", $cl);
     }
@@ -74,10 +74,10 @@ class Help extends Cmd
 
         self::printLabel("Examples", $cl);
         self::printInfo("call help make");
-        self::printInfo("call help serve");
+        self::printInfo("call help run");
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net/docs/2.0.0/cmd-help");
+        self::printInfo("Docs: https://winterframe.net/docs/3.0.0/cmd-help");
 
         self::printTitle("Help", $cl);
     }

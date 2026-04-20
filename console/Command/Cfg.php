@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\K2\Kernel;
 
 class Cfg extends Cmd
 {
@@ -41,9 +41,6 @@ class Cfg extends Cmd
                     break;
                 case 'docker':
                     $this->dockerArg();
-                    break;
-                case 'openapi':
-                    $this->openapiArg();
                     break;
                 case 'completion':
                     $this->completionArg();
@@ -210,21 +207,6 @@ class Cfg extends Cmd
         self::printBadge('Dockerfile', 'CREATED', 34, 32);
     }
 
-    private function openapiArg(): void
-    {
-        $filePath = Kernel::$pathRoot . '/main/OpenApiController.php';
-        if (!file_exists($filePath)) {
-            $code = file_get_contents($this->templatePath . '/Packages/OpenApiTemplate');
-            $fp   = fopen($filePath, "x");
-            fwrite($fp, $code);
-            fclose($fp);
-            self::printBadge('OpenApiController', 'CREATED', 34, 32);
-            self::printInfo("file://$filePath");
-        } else {
-            self::printBadge('OpenApiController', 'EXISTS', 34, 33);
-        }
-    }
-
     private function completionArg(): void
     {
         $home  = $_SERVER['HOME'] ?? getenv('HOME') ?: '';
@@ -329,8 +311,7 @@ class Cfg extends Cmd
         self::printBadge('key', 'manage WINTER_KEY (project security key)', $cl, 36);
         self::printBadge('env', 'manage .env environment file', $cl, 36);
         self::printBadge('docker', 'scaffold Docker configuration files', $cl, 36);
-        self::printBadge('openapi', 'create OpenAPI controller stub', $cl, 36);
-        self::printBadge('completion', 'install shell tab completion (bash)', $cl, 36);
+        self::printBadge('completion', 'install shell tab completion (bash/zsh)', $cl, 36);
         self::printLabel("Commands", $cl);
 
         // key
@@ -357,14 +338,13 @@ class Cfg extends Cmd
         self::printInfo("call cfg env -s");
         self::printInfo("call cfg env -s --file");
         self::printInfo("call cfg docker");
-        self::printInfo("call cfg openapi");
         self::printInfo("call cfg completion        (print scripts to stdout)");
         self::printInfo("call cfg completion -i     (install: ~/.zsh/completions/_call or ~/.bash_completion.d/call)");
         self::printInfo("call cfg completion -if    (force update installed file)");
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net/docs/2.0.0/cmd-cfg");
+        self::printInfo("Docs: https://winterframe.net/docs/3.0.0/cmd-cfg");
 
         self::printTitle("Config Help", $cl);
     }

@@ -16,4 +16,6 @@ use Attribute;
  *   public function store(#[RequestBody] UserCreateRequest $body): ResponseEntity { ... }
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-readonly class RequestBody {}
+readonly class RequestBody
+{
+}

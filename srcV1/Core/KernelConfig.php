@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Core;
 
+use JetBrains\PhpStorm\Deprecated;
+
+#[Deprecated]
 abstract class KernelConfig
 {
     public static string $pathRoot;

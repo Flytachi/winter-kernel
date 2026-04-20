@@ -32,7 +32,9 @@ final class ExceptionWrapper
 
     private static ?string $rootDir = null;
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     /**
      * Set the project root to scan for #[AdviceException] handlers.
@@ -101,7 +103,8 @@ final class ExceptionWrapper
             try {
                 $ref = new ReflectionClass($className);
 
-                if ($ref->isAbstract()
+                if (
+                    $ref->isAbstract()
                     || !$ref->implementsInterface(ResponseExceptionInterface::class)
                 ) {
                     continue;

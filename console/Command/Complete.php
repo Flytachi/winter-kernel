@@ -8,8 +8,8 @@ use Composer\Autoload\ClassLoader;
 use Flytachi\Winter\Console\Core;
 use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\Console\Inc\CmdCustom;
-use Flytachi\Winter\Kernel\Kernel;
-use Flytachi\Winter\Kernel\Process\Core\Dispatchable;
+use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\K2\Process\Core\Dispatchable;
 
 class Complete extends Cmd
 {
@@ -46,7 +46,6 @@ class Complete extends Cmd
             'key:manage WINTER_KEY',
             'env:manage .env file',
             'docker:scaffold Docker files',
-            'openapi:create OpenAPI controller stub',
             'completion:install shell tab completion',
         ],
         'cfg key'        => ['-g:generate WINTER_KEY', '-s:show current key'],
@@ -57,7 +56,7 @@ class Complete extends Cmd
         'run' => [
             'dev:start PHP built-in dev server',
             '--host=:bind host (default: 0.0.0.0)',
-            '--port=:bind port (default: 9501)',
+            '--port=:bind port (default: 8000)',
             '--workers=:number of Swoole workers',
             '--tasks=:number of Swoole task workers',
             '--max_request=:max requests per worker',
@@ -69,15 +68,8 @@ class Complete extends Cmd
             '--port=:bind port (default: 8000)',
         ],
 
-        // --- serve ---
-        'serve' => ['--host=:bind host (default: 0.0.0.0)', '--port=:bind port (default: 8000)'],
-
         // --- mapping ---
-        'mapping' => [
-            'show:display all registered routes (app + plugins)',
-            'build:generate and cache route mapping files',
-            'clean:delete cached route mapping files',
-        ],
+        'mapping' => [],   // takes optional URL pattern directly, no subcommands
 
         // --- storage ---
         'storage' => [
@@ -100,7 +92,7 @@ class Complete extends Cmd
             'migrate:run migrations against connected databases',
             'sql:preview generated SQL without executing',
         ],
-        'db ping'    => ['--plugin=:target a single plugin', '--plugins:target all plugins'],
+        'db ping'    => [],   // auto-scans project + all plugins
         'db migrate' => [
             '-s:schemes only', '-t:tables only', '-i:indexes only', '-c:constraints only',
             '--plugin=:target a single plugin', '--plugins:target all plugins',

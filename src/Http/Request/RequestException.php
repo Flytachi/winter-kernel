@@ -20,8 +20,8 @@ use Flytachi\Winter\K2\Http\Response\ResponseException;
 class RequestException extends ResponseException
 {
     public function __construct(
-        string      $message  = '',
-        HttpCode    $httpCode = HttpCode::BAD_REQUEST,
+        string $message = '',
+        HttpCode $httpCode = HttpCode::BAD_REQUEST,
         ?\Throwable $previous = null,
     ) {
         parent::__construct($message, $httpCode, $previous);

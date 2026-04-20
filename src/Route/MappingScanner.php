@@ -28,15 +28,46 @@ class MappingScanner
      * @param string   $rootDir
      * @param Router   $router
      * @param string[] $exclude  Directories to skip (absolute paths)
+     * @param string   $prefix   URL prefix prepended to every route (used for plugins)
      */
-    public static function scan(string $rootDir, Router $router, array $exclude = []): void
+    public static function scan(string $rootDir, Router $router, array $exclude = [], string $prefix = ''): void
     {
         $files   = self::findPhpFiles($rootDir, $exclude);
         $classes = self::resolveControllerClasses($files);
 
         foreach ($classes as $ref) {
-            self::registerController($ref, $router);
+            self::registerController($ref, $router, $prefix);
         }
+    }
+
+    /**
+     * Scan $rootDir for non-abstract classes implementing $interface.
+     *
+     * @return list<ReflectionClass>
+     */
+    public static function scanImplementors(string $rootDir, string $interface): array
+    {
+        $files        = self::findPhpFiles($rootDir, []);
+        $loaders      = ClassLoader::getRegisteredLoaders();
+        $loader       = reset($loaders);
+        $namespaceMap = $loader->getPrefixesPsr4();
+        $classes      = [];
+
+        foreach ($files as $realPath) {
+            $className = self::pathToClassName($realPath, $namespaceMap);
+            if ($className === null || !class_exists($className)) {
+                continue;
+            }
+            try {
+                $ref = new ReflectionClass($className);
+                if (!$ref->isAbstract() && $ref->implementsInterface($interface)) {
+                    $classes[] = $ref;
+                }
+            } catch (ReflectionException) {
+            }
+        }
+
+        return $classes;
     }
 
     /**
@@ -137,7 +168,7 @@ class MappingScanner
 
     // ── Route registration ────────────────────────────────────────────────────
 
-    private static function registerController(ReflectionClass $ref, Router $router): void
+    private static function registerController(ReflectionClass $ref, Router $router, string $pluginPrefix = ''): void
     {
         // Class-level prefix via #[RequestMapping('/prefix')]
         $classPrefix = '';
@@ -170,7 +201,7 @@ class MappingScanner
                     ? $classPrefix . '/' . $mapping->getUrl()
                     : ($classPrefix ?: $mapping->getUrl());
 
-                $url = '/' . $url;
+                $url = $pluginPrefix . '/' . ltrim($url, '/');
 
                 $handler = [$ref->getName(), $method->getName()];
 
@@ -213,7 +244,14 @@ class MappingScanner
      * Extract CORS config from a single #[CrossOrigin] attribute, or null if absent.
      *
      * @param  ReflectionAttribute[] $attrs
-     * @return array{origins:string[],allowHeaders:string[],exposeHeaders:string[],credentials:bool,maxAge:int,vary:string[]}|null
+     * @return array{
+     *     origins:string[],
+     *     allowHeaders:string[],
+     *     exposeHeaders:string[],
+     *     credentials:bool,
+     *     maxAge:int,
+     *     vary:string[]
+     * }|null
      */
     private static function collectCrossOrigin(array $attrs): ?array
     {

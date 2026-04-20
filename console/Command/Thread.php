@@ -6,8 +6,9 @@ namespace Flytachi\Winter\Console\Command;
 
 use Composer\Autoload\ClassLoader;
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\Kernel\Kernel;
-use Flytachi\Winter\Kernel\Process\Core\Dispatchable;
+use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\K2\Plugin;
+use Flytachi\Winter\K2\Process\Core\Dispatchable;
 
 class Thread extends Cmd
 {
@@ -88,6 +89,7 @@ class Thread extends Cmd
         $namespaceMap = $loader->getPrefixesPsr4();
 
         $vendorPath = realpath(Kernel::$pathRoot . '/vendor');
+        $pluginRealPaths = array_filter(array_map('realpath', Plugin::getPlugins()));
 
         $threads = [];
         foreach ($namespaceMap as $nsPrefix => $dirs) {
@@ -97,7 +99,16 @@ class Thread extends Cmd
                     continue;
                 }
                 if ($vendorPath && str_starts_with($realDir, $vendorPath)) {
-                    continue;
+                    $isPlugin = false;
+                    foreach ($pluginRealPaths as $pluginPath) {
+                        if (str_starts_with($realDir, $pluginPath)) {
+                            $isPlugin = true;
+                            break;
+                        }
+                    }
+                    if (!$isPlugin) {
+                        continue;
+                    }
                 }
                 $files = new \RecursiveIteratorIterator(
                     new \RecursiveDirectoryIterator($realDir, \FilesystemIterator::SKIP_DOTS)
@@ -186,7 +197,7 @@ class Thread extends Cmd
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net/docs/2.0.0/cmd-thread");
+        self::printInfo("Docs: https://winterframe.net/docs/3.0.0/cmd-thread");
 
         self::printTitle("Thread Help", $cl);
     }

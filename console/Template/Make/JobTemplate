@@ -2,7 +2,7 @@
 
 namespace __namespace__;
 
-use Flytachi\Winter\Kernel\Stereotype\Job;
+use Flytachi\Winter\K2\Stereotype\Job;
 
 class __className__ extends Job
 {

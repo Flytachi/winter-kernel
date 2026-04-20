@@ -13,7 +13,9 @@ use Swoole\Http\Response;
  */
 final class SwooleResponse implements HttpResponse
 {
-    public function __construct(private readonly Response $response) {}
+    public function __construct(private readonly Response $response)
+    {
+    }
 
     public function status(int $code): void
     {

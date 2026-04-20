@@ -35,7 +35,9 @@ class ResponseEntity implements Sendable
     private mixed $body    = null;
     private array $headers = [];
 
-    private function __construct(private HttpCode $code) {}
+    private function __construct(private HttpCode $code)
+    {
+    }
 
     // ── Status factories ──────────────────────────────────────────────────────
 
@@ -115,9 +117,18 @@ class ResponseEntity implements Sendable
 
     // ── Accessors ─────────────────────────────────────────────────────────────
 
-    public function getCode(): HttpCode { return $this->code; }
-    public function getBody(): mixed    { return $this->body; }
-    public function getHeaders(): array { return $this->headers; }
+    public function getCode(): HttpCode
+    {
+        return $this->code;
+    }
+    public function getBody(): mixed
+    {
+        return $this->body;
+    }
+    public function getHeaders(): array
+    {
+        return $this->headers;
+    }
 
     // ── Serialization ─────────────────────────────────────────────────────────
 

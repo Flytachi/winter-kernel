@@ -7,7 +7,8 @@ namespace Flytachi\Winter\Console\Command;
 use Composer\Autoload\ClassLoader;
 use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\Console\Inc\CmdCustom;
-use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\K2\Plugin;
 
 class Script extends Cmd
 {
@@ -74,6 +75,7 @@ class Script extends Cmd
         $namespaceMap = $loader->getPrefixesPsr4();
 
         $vendorPath = realpath(Kernel::$pathRoot . '/vendor');
+        $pluginRealPaths = array_filter(array_map('realpath', Plugin::getPlugins()));
 
         $scripts = [];
         foreach ($namespaceMap as $nsPrefix => $dirs) {
@@ -83,7 +85,16 @@ class Script extends Cmd
                     continue;
                 }
                 if ($vendorPath && str_starts_with($realDir, $vendorPath)) {
-                    continue;
+                    $isPlugin = false;
+                    foreach ($pluginRealPaths as $pluginPath) {
+                        if (str_starts_with($realDir, $pluginPath)) {
+                            $isPlugin = true;
+                            break;
+                        }
+                    }
+                    if (!$isPlugin) {
+                        continue;
+                    }
                 }
                 $files = new \RecursiveIteratorIterator(
                     new \RecursiveDirectoryIterator($realDir, \FilesystemIterator::SKIP_DOTS)

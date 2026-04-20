@@ -73,8 +73,12 @@ class MemoryWatcher
 
     private function format(int $bytes): string
     {
-        if ($bytes >= 1024 * 1024) return round($bytes / 1024 / 1024, 2) . ' MB';
-        if ($bytes >= 1024)        return round($bytes / 1024, 2) . ' KB';
+        if ($bytes >= 1024 * 1024) {
+            return round($bytes / 1024 / 1024, 2) . ' MB';
+        }
+        if ($bytes >= 1024) {
+            return round($bytes / 1024, 2) . ' KB';
+        }
         return $bytes . ' B';
     }
 
@@ -82,8 +86,12 @@ class MemoryWatcher
     {
         $sign = $bytes >= 0 ? '+' : '-';
         $abs  = abs($bytes);
-        if ($abs >= 1024 * 1024) return $sign . round($abs / 1024 / 1024, 2) . ' MB';
-        if ($abs >= 1024)        return $sign . round($abs / 1024, 2) . ' KB';
+        if ($abs >= 1024 * 1024) {
+            return $sign . round($abs / 1024 / 1024, 2) . ' MB';
+        }
+        if ($abs >= 1024) {
+            return $sign . round($abs / 1024, 2) . ' KB';
+        }
         return $sign . $abs . ' B';
     }
 }

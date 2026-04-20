@@ -46,9 +46,9 @@ class ParameterResolver
 {
     public static function resolve(
         ReflectionMethod $method,
-        HttpRequest      $request,
-        HttpResponse     $response,
-        array            $pathParams,
+        HttpRequest $request,
+        HttpResponse $response,
+        array $pathParams,
     ): array {
         $args = [];
         foreach (ReflectionCache::parameters($method->class, $method->name) as $param) {
@@ -59,9 +59,9 @@ class ParameterResolver
 
     private static function resolveParam(
         ReflectionParameter $param,
-        HttpRequest         $request,
-        HttpResponse        $response,
-        array               $pathParams,
+        HttpRequest $request,
+        HttpResponse $response,
+        array $pathParams,
     ): mixed {
         $type     = $param->getType() instanceof ReflectionNamedType ? $param->getType() : null;
         $typeName = $type?->getName();
@@ -79,8 +79,12 @@ class ParameterResolver
             $val = $request->getQueryParams()[$key] ?? null;
 
             if ($val === null) {
-                if ($param->isDefaultValueAvailable()) return $param->getDefaultValue();
-                if ($type?->allowsNull())              return null;
+                if ($param->isDefaultValueAvailable()) {
+                    return $param->getDefaultValue();
+                }
+                if ($type?->allowsNull()) {
+                    return null;
+                }
                 RequestException::throw("Required query parameter '{$key}' is missing");
             }
 
@@ -116,7 +120,8 @@ class ParameterResolver
             }
 
             // variadic RequestObject (MyDto ...$items) → JSON-массив в коллекцию DTO
-            if ($param->isVariadic() && $typeName !== null
+            if (
+                $param->isVariadic() && $typeName !== null
                 && is_subclass_of($typeName, RequestObject::class)
             ) {
                 $items = json_decode($raw, true);
@@ -145,8 +150,12 @@ class ParameterResolver
 
             $file = $files[$name] ?? null;
             if ($file === null) {
-                if ($param->isDefaultValueAvailable()) return $param->getDefaultValue();
-                if ($type?->allowsNull())              return null;
+                if ($param->isDefaultValueAvailable()) {
+                    return $param->getDefaultValue();
+                }
+                if ($type?->allowsNull()) {
+                    return null;
+                }
                 RequestException::throw("Uploaded file '{$name}' is missing");
             }
 
@@ -193,8 +202,12 @@ class ParameterResolver
             $val = $request->getHeader($raw);
 
             if ($val === null) {
-                if ($param->isDefaultValueAvailable()) return $param->getDefaultValue();
-                if ($type?->allowsNull())              return null;
+                if ($param->isDefaultValueAvailable()) {
+                    return $param->getDefaultValue();
+                }
+                if ($type?->allowsNull()) {
+                    return null;
+                }
                 RequestException::throw("Required header '{$raw}' is missing");
             }
 
@@ -212,14 +225,20 @@ class ParameterResolver
         // ── Path param by name (no annotation) ───────────────────────────────
         if (array_key_exists($param->getName(), $pathParams)) {
             return self::required(
-                $pathParams[$param->getName()], $param, $typeName,
+                $pathParams[$param->getName()],
+                $param,
+                $typeName,
                 "Path param '{$param->getName()}'"
             );
         }
 
         // ── Default / nullable fallback ───────────────────────────────────────
-        if ($param->isDefaultValueAvailable()) return $param->getDefaultValue();
-        if ($type?->allowsNull())              return null;
+        if ($param->isDefaultValueAvailable()) {
+            return $param->getDefaultValue();
+        }
+        if ($type?->allowsNull()) {
+            return null;
+        }
 
         throw new \RuntimeException(sprintf(
             "Cannot resolve parameter '\$%s' in %s::%s() — add an annotation or a default value",
@@ -247,8 +266,12 @@ class ParameterResolver
         if ($val !== null) {
             return self::cast($val, $typeName);
         }
-        if ($param->isDefaultValueAvailable()) return $param->getDefaultValue();
-        if ($param->getType()?->allowsNull())  return null;
+        if ($param->isDefaultValueAvailable()) {
+            return $param->getDefaultValue();
+        }
+        if ($param->getType()?->allowsNull()) {
+            return null;
+        }
 
         RequestException::throw("{$label} is required but missing");
     }

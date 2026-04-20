@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\K2\Ppa\Declaration;
+use Flytachi\Winter\K2\Ppa\DeclarationItem;
 use Flytachi\Winter\K2\Ppa\PPAMapping;
 use Flytachi\Winter\K2\Ppa\Mapping\Structure\Table;
-use Flytachi\Winter\Kernel\Factory\Plugin;
+use Flytachi\Winter\K2\Plugin;
 
 class Db extends Cmd
 {
@@ -84,22 +84,23 @@ class Db extends Cmd
 
     private function ping(): void
     {
-        foreach ($this->resolveTargets() as $label => $rootDir) {
-            $declaration = PPAMapping::scanningDeclaration($rootDir);
+        $targets = ['Project' => null] + Plugin::getPlugins();
+        foreach ($targets as $label => $rootDir) {
+            $configs = PPAMapping::scanningConfigs($rootDir);
 
-            $seen = [];
-            foreach ($declaration->getItems() as $item) {
-                $configClass = $item->config::class;
-                if (isset($seen[$configClass])) {
-                    continue;
-                }
-                $seen[$configClass] = true;
+            if (empty($configs)) {
+                self::printWarning("[$label] No DB configs found — nothing to ping.");
+                continue;
+            }
 
-                $detail = $item->config->pingDetail();
+            foreach ($configs as $config) {
+                $configClass = $config::class;
+                $config->setUp();
+                $detail = $config->pingDetail();
 
                 self::printLabel("[$label] $configClass", 34);
-                self::printKeyValue("driver", $item->config->getDriver(), 12, 34, 36);
-                self::printKeyValue("dsn", $item->config->getDns(), 12, 34, 36);
+                self::printKeyValue("driver", $config->getDriver(), 12, 34, 36);
+                self::printKeyValue("dsn", $config->getDns(), 12, 34, 36);
                 if ($detail['status']) {
                     self::printKeyValue("latency", round($detail['latency'], 2) . ' ms', 12, 34, 36);
                     self::printBadge($configClass, 'OK', 34, 32);
@@ -110,10 +111,6 @@ class Db extends Cmd
                     }
                 }
             }
-
-            if (empty($seen)) {
-                self::printWarning("[$label] No repositories found — nothing to ping.");
-            }
         }
     }
 
@@ -121,9 +118,9 @@ class Db extends Cmd
     {
         foreach ($this->resolveTargets() as $label => $rootDir) {
             $declaration = PPAMapping::scanningDeclaration($rootDir);
-            $data = $this->processDeclarationData($declaration);
 
             foreach ($declaration->getItems() as $item) {
+                $data = $this->processItemData($item);
                 self::printLabel("[$label] " . $item->config::class, 34);
 
                 if (in_array('s', $this->args['flags']) && count($data['sqlSchemes']) > 0) {
@@ -167,9 +164,9 @@ class Db extends Cmd
     {
         foreach ($this->resolveTargets() as $label => $rootDir) {
             $declaration = PPAMapping::scanningDeclaration($rootDir);
-            $data = $this->processDeclarationData($declaration);
 
             foreach ($declaration->getItems() as $item) {
+                $data = $this->processItemData($item);
                 self::printLabel("[$label] " . $item->config::class, 34);
                 $db = $item->config->connection();
 
@@ -269,47 +266,45 @@ class Db extends Cmd
     /**
      * @return array{sqlSchemes: array, sqlTables: array, sqlIndexes: array, sqlConstraints: array}
      */
-    private function processDeclarationData(Declaration $declaration): array
+    private function processItemData(DeclarationItem $item): array
     {
         $sqlSchemes = [];
         $sqlTables = [];
         $sqlIndexes = [];
         $sqlConstraints = [];
 
-        foreach ($declaration->getItems() as $item) {
-            $item->config->setUp();
+        $item->config->setUp();
 
-            foreach ($item->getTables() as $structure) {
-                if ($structure instanceof Table) {
-                    $schemaSql = $structure->createSchemaIfNotExists($item->config->getDriver());
-                    if ($schemaSql !== null) {
-                        $title = str_replace(';', '', str_replace('CREATE SCHEMA ', '', $schemaSql));
-                        if (!isset($sqlSchemes[$title])) {
-                            $sqlSchemes[$title] = ['title' => $title, 'exec' => $schemaSql];
-                        }
+        foreach ($item->getTables() as $structure) {
+            if ($structure instanceof Table) {
+                $schemaSql = $structure->createSchemaIfNotExists($item->config->getDriver());
+                if ($schemaSql !== null) {
+                    $title = str_replace(';', '', str_replace('CREATE SCHEMA ', '', $schemaSql));
+                    if (!isset($sqlSchemes[$title])) {
+                        $sqlSchemes[$title] = ['title' => $title, 'exec' => $schemaSql];
                     }
-                    $sql = $structure->toSql($item->config->getDriver());
-                    $exp = explode(PHP_EOL . ');' . PHP_EOL, $sql);
+                }
+                $sql = $structure->toSql($item->config->getDriver());
+                $exp = explode(PHP_EOL . ');' . PHP_EOL, $sql);
 
-                    $sqlTables[] = [
-                        'title' => $structure->getFullName(),
-                        'exec' => (count($exp) == 1 ? $exp[0] : $exp[0] . PHP_EOL . ');')
-                    ];
-                    if (count($exp) > 1) {
-                        foreach (explode(PHP_EOL, $exp[1]) as $line) {
-                            if (str_starts_with($line, 'ALTER TABLE')) {
-                                preg_match('/ADD\s+CONSTRAINT\s+([a-zA-Z0-9_]+)/i', $line, $match);
-                                $sqlConstraints[] = [
-                                    'title' => "constraint '" . ($match[1] ?? 'unknown') . "'",
-                                    'exec'  => $line,
-                                ];
-                            } else {
-                                preg_match('/\bINDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_]+)/i', $line, $match);
-                                $sqlIndexes[] = [
-                                    'title' => "index '" . ($match[1] ?? 'unknown') . "'",
-                                    'exec'  => $line,
-                                ];
-                            }
+                $sqlTables[] = [
+                    'title' => $structure->getFullName(),
+                    'exec' => (count($exp) == 1 ? $exp[0] : $exp[0] . PHP_EOL . ');')
+                ];
+                if (count($exp) > 1) {
+                    foreach (explode(PHP_EOL, $exp[1]) as $line) {
+                        if (str_starts_with($line, 'ALTER TABLE')) {
+                            preg_match('/ADD\s+CONSTRAINT\s+([a-zA-Z0-9_]+)/i', $line, $match);
+                            $sqlConstraints[] = [
+                                'title' => "constraint '" . ($match[1] ?? 'unknown') . "'",
+                                'exec'  => $line,
+                            ];
+                        } else {
+                            preg_match('/\bINDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_]+)/i', $line, $match);
+                            $sqlIndexes[] = [
+                                'title' => "index '" . ($match[1] ?? 'unknown') . "'",
+                                'exec'  => $line,
+                            ];
                         }
                     }
                 }
@@ -366,7 +361,7 @@ class Db extends Cmd
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net/docs/2.0.0/cmd-db");
+        self::printInfo("Docs: https://winterframe.net/docs/3.0.0/cmd-db");
 
         self::printTitle("Db Help", $cl);
     }

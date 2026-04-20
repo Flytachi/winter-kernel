@@ -72,13 +72,17 @@ final class FpmRequest implements HttpRequest
         if (!empty($_SERVER['HTTP_FORWARDED'])) {
             if (preg_match('/for=["\']?([^;,"\'\s\]]+)/i', $_SERVER['HTTP_FORWARDED'], $m)) {
                 $ip = trim($m[1], '"\'[]');
-                if (filter_var($ip, FILTER_VALIDATE_IP)) return $ip;
+                if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                    return $ip;
+                }
             }
         }
 
         if (!empty($_SERVER['HTTP_X_REAL_IP'])) {
             $ip = trim($_SERVER['HTTP_X_REAL_IP']);
-            if (filter_var($ip, FILTER_VALIDATE_IP)) return $ip;
+            if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                return $ip;
+            }
         }
 
         if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {

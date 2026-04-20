@@ -20,7 +20,7 @@ class ExceptionResponseBase implements ResponseExceptionInterface
 {
     use ResponseTrait;
 
-    protected HttpCode   $httpCode;
+    protected HttpCode $httpCode;
     protected \Throwable $throwable;
 
     public function __construct(\Throwable $throwable)
@@ -160,7 +160,9 @@ class ExceptionResponseBase implements ResponseExceptionInterface
                     <span style="font-size:1.2rem;color:#fff">
                         <span style="color:#{$color};font-weight:bold">[{$code}] Winter Debug: </span>{$class}
                     </span>
-                    <span style="font-style:italic;color:#adadad">{$this->throwable->getFile()}:{$this->throwable->getLine()}</span>
+                    <span style="font-style:italic;color:#adadad">
+                        {$this->throwable->getFile()}:{$this->throwable->getLine()}
+                    </span>
                 </div>
                 <hr style="border:1px solid #999">
                 <pre style="margin:10px;white-space:pre-wrap;word-wrap:break-word">
@@ -189,12 +191,22 @@ class ExceptionResponseBase implements ResponseExceptionInterface
             if ($i === 0) {
                 $line .= ($f['file'] ?? $e->getFile()) . ' (' . ($f['line'] ?? $e->getLine()) . '): ';
             } else {
-                if (isset($f['file'])) $line .= $f['file'];
-                if (isset($f['line'])) $line .= ' (' . $f['line'] . '): ';
+                if (isset($f['file'])) {
+                    $line .= $f['file'];
+                }
+                if (isset($f['line'])) {
+                    $line .= ' (' . $f['line'] . '): ';
+                }
             }
-            if (isset($f['class']))    $line .= $f['class'];
-            if (isset($f['type']))     $line .= $f['type'];
-            if (isset($f['function'])) $line .= $f['function'];
+            if (isset($f['class'])) {
+                $line .= $f['class'];
+            }
+            if (isset($f['type'])) {
+                $line .= $f['type'];
+            }
+            if (isset($f['function'])) {
+                $line .= $f['function'];
+            }
             $out[] = $line;
         }
     }

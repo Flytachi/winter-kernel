@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Http\Health;
 
+use JetBrains\PhpStorm\Deprecated;
+
+#[Deprecated]
 interface HealthIndicatorInterface
 {
     public function health(array $args = []): array;

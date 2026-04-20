@@ -17,7 +17,9 @@ use Swoole\Http\Request;
  */
 final class SwooleRequest implements HttpRequest
 {
-    public function __construct(private readonly Request $request) {}
+    public function __construct(private readonly Request $request)
+    {
+    }
 
     public function getMethod(): string
     {
@@ -71,13 +73,17 @@ final class SwooleRequest implements HttpRequest
         if (!empty($h['forwarded'])) {
             if (preg_match('/for=["\']?([^;,"\'\s\]]+)/i', $h['forwarded'], $m)) {
                 $ip = trim($m[1], '"\'[]');
-                if (filter_var($ip, FILTER_VALIDATE_IP)) return $ip;
+                if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                    return $ip;
+                }
             }
         }
 
         if (!empty($h['x-real-ip'])) {
             $ip = trim($h['x-real-ip']);
-            if (filter_var($ip, FILTER_VALIDATE_IP)) return $ip;
+            if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                return $ip;
+            }
         }
 
         if (!empty($h['x-forwarded-for'])) {

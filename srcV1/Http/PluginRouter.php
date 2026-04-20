@@ -12,7 +12,9 @@ use Flytachi\Winter\Kernel\Factory\Mapping;
 use Flytachi\Winter\Kernel\Factory\Middleware\Cors\AccessControl;
 use Flytachi\Winter\Kernel\Factory\Plugin;
 use Flytachi\Winter\Kernel\Kernel;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 class PluginRouter extends HttpRouter implements ActuatorItemInterface
 {
     use RoutingTrait;

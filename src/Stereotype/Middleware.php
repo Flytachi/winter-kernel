@@ -19,7 +19,9 @@ use Flytachi\Winter\K2\Http\Middleware\MiddlewareInterface;
  */
 abstract class Middleware implements MiddlewareInterface
 {
-    public function before(HttpRequest $request, HttpResponse $response): void {}
+    public function before(HttpRequest $request, HttpResponse $response): void
+    {
+    }
 
     public function after(mixed $result): mixed
     {

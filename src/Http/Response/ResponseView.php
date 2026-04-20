@@ -6,7 +6,7 @@ namespace Flytachi\Winter\K2\Http\Response;
 
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
-use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\K2\Kernel;
 
 /**
  * PHP template response — port of ViewBase + View.

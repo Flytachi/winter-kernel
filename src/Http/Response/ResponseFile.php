@@ -6,7 +6,7 @@ namespace Flytachi\Winter\K2\Http\Response;
 
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
-use Flytachi\Winter\Kernel\File\XML;
+use Flytachi\Winter\K2\File\XML;
 use SimpleXMLElement;
 
 /**
@@ -27,21 +27,21 @@ use SimpleXMLElement;
  */
 class ResponseFile implements Sendable
 {
-    private string   $body;
-    private array    $extraHeaders = [];
-    private bool     $isAttachment;
-    private int      $maxAge;
+    private string $body;
+    private array $extraHeaders = [];
+    private bool $isAttachment;
+    private int $maxAge;
     private HttpCode $httpCode;
-    private string   $fileName;
-    private string   $mimeType;
+    private string $fileName;
+    private string $mimeType;
 
     private function __construct(
-        string   $body,
-        string   $fileName,
-        string   $mimeType,
-        bool     $isAttachment,
+        string $body,
+        string $fileName,
+        string $mimeType,
+        bool $isAttachment,
         HttpCode $httpCode,
-        int      $maxAge,
+        int $maxAge,
     ) {
         $this->body         = $body;
         $this->fileName     = $fileName;
@@ -54,45 +54,45 @@ class ResponseFile implements Sendable
     // ── Factory methods ───────────────────────────────────────────────────────
 
     public static function binary(
-        mixed    $data,
-        string   $fileName,
-        string   $mimeType    = 'application/octet-stream',
-        bool     $isAttachment = true,
-        HttpCode $httpCode    = HttpCode::OK,
-        int      $maxAge      = 0,
+        mixed $data,
+        string $fileName,
+        string $mimeType = 'application/octet-stream',
+        bool $isAttachment = true,
+        HttpCode $httpCode = HttpCode::OK,
+        int $maxAge = 0,
     ): static {
         return new static(print_r($data, true), $fileName, $mimeType, $isAttachment, $httpCode, $maxAge);
     }
 
     public static function txt(
-        mixed    $data,
-        string   $fileName,
-        string   $mimeType    = 'text/plain',
-        bool     $isAttachment = false,
-        HttpCode $httpCode    = HttpCode::OK,
-        int      $maxAge      = 0,
+        mixed $data,
+        string $fileName,
+        string $mimeType = 'text/plain',
+        bool $isAttachment = false,
+        HttpCode $httpCode = HttpCode::OK,
+        int $maxAge = 0,
     ): static {
         return new static((string) $data, $fileName, $mimeType, $isAttachment, $httpCode, $maxAge);
     }
 
     public static function csv(
-        array    $rows,
-        string   $fileName,
-        string   $mimeType    = 'text/csv',
-        bool     $isAttachment = true,
-        HttpCode $httpCode    = HttpCode::OK,
-        int      $maxAge      = 0,
+        array $rows,
+        string $fileName,
+        string $mimeType = 'text/csv',
+        bool $isAttachment = true,
+        HttpCode $httpCode = HttpCode::OK,
+        int $maxAge = 0,
     ): static {
         return new static(self::buildCsv($rows), $fileName, $mimeType, $isAttachment, $httpCode, $maxAge);
     }
 
     public static function json(
         array|string $data,
-        string       $fileName,
-        string       $mimeType    = 'application/json',
-        bool         $isAttachment = false,
-        HttpCode     $httpCode    = HttpCode::OK,
-        int          $maxAge      = 0,
+        string $fileName,
+        string $mimeType = 'application/json',
+        bool $isAttachment = false,
+        HttpCode $httpCode = HttpCode::OK,
+        int $maxAge = 0,
     ): static {
         $body = is_array($data) ? json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : $data;
         return new static($body, $fileName, $mimeType, $isAttachment, $httpCode, $maxAge);
@@ -100,11 +100,11 @@ class ResponseFile implements Sendable
 
     public static function xml(
         SimpleXMLElement|\stdClass|array|string|int|bool $data,
-        string   $fileName,
-        string   $mimeType    = 'application/xml',
-        bool     $isAttachment = false,
-        HttpCode $httpCode    = HttpCode::OK,
-        int      $maxAge      = 0,
+        string $fileName,
+        string $mimeType = 'application/xml',
+        bool $isAttachment = false,
+        HttpCode $httpCode = HttpCode::OK,
+        int $maxAge = 0,
     ): static {
         return new static(self::buildXml($data), $fileName, $mimeType, $isAttachment, $httpCode, $maxAge);
     }
@@ -114,10 +114,10 @@ class ResponseFile implements Sendable
      * Detects MIME type automatically.
      */
     public static function file(
-        string   $filePath,
-        bool     $isAttachment = false,
-        HttpCode $httpCode    = HttpCode::OK,
-        int      $maxAge      = 0,
+        string $filePath,
+        bool $isAttachment = false,
+        HttpCode $httpCode = HttpCode::OK,
+        int $maxAge = 0,
     ): static {
         if (!file_exists($filePath)) {
             throw new \RuntimeException("File not found: {$filePath}");

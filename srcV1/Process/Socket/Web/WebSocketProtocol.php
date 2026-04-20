@@ -4,6 +4,7 @@ namespace Flytachi\Winter\Kernel\Process\Socket\Web;
 
 use Flytachi\Winter\Kernel\Process\Socket\Web\PDU\DecodedFrame;
 use Flytachi\Winter\Kernel\Process\Socket\Web\PDU\Msg;
+use JetBrains\PhpStorm\Deprecated;
 
 /**
  * Handles the encoding and decoding of WebSocket frames according to RFC 6455.
@@ -12,6 +13,7 @@ use Flytachi\Winter\Kernel\Process\Socket\Web\PDU\Msg;
  * and parse incoming frames back into structured messages. It is stateless
  * and can be used without instantiation.
  */
+#[Deprecated]
 final class WebSocketProtocol
 {
     private function __construct()

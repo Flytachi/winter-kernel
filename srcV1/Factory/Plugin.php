@@ -4,8 +4,10 @@ namespace Flytachi\Winter\Kernel\Factory;
 
 use Composer\InstalledVersions;
 use Flytachi\Winter\Kernel\Exception\Error;
+use JetBrains\PhpStorm\Deprecated;
 use OutOfBoundsException;
 
+#[Deprecated]
 final class Plugin
 {
     /**

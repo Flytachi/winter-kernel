@@ -12,7 +12,9 @@ namespace Flytachi\Winter\K2\Localization;
  */
 final class LanguageNegotiator
 {
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     /**
      * @param string   $acceptLanguage  Value of Accept-Language header
@@ -21,7 +23,7 @@ final class LanguageNegotiator
      */
     public static function negotiate(
         string $acceptLanguage,
-        array  $available,
+        array $available,
         string $default,
     ): string {
         if (empty($acceptLanguage) || empty($available)) {

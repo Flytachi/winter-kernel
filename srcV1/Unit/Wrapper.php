@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Kernel\Unit;
 
 use Flytachi\Winter\Cdo\Connection\CDOStatement;
 use Flytachi\Winter\K2\Ppa\Entity\RepositoryInterface;
+use JetBrains\PhpStorm\Deprecated;
 use TypeError;
 
 /**
@@ -26,6 +27,7 @@ use TypeError;
  * @version 3.0
  * @author Flytachi
  */
+#[Deprecated]
 final class Wrapper
 {
     private static int $maxList = 10;

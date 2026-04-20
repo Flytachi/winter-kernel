@@ -28,13 +28,15 @@ use Flytachi\Winter\Base\Runtime;
  */
 final class Locale
 {
-    private static string  $basePath = '';
-    private static string  $default  = 'en';
+    private static string $basePath = '';
+    private static string $default  = 'en';
 
     /** FPM fallback — used when not inside a Swoole coroutine. */
     private static ?LocaleService $static = null;
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     // ── Configuration ─────────────────────────────────────────────────────────
 

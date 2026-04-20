@@ -25,12 +25,13 @@ use Flytachi\Winter\Base\Tool;
 class LocaleService
 {
     private array $dictionary = [];
-    private bool  $loaded     = false;
+    private bool $loaded     = false;
 
     public function __construct(
         private readonly string $langPath,
         private readonly string $lang,
-    ) {}
+    ) {
+    }
 
     public function getLang(): string
     {

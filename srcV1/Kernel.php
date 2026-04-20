@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Kernel;
 
 use Flytachi\Winter\Base\Log\LoggerRegistry;
 use Flytachi\Winter\Thread\Thread;
+use JetBrains\PhpStorm\Deprecated;
 use Monolog\Formatter\LineFormatter;
 use Monolog\Handler\FilterHandler;
 use Monolog\Handler\RotatingFileHandler;
@@ -24,6 +25,7 @@ use Psr\Log\NullLogger;
  * @version 1.5
  * @author Flytachi
  */
+#[Deprecated]
 final class Kernel extends KernelStore
 {
     public static function init(

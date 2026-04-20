@@ -13,7 +13,7 @@ readonly class Route
     public function __construct(
         public string $method,
         public string $path,
-        public mixed  $handler,
+        public mixed $handler,
     ) {
         [$this->regex, $this->paramNames] = self::compile($path);
     }

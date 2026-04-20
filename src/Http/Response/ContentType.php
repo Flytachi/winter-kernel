@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Http\Response;
 
-use Flytachi\Winter\Kernel\File\XML;
+use Flytachi\Winter\K2\File\XML;
 
 enum ContentType: string
 {

@@ -9,5 +9,8 @@ use Attribute;
 #[Attribute(Attribute::TARGET_METHOD | Attribute::IS_REPEATABLE)]
 class PutMapping extends AbstractMapping
 {
-    public function getMethod(): string { return 'PUT'; }
+    public function getMethod(): string
+    {
+        return 'PUT';
+    }
 }

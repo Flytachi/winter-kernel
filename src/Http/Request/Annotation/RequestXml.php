@@ -18,4 +18,6 @@ use Attribute;
  * ```
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-readonly class RequestXml {}
+readonly class RequestXml
+{
+}

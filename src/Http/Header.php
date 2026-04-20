@@ -28,7 +28,9 @@ final class Header
     /** FPM fallback storage */
     private static array $bag = [];
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     // ── Initialization ────────────────────────────────────────────────────────
 
@@ -62,12 +64,30 @@ final class Header
         return self::storage();
     }
 
-    public static function getIpAddress(): ?string      { return self::storage()['Ip-Address']     ?? null; }
-    public static function getUserAgent(): ?string      { return self::storage()['User-Agent']      ?? null; }
-    public static function getContentType(): ?string    { return self::storage()['Content-Type']    ?? null; }
-    public static function getAcceptLanguage(): ?string { return self::storage()['Accept-Language'] ?? null; }
-    public static function getOrigin(): ?string         { return self::storage()['Origin']          ?? null; }
-    public static function getReferer(): ?string        { return self::storage()['Referer']         ?? null; }
+    public static function getIpAddress(): ?string
+    {
+        return self::storage()['Ip-Address']     ?? null;
+    }
+    public static function getUserAgent(): ?string
+    {
+        return self::storage()['User-Agent']      ?? null;
+    }
+    public static function getContentType(): ?string
+    {
+        return self::storage()['Content-Type']    ?? null;
+    }
+    public static function getAcceptLanguage(): ?string
+    {
+        return self::storage()['Accept-Language'] ?? null;
+    }
+    public static function getOrigin(): ?string
+    {
+        return self::storage()['Origin']          ?? null;
+    }
+    public static function getReferer(): ?string
+    {
+        return self::storage()['Referer']         ?? null;
+    }
 
     public static function getPreferredLanguage(): ?string
     {

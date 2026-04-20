@@ -9,7 +9,9 @@ use Flytachi\Winter\Kernel\Factory\Middleware\MiddlewareInterface;
 use Flytachi\Winter\Kernel\Stereotype\ControllerInterface;
 use Flytachi\Winter\Mapping\Annotation\AbstractMapping;
 use Flytachi\Winter\Mapping\MappingRequestInterface;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 #[Attribute(Attribute::TARGET_CLASS | Attribute::IS_REPEATABLE)]
 class PluginMapping
 {

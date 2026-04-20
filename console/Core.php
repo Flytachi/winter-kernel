@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Console;
 
-use Flytachi\Winter\Base\Interface\ActuatorItemInterface;
 use Flytachi\Winter\Console\Inc\CoreHandle;
 
-class Core extends CoreHandle implements ActuatorItemInterface
+class Core extends CoreHandle
 {
     /** Short aliases → Command class name */
     protected static array $aliases = [

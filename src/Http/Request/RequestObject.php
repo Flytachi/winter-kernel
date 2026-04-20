@@ -102,13 +102,15 @@ abstract class RequestObject
             return static::json($request, $required);
         }
 
-        if (str_contains($ct, 'multipart/form-data')
+        if (
+            str_contains($ct, 'multipart/form-data')
             || str_contains($ct, 'application/x-www-form-urlencoded')
         ) {
             return static::form($request, $required);
         }
 
-        if (str_contains($ct, 'application/xml')
+        if (
+            str_contains($ct, 'application/xml')
             || str_contains($ct, 'text/xml')
         ) {
             return static::xml($request, $required);
@@ -128,7 +130,9 @@ abstract class RequestObject
      *            ->validate('age',   ['numeric', 'range:0,150'], required: false);
      *   }
      */
-    public function rules(): void {}
+    public function rules(): void
+    {
+    }
 
     /**
      * Validate a field using rule strings or callables.
@@ -141,10 +145,10 @@ abstract class RequestObject
      * @param array<callable|string> $rules
      */
     final protected function validate(
-        string  $field,
-        array   $rules,
-        bool    $required = true,
-        ?string $message  = null,
+        string $field,
+        array $rules,
+        bool $required = true,
+        ?string $message = null,
     ): static {
         $value = $this->get($field);
 
@@ -236,17 +240,25 @@ abstract class RequestObject
     private static function castToConstructorTypes(array $data): array
     {
         $constructor = (new \ReflectionClass(static::class))->getConstructor();
-        if ($constructor === null) return $data;
+        if ($constructor === null) {
+            return $data;
+        }
 
         foreach ($constructor->getParameters() as $param) {
             $name = $param->getName();
-            if (!array_key_exists($name, $data)) continue;
+            if (!array_key_exists($name, $data)) {
+                continue;
+            }
 
             $type = $param->getType();
-            if (!$type instanceof \ReflectionNamedType || !$type->isBuiltin()) continue;
+            if (!$type instanceof \ReflectionNamedType || !$type->isBuiltin()) {
+                continue;
+            }
 
             $value = $data[$name];
-            if ($value === null) continue;
+            if ($value === null) {
+                continue;
+            }
 
             $data[$name] = match ($type->getName()) {
                 'int'    => (int)   $value,
@@ -286,17 +298,21 @@ abstract class RequestObject
                                               || $fail("Field '{$field}' must be a valid URL"),
             'ip'                       => (is_string($value) && filter_var($value, FILTER_VALIDATE_IP))
                                               || $fail("Field '{$field}' must be a valid IP"),
-            'ipv4', 'ip4'              => (is_string($value) && filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4))
+            'ipv4', 'ip4'              => (is_string($value)
+                                        && filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4))
                                               || $fail("Field '{$field}' must be a valid IPv4"),
-            'ipv6', 'ip6'              => (is_string($value) && filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6))
+            'ipv6', 'ip6'              => (is_string($value)
+                                        && filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6))
                                               || $fail("Field '{$field}' must be a valid IPv6"),
             'uuid'                     => (is_string($value) && preg_match(
-                                    '/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
-                                              $value)) || $fail("Field '{$field}' must be a valid UUID"),
+                '/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+                $value
+            )) || $fail("Field '{$field}' must be a valid UUID"),
             'msisdn'                   => (is_string($value) && preg_match('/^\+[1-9]\d{6,14}$/', $value))
                                               || $fail("Field '{$field}' must be a valid MSISDN (E.164)"),
-            'phone'                    => (is_string($value) && preg_match('/^\+?\d[\d\s\-\(\)]{5,20}$/', $value))
-                                              || $fail("Field '{$field}' must be a valid phone number"),
+            'phone'                    => (is_string($value)
+                                            && preg_match('/^\+?\d[\d\s\-\(\)]{5,20}$/', $value))
+                                            || $fail("Field '{$field}' must be a valid phone number"),
             'length', 'len'            => $this->ruleLength($field, $value, $params, $fail),
             'range', 'rg'              => $this->ruleRange($field, $value, $params, $fail),
             'in'                       => $this->ruleIn($field, $value, $params, $fail),

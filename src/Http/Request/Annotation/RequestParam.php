@@ -21,5 +21,7 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PARAMETER)]
 readonly class RequestParam
 {
-    public function __construct(public ?string $name = null) {}
+    public function __construct(public ?string $name = null)
+    {
+    }
 }

@@ -9,5 +9,8 @@ use Attribute;
 #[Attribute(Attribute::TARGET_METHOD | Attribute::IS_REPEATABLE)]
 class DeleteMapping extends AbstractMapping
 {
-    public function getMethod(): string { return 'DELETE'; }
+    public function getMethod(): string
+    {
+        return 'DELETE';
+    }
 }

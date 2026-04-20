@@ -18,5 +18,7 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PARAMETER)]
 readonly class RequestHeader
 {
-    public function __construct(public ?string $name = null) {}
+    public function __construct(public ?string $name = null)
+    {
+    }
 }

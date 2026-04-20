@@ -9,7 +9,9 @@ use Flytachi\Winter\Kernel\Process\Socket\Web\PDU\Msg;
 use Flytachi\Winter\Kernel\Process\Socket\Web\PDU\WSResource;
 use Flytachi\Winter\Kernel\Process\Traits\ThreadSignalHandler;
 use Flytachi\Winter\Thread\ThreadException;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 abstract class ThreadWebSocket extends Dispatch
 {
     use SocketWebServerHandler;

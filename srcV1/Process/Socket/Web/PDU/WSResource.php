@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Process\Socket\Web\PDU;
 
+use JetBrains\PhpStorm\Deprecated;
+
 /**
  * Wraps a client connection resource, holding its state and buffers.
  */
+#[Deprecated]
 class WSResource
 {
     /** @var resource The raw socket connection resource. */

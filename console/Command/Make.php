@@ -6,7 +6,7 @@ namespace Flytachi\Winter\Console\Command;
 
 use Composer\Autoload\ClassLoader;
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\K2\Kernel;
 
 class Make extends Cmd
 {
@@ -27,7 +27,7 @@ class Make extends Cmd
             self::printInfo("Help:    call make [--help or -h]");
         } elseif (!count($this->args['flags'])) {
             self::printWarning("Specify template types with flags");
-            self::printInfo("Example: call make -asrm .Example");
+            self::printInfo("Example: call make -csrm .Example");
             self::printInfo("Help:    call make [--help or -h]");
         } else {
             $this->resolution();
@@ -582,14 +582,14 @@ class Make extends Cmd
         self::printDivider($cl);
 
         self::printLabel("Examples", $cl);
-        self::printInfo("call make .User -asre");
-        self::printInfo("call make api.user.Profile -a");
-        self::printInfo("call make .Order -asre --mvc");
-        self::printInfo("call make acme.app.http.User -a");
+        self::printInfo("call make .User -csre");
+        self::printInfo("call make api.user.Profile -c");
+        self::printInfo("call make .Order -csre --mvc");
+        self::printInfo("call make acme.app.http.User -c");
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net/docs/2.0.0/cmd-make");
+        self::printInfo("Docs: https://winterframe.net/docs/3.0.0/cmd-make");
 
         self::printTitle("Make Help", $cl);
     }

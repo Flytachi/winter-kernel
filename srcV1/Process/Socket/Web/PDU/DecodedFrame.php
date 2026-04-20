@@ -2,10 +2,13 @@
 
 namespace Flytachi\Winter\Kernel\Process\Socket\Web\PDU;
 
+use JetBrains\PhpStorm\Deprecated;
+
 /**
  * A Data Transfer Object returned by WebSocketProtocol::decode.
  * It contains the decoded message and the total length of the frame that was processed.
  */
+#[Deprecated]
 readonly class DecodedFrame
 {
     /**

@@ -29,19 +29,19 @@ final class RenderContext
     // ── Pending debug meta (Router → push, consumed once) ────────────────────
     private static ?string $pendingController = null;
     private static ?string $pendingMethod     = null;
-    private static array   $pendingRoutes     = [];
+    private static array $pendingRoutes     = [];
 
     // ── Instance fields ───────────────────────────────────────────────────────
     private ?string $controllerClass;
     private ?string $controllerMethod;
-    private array   $routes             = [];
-    private array   $resourceAdditional = [];
+    private array $routes             = [];
+    private array $resourceAdditional = [];
 
     private function __construct(
-        private readonly string  $basePath,
-        private readonly array   $data,
+        private readonly string $basePath,
+        private readonly array $data,
         private readonly ?string $templateName,
-        private readonly string  $resourceName,
+        private readonly string $resourceName,
     ) {
         [$this->controllerClass, $this->controllerMethod] = self::consumeMeta();
         $this->routes = self::consumeRoutes();
@@ -99,10 +99,10 @@ final class RenderContext
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     public static function push(
-        string  $basePath,
-        array   $data,
+        string $basePath,
+        array $data,
         ?string $templateName,
-        string  $resourceName,
+        string $resourceName,
     ): void {
         $ctx = new self($basePath, $data, $templateName, $resourceName);
 
@@ -217,13 +217,14 @@ final class RenderContext
         $routingRows = '';
         foreach ($this->routes as $r) {
             $m       = htmlspecialchars($r['method'], ENT_QUOTES);
-            $p       = htmlspecialchars($r['path'],   ENT_QUOTES);
+            $p       = htmlspecialchars($r['path'], ENT_QUOTES);
             $h       = htmlspecialchars($r['handler'], ENT_QUOTES);
             $color   = self::methodColor($r['method']);
             $routingRows .= <<<HTML
                 <tr style="border-bottom:1px solid #1a1a1a">
                     <td style="padding:4px 10px">
-                        <span style="background:$color;color:#fff;padding:2px 7px;border-radius:3px;font-size:11px;font-weight:bold">$m</span>
+                        <span style="background:$color;color:#fff;padding:2px 7px;
+                        border-radius:3px;font-size:11px;font-weight:bold">$m</span>
                     </td>
                     <td style="padding:4px 10px;color:#c3fc04;font-family:monospace">$p</td>
                     <td style="padding:4px 10px;color:#7ecfff;font-family:monospace;font-size:12px">$h</td>

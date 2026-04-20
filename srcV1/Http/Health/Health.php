@@ -11,7 +11,9 @@ use Flytachi\Winter\Kernel\Exception\ClientError;
 use Flytachi\Winter\Kernel\Factory\Middleware\MiddlewareInterface;
 use Flytachi\Winter\Kernel\Http\Rendering;
 use Flytachi\Winter\Kernel\Stereotype\Output\ResponseJson;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 final readonly class Health implements ActuatorItemInterface
 {
     /**

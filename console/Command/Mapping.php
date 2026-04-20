@@ -5,146 +5,47 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\Kernel\Factory\Mapping as MappingFactory;
-use Flytachi\Winter\Kernel\Factory\Plugin;
-use Flytachi\Winter\Kernel\Http\PluginRouter;
-use Flytachi\Winter\Kernel\Http\Router;
+use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\K2\Route\Router;
 
 class Mapping extends Cmd
 {
-    public static string $title = "manage route mapping cache (build, clean, show)";
+    public static string $title = "search registered routes by URL pattern";
 
     public function handle(): void
     {
         self::printTitle("Mapping", 34);
-
-        if (count($this->args['arguments']) > 1) {
-            $this->resolution();
-        } else {
-            self::help();
-        }
-
+        $this->searchArg($this->args['arguments'][1] ?? '');
         self::printTitle("Mapping", 34);
     }
 
-    private function resolution(): void
-    {
-        switch ($this->args['arguments'][1] ?? '') {
-            case 'show':
-                $this->showArg();
-                break;
-            case 'build':
-                $this->buildArg();
-                break;
-            case 'clean':
-                $this->cleanArg();
-                break;
-            default:
-                self::printWarning("Unknown argument '{$this->args['arguments'][1]}'");
-                self::printInfo("Run 'call mapping --help' to see available commands.");
-                break;
-        }
-    }
-
-    private function showArg(): void
+    private function searchArg(string $pattern): void
     {
         try {
-            // Project routes
-            $declaration = MappingFactory::scanningDeclaration();
-            $children    = $declaration->getChildren();
+            $router = Router::fromScan(Kernel::$pathRoot);
+            $routes = $router->getRoutesSummary();
 
-            self::printLabel("Project Routes", 34);
-            if (empty($children)) {
-                self::printInfo("No routes registered.");
+            $pattern = trim($pattern, '/');
+            $matched = $pattern === ''
+                ? $routes
+                : array_values(array_filter(
+                    $routes,
+                    fn($r) => str_contains(ltrim($r['path'], '/'), $pattern)
+                ));
+
+            $label = $pattern === '' ? 'Routes' : "Matched '$pattern'";
+            if (empty($matched)) {
+                self::printWarning("No routes matching '$pattern'.");
             } else {
-                foreach ($children as $item) {
-                    $key   = str_pad($item->getMethod() ?: '*', 7) . ' /' . ltrim($item->getUrl(), '/');
-                    $value = '→ ' . $item->getClassName() . '->' . $item->getClassMethod() . '()';
-                    self::printKeyValue($key, $value, 45, 34, 36);
+                self::printLabel("$label (" . count($matched) . ")", 34);
+                foreach ($matched as $route) {
+                    $key = str_pad($route['method'], 7) . ' ' . $route['path'];
+                    self::printKeyValue($key, '→ ' . $route['handler'], 45, 34, 36);
                 }
-            }
-            self::printLabel("Project Routes", 34);
-
-            // Plugin routes
-            $plugins = Plugin::getPlugins();
-            foreach ($plugins as $pluginPrefix => $pluginPath) {
-                $pluginDeclaration = MappingFactory::scanningDeclaration($pluginPath);
-                $pluginChildren    = $pluginDeclaration->getChildren();
-
-                self::printLabel("Plugin [$pluginPrefix]", 36);
-                if (empty($pluginChildren)) {
-                    self::printInfo("No routes registered.");
-                } else {
-                    foreach ($pluginChildren as $item) {
-                        $key   = str_pad($item->getMethod() ?: '*', 7)
-                            . " /{$pluginPrefix}/" . ltrim($item->getUrl(), '/');
-                        $value = '→ ' . $item->getClassName() . '->' . $item->getClassMethod() . '()';
-                        self::printKeyValue($key, $value, 45, 36, 37);
-                    }
-                }
-                self::printLabel("Plugin [$pluginPrefix]", 36);
+                self::printLabel($label, 34);
             }
         } catch (\Throwable $e) {
-            self::printWarning("Show failed: " . $e->getMessage());
-            if (env('DEBUG', false)) {
-                self::printTitle($e->getMessage(), 31);
-                self::printSplit($e->getTraceAsString(), 31);
-                self::printTitle($e->getMessage(), 31);
-            }
-        }
-    }
-
-    private function buildArg(): void
-    {
-        try {
-            $router = new Router();
-            $router->generateMappingRoutes();
-            self::printBadge("Project", 'BUILT', 34, 32);
-
-            $plugins = Plugin::getPlugins();
-            if (!empty($plugins)) {
-                $pluginRouter = new PluginRouter();
-                foreach ($plugins as $pluginPrefix => $pluginPath) {
-                    $pluginRouter->generateMappingRoutes($pluginPath, $pluginPrefix);
-                    self::printBadge("Plugin [$pluginPrefix]", 'BUILT', 36, 32);
-                }
-            }
-        } catch (\Throwable $e) {
-            self::printWarning("Build failed: " . $e->getMessage());
-            if (env('DEBUG', false)) {
-                self::printTitle($e->getMessage(), 31);
-                self::printSplit($e->getTraceAsString(), 31);
-                self::printTitle($e->getMessage(), 31);
-            }
-        }
-    }
-
-    private function cleanArg(): void
-    {
-        try {
-            $router = new Router();
-            if (file_exists($router->getPathMapping())) {
-                unlink($router->getPathMapping());
-                self::printBadge("Project", 'CLEANED', 34, 32);
-            } else {
-                self::printBadge("Project", 'SKIPPED', 34, 33);
-            }
-
-            $plugins = Plugin::getPlugins();
-            if (!empty($plugins)) {
-                $pluginRouter = new PluginRouter();
-                foreach ($plugins as $pluginPrefix => $pluginPath) {
-                    $pluginMappingFile = $pluginRouter->getFolderMapping() . $pluginPrefix . '.php';
-                    if (file_exists($pluginMappingFile)) {
-                        unlink($pluginMappingFile);
-                        self::printBadge("Plugin [$pluginPrefix]", 'CLEANED', 36, 32);
-                    } else {
-                        self::printBadge("Plugin [$pluginPrefix]", 'SKIPPED', 36, 33);
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            self::printWarning("Clean failed: " . $e->getMessage());
+            self::printWarning("Search failed: " . $e->getMessage());
             if (env('DEBUG', false)) {
                 self::printTitle($e->getMessage(), 31);
                 self::printSplit($e->getTraceAsString(), 31);
@@ -159,25 +60,19 @@ class Mapping extends Cmd
         self::printTitle("Mapping Help", $cl);
 
         self::printLabel("Usage", $cl);
-        self::print("call mapping [command]", $cl);
+        self::print("call mapping <url-pattern>", $cl);
         self::printLabel("Usage", $cl);
 
-        self::printLabel("Commands", $cl);
-        self::printBadge('show', 'display all registered routes (app + plugins)', $cl, 36);
-        self::printBadge('build', 'generate and cache route mapping files', $cl, 36);
-        self::printBadge('clean', 'delete cached route mapping files', $cl, 36);
-        self::printLabel("Commands", $cl);
-
         self::printDivider($cl);
 
         self::printLabel("Examples", $cl);
-        self::printInfo("call mapping show");
-        self::printInfo("call mapping build");
-        self::printInfo("call mapping clean");
+        self::printInfo("call mapping test/view");
+        self::printInfo("call mapping api/user");
+        self::printInfo("call mapping /health");
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net/docs/2.0.0/cmd-mapping");
+        self::printInfo("Docs: https://winterframe.net/docs/3.0.0/cmd-mapping");
 
         self::printTitle("Mapping Help", $cl);
     }
