@@ -7,7 +7,9 @@ namespace Flytachi\Winter\Kernel\Process\Core;
 use Flytachi\Winter\Base\Log\LoggerRegistry;
 use Flytachi\Winter\Thread\Thread;
 use Psr\Log\LoggerInterface;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 abstract class Dispatch implements Dispatchable
 {
     protected string $exNamespace = 'dispatch';

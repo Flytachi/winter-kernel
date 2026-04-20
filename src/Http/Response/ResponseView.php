@@ -117,13 +117,18 @@ class ResponseView implements Sendable
 
     private function renderContent(): string
     {
-        $content = $this->capture($this->resourcePath(), $this->data);
+        RenderContext::push(self::$basePath, $this->data, $this->templateName, $this->resourceName);
+        try {
+            $resource = $this->capture($this->resourcePath(), $this->data);
 
-        if ($this->templateName !== null) {
-            return $this->capture($this->templatePath(), [...$this->data, 'content' => $content]);
+            $html = $this->templateName !== null
+                ? $this->capture($this->templatePath(), [...$this->data, 'content' => $resource])
+                : $resource;
+
+            return $html . RenderContext::current()?->debugger();
+        } finally {
+            RenderContext::pop();
         }
-
-        return $content;
     }
 
     private function capture(string $filePath, array $data): string

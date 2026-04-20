@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Unit\DataTableNet;
 
+use JetBrains\PhpStorm\Deprecated;
+
+#[Deprecated]
 class DataTableNetResponse
 {
     public int $draw;

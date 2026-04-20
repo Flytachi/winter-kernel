@@ -6,7 +6,9 @@ namespace Flytachi\Winter\Kernel\Unit\DataTableNet;
 
 use Flytachi\Winter\Cdo\Qb;
 use Flytachi\Winter\K2\Ppa\Entity\RepositoryInterface;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 class DTNWrapper
 {
     /**

@@ -6,7 +6,9 @@ namespace Flytachi\Winter\Kernel\Process\Core;
 
 use Flytachi\FileStore\FileStorage;
 use Flytachi\Winter\Kernel\Kernel;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 final class DaemonStore
 {
     private string $mainKey;

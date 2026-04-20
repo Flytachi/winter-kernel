@@ -17,7 +17,9 @@ use Flytachi\Winter\Kernel\Process\Traits\ThreadDaemonHandler;
 use Flytachi\Winter\Kernel\Process\Traits\ThreadDaemonStatement;
 use Flytachi\Winter\Kernel\Process\Traits\ThreadSignalHandler;
 use Flytachi\Winter\Thread\Signal;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 abstract class ThreadDaemon extends Dispatch
 {
     use ThreadDaemonFork;

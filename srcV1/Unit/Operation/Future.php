@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Kernel\Unit\Operation;
 
 use Flytachi\Winter\Kernel\Exception\Error;
 use Flytachi\Winter\Thread\Thread;
+use JetBrains\PhpStorm\Deprecated;
 
 /**
  * Represents a handle to an ongoing background operation.
@@ -45,6 +46,7 @@ use Flytachi\Winter\Thread\Thread;
  * @see Operation::async()
  * @see OpResult
  */
+#[Deprecated]
 readonly class Future
 {
     /**

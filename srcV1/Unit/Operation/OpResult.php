@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Unit\Operation;
 
+use JetBrains\PhpStorm\Deprecated;
+
 /**
  * Immutable value object carrying the outcome of a background operation.
  *
@@ -33,6 +35,7 @@ namespace Flytachi\Winter\Kernel\Unit\Operation;
  * @see Future::get()
  * @see OperationRunnable::run()
  */
+#[Deprecated]
 readonly class OpResult
 {
     /**

@@ -2,7 +2,8 @@
 
 declare(strict_types=1);
 
-use Flytachi\Winter\Kernel\Localization\Locale;
+use Flytachi\Winter\K2\Localization\Locale;
+use Flytachi\Winter\K2\Http\Response\RenderContext;
 
 if (!function_exists('trans')) {
     /**
@@ -20,5 +21,36 @@ if (!function_exists('trans')) {
     function trans(string $key, ?array $params = null): string
     {
         return Locale::translate($key, $params);
+    }
+}
+
+if (!function_exists('wrImport')) {
+    function wrImport(string $resourceName): void
+    {
+        RenderContext::current()?->import($resourceName);
+    }
+}
+
+if (!function_exists('wrIsActiveLink')) {
+    function wrIsActiveLink(
+        string $link,
+        string $classNameSuccess = 'active',
+        string $classNameNone = ''
+    ): string {
+        return RenderContext::current()?->isActiveLink($link, $classNameSuccess, $classNameNone) ?? $classNameNone;
+    }
+}
+
+if (!function_exists('wrContent')) {
+    function wrContent(): void
+    {
+        echo RenderContext::current()?->getData('content') ?? '';
+    }
+}
+
+if (!function_exists('wrData')) {
+    function wrData(?string $valueKey = null): mixed
+    {
+        return RenderContext::current()?->getData($valueKey);
     }
 }

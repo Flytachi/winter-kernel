@@ -10,7 +10,9 @@ use Flytachi\Winter\Kernel\Process\Entity\TDStatus;
 use Flytachi\Winter\Kernel\Process\Entity\TInfo;
 use Flytachi\Winter\Kernel\Process\Entity\TStats;
 use Flytachi\Winter\Kernel\Process\Entity\TStatus;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 trait ThreadDaemonStatement
 {
     protected function preparation(): void

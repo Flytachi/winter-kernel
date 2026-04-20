@@ -7,7 +7,9 @@ namespace Flytachi\Winter\Kernel\Process;
 use Flytachi\Winter\Kernel\Process\Core\Dispatch;
 use Flytachi\Winter\Kernel\Process\Traits\ThreadJobHandler;
 use Flytachi\Winter\Kernel\Process\Traits\ThreadSignalHandler;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 abstract class ThreadJob extends Dispatch
 {
     use ThreadJobHandler;

@@ -6,7 +6,9 @@ namespace Flytachi\Winter\Kernel\Process\Traits;
 
 use Flytachi\Winter\Base\Log\LoggerRegistry;
 use RuntimeException;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 trait ThreadDaemonFork
 {
     /** @var bool $childrenPidSave Children process ids on/off */

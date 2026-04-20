@@ -7,7 +7,9 @@ namespace Flytachi\Winter\Kernel\Http\Res;
 use Flytachi\Winter\Kernel\Factory\Mapping;
 use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Kernel\Stereotype\Controller;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 final class ResourceTree
 {
     private static string $controllerClass;

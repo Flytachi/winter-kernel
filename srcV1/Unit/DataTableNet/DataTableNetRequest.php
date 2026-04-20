@@ -11,7 +11,9 @@ use Flytachi\Winter\Kernel\Unit\DataTableNet\Entity\DTNetColumn;
 use Flytachi\Winter\Kernel\Unit\DataTableNet\Entity\DTNetColumns;
 use Flytachi\Winter\Kernel\Unit\DataTableNet\Entity\DTNetOrder;
 use Flytachi\Winter\Kernel\Unit\DataTableNet\Entity\DTNetSearch;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 class DataTableNetRequest extends RequestObject
 {
     /** @var callable|null User-defined callback for filtering logic */

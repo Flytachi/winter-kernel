@@ -8,7 +8,9 @@ use Flytachi\Winter\Kernel\Process\Core\Dispatch;
 use Flytachi\Winter\Kernel\Process\Traits\ThreadProcessHandler;
 use Flytachi\Winter\Kernel\Process\Traits\ThreadSignalHandler;
 use Flytachi\Winter\Kernel\Process\Traits\ThreadFork;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 abstract class ThreadProcess extends Dispatch
 {
     use ThreadFork;

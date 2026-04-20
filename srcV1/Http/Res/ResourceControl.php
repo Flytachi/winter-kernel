@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Http\Res;
 
 use Flytachi\Winter\Kernel\Kernel;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 abstract class ResourceControl
 {
     final public static function import(string $resourceName): void

@@ -13,7 +13,9 @@ use Flytachi\Winter\Kernel\Http\Response\ResponseFileContentInterface;
 use Flytachi\Winter\Kernel\Http\Response\ResponseInterface;
 use Flytachi\Winter\Kernel\Http\Response\ViewInterface;
 use Flytachi\Winter\Thread\ThreadException;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 final class Rendering
 {
     private HttpCode $httpCode;

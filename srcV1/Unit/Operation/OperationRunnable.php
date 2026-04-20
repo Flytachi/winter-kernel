@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Kernel\Unit\Operation;
 
 use Flytachi\Winter\Base\Algorithm;
 use Flytachi\Winter\Thread\Runnable;
+use JetBrains\PhpStorm\Deprecated;
 
 /**
  * Internal Runnable that wraps a user-provided callable for background execution.
@@ -26,6 +27,7 @@ use Flytachi\Winter\Thread\Runnable;
  * @see Operation::async()
  * @see Future
  */
+#[Deprecated]
 final class OperationRunnable implements Runnable
 {
     /**

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Process\Traits;
 
+use JetBrains\PhpStorm\Deprecated;
+
+#[Deprecated]
 trait ThreadDaemonHandler
 {
     /**

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Process\Core;
 
 use Flytachi\Winter\Kernel\Kernel;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 final class DispatchStore
 {
     private static string $ES_NAME = 'dispatcher';

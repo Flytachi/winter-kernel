@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Http\Res;
 
+use JetBrains\PhpStorm\Deprecated;
+
+#[Deprecated]
 abstract class Resource extends ResourceControl
 {
     public static function isActiveLink(

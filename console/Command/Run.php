@@ -71,6 +71,7 @@ class Run extends Cmd
 
         \Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL);
         Runtime::boot(RuntimeMode::Swoole);
+        $router->static(Kernel::$pathPublic);
 
         $server = new \Swoole\Http\Server($host, $port);
         $config = [];

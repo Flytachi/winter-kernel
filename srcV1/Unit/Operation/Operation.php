@@ -8,6 +8,7 @@ use Closure;
 use Flytachi\FileStore\FileStorage;
 use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Thread\Thread;
+use JetBrains\PhpStorm\Deprecated;
 
 /**
  * Entry point for dispatching background tasks.
@@ -33,6 +34,7 @@ use Flytachi\Winter\Thread\Thread;
  * @see Future
  * @see OperationRunnable
  */
+#[Deprecated]
 final class Operation
 {
     /**

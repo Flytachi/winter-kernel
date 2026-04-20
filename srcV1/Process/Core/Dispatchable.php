@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Process\Core;
 
 use Flytachi\Winter\Thread\Runnable;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 interface Dispatchable extends Runnable
 {
     public static function dispatch(mixed $data = null): int;

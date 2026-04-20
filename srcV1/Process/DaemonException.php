@@ -6,7 +6,9 @@ namespace Flytachi\Winter\Kernel\Process;
 
 use Flytachi\Winter\Base\Exception\Exception;
 use Psr\Log\LogLevel;
+use JetBrains\PhpStorm\Deprecated;
 
+#[Deprecated]
 class DaemonException extends Exception
 {
     protected string $logLevel = LogLevel::CRITICAL;

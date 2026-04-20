@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Unit\DataTableNet\Entity;
 
+use JetBrains\PhpStorm\Deprecated;
+
+#[Deprecated]
 class DTNetColumns
 {
     /** @var DTNetColumn[] */

@@ -45,13 +45,16 @@ class ExceptionResponseBase implements ResponseExceptionInterface
     {
         $contentType = AcceptHeaderParser::getBestMatch(Header::get('Accept'));
 
-        // Structured output only — anything other than XML defaults to JSON
+        if ($contentType === ContentType::HTML) {
+            $this->addHeader('Content-Type', $contentType->headerFullValue());
+            return $this->contentHtml();
+        }
+
         if ($contentType !== ContentType::XML) {
             $contentType = ContentType::JSON;
         }
 
         $this->addHeader('Content-Type', $contentType->headerFullValue());
-
         return $contentType->serialize($this->contentData());
     }
 
@@ -109,9 +112,11 @@ class ExceptionResponseBase implements ResponseExceptionInterface
             'memory'   => round($memory / 1024, 2) . ' KB',
         ];
 
-        if (defined('WINTER_STARTUP_TIME')) {
-            $delta         = round(microtime(true) - WINTER_STARTUP_TIME, 3);
-            $debug['time'] = $delta < 0.001 ? 0.001 : $delta;
+        $start = \Flytachi\Winter\Base\Runtime::isSwooleCoroutine()
+            ? (\Swoole\Coroutine::getContext()['__request_start'] ?? null)
+            : (defined('WINTER_STARTUP_TIME') ? WINTER_STARTUP_TIME : null);
+        if ($start !== null) {
+            $debug['time'] = max(round(microtime(true) - $start, 3), 0.001);
         }
 
         return [
@@ -134,9 +139,10 @@ class ExceptionResponseBase implements ResponseExceptionInterface
             4 => 'ffff00', 5 => 'ff0000', default => 'dddddd',
         };
 
-        $delta = defined('WINTER_STARTUP_TIME')
-            ? max(0.001, round(microtime(true) - WINTER_STARTUP_TIME, 3))
-            : null;
+        $start = \Flytachi\Winter\Base\Runtime::isSwooleCoroutine()
+            ? (\Swoole\Coroutine::getContext()['__request_start'] ?? null)
+            : (defined('WINTER_STARTUP_TIME') ? WINTER_STARTUP_TIME : null);
+        $delta = $start !== null ? max(round(microtime(true) - $start, 3), 0.001) : null;
 
         $trace = [];
         $this->collectTrace($trace, $this->throwable);

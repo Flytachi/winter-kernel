@@ -15,6 +15,7 @@ use Flytachi\Winter\K2\Http\Header;
 use Flytachi\Winter\K2\Http\ParameterResolver;
 use Flytachi\Winter\K2\Localization\Locale;
 use Flytachi\Winter\K2\Http\Response\ExceptionWrapper;
+use Flytachi\Winter\K2\Http\Response\RenderContext;
 use Flytachi\Winter\K2\Http\Response\ResponseEntity;
 use Flytachi\Winter\K2\Http\Response\ResponseException;
 use Flytachi\Winter\K2\Http\Response\Sendable;
@@ -48,6 +49,8 @@ class Router
 
     private ?Dispatcher $dispatcher = null;
 
+    private ?string $publicDir = null;
+
     /**
      * Global CORS configuration — applied to every route unless overridden
      * by a per-route #[CrossOrigin] attribute.
@@ -62,6 +65,21 @@ class Router
      * }|null
      */
     private ?array $globalCors = null;
+
+    // ── Static file serving ───────────────────────────────────────────────────
+
+    /**
+     * Serve static files from $publicDir for GET requests that match an existing file.
+     * Required for Swoole — unlike FPM+nginx, Swoole does not serve files natively.
+     *
+     * Example:
+     *   $router->static(__DIR__ . '/public');
+     */
+    public function static(string $publicDir): static
+    {
+        $this->publicDir = rtrim($publicDir, '/\\');
+        return $this;
+    }
 
     // ── CORS configuration ────────────────────────────────────────────────────
 
@@ -192,6 +210,24 @@ class Router
         Header::init($request);
         Locale::initFromRequest();
 
+        if (Runtime::isSwooleCoroutine()) {
+            \Swoole\Coroutine::getContext()['__request_start'] = microtime(true);
+        }
+
+        if ($this->publicDir !== null && strtoupper($request->getMethod()) === 'GET') {
+            $uri  = $request->getUri();
+            $path = ($pos = strpos($uri, '?')) !== false ? substr($uri, 0, $pos) : $uri;
+            $file = $this->publicDir . $path;
+            if (is_file($file)) {
+                $this->serveStaticFile($file, $response);
+                return;
+            }
+        }
+
+        if (env('DEBUG', false)) {
+            RenderContext::setRoutes($this->getRoutesSummary());
+        }
+
         try {
             $method = $request->getMethod();
 
@@ -267,6 +303,9 @@ class Router
                 $object    = ReflectionCache::controller($class);
                 $refMethod = ReflectionCache::method($class, $methodName);
                 $args      = ParameterResolver::resolve($refMethod, $req, $res, $params);
+                    if (env('DEBUG', false)) {
+                    RenderContext::setMeta($class, $methodName);
+                }
                 $result    = $refMethod->invokeArgs($object, $args);
             } else {
                 $result = ($handler)($req, $res, $params);
@@ -461,6 +500,51 @@ class Router
             return $stored['__cors'];
         }
         return null;
+    }
+
+    // ── Static file helper ────────────────────────────────────────────────────
+
+    private function serveStaticFile(string $filePath, HttpResponse $response): void
+    {
+        $mime = mime_content_type($filePath) ?: 'application/octet-stream';
+        $response->status(200);
+        $response->header('Content-Type', $mime);
+        $response->header('Cache-Control', 'public, max-age=86400');
+        $response->end((string) file_get_contents($filePath));
+    }
+
+    // ── Debug helpers ─────────────────────────────────────────────────────────
+
+    /** @return list<array{method:string, path:string, handler:string}> */
+    private function getRoutesSummary(): array
+    {
+        $routes = [];
+
+        foreach ($this->staticRoutes as $method => $paths) {
+            foreach ($paths as $path => $handler) {
+                $routes[] = ['method' => $method, 'path' => $path, 'handler' => $this->formatHandler($handler)];
+            }
+        }
+
+        foreach ($this->dynamicRoutes as $route) {
+            $routes[] = ['method' => $route->method, 'path' => $route->path, 'handler' => $this->formatHandler($route->handler)];
+        }
+
+        usort($routes, static fn($a, $b) => strcmp($a['path'], $b['path']));
+
+        return $routes;
+    }
+
+    private function formatHandler(mixed $handler): string
+    {
+        $h = is_array($handler) && array_key_exists('__handler', $handler) ? $handler['__handler'] : $handler;
+
+        if (is_array($h) && count($h) === 2) {
+            $class = is_string($h[0]) ? $h[0] : get_class($h[0]);
+            return $class . '::' . $h[1];
+        }
+
+        return is_string($h) ? $h : '{closure}';
     }
 
     // ── Debug dump renderer ───────────────────────────────────────────────────
