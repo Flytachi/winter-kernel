@@ -55,7 +55,7 @@ class MappingScanner
 
         foreach ($files as $realPath) {
             $className = self::pathToClassName($realPath, $namespaceMap);
-            if ($className === null || !class_exists($className)) {
+            if ($className === null || !self::looksLikeClass($className) || !class_exists($className)) {
                 continue;
             }
             try {
@@ -131,7 +131,7 @@ class MappingScanner
 
         foreach ($files as $realPath) {
             $className = self::pathToClassName($realPath, $namespaceMap);
-            if ($className === null || !class_exists($className)) {
+            if ($className === null || !self::looksLikeClass($className) || !class_exists($className)) {
                 continue;
             }
 
@@ -145,6 +145,18 @@ class MappingScanner
         }
 
         return $classes;
+    }
+
+    /**
+     * Returns false for files like functions.php / helpers.php that define
+     * functions rather than classes — their resolved "class name" starts with
+     * a lowercase letter, violating PSR-4. Prevents class_exists() from
+     * triggering the autoloader on those files and causing redeclaration errors.
+     */
+    private static function looksLikeClass(string $className): bool
+    {
+        $short = substr($className, strrpos($className, '\\') + 1);
+        return $short !== '' && ctype_upper($short[0]);
     }
 
     /** @param array<string, list<string>> $namespaceMap */
