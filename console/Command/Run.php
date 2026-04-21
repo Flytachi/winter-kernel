@@ -101,6 +101,11 @@ class Run extends Cmd
 
         $workerHandler = static function (\Swoole\Http\Server $server, int $workerId): void {
             cli_set_process_title("Winter swoole -> worker@$workerId");
+            // Reap background job processes (Thread/proc_open children) to prevent
+            // zombie accumulation that breaks posix_spawn on subsequent requests.
+            \Swoole\Process::signal(SIGCHLD, static function () {
+                while (\Swoole\Process::wait(false) !== false) {}
+            });
         };
         $requestHandler = static function (\Swoole\Http\Request $req, \Swoole\Http\Response $res) use ($router): void {
             $router->handle(new SwooleRequest($req), new SwooleResponse($res));

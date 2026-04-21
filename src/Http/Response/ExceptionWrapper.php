@@ -134,19 +134,26 @@ final class ExceptionWrapper
         return array_merge($specific, $catchAll);
     }
 
-    /** @return list<string> */
+    /** @return list<string> absolute paths, vendor excluded */
     private static function findPhpFiles(string $dir): array
     {
-        $files    = [];
+        $vendor = realpath($dir . '/vendor');
+        $files  = [];
+
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)
         );
 
         foreach ($iterator as $file) {
             /** @var \SplFileInfo $file */
-            if ($file->getExtension() === 'php') {
-                $files[] = $file->getRealPath();
+            if ($file->getExtension() !== 'php') {
+                continue;
             }
+            $real = $file->getRealPath();
+            if ($vendor && str_starts_with($real, $vendor . DIRECTORY_SEPARATOR)) {
+                continue;
+            }
+            $files[] = $real;
         }
 
         return $files;
