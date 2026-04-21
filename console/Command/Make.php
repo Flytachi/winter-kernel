@@ -107,10 +107,6 @@ class Make extends Cmd
             $info,
             'Rests',
             'Rest',
-            'Controllers/Rests',
-            'Controllers/Rest',
-            'Controller/Rests',
-            'Controller/Rest',
             'Controllers',
             'Controller'
         );
@@ -142,10 +138,6 @@ class Make extends Cmd
             'Controllers/Middleware',
             'Controller/Middlewares',
             'Controller/Middleware',
-            'Utils/Middlewares',
-            'Utils/Middleware',
-            'Util/Middlewares',
-            'Util/Middleware'
         );
         $code = file_get_contents($info['template']);
         $code = str_replace("__namespace__", $info['namespace'], $code);
@@ -187,10 +179,6 @@ class Make extends Cmd
             $info,
             'Entity',
             'Entities',
-            'Entity/Models',
-            'Entity/Model',
-            'Entities/Models',
-            'Entities/Model',
         );
         $code = file_get_contents($info['template']);
         $code = str_replace("__namespace__", $info['namespace'], $code);
@@ -207,9 +195,8 @@ class Make extends Cmd
             'DTOs',
             'Entity/Dto',
             'Entity/DTOs',
+            'Entities/Dto',
             'Entities/DTOs',
-            'Entity',
-            'Entities'
         );
         $code = file_get_contents($info['template']);
         $code = str_replace("__namespace__", $info['namespace'], $code);
@@ -224,10 +211,6 @@ class Make extends Cmd
             $info,
             'Requests',
             'Request',
-            'Entity/Requests',
-            'Entity/Request',
-            'Entities/Requests',
-            'Entities/Request',
         );
         $code = file_get_contents($info['template']);
         $code = str_replace("__namespace__", $info['namespace'], $code);
@@ -242,6 +225,10 @@ class Make extends Cmd
             $info,
             'Controllers',
             'Controller',
+            'Utilities/Responses',
+            'Utilities/Response',
+            'Utility/Responses',
+            'Utility/Response',
             'Utils/Responses',
             'Utils/Response',
             'Util/Responses',

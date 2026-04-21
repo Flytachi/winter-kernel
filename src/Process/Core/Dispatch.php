@@ -36,6 +36,17 @@ abstract class Dispatch implements Dispatchable
             $arguments['storeKey'] = $storeKey;
         }
 
+        if (extension_loaded('swoole') && \Swoole\Coroutine::getCid() !== -1) {
+            $proc = new \Swoole\Process(
+                function () use ($thread, $arguments): void {
+                    $thread->start(arguments: $arguments);
+                },
+                false,
+                0
+            );
+            return $proc->start();
+        }
+
         return $thread->start(arguments: $arguments);
     }
 
