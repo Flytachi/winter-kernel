@@ -37,14 +37,6 @@ abstract class Dispatch implements Dispatchable
             $arguments['storeKey'] = $storeKey;
         }
 
-        if (Runtime::isSwooleCoroutine()) {
-            // In Swoole, ['file', path, 'a'] descriptors in proc_open go through
-            // SWOOLE_HOOK_FILE → socket_free_defer → EBADF in posix_spawn.
-            // outputTarget=null forces ['pipe','w'] for stdout/stderr — native pipes,
-            // no file hook involvement.
-            return $thread->start(arguments: $arguments, outputTarget: null);
-        }
-
         return $thread->start(arguments: $arguments);
     }
 
