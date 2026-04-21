@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\K2\Process\Core;
 
 use Flytachi\Winter\Base\Log\LoggerRegistry;
+use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\Thread\Thread;
 use Psr\Log\LoggerInterface;
 
@@ -36,15 +37,12 @@ abstract class Dispatch implements Dispatchable
             $arguments['storeKey'] = $storeKey;
         }
 
-        if (extension_loaded('swoole') && \Swoole\Coroutine::getCid() !== -1) {
-            $proc = new \Swoole\Process(
-                function () use ($thread, $arguments): void {
-                    $thread->start(arguments: $arguments);
-                },
-                false,
-                0
-            );
-            return $proc->start();
+        if (Runtime::isSwooleCoroutine()) {
+            // In Swoole, ['file', path, 'a'] descriptors in proc_open go through
+            // SWOOLE_HOOK_FILE → socket_free_defer → EBADF in posix_spawn.
+            // outputTarget=null forces ['pipe','w'] for stdout/stderr — native pipes,
+            // no file hook involvement.
+            return $thread->start(arguments: $arguments, outputTarget: null);
         }
 
         return $thread->start(arguments: $arguments);
