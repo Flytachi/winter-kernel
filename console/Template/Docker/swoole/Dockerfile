@@ -1,0 +1,72 @@
+FROM alpine:3.23.3 AS builder
+WORKDIR /var/www/html
+
+RUN apk add --no-cache php85 php85-phar php85-mbstring php85-openssl php85-curl curl \
+    && rm -rf /var/cache/apk/* \
+    && ln -s /usr/bin/php85 /usr/bin/php
+
+COPY composer.json composer.lock ./
+RUN curl -sS https://getcomposer.org/installer | php85 -- --install-dir=/usr/local/bin --filename=composer \
+    && composer install --no-dev --no-plugins --no-interaction --optimize-autoloader --ignore-platform-reqs \
+    && rm /usr/local/bin/composer
+
+# -------------------------------------------------------
+
+FROM alpine:3.23.3
+WORKDIR /var/www/html
+
+# Installing required packages
+RUN apk update && apk add --no-cache php85 \
+    php85-dom php85-xml php85-xmlwriter \
+    php85-tokenizer php85-ctype php85-session \
+    php85-common php85-phar php85-pcntl \
+    php85-posix php85-mbstring php85-simplexml \
+    php85-iconv php85-pdo \
+    php85-openssl php85-sockets php85-curl \
+    php85-pecl-swoole \
+    su-exec runit procps bash \
+    && rm -rf /var/cache/apk/*
+
+#  =>  PostgreSql
+#RUN apk add --no-cache php85-pgsql php85-pdo_pgsql
+#  =>  Mysql / MariaDb
+#RUN apk add --no-cache php85-mysqli php85-pdo_mysql php85-mysqlnd
+#  =>  Redis
+#RUN apk add --no-cache php85-redis
+
+# Create application user
+RUN adduser -D -H -s /sbin/nologin winter
+
+# PHP: set variables_order and wire opcache
+RUN test -f /usr/bin/php || ln -s /usr/bin/php85 /usr/bin/php \
+    && echo "variables_order = 'EGPCS'" > /etc/php85/conf.d/99-custom.ini
+
+ARG DISABLE_OPCACHE=false
+COPY ./docker/php-opcache.ini /tmp/php-opcache.ini
+RUN if [ "$DISABLE_OPCACHE" = "false" ]; then \
+        cp /tmp/php-opcache.ini /etc/php85/conf.d/10-opcache.ini; \
+    fi && rm -f /tmp/php-opcache.ini
+
+# Create service directories and scripts
+RUN mkdir -p /etc/service/syslog /etc/service/swoole
+RUN printf '#!/bin/sh\nexec syslogd -n -O /dev/stdout\n' > /etc/service/syslog/run \
+    && chmod +x /etc/service/syslog/run
+RUN printf '#!/bin/sh\nwhile [ ! -S /dev/log ]; do sleep 1; done\nexec su-exec winter php call run --port=80\n' > /etc/service/swoole/run \
+    && chmod +x /etc/service/swoole/run
+
+# Copy vendor from builder (composer not included)
+COPY --from=builder /var/www/html/vendor ./vendor
+
+# Copy application code
+COPY . /var/www/html
+
+# Adjust permissions
+RUN chown -R winter:winter /var/www/html \
+    && chmod -R 755 /var/www/html/public \
+    && chmod -R 775 /var/www/html/storage
+
+# bash completion
+RUN ./call cfg completion -if
+
+EXPOSE 80
+ENTRYPOINT ["runsvdir", "/etc/service"]

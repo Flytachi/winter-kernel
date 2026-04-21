@@ -200,7 +200,12 @@ class Cfg extends Cmd
 
     private function dockerArg(): void
     {
-        multiCopy($this->templatePath . '/Docker', Kernel::$pathRoot);
+        $isSwoole = array_key_exists('swoole', $this->args['options']);
+        $mode = $isSwoole ? 'swoole' : 'fpm';
+
+        multiCopy($this->templatePath . '/Docker/shared', Kernel::$pathRoot);
+        multiCopy($this->templatePath . '/Docker/' . $mode, Kernel::$pathRoot);
+        self::printBadge('mode', $mode, 34, 36);
         self::printBadge('docker/', 'CREATED', 34, 32);
         self::printBadge('.dockerignore', 'CREATED', 34, 32);
         self::printBadge('docker-compose.yml', 'CREATED', 34, 32);
@@ -310,7 +315,7 @@ class Cfg extends Cmd
         self::printBadge('init', 'initialize project: composer.json extras + .env', $cl, 36);
         self::printBadge('key', 'manage WINTER_KEY (project security key)', $cl, 36);
         self::printBadge('env', 'manage .env environment file', $cl, 36);
-        self::printBadge('docker', 'scaffold Docker configuration files', $cl, 36);
+        self::printBadge('docker', 'scaffold Docker configuration files (default: fpm)', $cl, 36);
         self::printBadge('completion', 'install shell tab completion (bash/zsh)', $cl, 36);
         self::printLabel("Commands", $cl);
 
@@ -328,6 +333,12 @@ class Cfg extends Cmd
         self::print("-s --file    show raw .env file contents", $cl);
         self::printLabel("env — environment file", $cl);
 
+        // docker
+        self::printLabel("docker — scaffold Docker files", $cl);
+        self::print("--fpm        PHP-FPM + Nginx mode (default)", $cl);
+        self::print("--swoole     Swoole HTTP server mode", $cl);
+        self::printLabel("docker — scaffold Docker files", $cl);
+
         // examples
         self::printDivider($cl);
         self::printLabel("Examples", $cl);
@@ -337,7 +348,9 @@ class Cfg extends Cmd
         self::printInfo("call cfg env -i");
         self::printInfo("call cfg env -s");
         self::printInfo("call cfg env -s --file");
-        self::printInfo("call cfg docker");
+        self::printInfo("call cfg docker           (fpm mode, default)");
+        self::printInfo("call cfg docker --fpm     (explicit fpm mode)");
+        self::printInfo("call cfg docker --swoole  (swoole mode)");
         self::printInfo("call cfg completion        (print scripts to stdout)");
         self::printInfo("call cfg completion -i     (install: ~/.zsh/completions/_call or ~/.bash_completion.d/call)");
         self::printInfo("call cfg completion -if    (force update installed file)");

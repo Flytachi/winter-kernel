@@ -45,11 +45,12 @@ class Complete extends Cmd
             'init:initialize project (.env + key)',
             'key:manage WINTER_KEY',
             'env:manage .env file',
-            'docker:scaffold Docker files',
+            'docker:scaffold Docker files (default: fpm)',
             'completion:install shell tab completion',
         ],
         'cfg key'        => ['-g:generate WINTER_KEY', '-s:show current key'],
         'cfg env'        => ['-i:create .env from template', '-s:show loaded env vars', '--file:show raw .env file'],
+        'cfg docker'     => ['--fpm:PHP-FPM + Nginx mode (default)', '--swoole:Swoole HTTP server mode'],
         'cfg completion' => ['-i:install globally (once per machine)', '-if:force reinstall', '-f:force flag'],
 
         // --- run ---
