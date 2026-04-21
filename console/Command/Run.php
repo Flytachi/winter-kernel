@@ -69,7 +69,8 @@ class Run extends Cmd
 
         $router = Router::fromScan(Kernel::$pathRoot);
 
-        \Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL ^ SWOOLE_HOOK_PROC);
+//        \Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL ^ SWOOLE_HOOK_PROC);
+        \Swoole\Runtime::enableCoroutine();
         Runtime::boot(RuntimeMode::Swoole);
         $router->static(Kernel::$pathPublic);
 
