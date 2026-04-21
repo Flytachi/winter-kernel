@@ -178,5 +178,8 @@ final class Kernel extends KernelStore
         if (!empty($key)) {
             Thread::bindSerSecurity($key);
         }
+
+        // thread payload mode
+        Thread::bindPayloadMode(Thread::PAYLOAD_TEMP_FILE);
     }
 }

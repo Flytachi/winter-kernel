@@ -35,8 +35,8 @@
         "ext-posix": "*"
     },
     "suggest": {
-        "ext-swoole": "Required for coroutine-based connection pooling (Swoole mode)",
-        "ext-simplexml": "Required for XML file operations (K2\\File\\XML)"
+        "ext-simplexml": "Required for XML file operations (K2\\File\\XML)",
+        "ext-swoole": "Required for coroutine-based connection pooling (Swoole mode)"
     },
     "autoload-dev": {
         "psr-4": {
