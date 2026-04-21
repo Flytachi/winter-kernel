@@ -36,7 +36,8 @@
     },
     "suggest": {
         "ext-simplexml": "Required for XML file operations (K2\\File\\XML)",
-        "ext-swoole": "Required for coroutine-based connection pooling (Swoole mode)"
+        "ext-swoole": "Required for coroutine-based connection pooling (Swoole mode)",
+        "ext-shmop": "Recommended for Swoole mode — enables PAYLOAD_SHM in Thread dispatch, avoiding fd conflicts with proc_open (fallback: PAYLOAD_PIPE)"
     },
     "autoload-dev": {
         "psr-4": {
