@@ -12,47 +12,30 @@ RUN curl -sS https://getcomposer.org/installer | php85 -- --install-dir=/usr/loc
 
 # -------------------------------------------------------
 
-FROM alpine:3.23.3
+FROM phpswoole/swoole:php8.5-alpine
 WORKDIR /var/www/html
 
-# Installing required packages
-RUN apk update && apk add --no-cache php85 \
-    php85-dom php85-xml php85-xmlwriter \
-    php85-tokenizer php85-ctype php85-session \
-    php85-common php85-phar php85-pcntl \
-    php85-posix php85-mbstring php85-simplexml \
-    php85-iconv php85-pdo \
-    php85-openssl php85-sockets php85-curl \
-    php85-pecl-swoole \
-    su-exec runit procps bash \
+# Included in base: swoole, opcache, dom, xml, xmlwriter, tokenizer, ctype,
+#   session, pcntl, posix, mbstring, simplexml, iconv, pdo, pdo_mysql,
+#   openssl, sockets, curl, redis
+
+RUN apk add --no-cache su-exec procps \
     && rm -rf /var/cache/apk/*
 
 #  =>  PostgreSql
-#RUN apk add --no-cache php85-pgsql php85-pdo_pgsql
-#  =>  Mysql / MariaDb
-#RUN apk add --no-cache php85-mysqli php85-pdo_mysql php85-mysqlnd
-#  =>  Redis
-#RUN apk add --no-cache php85-redis
+#RUN apk add --no-cache postgresql-dev && docker-php-ext-install pdo_pgsql
+#  =>  MongoDB
+#RUN apk add --no-cache $PHPIZE_DEPS && pecl install mongodb && docker-php-ext-enable mongodb
 
 # Create application user
 RUN adduser -D -H -s /sbin/nologin winter
 
-# PHP: set variables_order and wire opcache
-RUN test -f /usr/bin/php || ln -s /usr/bin/php85 /usr/bin/php \
-    && echo "variables_order = 'EGPCS'" > /etc/php85/conf.d/99-custom.ini
-
+# Opcache: enable CLI (required — Swoole is a long-lived CLI process)
 ARG DISABLE_OPCACHE=false
 COPY ./docker/php-opcache.ini /tmp/php-opcache.ini
 RUN if [ "$DISABLE_OPCACHE" = "false" ]; then \
-        cp /tmp/php-opcache.ini /etc/php85/conf.d/10-opcache.ini; \
+        cp /tmp/php-opcache.ini /usr/local/etc/php/conf.d/10-opcache.ini; \
     fi && rm -f /tmp/php-opcache.ini
-
-# Create service directories and scripts
-RUN mkdir -p /etc/service/syslog /etc/service/swoole
-RUN printf '#!/bin/sh\nexec syslogd -n -O /dev/stdout\n' > /etc/service/syslog/run \
-    && chmod +x /etc/service/syslog/run
-RUN printf '#!/bin/sh\nwhile [ ! -S /dev/log ]; do sleep 1; done\nexec su-exec winter php call run --port=80\n' > /etc/service/swoole/run \
-    && chmod +x /etc/service/swoole/run
 
 # Copy vendor from builder (composer not included)
 COPY --from=builder /var/www/html/vendor ./vendor
@@ -65,8 +48,5 @@ RUN chown -R winter:winter /var/www/html \
     && chmod -R 755 /var/www/html/public \
     && chmod -R 775 /var/www/html/storage
 
-# bash completion
-RUN ./call cfg completion -if
-
 EXPOSE 80
-ENTRYPOINT ["runsvdir", "/etc/service"]
+ENTRYPOINT ["su-exec", "winter", "php", "/var/www/html/call", "run", "--port=80"]
