@@ -17,7 +17,8 @@ if (file_exists($fileAutoloader)) {
 }
 
 // 1. Command line options (debugging, configure)
-$options = getopt('', ['namespace::', 'name::', 'tag::', 'debug']);
+$options = getopt('', ['namespace::', 'name::', 'tag::', 'debug', 'shmkey::']);
+
 
 // Debugging / Configure
 set_time_limit(0);
@@ -36,11 +37,23 @@ if (isset($options['debug'])) {
 
 
 // 2. Reading all standard input data (stdin).
-$payload = stream_get_contents(STDIN);
+if (isset($options['shmkey'])) {
+    $shmKey = (int) $options['shmkey'];
+    $shm = @shmop_open($shmKey, 'a', 0, 0);
+    if ($shm === false) {
+        fwrite(STDERR, "Error: Failed to open shared memory segment (key={$shmKey}).\n");
+        exit(1);
+    }
+    $payload = shmop_read($shm, 0, shmop_size($shm));
+    shmop_delete($shm);
+    unset($shm);
+} else {
+    $payload = stream_get_contents(STDIN);
+}
 
 if (empty($payload)) {
     $logger->emergency('No payload received from stdin');
-    fwrite(STDERR, "Error: No payload received from stdin.\n");
+    fwrite(STDERR, "Error: No payload received.\n");
     exit(1);
 }
 
