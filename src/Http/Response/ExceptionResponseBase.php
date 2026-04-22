@@ -84,13 +84,15 @@ class ExceptionResponseBase implements ResponseExceptionInterface
             <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <link rel="icon" type="image/svg+xml" href="/static/winter/logo.svg">
                 <title>{$code} {$httpMessage}</title>
             </head>
             <body style="background-color:#0a0f1f;color:#ffffff;font-family:sans-serif">
                 <center>
-                    <strong style="font-size:21px"><em>Winter {$code} — {$httpMessage}</em></strong>
+                    <div><img src="/static/winter/logo.svg" alt="logotype" width="80" height="80"></div>
+                    <strong style="font-size:21px;"><em>Winter {$code} — {$httpMessage}</em></strong>
                     <hr width="50%">
-                    <h2 style="color:#676980">{$message}</h2>
+                    <h2 style="color:#676980FF">{$message}</h2>
                 </center>
             </body></html>
             HTML;

@@ -16,7 +16,6 @@
     "autoload": {
         "psr-4": {
             "Flytachi\\Winter\\Console\\": "console/",
-            "Flytachi\\Winter\\Kernel\\": "srcV1/",
             "Flytachi\\Winter\\K2\\": "src/"
         },
         "files": [
