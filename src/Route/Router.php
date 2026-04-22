@@ -8,6 +8,7 @@ use Flytachi\Winter\Base\Exception\DebugDumpException;
 use Flytachi\Winter\Base\Log\LoggerRegistry;
 use Flytachi\Winter\Base\ReflectionCache;
 use Flytachi\Winter\Base\Runtime;
+use Flytachi\Winter\K2\Kernel;
 use Flytachi\Winter\K2\Exception\LogLevelException;
 use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
@@ -30,17 +31,25 @@ use Flytachi\Winter\Base\HttpCode;
 /**
  * K2 Router — dual-mode (Swoole + FPM), Spring Boot-style.
  *
- * Route registration:
+ * ── Route registration (manual) ─────────────────────────────────────────────
  *   $router->get('/users',          [UserController::class, 'index']);
+ *   $router->post('/users',         [UserController::class, 'store']);
  *   $router->get('/users/{id:\d+}', [UserController::class, 'show']);
+ *   $router->add('GET', '/ping',    fn($req, $res, $p) => ResponseEntity::ok('pong'));
  *
- * Attribute-based (preferred):
- *   $router = Router::fromScan(__DIR__ . '/src');
+ * ── Attribute-based (preferred) ─────────────────────────────────────────────
+ *   $router = Router::resolve(Kernel::$pathRoot);   // auto scan + cache
+ *   $router = Router::fromScan(Kernel::$pathRoot);  // always scan
+ *   $router = Router::fromCache($path);             // load from cache file
  *
- * Global CORS:
- *   $router->cors(origins: ['https://app.example.com'], credentials: true, maxAge: 3600);
+ * ── Global CORS ──────────────────────────────────────────────────────────────
+ *   Cors::configure([...]);   // call once in bootstrap.php before resolve()
+ *   // Per-route override: #[CrossOrigin] attribute on controller class or method
  *
- * Dispatch a request (works identically in Swoole and FPM):
+ * ── Static files ─────────────────────────────────────────────────────────────
+ *   $router->static(Kernel::$pathPublic);
+ *
+ * ── Dispatch ─────────────────────────────────────────────────────────────────
  *   $router->handle(new SwooleRequest($req), new SwooleResponse($res));
  *   $router->handle(new FpmRequest(),        new FpmResponse());
  */
@@ -74,6 +83,11 @@ class Router
     // ── Route registration ────────────────────────────────────────────────────
 
     /**
+     * Register a single route.
+     *
+     * Handlers are stored as-is for simple routes; wrapped in an array envelope
+     * when middlewares or per-route CORS are present so invoke() can unpack them.
+     *
      * @param list<array{class: class-string<Middleware>, args: array}> $middlewares
      * @param array{
      *     origins:string[],
@@ -182,14 +196,126 @@ class Router
     }
 
     /**
-     * Register routes from all currently declared classes implementing ControllerInterface.
-     * Use this when controllers are defined inline (e.g. in tests).
+     * Unified entry point — automatically chooses scan or cache.
+     *
+     * DEBUG=true  → always scans, cache is never read or written (dev mode).
+     * DEBUG=false → loads from Kernel::$pathStorageVolatile/mapping.php when it
+     *               exists; otherwise scans and writes the cache for subsequent
+     *               requests (first boot after a clean or a deployment).
+     *
+     * @param string   $rootDir  Project root (Kernel::$pathRoot).
+     * @param string[] $exclude  Additional directories to skip during scan.
      */
-    public static function fromDeclared(): static
+    public static function resolve(string $rootDir, array $exclude = []): static
+    {
+        $cachePath = Kernel::$pathStorageVolatile . '/mapping.php';
+
+        if (!env('DEBUG', false) && is_file($cachePath)) {
+            return static::fromCache($cachePath);
+        }
+
+        $router = static::fromScan($rootDir, $exclude);
+
+        if (!env('DEBUG', false)) {
+            $router->dumpCache($cachePath);
+        }
+
+        return $router;
+    }
+
+    /**
+     * Load compiled routes from a cache file produced by dumpCache().
+     * Skips all filesystem scanning and reflection — routes are restored
+     * directly from the serialised PHP array.
+     *
+     * Closure-based handlers (e.g. Health actuator routes) are excluded from
+     * the cache and are re-registered here from the current Health config.
+     * ExceptionWrapper is re-configured so #[AdviceException] scanning still
+     * happens lazily on the first error (same behaviour as fromScan).
+     *
+     * @param string $path  Absolute path to the cache file (mapping.php).
+     */
+    public static function fromCache(string $path): static
     {
         $router = new static();
-        MappingScanner::scanDeclared($router);
+        $data   = require $path;
+
+        $router->staticRoutes  = $data['static'];
+        $router->dynamicRoutes = array_map(
+            static fn($r) => new Route($r['method'], $r['path'], $r['handler']),
+            $data['dynamic']
+        );
+
+        if ($health = Health::getConfig()) {
+            Health::setRootDir(Kernel::$pathRoot);
+            Health::setMappings($router->getRoutesSummary());
+            $router->registerHealth($health['indicator'], $health['middleware']);
+        }
+
+        ExceptionWrapper::configure(Kernel::$pathRoot);
+
         return $router;
+    }
+
+    /**
+     * Serialise compiled routes to a PHP cache file and invalidate OPcache.
+     * Closure handlers (Health actuator routes) are intentionally excluded
+     * because closures are not serialisable — they are re-registered by
+     * fromCache() at load time.
+     *
+     * @param string $path  Absolute path where the cache file will be written.
+     */
+    public function dumpCache(string $path): static
+    {
+        $static  = [];
+        $dynamic = [];
+
+        foreach ($this->staticRoutes as $method => $paths) {
+            foreach ($paths as $uri => $handler) {
+                if ($this->isSerializableHandler($handler)) {
+                    $static[$method][$uri] = $handler;
+                }
+            }
+        }
+
+        foreach ($this->dynamicRoutes as $route) {
+            if ($this->isSerializableHandler($route->handler)) {
+                $dynamic[] = [
+                    'method'  => $route->method,
+                    'path'    => $route->path,
+                    'handler' => $route->handler,
+                ];
+            }
+        }
+
+        $dir = dirname($path);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0777, true);
+        }
+
+        $exported = var_export(['static' => $static, 'dynamic' => $dynamic], true);
+        $content  = "<?php\n\n// Generated by Router::dumpCache() on " . date(DATE_RFC822)
+            . "\n\nreturn " . $exported . ";\n";
+
+        file_put_contents($path, $content);
+
+        if (function_exists('opcache_invalidate')) {
+            opcache_invalidate($path, true);
+        }
+
+        return $this;
+    }
+
+    /** Returns false for any handler that contains a Closure (not serialisable). */
+    private function isSerializableHandler(mixed $handler): bool
+    {
+        if ($handler instanceof \Closure) {
+            return false;
+        }
+        if (is_array($handler) && isset($handler['__handler']) && $handler['__handler'] instanceof \Closure) {
+            return false;
+        }
+        return true;
     }
 
     // ── Health / Actuator ─────────────────────────────────────────────────────
@@ -223,6 +349,11 @@ class Router
 
     // ── Dispatch ──────────────────────────────────────────────────────────────
 
+    /**
+     * Resolve $method + $uri to a RouteResult.
+     * Strips the query string before matching.
+     * Builds the Dispatcher lazily on first call and reuses it for all subsequent requests.
+     */
     public function dispatch(string $method, string $uri): RouteResult
     {
         if ($this->dispatcher === null) {
@@ -235,13 +366,22 @@ class Router
     }
 
     /**
-     * Handle an HTTP request — works in both Swoole and FPM modes.
+     * Handle an HTTP request end-to-end. Works identically in Swoole and FPM.
      *
-     * Swoole:
-     *   $router->handle(new SwooleRequest($req), new SwooleResponse($res));
-     *
-     * FPM:
-     *   $router->handle(new FpmRequest(), new FpmResponse());
+     * Pipeline:
+     *   1. Header::init()            — snapshot request headers into the static bag
+     *   2. Locale::initFromRequest() — detect Accept-Language / locale cookie
+     *   3. Swoole context            — stamp start time, method, uri in coroutine ctx
+     *   4. Static file check         — short-circuit for existing files (GET only)
+     *   5. Global CORS headers       — applied before dispatch (covers 404 / 500 too)
+     *   6. OPTIONS preflight         — returns 204 before handler invocation
+     *   7. Route dispatch            — O(1) static map → chunked regex dynamic scan
+     *   8. Per-route #[CrossOrigin]  — overrides global CORS if present
+     *   9. Middleware before()       — run in declaration order
+     *  10. Controller method         — resolved via ReflectionCache + ParameterResolver
+     *  11. Middleware after()        — run in reverse order
+     *  12. Response serialise        — Sendable::send() or ResponseEntity::ok()->send()
+     *  13. Error handling            — ExceptionWrapper maps Throwable → HTTP response
      */
     public function handle(HttpRequest $request, HttpResponse $response): void
     {

@@ -70,7 +70,12 @@ class Complete extends Cmd
         ],
 
         // --- mapping ---
-        'mapping' => [],   // takes optional URL pattern directly, no subcommands
+        'mapping' => [
+            'build:scan controllers and write the route cache file',
+            'clean:delete the route cache file',
+            'show:list all registered routes',
+        ],
+        'mapping show' => [],   // takes optional URL pattern as argument
 
         // --- storage ---
         'storage' => [
