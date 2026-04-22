@@ -32,7 +32,7 @@ class Mapping extends Cmd
     private function showArg(string $pattern): void
     {
         try {
-            $cachePath = Kernel::$pathStorageVolatile . '/mapping.php';
+            $cachePath = Router::cachePath();
             $router    = is_file($cachePath)
                 ? Router::fromCache($cachePath)
                 : Router::fromScan(Kernel::$pathRoot);
@@ -72,7 +72,7 @@ class Mapping extends Cmd
     private function buildArg(): void
     {
         try {
-            $cachePath = Kernel::$pathStorageVolatile . '/mapping.php';
+            $cachePath = Router::cachePath();
             Router::fromScan(Kernel::$pathRoot)->dumpCache($cachePath);
             self::printBadge("mapping cache", 'BUILT', 34, 32);
             self::printInfo($cachePath);
@@ -89,7 +89,7 @@ class Mapping extends Cmd
     private function cleanArg(): void
     {
         try {
-            $cachePath = Kernel::$pathStorageVolatile . '/mapping.php';
+            $cachePath = Router::cachePath();
             if (file_exists($cachePath)) {
                 unlink($cachePath);
                 self::printBadge("mapping cache", 'CLEANED', 34, 32);
