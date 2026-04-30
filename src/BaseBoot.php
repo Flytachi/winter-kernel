@@ -26,7 +26,7 @@ use Flytachi\Winter\Thread\Runnable;
  * then call one entry point from each runtime file.
  *
  * Minimal setup:
- * ```php
+ * ```
  * class Boot extends BaseBoot
  * {
  *     protected static function configure(): void
@@ -37,7 +37,7 @@ use Flytachi\Winter\Thread\Runnable;
  * ```
  *
  * Entry points:
- * ```php
+ * ```
  * Boot::web();        // public/index.php  — FPM
  * Boot::swoole();     // server.php        — Swoole HTTP server
  * Boot::cli($argv);   // call              — CLI console
@@ -46,6 +46,14 @@ use Flytachi\Winter\Thread\Runnable;
  */
 abstract class BaseBoot
 {
+    private static string $bootClass = '';
+
+    /** Returns the concrete Boot class name set during boot(). */
+    public static function getBootClass(): string
+    {
+        return self::$bootClass;
+    }
+
     // ── Hooks (override in your Boot class) ───────────────────────────────────
 
     /**
@@ -54,7 +62,7 @@ abstract class BaseBoot
      *
      * All parameters are optional — omitted ones are derived from $pathRoot:
      *
-     * ```php
+     * ```
      * protected static function configure(): void
      * {
      *     Kernel::init(
@@ -97,7 +105,7 @@ abstract class BaseBoot
      * #[Transient] classes. Use this hook to bind interfaces to implementations,
      * register factories, or set named scalar values.
      *
-     * ```php
+     * ```
      * protected static function providers(Container $c): void
      * {
      *     $c->register(AppServiceProvider::class);
@@ -126,7 +134,7 @@ abstract class BaseBoot
      *   - Channel name is lowercase by convention; env prefix is uppercased automatically.
      *   - If a channel is requested but not registered, it falls back to the default channel.
      *
-     * ```php
+     * ```
      * protected static function channels(): void
      * {
      *     Kernel::channel('job');
@@ -153,7 +161,7 @@ abstract class BaseBoot
      * dispatch. Per-route overrides are available via #[CrossOrigin] on any
      * controller class or method; method-level takes priority over class-level.
      *
-     * ```php
+     * ```
      * protected static function httpCors(): void
      * {
      *     Cors::configure(
@@ -191,7 +199,7 @@ abstract class BaseBoot
      *   /actuator/loggers    — active log channels and their configured levels
      *   /actuator/mappings   — registered route table
      *
-     * ```php
+     * ```
      * protected static function health(): void
      * {
      *     // Default built-in indicator, open access:
@@ -214,7 +222,7 @@ abstract class BaseBoot
      * Each plugin's src/ directory is scanned for controllers automatically
      * by Router::fromScan() / Router::resolve() — no extra wiring required.
      *
-     * ```php
+     * ```
      * protected static function plugins(): void
      * {
      *     Plugin::registry('acme/auth-plugin',    '/auth');
@@ -235,7 +243,7 @@ abstract class BaseBoot
      * Override to tune concurrency, request limits, SSL, and other Swoole options.
      * Return an empty array to use Swoole's built-in defaults.
      *
-     * ```php
+     * ```
      * protected static function swooleConfig(): array
      * {
      *     return [
@@ -249,7 +257,7 @@ abstract class BaseBoot
      *
      * @return array<string, mixed>
      */
-    protected static function swooleConfig(): array
+    public static function swooleConfig(): array
     {
         return [];
     }
@@ -312,7 +320,7 @@ abstract class BaseBoot
      * all blocking I/O (PDO, cURL, file, sleep, …) is coroutine-friendly.
      *
      * Server configuration is supplied via swooleConfig() — override it in Boot:
-     * ```php
+     * ```
      * protected static function swooleConfig(): array
      * {
      *     return ['worker_num' => swoole_cpu_num() * 2, 'max_request' => 5000];
@@ -514,6 +522,7 @@ abstract class BaseBoot
 
     private static function boot(): void
     {
+        self::$bootClass = static::class;
         static::configure();
 
         $c = Container::init();

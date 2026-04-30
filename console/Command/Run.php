@@ -7,6 +7,7 @@ namespace Flytachi\Winter\Console\Command;
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\Base\RuntimeMode;
 use Flytachi\Winter\Console\Inc\Cmd;
+use Flytachi\Winter\K2\BaseBoot;
 use Flytachi\Winter\K2\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\K2\Http\Adapter\SwooleResponse;
 use Flytachi\Winter\K2\Route\MemoryWatcher;
@@ -91,19 +92,14 @@ class Run extends Cmd
         $router->static(Kernel::$pathPublic);
 
         $server = new \Swoole\Http\Server($host, $port);
-        $config = [];
-        if ($workerNum !== null) {
-            $config['worker_num']         = (int) $workerNum;
-        }
-        if ($taskWorkers !== null) {
-            $config['task_worker_num']    = (int) $taskWorkers;
-        }
-        if ($maxRequest !== null) {
-            $config['max_request']        = (int) $maxRequest;
-        }
-        if ($maxRequestGrace !== null) {
-            $config['max_request_grace']  = (int) $maxRequestGrace;
-        }
+
+        // Base config from Boot::swooleConfig(), CLI args override
+        $bootClass = BaseBoot::getBootClass();
+        $config = $bootClass !== '' ? $bootClass::swooleConfig() : [];
+        if ($workerNum !== null)       { $config['worker_num']        = (int) $workerNum; }
+        if ($taskWorkers !== null)     { $config['task_worker_num']   = (int) $taskWorkers; }
+        if ($maxRequest !== null)      { $config['max_request']       = (int) $maxRequest; }
+        if ($maxRequestGrace !== null) { $config['max_request_grace'] = (int) $maxRequestGrace; }
         if (!empty($config)) {
             $server->set($config);
         }
