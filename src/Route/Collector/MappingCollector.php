@@ -20,7 +20,8 @@ final class MappingCollector implements CollectorInterface
     public function __construct(
         private readonly Router $router,
         private readonly string $prefix = '',
-    ) {}
+    ) {
+    }
 
     public function collect(string $class, ReflectionClass $ref): void
     {

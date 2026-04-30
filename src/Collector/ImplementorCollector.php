@@ -20,7 +20,9 @@ final class ImplementorCollector implements CollectorInterface
     /** @var ReflectionClass[] */
     private array $found = [];
 
-    public function __construct(private readonly string $interface) {}
+    public function __construct(private readonly string $interface)
+    {
+    }
 
     public function collect(string $class, ReflectionClass $ref): void
     {

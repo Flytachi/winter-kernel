@@ -1,0 +1,33 @@
+{
+    "name": "project/winter-k2",
+    "description": "My Project winter-k2",
+    "type": "project",
+    "license": "MIT",
+    "scripts": {
+        "dev-server": "@php -S 0.0.0.0:8000 -t ./public"
+    },
+    "autoload": {
+        "psr-4": {
+            "Main\\": "main/"
+        }
+    },
+    "require": {
+        "php": ">=8.3",
+        "flytachi/winter-kernel": "dev-k2"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "@stable",
+        "monolog/monolog": "@stable"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../",
+            "options": {
+                "symlink": true,
+                "canonical": false
+            }
+        }
+    ],
+    "authors": []
+}

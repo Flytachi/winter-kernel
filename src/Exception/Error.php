@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Exception;
 
-use Flytachi\Winter\Base\Exception\Exception;
+use Flytachi\Winter\Base\Exception\ExceptionTrait;
 use Flytachi\Winter\Base\HttpCode;
 use Psr\Log\LogLevel;
 
@@ -22,8 +22,10 @@ use Psr\Log\LogLevel;
  *   throw new Error('Not implemented', HttpCode::NOT_IMPLEMENTED->value);
  *   Error::throw('Not implemented', HttpCode::NOT_IMPLEMENTED);
  */
-class Error extends Exception implements LogLevelException
+class Error extends \RuntimeException implements LogLevelException
 {
+    use ExceptionTrait;
+
     protected $code = HttpCode::UNKNOWN_ERROR->value;
 
     private string $resolvedLogLevel;

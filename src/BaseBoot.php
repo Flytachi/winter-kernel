@@ -120,7 +120,9 @@ abstract class BaseBoot
      * }
      * ```
      */
-    protected static function providers(Container $c): void {}
+    protected static function providers(Container $c): void
+    {
+    }
 
     /**
      * Register additional log channels via Kernel::channel().
@@ -152,7 +154,9 @@ abstract class BaseBoot
      *   LOG_JOB_FILE=/var/log/app/job.log
      *   LOG_JOB_FILE_MAX=7
      */
-    protected static function channels(): void {}
+    protected static function channels(): void
+    {
+    }
 
     /**
      * Configure global CORS policy via Cors::configure().
@@ -181,7 +185,9 @@ abstract class BaseBoot
      *   credentials    bool      Send Access-Control-Allow-Credentials: true.
      *   maxAge         int       Preflight cache lifetime in seconds.
      */
-    protected static function httpCors(): void {}
+    protected static function httpCors(): void
+    {
+    }
 
     /**
      * Configure health / actuator endpoints via Health::configure().
@@ -213,7 +219,9 @@ abstract class BaseBoot
      * }
      * ```
      */
-    protected static function health(): void {}
+    protected static function health(): void
+    {
+    }
 
     /**
      * Register plugins via Plugin::registry().
@@ -235,7 +243,9 @@ abstract class BaseBoot
      *   prefix   string  URL prefix             (e.g. '/billing').
      *   required bool    Throw if package is not installed (default: true).
      */
-    protected static function plugins(): void {}
+    protected static function plugins(): void
+    {
+    }
 
     /**
      * Swoole HTTP server settings passed to \Swoole\Http\Server::set().
@@ -530,7 +540,7 @@ abstract class BaseBoot
         Scanner::run(
             rootDir: Kernel::$pathRoot,
             cache: env('DEBUG', false) ? null
-                : Kernel::$pathStorageCache . '/di.php',
+                : Kernel::$pathStorageVolatile . '/di.php',
         )
             ->collect(new DICollector($c))
             ->execute();

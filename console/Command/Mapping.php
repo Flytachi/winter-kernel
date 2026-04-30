@@ -111,10 +111,10 @@ class Mapping extends Cmd
         self::printLabel("Usage", $cl);
 
         self::printLabel("Commands", $cl);
-        self::printBadge('build',        'scan controllers and write the route cache file', $cl, 36);
-        self::printBadge('clean',        'delete the route cache file',                     $cl, 36);
-        self::printBadge('show',         'list all registered routes',                      $cl, 36);
-        self::printBadge('show <pattern>', 'filter routes by URL fragment',                 $cl, 36);
+        self::printBadge('build', 'scan controllers and write the route cache file', $cl, 36);
+        self::printBadge('clean', 'delete the route cache file', $cl, 36);
+        self::printBadge('show', 'list all registered routes', $cl, 36);
+        self::printBadge('show <pattern>', 'filter routes by URL fragment', $cl, 36);
         self::printLabel("Commands", $cl);
 
         self::printDivider($cl);

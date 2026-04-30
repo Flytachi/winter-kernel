@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Exception;
 
-use Flytachi\Winter\Base\Exception\Exception;
+use Flytachi\Winter\Base\Exception\ExceptionTrait;
 use Flytachi\Winter\Base\HttpCode;
 use Psr\Log\LogLevel;
 
@@ -18,8 +18,10 @@ use Psr\Log\LogLevel;
  *   throw new ServerError('Payment gateway timeout');
  *   ServerError::throw('Payment gateway timeout');
  */
-class ServerError extends Exception implements LogLevelException
+class ServerError extends \RuntimeException implements LogLevelException
 {
+    use ExceptionTrait;
+
     protected $code = HttpCode::INTERNAL_SERVER_ERROR->value;
 
     public function getLogLevel(): string

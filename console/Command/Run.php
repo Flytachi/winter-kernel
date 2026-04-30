@@ -94,10 +94,18 @@ class Run extends Cmd
         // Base config from Boot::swooleConfig(), CLI args override
         $bootClass = BaseBoot::getBootClass();
         $config = $bootClass !== '' ? $bootClass::swooleConfig() : [];
-        if ($workerNum !== null)       { $config['worker_num']        = (int) $workerNum; }
-        if ($taskWorkers !== null)     { $config['task_worker_num']   = (int) $taskWorkers; }
-        if ($maxRequest !== null)      { $config['max_request']       = (int) $maxRequest; }
-        if ($maxRequestGrace !== null) { $config['max_request_grace'] = (int) $maxRequestGrace; }
+        if ($workerNum !== null) {
+            $config['worker_num']        = (int) $workerNum;
+        }
+        if ($taskWorkers !== null) {
+            $config['task_worker_num']   = (int) $taskWorkers;
+        }
+        if ($maxRequest !== null) {
+            $config['max_request']       = (int) $maxRequest;
+        }
+        if ($maxRequestGrace !== null) {
+            $config['max_request_grace'] = (int) $maxRequestGrace;
+        }
         if (!empty($config)) {
             $server->set($config);
         }

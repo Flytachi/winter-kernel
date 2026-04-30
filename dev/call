@@ -1,0 +1,35 @@
+#!/usr/bin/env php
+<?php
+
+/*
+    PHP version guard
+    -----------------
+    The framework requires PHP 8.3+ (named arguments, readonly properties, etc.).
+    If the requirement is not met the script exits with a human-readable message
+    instead of a cryptic parse error.
+*/
+if (PHP_VERSION_ID >= 80300) {
+
+    /*
+        Working directory
+        -----------------
+        chdir() moves the process CWD to dev/ so that relative paths inside
+        bootstrap.php (e.g. require './bootstrap.php', .env lookup, path resolution)
+        work correctly regardless of which directory the operator runs `call` from.
+    */
+    chdir(__DIR__);
+
+    /*
+        Bootstrap
+        ---------
+        Initialises the framework (autoload, Kernel::init, optional CORS / Health /
+        Plugin config).  See bootstrap.php for full parameter reference.
+    */
+    require './bootstrap.php';
+
+    Boot::cli($argv);
+
+} else {
+    echo "\033[33m"." Please use PHP version 8.3 or higher.\n";
+    echo "\033[34m"." Current PHP version => " . PHP_VERSION . "\n";
+}

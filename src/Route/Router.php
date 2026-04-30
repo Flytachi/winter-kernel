@@ -212,16 +212,13 @@ class Router
      * Unified entry point — automatically chooses scan or cache.
      *
      * DEBUG=true  → always scans, cache is never read or written (dev mode).
-     * DEBUG=false → loads from Kernel::$pathStorageCache/mapping.php when it
+     * DEBUG=false → loads from Kernel::$pathStorageVolatile/mapping.php when it
      *               exists; otherwise scans and writes the cache for subsequent
      *               requests (first boot after a clean or a deployment).
-     *
-     * @param string   $rootDir  Project root (Kernel::$pathRoot).
-     * @param string[] $exclude  Additional directories to skip during scan.
      */
     public static function cachePath(): string
     {
-        return Kernel::$pathStorageCache . '/mapping.php';
+        return Kernel::$pathStorageVolatile . '/mapping.php';
     }
 
     public static function resolve(string $rootDir, array $exclude = []): static
