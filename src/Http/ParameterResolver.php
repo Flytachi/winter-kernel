@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Http;
 
-use Flytachi\Winter\Base\ReflectionCache;
+use Flytachi\Winter\DI\ReflectionCache;
 use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 use Flytachi\Winter\K2\Http\Request\Annotation\PathVariable;

@@ -6,8 +6,9 @@ namespace Flytachi\Winter\K2\Route;
 
 use Flytachi\Winter\Base\Exception\DebugDumpException;
 use Flytachi\Winter\Logger\LoggerFactory;
-use Flytachi\Winter\Base\ReflectionCache;
+use Flytachi\Winter\DI\ReflectionCache;
 use Flytachi\Winter\Base\Runtime;
+use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\DI\Scanner;
 use Flytachi\Winter\K2\Kernel;
 use Flytachi\Winter\K2\Exception\LogLevelException;
@@ -508,7 +509,7 @@ class Router
             // ── Resolve handler and invoke ────────────────────────────────────
             if (is_array($handler) && is_string($handler[0])) {
                 [$class, $methodName] = $handler;
-                $object    = ReflectionCache::controller($class);
+                $object    = Container::getInstance()->make($class);
                 $refMethod = ReflectionCache::method($class, $methodName);
                 $args      = ParameterResolver::resolve($refMethod, $req, $res, $params);
                 if (env('DEBUG', false)) {
