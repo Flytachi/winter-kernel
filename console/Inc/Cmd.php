@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Console\Inc;
 
+use Flytachi\Winter\DI\Container;
+
 abstract class Cmd extends Printer implements CmdInterface
 {
     public static string $title = "extra command title";
@@ -12,18 +14,18 @@ abstract class Cmd extends Printer implements CmdInterface
     final public function __construct(array $args)
     {
         $this->args = $args;
-        try {
-            $this->init();
-            $this->isHelp();
-            $this->handle();
-        } catch (\Throwable $exception) {
-            self::printError($exception);
-        }
     }
 
     final public static function script(array $args): void
     {
-        new static($args);
+        $instance = Container::getInstance()->make(static::class, ['args' => $args]);
+        try {
+            $instance->init();
+            $instance->isHelp();
+            $instance->handle();
+        } catch (\Throwable $exception) {
+            self::printError($exception);
+        }
     }
 
     protected function init(): void

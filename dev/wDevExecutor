@@ -1,0 +1,20 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+if (PHP_VERSION_ID < 80300) {
+    fwrite(STDERR, "Please use PHP version 8.3 or higher.\n");
+    exit(1);
+}
+
+$fileAutoloader = __DIR__ . '/bootstrap.php';
+
+if (!file_exists($fileAutoloader)) {
+    fwrite(STDERR, "Error: bootstrap.php not found at {$fileAutoloader}\n");
+    exit(1);
+}
+
+require_once $fileAutoloader;
+
+Boot::executor($argv);

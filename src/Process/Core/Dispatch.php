@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Process\Core;
 
+use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\Thread\Thread;
 use Psr\Log\LoggerInterface;
@@ -22,7 +23,7 @@ abstract class Dispatch implements Dispatchable
 
     public static function dispatch(mixed $data = null): int
     {
-        $runnable = new static();
+        $runnable = Container::getInstance()->make(static::class);
         $thread = new Thread(
             $runnable,
             $runnable->exNamespace,
@@ -41,7 +42,7 @@ abstract class Dispatch implements Dispatchable
 
     final public static function start(mixed $data = null): void
     {
-        $runnable = new static();
+        $runnable = Container::getInstance()->make(static::class);
         $arguments = [];
         if (!empty($data)) {
             $storeKey = uniqid('cache-');

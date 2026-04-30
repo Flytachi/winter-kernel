@@ -12,4 +12,9 @@ class SmsService extends Service
             'message' => 'Hello, World!',
         ];
     }
+
+    public function message(): string
+    {
+        return 'Sms Message';
+    }
 }
