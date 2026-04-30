@@ -5,26 +5,74 @@ namespace PHPSTORM_META;
 override(\env(0), map([
     'WINTER_THREAD_RUNNER' => '',
     'WINTER_BINARY_PATH' => '',
-    'WINTER_KEY' => 'secret-key'
+    'WINTER_KEY' => '',
     'TIME_ZONE' => 'UTC',
-    'DEBUG' => 'true',
-    'LOGGER_SYSLOG' => '',
-    'LOGGER_LEVEL_ALLOW' => 'DEBUG,INFO,NOTICE,WARNING,ERROR,CRITICAL,ALERT,EMERGENCY',
-    'LOGGER_FILE_MAX' => '0',
-    'LOGGER_FILE_DATE_FORMAT' => 'Y-m-d',
-    'LOGGER_LINE_DATE_FORMAT' => 'Y-m-d H:i:s P',
+    'DEBUG' => 'false',
+
+    // ── Logging — global defaults ──────────────────────────────────────────
+    'LOG_LEVEL' => 'info',
+    'LOG_FORMAT' => 'line',
+    'LOG_OUTPUT' => 'auto',
+    'LOG_FILE' => '',
+    'LOG_FILE_MAX' => '30',
+    'LOG_SYSLOG_IDENT' => 'winter',
+
+    // ── Logging — sys channel overrides ───────────────────────────────────
+    'LOG_SYS_LEVEL' => '',
+    'LOG_SYS_FORMAT' => '',
+    'LOG_SYS_OUTPUT' => '',
+    'LOG_SYS_FILE' => '',
+    'LOG_SYS_FILE_MAX' => '',
+    'LOG_SYS_SYSLOG_IDENT' => '',
+
+    // ── Logging — http channel overrides ──────────────────────────────────
+    'LOG_HTTP_LEVEL' => '',
+    'LOG_HTTP_FORMAT' => '',
+    'LOG_HTTP_OUTPUT' => '',
+    'LOG_HTTP_FILE' => '',
+    'LOG_HTTP_FILE_MAX' => '',
+    'LOG_HTTP_SYSLOG_IDENT' => '',
+
+    // ── Logging — cli channel overrides ───────────────────────────────────
+    'LOG_CLI_LEVEL' => '',
+    'LOG_CLI_FORMAT' => '',
+    'LOG_CLI_OUTPUT' => '',
+    'LOG_CLI_FILE' => '',
+    'LOG_CLI_FILE_MAX' => '',
+    'LOG_CLI_SYSLOG_IDENT' => '',
 ]));
 
 expectedArguments(\env(), 1,
     match (arg(0)) {
-        'WINTER_KEY' => 'secret-key'
-        'TIME_ZONE' => 'UTC',
-        'DEBUG' => 'true', 'false',
-        'LOGGER_SYSLOG' => '', 'true', 'false',
-        'LOGGER_LEVEL_ALLOW' => 'DEBUG,INFO,NOTICE,WARNING,ERROR,CRITICAL,ALERT,EMERGENCY',
-            'DEBUG', 'INFO', 'NOTICE', 'WARNING', 'ERROR', 'CRITICAL', 'ALERT', 'EMERGENCY',
-        'LOGGER_FILE_DATE_FORMAT' => 'Y-m-d', 'Y-m', 'Y', 'Ymd',
-        'LOGGER_LINE_DATE_FORMAT' => 'Y-m-d H:i:s P', 'd/m/Y H:i:s',
+        'WINTER_KEY' => '',
+        'TIME_ZONE' => 'UTC', 'Europe/Moscow', 'America/New_York', 'Asia/Tokyo',
+        'DEBUG' => 'false', 'true',
+
+        // global
+        'LOG_LEVEL' => 'info', 'debug', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency',
+        'LOG_FORMAT' => 'line', 'json',
+        'LOG_OUTPUT' => 'auto', 'stdout', 'stderr', 'syslog', 'file', 'null',
+        'LOG_FILE_MAX' => '30', '7', '14', '0',
+        'LOG_SYSLOG_IDENT' => 'winter',
+
+        // sys channel
+        'LOG_SYS_LEVEL' => 'info', 'debug', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency',
+        'LOG_SYS_FORMAT' => 'line', 'json',
+        'LOG_SYS_OUTPUT' => 'auto', 'stdout', 'stderr', 'syslog', 'file', 'null',
+        'LOG_SYS_FILE_MAX' => '30', '7', '14', '0',
+
+        // http channel
+        'LOG_HTTP_LEVEL' => 'info', 'debug', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency',
+        'LOG_HTTP_FORMAT' => 'line', 'json',
+        'LOG_HTTP_OUTPUT' => 'auto', 'stdout', 'stderr', 'syslog', 'file', 'null',
+        'LOG_HTTP_FILE_MAX' => '30', '7', '14', '0',
+
+        // cli channel
+        'LOG_CLI_LEVEL' => 'info', 'debug', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency',
+        'LOG_CLI_FORMAT' => 'line', 'json',
+        'LOG_CLI_OUTPUT' => 'auto', 'stdout', 'stderr', 'syslog', 'file', 'null',
+        'LOG_CLI_FILE_MAX' => '30', '7', '14', '0',
+
         default => ''
     }
 );

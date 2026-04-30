@@ -12,6 +12,8 @@ use Flytachi\Winter\K2\Http\Adapter\SwooleResponse;
 use Flytachi\Winter\K2\Route\MemoryWatcher;
 use Flytachi\Winter\K2\Route\Router;
 use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\Logger\Context\CoroutineContext;
+use Flytachi\Winter\Logger\LoggerFactory;
 
 class Run extends Cmd
 {
@@ -71,6 +73,21 @@ class Run extends Cmd
 
         \Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL ^ SWOOLE_HOOK_PROC);
         Runtime::boot(RuntimeMode::Swoole);
+
+        // Log — activate Swoole context and HTTP channel
+        // ------------------------------------------------
+        // Kernel::init() registers channels (sys / http / cli) with ProcessContext
+        // and sets 'sys' as default. Here, before the server starts:
+        //   1. CoroutineContext — replaces ProcessContext so each coroutine (request)
+        //      gets its own isolated storage. All log fields (request_id, user_id …)
+        //      set via contextStorage()->set() are scoped to the current coroutine
+        //      and never leak across concurrent requests.
+        //   2. setDefaultChannel('http') — switches the active channel so every
+        //      LoggerFactory::getLogger() and Log::* call writes to 'http'.
+        // Both calls happen once before server start; worker processes inherit
+        // the state via fork and do not need to call them again.
+        LoggerFactory::setContextStorage(new CoroutineContext());
+        LoggerFactory::setDefaultChannel('http');
         $router->static(Kernel::$pathPublic);
 
         $server = new \Swoole\Http\Server($host, $port);

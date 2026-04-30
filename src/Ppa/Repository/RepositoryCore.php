@@ -14,6 +14,7 @@ use Flytachi\Winter\K2\Ppa\Entity\RepositoryInterface;
 use Flytachi\Winter\K2\Ppa\Mapping\RepositoryMappingInterface;
 use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
 use Flytachi\Winter\Base\Runtime;
+use Monolog\Logger;
 use stdClass;
 
 /**
@@ -47,7 +48,7 @@ use stdClass;
  * @see RepositoryCrudTrait  for INSERT / UPDATE / DELETE / UPSERT operations
  * @see RepositoryViewTrait  for SELECT / find / count / exists operations
  */
-abstract class RepositoryCore extends Stereotype implements RepositoryInterface, RepositoryMappingInterface
+abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingInterface
 {
     /** @var class-string $dbConfigClassName dbConfig class name (default => DbConfig::class) */
     protected string $dbConfigClassName;
@@ -66,7 +67,6 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
 
     public function __construct()
     {
-        parent::__construct();
         if (!isset($this->dbConfigClassName)) {
             RepositoryException::throw(static::class . ' $dbConfigClassName must be set by the child class');
         }
@@ -217,9 +217,7 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
                 array_unshift($parts, $withKeyword . ' ' . $state->sqlParts['with']);
             }
 
-            $query = implode(' ', $parts);
-            $this->logger->debug('Repository build:' . $query);
-            return $query;
+            return implode(' ', $parts);
         } catch (\Throwable $th) {
             throw new RepositoryException($th->getMessage(), previous: $th);
         }
@@ -236,7 +234,7 @@ abstract class RepositoryCore extends Stereotype implements RepositoryInterface,
     {
         if ($param) {
             $state = $this->state();
-            return isset($state->sqlParts[$param]) ? $state->sqlParts[$param] : null;
+            return $state->sqlParts[$param] ?? null;
         } else {
             return $this->buildSql();
         }

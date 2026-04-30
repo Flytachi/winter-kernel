@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Process\Traits;
 
-use Flytachi\Winter\Base\Log\LoggerRegistry;
+use Flytachi\Winter\Logger\LoggerFactory;
 use RuntimeException;
 
 trait ThreadFork
@@ -128,7 +128,7 @@ trait ThreadFork
     protected function forkStart(string $tag): void
     {
         $this->iAmChild = true;
-        $this->logger = LoggerRegistry::instance("[{$this->pid}] " . static::class);
+        $this->logger = LoggerFactory::getLogger(static::class);
         if (
             PHP_SAPI === 'cli'
             && empty($_SERVER['REMOTE_ADDR'])

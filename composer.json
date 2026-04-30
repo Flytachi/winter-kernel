@@ -24,6 +24,8 @@
     },
     "require": {
         "php": ">=8.3",
+        "flytachi/winter-base": "^3.0",
+        "flytachi/winter-logger": "^1.0",
         "flytachi/winter-thread": "^1.0",
         "flytachi/winter-cdo": "^3.0",
         "flytachi/winter-cache": "^1.0",

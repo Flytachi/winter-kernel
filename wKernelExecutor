@@ -3,14 +3,15 @@
 
 declare(strict_types=1);
 
-use Flytachi\Winter\Base\Log\LoggerRegistry;
+use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\Thread\Runnable;
 
 // initialization
 $fileAutoloader = dirname(__DIR__, 3) . '/bootstrap.php';
 if (file_exists($fileAutoloader)) {
     require_once $fileAutoloader;
-    $logger = LoggerRegistry::instance('Executor');
+    LoggerFactory::setDefaultChannel('cli');
+    $logger = LoggerFactory::getLogger('Executor');
 } else {
     fwrite(STDERR, "Error: No file bootstrap.php.\n");
     exit(1);

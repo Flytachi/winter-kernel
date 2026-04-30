@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Process\Core;
 
-use Flytachi\Winter\Base\Log\LoggerRegistry;
-use Flytachi\Winter\Base\Runtime;
+use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\Thread\Thread;
 use Psr\Log\LoggerInterface;
 
@@ -75,7 +74,7 @@ abstract class Dispatch implements Dispatchable
     protected function resolutionStart(): void
     {
         $this->pid = getmypid();
-        $this->logger = LoggerRegistry::instance("[{$this->pid}] " . static::class);
+        $this->logger = LoggerFactory::getLogger(static::class);
     }
 
     abstract protected function resolutionEnd(): void;

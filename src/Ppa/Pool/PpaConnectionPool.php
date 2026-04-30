@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Ppa\Pool;
 
-use Flytachi\Winter\Base\Log\LoggerRegistry;
+use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\Cdo\Config\Common\DbConfigInterface;
 use Flytachi\Winter\Cdo\Connection\CDO;
 use Flytachi\Winter\Base\Runtime;
@@ -59,7 +59,7 @@ final class PpaConnectionPool
 
     private static function logger(): LoggerInterface
     {
-        return LoggerRegistry::instance('PpaPool');
+        return LoggerFactory::getLogger('PPA');
     }
 
     // -------------------------------------------------------------------------
@@ -78,6 +78,7 @@ final class PpaConnectionPool
         if (!isset(self::$configs[$key])) {
             /** @var DbConfigInterface $config */
             $config = new $configClass();
+            $config->setLogger(self::logger());
             $config->setUp();
             self::$configs[$key] = $config;
             self::logger()->debug("config registered: {$configClass} driver={$config->getDriver()}");
@@ -213,6 +214,7 @@ final class PpaConnectionPool
                 /** @var DbConfigInterface $slotConfig */
                 $slotConfig = new $configClass();
                 $slotConfig->setUp();
+                $slotConfig->setLogger(self::logger());
                 $cdo = $slotConfig->connection();
                 self::logger()->debug("slot opened: {$configClass} dsn={$slotConfig->getDns()}");
                 return $cdo;

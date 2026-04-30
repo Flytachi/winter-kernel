@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\K2\Route;
 
 use Flytachi\Winter\Base\Exception\DebugDumpException;
-use Flytachi\Winter\Base\Log\LoggerRegistry;
+use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\Base\ReflectionCache;
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\K2\Kernel;
@@ -24,7 +24,6 @@ use Flytachi\Winter\K2\Http\Cors;
 use Flytachi\Winter\K2\Http\Health\Health;
 use Flytachi\Winter\K2\Http\Health\HealthIndicatorInterface;
 use Flytachi\Winter\K2\Plugin;
-use Flytachi\Winter\K2\Exception\ServerError;
 use Flytachi\Winter\K2\Stereotype\Middleware;
 use Flytachi\Winter\Base\HttpCode;
 
@@ -225,7 +224,7 @@ class Router
             try {
                 $router->dumpCache($cachePath);
             } catch (\RuntimeException $e) {
-                LoggerRegistry::instance('Router')->warning(
+                LoggerFactory::getLogger(self::class)->warning(
                     'Route cache write failed — running without cache: ' . $e->getMessage()
                 );
             }
@@ -422,11 +421,12 @@ class Router
             RenderContext::setRoutes($this->getRoutesSummary());
         }
 
+
         try {
             $method = $request->getMethod();
 
             if (env('DEBUG', false)) {
-                LoggerRegistry::instance('Router')->debug(
+                LoggerFactory::getLogger(self::class)->debug(
                     "Handle " . $request->getClientIp()
                     . " [$method] " . $request->getUri()
                 );
@@ -465,6 +465,8 @@ class Router
             };
         } catch (\Throwable $e) {
             $this->sendError($e, $response);
+        } finally {
+            LoggerFactory::contextStorage()->clear();
         }
     }
 
@@ -545,7 +547,7 @@ class Router
     private function logException(\Throwable $e): void
     {
         $code   = (int) $e->getCode();
-        $logger = LoggerRegistry::instance('Router');
+        $logger = LoggerFactory::getLogger(self::class);
 
         // Exception carries its own declared log level — highest priority
         if ($e instanceof LogLevelException) {

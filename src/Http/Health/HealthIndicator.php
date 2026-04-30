@@ -104,33 +104,40 @@ class HealthIndicator implements HealthIndicatorInterface
 
     public function loggers(): array
     {
-        $raw      = (string) env('LOGGER_LEVEL_ALLOW', '');
-        $maxFiles = (int) env('LOGGER_FILE_MAX', 0);
-        $syslog   = env('LOGGER_SYSLOG');
-        $useSyslog = ($syslog !== null && $syslog !== '')
-            ? filter_var($syslog, FILTER_VALIDATE_BOOLEAN)
-            : file_exists('/.dockerenv');
+        $globalLevel  = env('LOG_LEVEL', '');
+        $globalOutput = env('LOG_OUTPUT', 'auto');
+        $globalFormat = env('LOG_FORMAT', 'line');
 
-        $fileInfo = null;
-        if ($maxFiles > 0) {
-            $root        = \Flytachi\Winter\K2\Kernel::$pathRoot;
-            $logDir      = \Flytachi\Winter\K2\Kernel::$pathStorageLog;
-            $relDir      = str_starts_with($logDir, $root)
-                ? ltrim(substr($logDir, strlen($root)), DIRECTORY_SEPARATOR)
-                : $logDir;
-            $dateFormat  = (string) env('LOGGER_FILE_DATE_FORMAT', 'Y-m-d');
-            $fileInfo    = [
-                'directory' => $relDir,
-                'pattern'   => 'frame-{' . $dateFormat . '}.log',
-                'max_files' => $maxFiles,
+        $channels = [];
+        foreach (['sys', 'http', 'cli'] as $name) {
+            $prefix   = 'LOG_' . strtoupper($name) . '_';
+            $level    = env($prefix . 'LEVEL')  ?? $globalLevel;
+            $output   = env($prefix . 'OUTPUT') ?? $globalOutput;
+            $format   = env($prefix . 'FORMAT') ?? $globalFormat;
+            $file     = env($prefix . 'FILE')   ?? env('LOG_FILE');
+            $fileMax  = (int) (env($prefix . 'FILE_MAX') ?? env('LOG_FILE_MAX', 30));
+
+            $entry = [
+                'level'  => $level !== '' ? strtoupper((string) $level) : 'disabled',
+                'output' => $output,
+                'format' => $format,
             ];
+
+            if ($output === 'file' || $file) {
+                $root   = \Flytachi\Winter\K2\Kernel::$pathRoot;
+                $logDir = \Flytachi\Winter\K2\Kernel::$pathStorageLog;
+                $entry['file'] = [
+                    'path'     => $file ?? (str_starts_with($logDir, $root)
+                        ? ltrim(substr($logDir, strlen($root)), DIRECTORY_SEPARATOR)
+                        : $logDir) . '/' . $name . '.log',
+                    'max_files' => $fileMax,
+                ];
+            }
+
+            $channels[$name] = $entry;
         }
 
-        return [
-            'levels' => $raw !== '' ? array_map('trim', explode(',', $raw)) : [],
-            'output' => $useSyslog ? 'syslog' : 'stdout',
-            'file'   => $fileInfo,
-        ];
+        return $channels;
     }
 
     public function mappings(): array

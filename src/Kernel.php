@@ -4,19 +4,14 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2;
 
-use Flytachi\Winter\Base\Log\LoggerRegistry;
+use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\K2\Core\KernelStore;
 use Flytachi\Winter\Thread\Thread;
-use Monolog\Formatter\LineFormatter;
-use Monolog\Handler\FilterHandler;
-use Monolog\Handler\RotatingFileHandler;
-use Monolog\Handler\StreamHandler;
-use Monolog\Handler\SyslogHandler;
+use Flytachi\Winter\Logger\Context\ProcessContext;
+use Flytachi\Winter\Logger\LoggerFactory;
+use Flytachi\Winter\Logger\LoggerManager;
 use Monolog\Level;
-use Monolog\Logger;
 use Dotenv\Dotenv;
-use Psr\Log\LoggerInterface;
-use Psr\Log\NullLogger;
 
 /**
  * Class Kernel
@@ -36,7 +31,6 @@ final class Kernel extends KernelStore
         ?string $pathStorageCache = null,
         ?string $pathStorageRunnable = null,
         bool $isTmpVolatile = true,
-        ?LoggerInterface $logger = null
     ): void {
         defined('WINTER_STARTUP_TIME') or define('WINTER_STARTUP_TIME', microtime(true));
         parent::init(
@@ -68,86 +62,88 @@ final class Kernel extends KernelStore
             ini_set('display_startup_errors', 0);
         }
 
-        // logging
-        LoggerRegistry::setInstance($logger !== null ? $logger : self::registryLogger());
+        self::bootLogger();
 
         // thread
         self::bindThread();
     }
 
-    private static function registryLogger(): LoggerInterface
+    private static function bootLogger(): void
     {
-        if (!class_exists(Logger::class)) {
-            return new NullLogger();
-        }
+        $levelStr = trim((string) env('LOG_LEVEL', ''));
 
-        $allowedLevels = env('LOGGER_LEVEL_ALLOW');
-        if (empty($allowedLevels) || trim($allowedLevels) === '') {
-            return new NullLogger();
-        }
-
-        $allowedLevels = array_map('trim', explode(',', $allowedLevels));
-        $levelMap = [
-            'DEBUG' => Level::Debug,
-            'INFO' => Level::Info,
-            'NOTICE' => Level::Notice,
-            'WARNING' => Level::Warning,
-            'ERROR' => Level::Error,
-            'CRITICAL' => Level::Critical,
-            'ALERT' => Level::Alert,
-            'EMERGENCY' => Level::Emergency,
+        $null = [
+            'level' => Level::Debug,
+            'format' => 'line',
+            'output' => 'null',
+            'file_path' => null,
+            'file_max' => 0,
+            'syslog_ident' => 'winter'
         ];
 
-        $allowedLevels = array_map(fn($level) => $levelMap[strtoupper($level)] ?? null, $allowedLevels);
-        $allowedLevels = array_filter($allowedLevels);
-        if (empty($allowedLevels)) {
-            return new NullLogger();
-        }
-
-        // Logger
-        $logger = new Logger('Kernel');
-        $maxFiles = (int) env('LOGGER_FILE_MAX', 0);
-
-        // stdout (local) / syslog (docker)
-        $syslog = env('LOGGER_SYSLOG');
-        $useSyslog = ($syslog !== null && $syslog !== '')
-            ? filter_var($syslog, FILTER_VALIDATE_BOOLEAN)
-            : file_exists('/.dockerenv');
-        if ($useSyslog) {
-            $formatter = new LineFormatter(
-                format: "%channel%.%level_name%: %message% %context% %extra%",
-                dateFormat: env('LOGGER_LINE_DATE_FORMAT', 'Y-m-d H:i:s P'),
-                allowInlineLineBreaks: false,
-                ignoreEmptyContextAndExtra: true
-            );
-            $outputHandler = new SyslogHandler('winter', LOG_USER, Level::Debug);
-        } else {
-            $formatter = new LineFormatter(
-                dateFormat: env('LOGGER_LINE_DATE_FORMAT', 'Y-m-d H:i:s P'),
-                allowInlineLineBreaks: true,
-                ignoreEmptyContextAndExtra: true
-            );
-            $outputHandler = new StreamHandler('php://stdout');
-        }
-        $outputHandler->setFormatter($formatter);
-        $logger->pushHandler(new FilterHandler($outputHandler, $allowedLevels, Level::Emergency));
-
-        // file — only if LOGGER_FILE_MAX > 0
-        if ($maxFiles > 0) {
-            $fileHandler = new RotatingFileHandler(
-                self::$pathStorageLog . '/frame.log',
-                maxFiles: $maxFiles,
-                dateFormat: env('LOGGER_FILE_DATE_FORMAT', 'Y-m-d')
-            );
-            $fileHandler->setFormatter(new LineFormatter(
-                dateFormat: env('LOGGER_LINE_DATE_FORMAT', 'Y-m-d H:i:s P'),
-                allowInlineLineBreaks: true,
-                ignoreEmptyContextAndExtra: true
+        if (empty($levelStr)) {
+            LoggerFactory::setManager(new LoggerManager(
+                contextStorage: new ProcessContext(),
+                channels: ['sys' => $null, 'http' => $null, 'cli' => $null],
             ));
-            $logger->pushHandler(new FilterHandler($fileHandler, $allowedLevels, Level::Emergency));
+            return;
         }
 
-        return $logger;
+        LoggerFactory::setManager(new LoggerManager(
+            contextStorage: new ProcessContext(),
+            channels: [
+                'sys'  => self::buildChannelConfig('sys'),
+                'http' => self::buildChannelConfig('http'),
+                'cli'  => self::buildChannelConfig('cli'),
+            ],
+        ));
+
+        LoggerFactory::setDefaultChannel('sys');
+    }
+
+    /**
+     * Register an additional channel from .env (LOG_{NAME}_* vars).
+     * Call after Kernel::init() in bootstrap or entry point:
+     *   Kernel::channel('job');
+     *   Kernel::channel('daemon');
+     */
+    public static function channel(string $name): void
+    {
+        LoggerFactory::addChannel($name, self::buildChannelConfig($name));
+    }
+
+    private static function buildChannelConfig(string $channel): array
+    {
+        $prefix   = 'LOG_' . strtoupper($channel) . '_';
+        $levelStr = strtoupper((string) (env($prefix . 'LEVEL') ?? env('LOG_LEVEL', 'info')));
+
+        $rawOutput = (string) (env($prefix . 'OUTPUT') ?? env('LOG_OUTPUT', 'auto'));
+        $output    = self::resolveOutput($rawOutput);
+
+        $filePath = env($prefix . 'FILE') ?? env('LOG_FILE');
+        if ($output === 'file' && empty($filePath)) {
+            $filePath = self::$pathStorageLog . '/' . $channel . '.log';
+        }
+
+        return [
+            'level'        => Level::fromName($levelStr),
+            'format'       => (string) (env($prefix . 'FORMAT') ?? env('LOG_FORMAT', 'line')),
+            'output'       => $output,
+            'file_path'    => $filePath ? (string) $filePath : null,
+            'file_max'     => (int) (env($prefix . 'FILE_MAX') ?? env('LOG_FILE_MAX', 30)),
+            'syslog_ident' => (string) (env($prefix . 'SYSLOG_IDENT') ?? env('LOG_SYSLOG_IDENT', 'winter')),
+        ];
+    }
+
+    private static function resolveOutput(string $raw): string
+    {
+        if ($raw !== 'auto') {
+            return $raw;
+        }
+        if (getenv('KUBERNETES_SERVICE_HOST') !== false || file_exists('/.dockerenv')) {
+            return 'syslog';
+        }
+        return Runtime::isSwoole() ? 'stdout' : 'stderr';
     }
 
     private static function bindThread(): void
