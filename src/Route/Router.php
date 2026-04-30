@@ -478,8 +478,6 @@ class Router
             };
         } catch (\Throwable $e) {
             $this->sendError($e, $response);
-        } finally {
-            LoggerFactory::contextStorage()->clear();
         }
     }
 
