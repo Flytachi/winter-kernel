@@ -10,7 +10,6 @@ use Flytachi\Winter\Thread\Thread;
 use Flytachi\Winter\Logger\Context\ProcessContext;
 use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\Logger\LoggerManager;
-use Monolog\Level;
 use Dotenv\Dotenv;
 
 /**
@@ -73,7 +72,7 @@ final class Kernel extends KernelStore
         $levelStr = trim((string) env('LOG_LEVEL', ''));
 
         $null = [
-            'level' => Level::Debug,
+            'level' => 'info',
             'format' => 'line',
             'output' => 'null',
             'file_path' => null,
@@ -115,7 +114,7 @@ final class Kernel extends KernelStore
     private static function buildChannelConfig(string $channel): array
     {
         $prefix   = 'LOG_' . strtoupper($channel) . '_';
-        $levelStr = strtoupper((string) (env($prefix . 'LEVEL') ?? env('LOG_LEVEL', 'info')));
+        $levelStr = strtolower((string) (env($prefix . 'LEVEL') ?? env('LOG_LEVEL', 'info')));
 
         $rawOutput = (string) (env($prefix . 'OUTPUT') ?? env('LOG_OUTPUT', 'auto'));
         $output    = self::resolveOutput($rawOutput);
@@ -126,7 +125,7 @@ final class Kernel extends KernelStore
         }
 
         return [
-            'level'        => Level::fromName($levelStr),
+            'level'        => $levelStr,
             'format'       => (string) (env($prefix . 'FORMAT') ?? env('LOG_FORMAT', 'line')),
             'output'       => $output,
             'file_path'    => $filePath ? (string) $filePath : null,

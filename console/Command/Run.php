@@ -55,9 +55,7 @@ class Run extends Cmd
         $watcher         = in_array('w', $this->args['flags'] ?? [])
                         || isset($this->args['options']['watcher']);
 
-        $connection = @fsockopen($host, $port);
-        if (is_resource($connection)) {
-            fclose($connection);
+        if ($this->isPortInUse($host, $port)) {
             self::printWarning("Address 'http://$host:$port' is already in use.");
             return;
         }
@@ -129,6 +127,17 @@ class Run extends Cmd
         }
 
         $server->start();
+    }
+
+    private function isPortInUse(string $host, int $port): bool
+    {
+        $sock = @socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        if ($sock === false) {
+            return false;
+        }
+        $inUse = @socket_connect($sock, $host, $port);
+        socket_close($sock);
+        return $inUse;
     }
 
     // ── PHP built-in dev server ───────────────────────────────────────────────
