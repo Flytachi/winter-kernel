@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Ppa\Repository;
 
-use Flytachi\Winter\Base\Interface\Stereotype;
 use Flytachi\Winter\Cdo\CDOBind;
 use Flytachi\Winter\Cdo\Connection\CDO;
 use Flytachi\Winter\Cdo\Connection\CDOStatement;
@@ -14,7 +13,6 @@ use Flytachi\Winter\K2\Ppa\Entity\RepositoryInterface;
 use Flytachi\Winter\K2\Ppa\Mapping\RepositoryMappingInterface;
 use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
 use Flytachi\Winter\Base\Runtime;
-use Monolog\Logger;
 use stdClass;
 
 /**

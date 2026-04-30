@@ -202,7 +202,7 @@ class Boot extends BaseBoot
      *       'max_request_grace' => 500,
      *   ];
      */
-    protected static function swooleConfig(): array
+    public static function swooleConfig(): array
     {
         return [];
     }
