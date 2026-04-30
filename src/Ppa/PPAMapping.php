@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Flytachi\Winter\K2\Ppa;
 
 use Flytachi\Winter\Cdo\Config\Common\DbConfigInterface;
+use Flytachi\Winter\DI\Scanner;
+use Flytachi\Winter\K2\Collector\ImplementorCollector;
 use Flytachi\Winter\K2\Kernel;
 use Flytachi\Winter\K2\Ppa\Entity\RepositoryInterface;
 use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Entity\Table as EntityTable;
 use Flytachi\Winter\K2\Ppa\Mapping\ColumnMapping;
 use Flytachi\Winter\K2\Ppa\Mapping\Structure\Table;
-use Flytachi\Winter\K2\Route\MappingScanner;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionException;
@@ -22,14 +23,13 @@ class PPAMapping
      */
     public static function scanningConfigs(?string $rootDir = null): array
     {
-        $reflectionClasses = MappingScanner::scanImplementors(
-            $rootDir ?? Kernel::$pathRoot,
-            DbConfigInterface::class
-        );
+        $collector = new ImplementorCollector(DbConfigInterface::class);
+        Scanner::run($rootDir ?? Kernel::$pathRoot)->collect($collector)->execute();
+
         $configs = [];
-        foreach ($reflectionClasses as $rc) {
+        foreach ($collector->getResult() as $ref) {
             try {
-                $configs[] = $rc->newInstance();
+                $configs[] = $ref->newInstance();
             } catch (ReflectionException) {
             }
         }
@@ -38,11 +38,10 @@ class PPAMapping
 
     public static function scanningDeclaration(?string $rootDir = null): Declaration
     {
-        $reflectionClasses = MappingScanner::scanImplementors(
-            $rootDir ?? Kernel::$pathRoot,
-            RepositoryInterface::class
-        );
-        return self::scanDeclarationFilter($reflectionClasses);
+        $collector = new ImplementorCollector(RepositoryInterface::class);
+        Scanner::run($rootDir ?? Kernel::$pathRoot)->collect($collector)->execute();
+
+        return self::scanDeclarationFilter($collector->getResult());
     }
 
     /**

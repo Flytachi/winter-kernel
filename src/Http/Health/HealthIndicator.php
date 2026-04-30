@@ -6,8 +6,9 @@ namespace Flytachi\Winter\K2\Http\Health;
 
 use Composer\InstalledVersions;
 use Flytachi\Winter\Base\Runtime;
+use Flytachi\Winter\DI\Scanner;
+use Flytachi\Winter\K2\Collector\ImplementorCollector;
 use Flytachi\Winter\K2\Http\Header;
-use Flytachi\Winter\K2\Route\MappingScanner;
 
 class HealthIndicator implements HealthIndicatorInterface
 {
@@ -154,11 +155,12 @@ class HealthIndicator implements HealthIndicatorInterface
             return ['status' => 'up', 'details' => []];
         }
 
-        $refs        = MappingScanner::scanImplementors($rootDir, $interface);
+        $collector = new ImplementorCollector($interface);
+        Scanner::run($rootDir)->collect($collector)->execute();
         $details     = [];
         $worstStatus = 'up';
 
-        foreach ($refs as $ref) {
+        foreach ($collector->getResult() as $ref) {
             /** @var \Flytachi\Winter\Cdo\Config\Common\DbConfigInterface $config */
             $config = $ref->newInstance();
             $config->setUp();
@@ -210,11 +212,12 @@ class HealthIndicator implements HealthIndicatorInterface
             return ['status' => 'up', 'details' => []];
         }
 
-        $refs        = MappingScanner::scanImplementors($rootDir, $interface);
+        $collector = new ImplementorCollector($interface);
+        Scanner::run($rootDir)->collect($collector)->execute();
         $details     = [];
         $worstStatus = 'up';
 
-        foreach ($refs as $ref) {
+        foreach ($collector->getResult() as $ref) {
             /** @var \Flytachi\Winter\Cache\Config\Common\RedisConfigInterface $config */
             $config = $ref->newInstance();
             $config->setUp();

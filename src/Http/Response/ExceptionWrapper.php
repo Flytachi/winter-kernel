@@ -48,6 +48,17 @@ final class ExceptionWrapper
     }
 
     /**
+     * Inject pre-scanned handlers directly, bypassing the lazy filesystem scan.
+     * Called by ExceptionCollector after a unified Scanner run.
+     *
+     * @param list<array{className: string, exceptions: string[]}> $handlers
+     */
+    public static function setHandlers(array $handlers): void
+    {
+        self::$handlers = $handlers;
+    }
+
+    /**
      * Wrap a Throwable in the most specific matching exception response.
      * Falls back to ExceptionResponseBase if no custom handler is found.
      */

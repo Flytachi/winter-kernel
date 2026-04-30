@@ -16,9 +16,8 @@ use ReflectionException;
 use ReflectionMethod;
 
 /**
- * Scans PHP files for classes implementing ControllerInterface,
- * reads their #[GetMapping] / #[PostMapping] / … attributes,
- * and registers routes into a Router instance.
+ * @deprecated Use Scanner + MappingCollector / ImplementorCollector from winter-di instead.
+ *             This class will be removed in a future version.
  */
 class MappingScanner
 {
