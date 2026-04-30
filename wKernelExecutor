@@ -3,124 +3,18 @@
 
 declare(strict_types=1);
 
-use Flytachi\Winter\Logger\LoggerFactory;
-use Flytachi\Winter\Thread\Runnable;
+if (PHP_VERSION_ID < 80300) {
+    fwrite(STDERR, "Please use PHP version 8.3 or higher.\n");
+    exit(1);
+}
 
-// initialization
 $fileAutoloader = dirname(__DIR__, 3) . '/bootstrap.php';
-if (file_exists($fileAutoloader)) {
-    require_once $fileAutoloader;
-    LoggerFactory::setDefaultChannel('cli');
-    $logger = LoggerFactory::getLogger('Executor');
-} else {
-    fwrite(STDERR, "Error: No file bootstrap.php.\n");
+
+if (!file_exists($fileAutoloader)) {
+    fwrite(STDERR, "Error: bootstrap.php not found at {$fileAutoloader}\n");
     exit(1);
 }
 
-// 1. Command line options (debugging, configure)
-$options = getopt('', ['namespace::', 'name::', 'tag::', 'debug', 'shmkey::']);
+require_once $fileAutoloader;
 
-
-// Debugging / Configure
-set_time_limit(0);
-ob_implicit_flush();
-ignore_user_abort(true);
-
-if (isset($options['debug'])) {
-    error_reporting(E_ALL);
-    ini_set('display_errors', 1);
-    ini_set('display_startup_errors', 1);
-} else {
-    error_reporting(0);
-    ini_set('display_errors', 0);
-    ini_set('display_startup_errors', 0);
-}
-
-
-// 2. Reading all standard input data (stdin).
-if (isset($options['shmkey'])) {
-    $shmKey = (int) $options['shmkey'];
-    $shm = @shmop_open($shmKey, 'a', 0, 0);
-    if ($shm === false) {
-        fwrite(STDERR, "Error: Failed to open shared memory segment (key={$shmKey}).\n");
-        exit(1);
-    }
-    $payload = shmop_read($shm, 0, shmop_size($shm));
-    shmop_delete($shm);
-    unset($shm);
-} else {
-    $payload = stream_get_contents(STDIN);
-}
-
-if (empty($payload)) {
-    $logger->emergency('No payload received from stdin');
-    fwrite(STDERR, "Error: No payload received.\n");
-    exit(1);
-}
-
-// 3. Decode and deserialize the object Runnable.
-if (function_exists('\Opis\Closure\serialize')) {
-    $runnable = \Opis\Closure\unserialize(
-            $payload,
-            \Flytachi\Winter\Thread\Thread::getSerSecurity()
-    );
-} else {
-    $runnable = unserialize($payload);
-}
-unset($payload);
-
-if (!$runnable instanceof Runnable) {
-    $logger->emergency("The provided payload is not a valid RunnableInterface object");
-    fwrite(STDERR, "Error: The provided payload is not a valid RunnableInterface object.\n");
-    exit(1);
-}
-
-
-// 4. Set the process title.
-if (function_exists('cli_set_process_title')) {
-    $processNamespace = isset($options['namespace'])
-            ? ($options['namespace'] . ' ') : '';
-    $processTag = $options['tag'] ?? 'runnable';
-
-    // Name
-    if (isset($options['name'])) {
-        $processName = $options['name'];
-    } else {
-        $className = get_class($runnable);
-        $processName = substr($className, strrpos($className, '\\') + 1);
-    }
-
-    cli_set_process_title("Winter {$processNamespace}-> {$processName}@$processTag");
-    unset($processNamespace, $processTag, $processName);
-}
-
-// 5. Let's complete the task.
-try {
-
-    // Custom args
-    $customArgs = [];
-    for ($i = 1; $i < count($argv); $i++) {
-        $arg = $argv[$i];
-        if (str_starts_with($arg, '--arg-')) {
-            $argContent = substr($arg, 6);
-            if (str_contains($argContent, '=')) {
-                list($key, $value) = explode('=', $argContent, 2);
-                $customArgs[$key] = $value;
-            } else {
-                $customArgs[$argContent] = true;
-            }
-        }
-    }
-
-    $runnable->run($customArgs);
-    exit(0);
-} catch (\Throwable $e) {
-    $logger->alert($e->getMessage(), [
-        'file' => $e->getFile(),
-        'line' => $e->getLine(),
-        'exception' => $e
-    ]);
-    fwrite(STDERR, "Uncaught exception in background process: " . $e->getMessage() . "\n");
-    fwrite(STDERR, $e->getTraceAsString() . "\n");
-    exit(1);
-}
+Boot::executor($argv);
