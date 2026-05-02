@@ -31,6 +31,30 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PARAMETER)]
 readonly class RequestFile
 {
+    /**
+     * @param string|null $name     Form field name from the multipart request.
+     *                              Omit (null) to receive the full uploaded files map.
+     *
+     * @param bool        $multiple Set to true when the field sends several files via bracket
+     *                              notation (e.g. <input name="images[]" multiple>).
+     *                              Returns a list of file info arrays; a single uploaded file
+     *                              is automatically normalized to a one-element list.
+     *                              Default false returns a single file info array.
+     *
+     * @param string|null $maxSize  Maximum allowed file size. Accepts human-readable units:
+     *                              '500KB', '5MB', '1.5MB', '1GB', or plain bytes '2048'.
+     *                              Uses binary units (1KB = 1024 bytes).
+     *                              Throws 400 if file size exceeds the limit.
+     *                              When combined with multiple: true, applied to each file.
+     *
+     * @param array       $accept   Allowed file types. Throws 400 if none match.
+     *                              Three formats supported:
+     *                              - Exact MIME:    'image/jpeg', 'application/pdf'
+     *                              - Wildcard MIME: 'image/*', 'video/*'
+     *                              - Extension:     '.jpg', '.pdf', '.docx'
+     *                              MIME is detected from file magic bytes via finfo —
+     *                              not from the browser-supplied Content-Type.
+     */
     public function __construct(
         public ?string $name     = null,
         public bool    $multiple = false,
