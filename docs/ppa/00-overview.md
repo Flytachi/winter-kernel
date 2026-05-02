@@ -4,7 +4,7 @@
 It wraps [Winter CDO](https://winterframe.net/docs/cdo) with a fluent SQL query builder,
 entity hydration, and ready-made CRUD and read-only stereotypes.
 
-**Full web documentation:** https://winterframe.net/docs/edo
+**Full web documentation:** https://winterframe.net/docs/ppa
 
 ---
 

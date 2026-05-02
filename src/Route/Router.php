@@ -127,8 +127,16 @@ class Router
         $route = new Route($method, $path, $stored);
 
         if ($route->isStatic()) {
+            if (isset($this->staticRoutes[$method][$path])) {
+                throw new \RuntimeException("Ambiguous handler methods mapped for [{$method}] '{$path}'");
+            }
             $this->staticRoutes[$method][$path] = $stored;
         } else {
+            foreach ($this->dynamicRoutes as $existing) {
+                if ($existing->method === $method && $existing->path === $path) {
+                    throw new \RuntimeException("Ambiguous handler methods mapped for [{$method}] '{$path}'");
+                }
+            }
             $this->dynamicRoutes[] = $route;
         }
 
@@ -418,7 +426,8 @@ class Router
             $ctx['__request_uri']    = $request->getUri();
         }
 
-        if ($this->publicDir !== null && strtoupper($request->getMethod()) === 'GET') {
+        // static - files (js,css,media)
+        if (Runtime::isSwoole() && $this->publicDir !== null && strtoupper($request->getMethod()) === 'GET') {
             $uri  = $request->getUri();
             $path = ($pos = strpos($uri, '?')) !== false ? substr($uri, 0, $pos) : $uri;
             $file = $this->publicDir . $path;
@@ -428,19 +437,14 @@ class Router
             }
         }
 
-        if (env('DEBUG', false)) {
-            RenderContext::setRoutes($this->getRoutesSummary());
-        }
-
-
         try {
             $method = $request->getMethod();
 
             if (env('DEBUG', false)) {
                 LoggerFactory::getLogger(self::class)->debug(
-                    "Handle " . $request->getClientIp()
-                    . " [$method] " . $request->getUri()
+                    $request->getClientIp() . " -- $method " . $request->getUri()
                 );
+                RenderContext::setRoutes($this->getRoutesSummary());
             }
 
             // ── Global CORS applied eagerly (covers 404, 405, and errors too) ─
@@ -466,12 +470,10 @@ class Router
 
             match ($result->status) {
                 RouteResult::FOUND => $this->invoke($result->handler, $request, $response, $result->params),
-
-                RouteResult::METHOD_NOT_ALLOWED => throw (new ResponseException(
+                RouteResult::METHOD_NOT_ALLOWED => throw new ResponseException(
                     'Method Not Allowed',
                     HttpCode::METHOD_NOT_ALLOWED
-                ))->withHeader('Allow', implode(', ', $result->allowedMethods)),
-
+                )->withHeader('Allow', implode(', ', $result->allowedMethods)),
                 default => throw new ResponseException('Not Found', HttpCode::NOT_FOUND),
             };
         } catch (\Throwable $e) {
@@ -498,7 +500,7 @@ class Router
             $stack = [];
             foreach ($middlewareDefs as $def) {
                 /** @var Middleware $mw */
-                $mw = new $def['class'](...$def['args']);
+                $mw = Container::getInstance()->make($def['class'], $def['args']);
                 $mw->before($req, $res);
                 $stack[] = $mw;
             }

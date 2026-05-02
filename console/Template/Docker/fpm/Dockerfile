@@ -18,8 +18,8 @@ WORKDIR /var/www/html
 # Installing required packages
 RUN apk update && apk add --no-cache php85 \
     php85-dom php85-xml php85-xmlwriter \
-    php85-tokenizer php85-ctype php85-session \
-    php85-common php85-phar php85-pcntl \
+    php85-tokenizer php85-common php85-session \
+    php85-ctype php85-phar php85-pcntl php85-fileinfo \
     php85-posix php85-mbstring php85-simplexml \
     php85-iconv php85-pdo php85-fpm php85-curl \
     php85-openssl php85-sockets \

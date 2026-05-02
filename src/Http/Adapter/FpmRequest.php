@@ -59,7 +59,23 @@ final class FpmRequest implements HttpRequest
 
     public function getUploadedFiles(): array
     {
-        return $_FILES;
+        $result = [];
+        foreach ($_FILES as $field => $info) {
+            if (is_array($info['name'])) {
+                foreach (array_keys($info['name']) as $i) {
+                    $result[$field][] = [
+                        'name'     => $info['name'][$i],
+                        'type'     => $info['type'][$i],
+                        'tmp_name' => $info['tmp_name'][$i],
+                        'error'    => $info['error'][$i],
+                        'size'     => $info['size'][$i],
+                    ];
+                }
+            } else {
+                $result[$field] = $info;
+            }
+        }
+        return $result;
     }
 
     public function getServerParam(string $key): ?string

@@ -111,8 +111,8 @@ final class ExceptionWrapper
                 continue;
             }
 
-            try {
-                $ref = new ReflectionClass($className);
+            try {$ref = new ReflectionClass($className);
+
 
                 if (
                     $ref->isAbstract()

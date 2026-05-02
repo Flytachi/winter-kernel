@@ -6,8 +6,8 @@
          stopOnFailure="false">
 
     <testsuites>
-        <testsuite name="Unit">
-            <directory>tests/Unit</directory>
+        <testsuite name="Http">
+            <directory>tests/Http</directory>
         </testsuite>
     </testsuites>
 

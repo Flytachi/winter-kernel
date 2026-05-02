@@ -23,7 +23,7 @@
         ]
     },
     "require": {
-        "php": ">=8.3",
+        "php": ">=8.4",
         "flytachi/winter-di": "^1.0",
         "flytachi/winter-base": "^3.0",
         "flytachi/winter-logger": "^1.0",
@@ -34,7 +34,8 @@
         "vlucas/phpdotenv": "^5.6",
 
         "ext-pcntl": "*",
-        "ext-posix": "*"
+        "ext-posix": "*",
+        "ext-fileinfo": "*"
     },
     "suggest": {
         "ext-simplexml": "Required for XML file operations (K2\\File\\XML)",

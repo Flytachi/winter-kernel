@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Http;
 
+use Flytachi\Winter\Base\Tool;
 use Flytachi\Winter\DI\ReflectionCache;
 use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
@@ -63,20 +64,39 @@ class ParameterResolver
         HttpResponse $response,
         array $pathParams,
     ): mixed {
-        $type     = $param->getType() instanceof ReflectionNamedType ? $param->getType() : null;
+        $paramType = $param->getType();
+        if ($paramType !== null && !$paramType instanceof ReflectionNamedType) {
+            throw new \LogicException(sprintf(
+                "Union/intersection type on '\$%s' in %s::%s() is not supported for HTTP parameter binding — use a single type",
+                $param->getName(),
+                $param->getDeclaringClass()?->getName(),
+                $param->getDeclaringFunction()->getName(),
+            ));
+        }
+        $type     = $paramType;
         $typeName = $type?->getName();
 
         // ── #[PathVariable] ───────────────────────────────────────────────────
         if ($attr = $param->getAttributes(PathVariable::class)[0] ?? null) {
             $key = $attr->newInstance()->name ?? $param->getName();
             $val = $pathParams[$key] ?? null;
-            return self::required($val, $param, $typeName, "@PathVariable '{$key}'");
+            return self::required($val, $param, $typeName, "Path variable '$key'");
         }
 
         // ── #[RequestParam] ───────────────────────────────────────────────────
         if ($attr = $param->getAttributes(RequestParam::class)[0] ?? null) {
-            $key = $attr->newInstance()->name ?? $param->getName();
-            $val = $request->getQueryParams()[$key] ?? null;
+            $instance = $attr->newInstance();
+            $queryParams = $request->getQueryParams();
+            if ($instance->name !== null) {
+                $key = $instance->name;
+                $val = $queryParams[$key] ?? null;
+            } else {
+                $key = $param->getName();
+                $val = $queryParams[$key]
+                    ?? $queryParams[Tool::camelToSnake($key)]
+                    ?? $queryParams[Tool::camelToKebab($key)]
+                    ?? null;
+            }
 
             if ($val === null) {
                 if ($param->isDefaultValueAvailable()) {
@@ -88,7 +108,7 @@ class ParameterResolver
                 RequestException::throw("Required query parameter '{$key}' is missing");
             }
 
-            return self::cast($val, $typeName);
+            return self::cast($val, $typeName, "Query parameter '{$key}'");
         }
 
         // ── #[RequestBody] — raw string / object / array / RequestObject ───────
@@ -140,11 +160,21 @@ class ParameterResolver
 
         // ── #[RequestFile] — загруженный файл из multipart ───────────────────
         if ($attr = $param->getAttributes(RequestFile::class)[0] ?? null) {
-            $name  = $attr->newInstance()->name;
-            $files = $request->getUploadedFiles();
+            /** @var RequestFile $annotation */
+            $annotation = $attr->newInstance();
+            $name       = $annotation->name;
+            $files      = $request->getUploadedFiles();
 
-            // без имени → вся карта файлов
+            // без имени → вся карта файлов (constraints применяются к каждому)
             if ($name === null) {
+                if ($annotation->maxSize !== null || $annotation->accept !== []) {
+                    foreach ($files as $fieldName => $file) {
+                        $entries = isset($file[0]) && is_array($file[0]) ? $file : [$file];
+                        foreach ($entries as $entry) {
+                            self::validateFile($entry, (string) $fieldName, $annotation);
+                        }
+                    }
+                }
                 return $files;
             }
 
@@ -159,13 +189,28 @@ class ParameterResolver
                 RequestException::throw("Uploaded file '{$name}' is missing");
             }
 
-            // string → содержимое файла в памяти
-            if ($typeName === 'string') {
-                $path = is_array($file) ? ($file['tmp_name'] ?? '') : (string) $file;
-                return file_exists($path) ? file_get_contents($path) : '';
+            if ($annotation->multiple) {
+                // normalize single → list
+                $list = isset($file[0]) && is_array($file[0]) ? $file : [$file];
+                foreach ($list as $entry) {
+                    self::validateFile($entry, $name, $annotation);
+                }
+                return $list;
             }
 
-            return $file;
+            // single file — take first if client sent multiple
+            $single = isset($file[0]) && is_array($file[0]) ? $file[0] : $file;
+            self::validateFile($single, $name, $annotation);
+
+            if ($typeName === 'string') {
+                $path = is_array($single) ? ($single['tmp_name'] ?? '') : (string) $single;
+                if (!file_exists($path)) {
+                    RequestException::throw("Uploaded file '{$name}' is not readable");
+                }
+                return file_get_contents($path);
+            }
+
+            return $single;
         }
 
         // ── #[RequestJson] — явно JSON → RequestObject ────────────────────────
@@ -198,7 +243,9 @@ class ParameterResolver
 
         // ── #[RequestHeader] ─────────────────────────────────────────────────
         if ($attr = $param->getAttributes(RequestHeader::class)[0] ?? null) {
-            $raw = $attr->newInstance()->name ?? str_replace('_', '-', $param->getName());
+            $raw = $attr->newInstance()->name ?? str_replace('_', '-',
+                Tool::camelToKebab($param->getName())
+            );
             $val = $request->getHeader($raw);
 
             if ($val === null) {
@@ -211,7 +258,7 @@ class ParameterResolver
                 RequestException::throw("Required header '{$raw}' is missing");
             }
 
-            return self::cast($val, $typeName);
+            return self::cast($val, $typeName, "Header '{$raw}'");
         }
 
         // ── Framework types (HttpRequest / HttpResponse or any subclass) ──────
@@ -228,7 +275,7 @@ class ParameterResolver
                 $pathParams[$param->getName()],
                 $param,
                 $typeName,
-                "Path param '{$param->getName()}'"
+                "Path variable '{$param->getName()}'"
             );
         }
 
@@ -250,21 +297,109 @@ class ParameterResolver
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static function cast(mixed $value, ?string $typeName): mixed
+    private static function cast(mixed $value, ?string $typeName, string $label = 'Parameter'): mixed
     {
-        return match ($typeName) {
-            'int'    => (int)   $value,
-            'float'  => (float) $value,
-            'bool'   => filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? (bool) $value,
-            'string' => (string) $value,
-            default  => $value,
+        return match (true) {
+            $typeName === 'int' => filter_var($value, FILTER_VALIDATE_INT) !== false
+                ? (int) $value
+                : RequestException::throw("$label must be an integer, got '$value'"),
+            $typeName === 'float' => filter_var($value, FILTER_VALIDATE_FLOAT) !== false
+                ? (float) $value
+                : RequestException::throw("$label must be a float, got '$value'"),
+            $typeName === 'bool' => filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)
+                ?? RequestException::throw("$label must be a boolean (true/false/1/0/yes/no), got '$value'"),
+            $typeName === 'string' => (string) $value,
+            $typeName === 'array' => is_array($value)
+                ? $value : RequestException::throw(
+                    "$label must be an array (use bracket notation: key[]=val), got '$value'"
+                ),
+            $typeName !== null && enum_exists($typeName)
+                && is_subclass_of($typeName, \BackedEnum::class) => self::castEnum($value, $typeName, $label),
+            $typeName === \DateTimeImmutable::class => self::castDateTimeImmutable($value, $label),
+            $typeName === \DateTime::class => self::castDateTime($value, $label),
+            $typeName === 'BcMath\Number' && extension_loaded('bcmath')
+                => self::castBcMathNumber($value, $label),
+            $typeName === 'Decimal\Decimal' && extension_loaded('decimal')
+                => self::castDecimal($value, $label),
+            default => $value,
         };
+    }
+
+    /** @param class-string<\BackedEnum> $typeName */
+    private static function castEnum(mixed $value, string $typeName, string $label): \BackedEnum
+    {
+        $backingType = ReflectionCache::enumOf($typeName)->getBackingType()?->getName();
+
+        if ($backingType === 'int') {
+            if (filter_var($value, FILTER_VALIDATE_INT) === false) {
+                $valid = implode(', ', array_column($typeName::cases(), 'value'));
+                RequestException::throw("$label must be one of [$valid], got '$value'");
+            }
+            $value = (int) $value;
+        }
+
+        try {
+            return $typeName::from($value);
+        } catch (\ValueError) {
+            $valid = implode(', ', array_column($typeName::cases(), 'value'));
+            RequestException::throw("$label must be one of [$valid], got '$value'");
+        }
+    }
+
+    private static function castDateTimeImmutable(mixed $value, string $label): \DateTimeImmutable
+    {
+        $str = (string) $value;
+        if ($str === '') {
+            RequestException::throw("$label has invalid date '' — expected ISO 8601 (e.g. 2024-01-31 or 2024-01-31T12:00:00)");
+        }
+        try {
+            return new \DateTimeImmutable($str);
+        } catch (\Exception) {
+            RequestException::throw("$label has invalid date '$value' — expected ISO 8601 (e.g. 2024-01-31 or 2024-01-31T12:00:00)");
+        }
+    }
+
+    private static function castDateTime(mixed $value, string $label): \DateTime
+    {
+        $str = (string) $value;
+        if ($str === '') {
+            RequestException::throw("$label has invalid date '' — expected ISO 8601 (e.g. 2024-01-31 or 2024-01-31T12:00:00)");
+        }
+        try {
+            return new \DateTime($str);
+        } catch (\Exception) {
+            RequestException::throw("$label has invalid date '$value' — expected ISO 8601 (e.g. 2024-01-31 or 2024-01-31T12:00:00)");
+        }
+    }
+
+    private static function castBcMathNumber(mixed $value, string $label): \BcMath\Number
+    {
+        if (!is_numeric($value)) {
+            RequestException::throw("$label must be a numeric value (int or decimal string), got '$value'");
+        }
+        try {
+            return new \BcMath\Number((string) $value);
+        } catch (\ValueError) {
+            RequestException::throw("$label must be a numeric value (int or decimal string), got '$value'");
+        }
+    }
+
+    private static function castDecimal(mixed $value, string $label): \Decimal\Decimal
+    {
+        if (!is_numeric($value)) {
+            RequestException::throw("$label must be a numeric value (int or decimal string), got '$value'");
+        }
+        try {
+            return new \Decimal\Decimal((string) $value);
+        } catch (\Throwable) {
+            RequestException::throw("$label must be a numeric value (int or decimal string), got '$value'");
+        }
     }
 
     private static function required(mixed $val, ReflectionParameter $param, ?string $typeName, string $label): mixed
     {
         if ($val !== null) {
-            return self::cast($val, $typeName);
+            return self::cast($val, $typeName, $label);
         }
         if ($param->isDefaultValueAvailable()) {
             return $param->getDefaultValue();
@@ -273,7 +408,61 @@ class ParameterResolver
             return null;
         }
 
-        RequestException::throw("{$label} is required but missing");
+        RequestException::throw("$label is missing");
+    }
+
+    private static function validateFile(array $file, string $fieldName, \Flytachi\Winter\K2\Http\Request\Annotation\RequestFile $annotation): void
+    {
+        $error = $file['error'] ?? UPLOAD_ERR_OK;
+        if ($error !== UPLOAD_ERR_OK) {
+            RequestException::throw("Uploaded file '{$fieldName}' transfer error (code {$error})");
+        }
+
+        if ($annotation->maxSize !== null) {
+            $limit = self::parseSize($annotation->maxSize);
+            if (($file['size'] ?? 0) > $limit) {
+                RequestException::throw("Uploaded file '{$fieldName}' exceeds maximum size of {$annotation->maxSize}");
+            }
+        }
+
+        if ($annotation->accept !== []) {
+            $mime = new \finfo(FILEINFO_MIME_TYPE)->file($file['tmp_name'] ?? '');
+            if (!self::mimeAccepted($mime ?: '', $file['name'] ?? '', $annotation->accept)) {
+                $allowed = implode(', ', $annotation->accept);
+                RequestException::throw("Uploaded file '{$fieldName}' type '{$mime}' is not allowed (accepted: {$allowed})");
+            }
+        }
+    }
+
+    private static function parseSize(string $size): int
+    {
+        preg_match('/^(\d+(?:\.\d+)?)\s*(B|KB|MB|GB)?$/i', trim($size), $m);
+        $value = (float) ($m[1] ?? 0);
+        return (int) match (strtoupper($m[2] ?? 'B')) {
+            'KB'    => $value * 1_024,
+            'MB'    => $value * 1_048_576,
+            'GB'    => $value * 1_073_741_824,
+            default => $value,
+        };
+    }
+
+    private static function mimeAccepted(string $mime, string $filename, array $accept): bool
+    {
+        foreach ($accept as $pattern) {
+            if (str_starts_with($pattern, '.')) {
+                $ext = '.' . strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+                if ($ext === strtolower($pattern)) {
+                    return true;
+                }
+            } elseif (str_ends_with($pattern, '/*')) {
+                if (str_starts_with($mime, substr($pattern, 0, -1))) {
+                    return true;
+                }
+            } elseif ($mime === $pattern) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static function assertRequestObject(?string $typeName, string $paramName, string $annotation): void

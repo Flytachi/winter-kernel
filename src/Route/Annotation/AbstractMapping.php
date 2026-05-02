@@ -17,6 +17,6 @@ abstract class AbstractMapping
 
     public function getUrl(): string
     {
-        return trim($this->url, '/');
+        return ltrim($this->url, '/');
     }
 }

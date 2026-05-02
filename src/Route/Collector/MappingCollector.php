@@ -15,11 +15,11 @@ use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
 
-final class MappingCollector implements CollectorInterface
+final readonly class MappingCollector implements CollectorInterface
 {
     public function __construct(
-        private readonly Router $router,
-        private readonly string $prefix = '',
+        private Router $router,
+        private string $prefix = '',
     ) {
     }
 
@@ -32,7 +32,7 @@ final class MappingCollector implements CollectorInterface
         $classPrefix = '';
         $classAttrs  = $ref->getAttributes(RequestMapping::class);
         if (!empty($classAttrs)) {
-            $classPrefix = $classAttrs[0]->newInstance()->getUrl();
+            $classPrefix = rtrim($classAttrs[0]->newInstance()->getUrl(), '/');
         }
 
         $classMiddlewares = $this->collectMiddlewares(
