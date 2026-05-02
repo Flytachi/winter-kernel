@@ -14,8 +14,10 @@ use Flytachi\Winter\K2\Http\Response\ResponseException;
  * Inherits ::throw() and withHeader() from ResponseException.
  *
  * Example:
+ * ```
  *   throw new RequestException('Missing required field: email');
  *   RequestException::throw('Invalid UUID format', HttpCode::UNPROCESSABLE_ENTITY);
+ * ```
  */
 class RequestException extends ResponseException
 {

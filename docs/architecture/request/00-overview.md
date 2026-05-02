@@ -50,9 +50,9 @@ caught at startup in Swoole mode).
 | 2        | `#[RequestParam]`         | Query string `?key=val`           | Required unless nullable / default |
 | 3        | `#[RequestBody]`          | Raw request body                  | Type determines parse strategy     |
 | 4        | `#[RequestFile]`          | Multipart file upload             | Required unless nullable / default |
-| 5        | `#[RequestJson]`          | Body — forced JSON parse          | Must be `RequestObject` subclass   |
-| 6        | `#[RequestForm]`          | Body — forced form parse          | Must be `RequestObject` subclass   |
-| 7        | `#[RequestXml]`           | Body — forced XML parse           | Must be `RequestObject` subclass   |
+| 5        | `#[RequestJson]`          | Body — forced JSON parse          | `array` / `stdClass` / any class   |
+| 6        | `#[RequestForm]`          | Body — forced form parse          | `array` / `stdClass` / any class   |
+| 7        | `#[RequestXml]`           | Body — forced XML parse           | `array` / `stdClass` / any class   |
 | 8        | `#[RequestQuery]`         | Full query string as DTO          | Always optional                    |
 | 9        | `#[RequestHeader]`        | HTTP request header               | Required unless nullable / default |
 | 10       | `HttpRequest` subclass    | Raw request object injected       | Framework type, no annotation      |
@@ -194,7 +194,7 @@ class OrderController extends Controller
 
 | # | File | Contents |
 |---|------|----------|
-| 03 | [03-request-body.md](03-request-body.md) | `#[RequestBody]` — string / array / object / RequestObject / variadic collection |
+| 03 | [03-request-body.md](03-request-body.md) | `#[RequestBody]` — string / array / object / plain DTO / nested DTO / variadic collection |
 | 07 | [07-request-json-form-xml.md](07-request-json-form-xml.md) | `#[RequestJson]` `#[RequestForm]` `#[RequestXml]` — forced format, vs auto-detect |
 
 ### Structured sources
@@ -202,4 +202,10 @@ class OrderController extends Controller
 | # | File | Contents |
 |---|------|----------|
 | 05 | [05-request-file.md](05-request-file.md) | `#[RequestFile]` — multipart uploads, single file info, file contents, all files map |
-| 06 | [06-request-query.md](06-request-query.md) | `#[RequestQuery]` — full query string mapped to a RequestObject DTO |
+| 06 | [06-request-query.md](06-request-query.md) | `#[RequestQuery]` — full query string mapped to a DTO |
+
+### Validation
+
+| # | File | Contents |
+|---|------|----------|
+| 08 | [08-validation.md](08-validation.md) | `#[Valid]` + all constraints — Required, NotBlank, Min, Max, Size, Email, Uuid, etc. |

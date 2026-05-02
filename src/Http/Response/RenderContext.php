@@ -162,7 +162,9 @@ final class RenderContext
         string $classNameSuccess = 'active',
         string $classNameNone = '',
     ): string {
-        $uri = $_SERVER['REQUEST_URI'] ?? '/';
+        $uri = Runtime::isSwooleCoroutine()
+            ? (\Swoole\Coroutine::getContext()['__request_uri'] ?? '/')
+            : ($_SERVER['REQUEST_URI'] ?? '/');
 
         if (is_array($link)) {
             return in_array($uri, $link, true) ? $classNameSuccess : $classNameNone;
@@ -189,8 +191,14 @@ final class RenderContext
             ? bytes(memory_get_usage(), 'MiB')
             : round(memory_get_usage() / 1048576, 2) . ' MiB';
 
-        $method = htmlspecialchars($_SERVER['REQUEST_METHOD'] ?? 'CLI', ENT_QUOTES);
-        $uri    = htmlspecialchars($_SERVER['REQUEST_URI']    ?? '/', ENT_QUOTES);
+        if (Runtime::isSwooleCoroutine()) {
+            $ctx    = \Swoole\Coroutine::getContext();
+            $method = htmlspecialchars($ctx['__request_method'] ?? 'CLI', ENT_QUOTES);
+            $uri    = htmlspecialchars($ctx['__request_uri']    ?? '/', ENT_QUOTES);
+        } else {
+            $method = htmlspecialchars($_SERVER['REQUEST_METHOD'] ?? 'CLI', ENT_QUOTES);
+            $uri    = htmlspecialchars($_SERVER['REQUEST_URI']    ?? '/', ENT_QUOTES);
+        }
 
         $templateDisplay   = $this->templateName
             ? str_replace($this->basePath, '', $this->basePath . '/' . $this->templateName . '.php')

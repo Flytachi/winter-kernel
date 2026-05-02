@@ -1,0 +1,340 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Flytachi\Winter\K2\Tests\Http\Request;
+
+use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
+use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
+use Flytachi\Winter\K2\Http\ParameterResolver;
+use Flytachi\Winter\K2\Http\Request\Annotation\RequestBody;
+use Flytachi\Winter\K2\Http\Request\Validation\Constraint;
+use Flytachi\Winter\K2\Http\Request\Validation\Min;
+use Flytachi\Winter\K2\Http\Request\Validation\NotBlank;
+use Flytachi\Winter\K2\Http\Request\Validation\Required;
+use Flytachi\Winter\K2\Http\Request\Validation\Valid;
+use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
+use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
+
+// ── Fixture DTOs ──────────────────────────────────────────────────────────────
+
+class Body_AddressDto
+{
+    public function __construct(
+        public readonly string $city,
+        public readonly string $zip,
+    ) {}
+}
+
+class Body_PersonDto
+{
+    public function __construct(
+        public readonly string  $name,
+        public readonly int     $age,
+        public readonly Body_AddressDto $address,
+    ) {}
+}
+
+class Body_SimpleDto
+{
+    public function __construct(
+        public readonly string $title,
+        public readonly int    $amount,
+    ) {}
+}
+
+class Body_NullableDto
+{
+    public function __construct(
+        public readonly string  $name,
+        public readonly ?string $email = null,
+    ) {}
+}
+
+class Body_ValidatedDto
+{
+    public function __construct(
+        #[Required] #[NotBlank]
+        public readonly string $title,
+        #[Required] #[Min(1)]
+        public readonly int    $amount,
+    ) {}
+}
+
+class Body_DeepDto
+{
+    public function __construct(
+        public readonly string       $label,
+        public readonly Body_PersonDto $person,
+    ) {}
+}
+
+// ── Fixture controller ────────────────────────────────────────────────────────
+
+class RequestBodyFixture
+{
+    public function rawString(#[RequestBody] string $body): void {}
+    public function asArray(#[RequestBody] array $body): void {}
+    public function asStdClass(#[RequestBody] \stdClass $body): void {}
+    public function asObject(#[RequestBody] object $body): void {}
+    public function asDto(#[RequestBody] Body_SimpleDto $body): void {}
+    public function asNullable(#[RequestBody] Body_NullableDto $body): void {}
+    public function asNested(#[RequestBody] Body_PersonDto $body): void {}
+    public function asDeep(#[RequestBody] Body_DeepDto $body): void {}
+    public function asValidated(#[Valid] #[RequestBody] Body_ValidatedDto $body): void {}
+    public function asXmlArray(#[RequestBody] array $body): void {}
+    public function asXmlStdClass(#[RequestBody] \stdClass $body): void {}
+    public function asXmlDto(#[RequestBody] Body_SimpleDto $body): void {}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+class RequestBodyTest extends TestCase
+{
+    private HttpResponse $response;
+
+    protected function setUp(): void
+    {
+        $this->response = $this->createStub(HttpResponse::class);
+    }
+
+    private function makeRequest(string $rawBody, string $contentType = 'application/json'): HttpRequest
+    {
+        $req = $this->createStub(HttpRequest::class);
+        $req->method('getRawBody')->willReturn($rawBody);
+        $req->method('getHeader')->willReturn($contentType);
+        $req->method('getQueryParams')->willReturn([]);
+        return $req;
+    }
+
+    private function resolve(string $method, HttpRequest $request): array
+    {
+        return ParameterResolver::resolve(
+            new ReflectionMethod(RequestBodyFixture::class, $method),
+            $request,
+            $this->response,
+            [],
+        );
+    }
+
+    // ── string type — raw body ────────────────────────────────────────────────
+
+    public function test_string_returns_raw_body(): void
+    {
+        [$body] = $this->resolve('rawString', $this->makeRequest('{"key":"val"}'));
+        $this->assertSame('{"key":"val"}', $body);
+    }
+
+    public function test_string_empty_body(): void
+    {
+        [$body] = $this->resolve('rawString', $this->makeRequest(''));
+        $this->assertSame('', $body);
+    }
+
+    // ── array type ────────────────────────────────────────────────────────────
+
+    public function test_array_json_decoded(): void
+    {
+        [$body] = $this->resolve('asArray', $this->makeRequest('{"a":1,"b":2}'));
+        $this->assertSame(['a' => 1, 'b' => 2], $body);
+    }
+
+    public function test_array_invalid_json_returns_empty(): void
+    {
+        [$body] = $this->resolve('asArray', $this->makeRequest('not-json'));
+        $this->assertSame([], $body);
+    }
+
+    public function test_array_xml_content_type(): void
+    {
+        $xml = '<root><city>Moscow</city><zip>12345</zip></root>';
+        [$body] = $this->resolve('asXmlArray', $this->makeRequest($xml, 'application/xml'));
+        $this->assertSame('Moscow', $body['city']);
+        $this->assertSame('12345', $body['zip']);
+    }
+
+    // ── stdClass / object type ────────────────────────────────────────────────
+
+    public function test_stdclass_json_decoded(): void
+    {
+        [$body] = $this->resolve('asStdClass', $this->makeRequest('{"name":"Alice"}'));
+        $this->assertInstanceOf(\stdClass::class, $body);
+        $this->assertSame('Alice', $body->name);
+    }
+
+    public function test_object_json_decoded(): void
+    {
+        [$body] = $this->resolve('asObject', $this->makeRequest('{"x":42}'));
+        $this->assertSame(42, $body->x);
+    }
+
+    public function test_stdclass_xml_content_type(): void
+    {
+        $xml = '<root><city>Paris</city></root>';
+        [$body] = $this->resolve('asXmlStdClass', $this->makeRequest($xml, 'text/xml'));
+        $this->assertInstanceOf(\stdClass::class, $body);
+        $this->assertSame('Paris', $body->city);
+    }
+
+    // ── plain DTO hydration ───────────────────────────────────────────────────
+
+    public function test_dto_hydrated_from_json(): void
+    {
+        $json = '{"title":"Order #1","amount":100}';
+        [$dto] = $this->resolve('asDto', $this->makeRequest($json));
+        $this->assertInstanceOf(Body_SimpleDto::class, $dto);
+        $this->assertSame('Order #1', $dto->title);
+        $this->assertSame(100, $dto->amount);
+    }
+
+    public function test_dto_nullable_field_absent(): void
+    {
+        $json = '{"name":"Alice"}';
+        [$dto] = $this->resolve('asNullable', $this->makeRequest($json));
+        $this->assertSame('Alice', $dto->name);
+        $this->assertNull($dto->email);
+    }
+
+    public function test_dto_nullable_field_present(): void
+    {
+        $json = '{"name":"Alice","email":"a@example.com"}';
+        [$dto] = $this->resolve('asNullable', $this->makeRequest($json));
+        $this->assertSame('a@example.com', $dto->email);
+    }
+
+    public function test_dto_missing_required_field_throws(): void
+    {
+        $this->expectException(ValidationException::class);
+        $json = '{"title":"Only title"}';
+        $this->resolve('asDto', $this->makeRequest($json));
+    }
+
+    public function test_dto_xml_hydration(): void
+    {
+        $xml = '<root><title>Widget</title><amount>5</amount></root>';
+        [$dto] = $this->resolve('asXmlDto', $this->makeRequest($xml, 'application/xml'));
+        $this->assertInstanceOf(Body_SimpleDto::class, $dto);
+        $this->assertSame('Widget', $dto->title);
+        $this->assertSame(5, $dto->amount);
+    }
+
+    // ── nested DTO hydration ──────────────────────────────────────────────────
+
+    public function test_nested_dto_hydrated(): void
+    {
+        $json = '{"name":"Bob","age":30,"address":{"city":"Berlin","zip":"10115"}}';
+        [$dto] = $this->resolve('asNested', $this->makeRequest($json));
+        $this->assertInstanceOf(Body_PersonDto::class, $dto);
+        $this->assertSame('Bob', $dto->name);
+        $this->assertSame(30, $dto->age);
+        $this->assertInstanceOf(Body_AddressDto::class, $dto->address);
+        $this->assertSame('Berlin', $dto->address->city);
+        $this->assertSame('10115', $dto->address->zip);
+    }
+
+    public function test_nested_dto_missing_field_uses_dot_notation(): void
+    {
+        $json = '{"name":"Bob","age":30,"address":{"city":"Berlin"}}';
+        try {
+            $this->resolve('asNested', $this->makeRequest($json));
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $errors = $e->getErrors();
+            $this->assertArrayHasKey('address.zip', $errors);
+        }
+    }
+
+    public function test_deeply_nested_dto_hydrated(): void
+    {
+        $json = json_encode([
+            'label'  => 'Deep',
+            'person' => [
+                'name'    => 'Carol',
+                'age'     => 25,
+                'address' => ['city' => 'Tokyo', 'zip' => '100-0001'],
+            ],
+        ]);
+        [$dto] = $this->resolve('asDeep', $this->makeRequest($json));
+        $this->assertSame('Deep', $dto->label);
+        $this->assertSame('Carol', $dto->person->name);
+        $this->assertSame('Tokyo', $dto->person->address->city);
+    }
+
+    public function test_deeply_nested_missing_field_dot_notation(): void
+    {
+        $json = json_encode([
+            'label'  => 'Deep',
+            'person' => [
+                'name'    => 'Carol',
+                'age'     => 25,
+                'address' => ['city' => 'Tokyo'],
+            ],
+        ]);
+        try {
+            $this->resolve('asDeep', $this->makeRequest($json));
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('person.address.zip', $e->getErrors());
+        }
+    }
+
+    public function test_nested_dto_wrong_type_error(): void
+    {
+        // address is a string instead of object
+        $json = '{"name":"Bob","age":30,"address":"wrong"}';
+        try {
+            $this->resolve('asNested', $this->makeRequest($json));
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $errors = $e->getErrors();
+            $this->assertArrayHasKey('address', $errors);
+            $this->assertStringContainsString('must be an object', $errors['address'][0]);
+        }
+    }
+
+    // ── multiple errors collected at once ─────────────────────────────────────
+
+    public function test_multiple_missing_fields_all_reported(): void
+    {
+        try {
+            $this->resolve('asDto', $this->makeRequest('{}'));
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $errors = $e->getErrors();
+            $this->assertArrayHasKey('title', $errors);
+            $this->assertArrayHasKey('amount', $errors);
+        }
+    }
+
+    // ── #[Valid] constraint integration ───────────────────────────────────────
+
+    public function test_valid_passes_when_constraints_satisfied(): void
+    {
+        $json = '{"title":"Test","amount":5}';
+        [$dto] = $this->resolve('asValidated', $this->makeRequest($json));
+        $this->assertInstanceOf(Body_ValidatedDto::class, $dto);
+    }
+
+    public function test_valid_fails_on_constraint_violation(): void
+    {
+        $json = '{"title":"Test","amount":0}';
+        try {
+            $this->resolve('asValidated', $this->makeRequest($json));
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('amount', $e->getErrors());
+        }
+    }
+
+    public function test_valid_fails_on_blank_string(): void
+    {
+        $json = '{"title":"   ","amount":10}';
+        try {
+            $this->resolve('asValidated', $this->makeRequest($json));
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('title', $e->getErrors());
+        }
+    }
+}

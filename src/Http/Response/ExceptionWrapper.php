@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\K2\Http\Response;
 
 use Composer\Autoload\ClassLoader;
+use Flytachi\Winter\DI\ReflectionCache;
 use ReflectionClass;
 use ReflectionException;
 
@@ -111,8 +112,8 @@ final class ExceptionWrapper
                 continue;
             }
 
-            try {$ref = new ReflectionClass($className);
-
+            try {
+                $ref = ReflectionCache::classOf($className);
 
                 if (
                     $ref->isAbstract()

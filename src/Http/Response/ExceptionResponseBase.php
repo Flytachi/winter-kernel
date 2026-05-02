@@ -6,6 +6,7 @@ namespace Flytachi\Winter\K2\Http\Response;
 
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\K2\Http\Header;
+use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
 
 /**
  * Default exception response — implements ResponseExceptionInterface.
@@ -62,11 +63,17 @@ class ExceptionResponseBase implements ResponseExceptionInterface
 
     protected function contentData(): array
     {
-        return [
+        $data = [
             'code'    => $this->throwable->getCode(),
             'message' => $this->throwable->getMessage(),
-            ...$this->debugData(),
         ];
+
+        $errorValidation = $this->validationRequests();
+        if (!empty($errorValidation)) {
+            $data['errors'] = $errorValidation;
+        }
+
+        return array_merge($data, $this->debugData());
     }
 
     protected function contentHtml(): string
@@ -96,6 +103,14 @@ class ExceptionResponseBase implements ResponseExceptionInterface
                 </center>
             </body></html>
             HTML;
+    }
+
+    final protected function validationRequests(): array
+    {
+        if ($this->throwable instanceof ValidationException) {
+            return $this->throwable->getErrors();
+        }
+        return [];
     }
 
     // ── Debug helpers ─────────────────────────────────────────────────────────

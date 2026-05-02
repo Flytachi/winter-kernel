@@ -15,7 +15,8 @@ use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
  */
 final class FpmRequest implements HttpRequest
 {
-    private readonly array $headers;
+    private readonly array  $headers;
+    private ?string         $rawBody = null;
 
     public function __construct()
     {
@@ -44,7 +45,7 @@ final class FpmRequest implements HttpRequest
 
     public function getRawBody(): string
     {
-        return file_get_contents('php://input') ?: '';
+        return $this->rawBody ??= (file_get_contents('php://input') ?: '');
     }
 
     public function getHeader(string $name): ?string

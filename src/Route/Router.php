@@ -718,11 +718,17 @@ class Router
 
     private function serveStaticFile(string $filePath, HttpResponse $response): void
     {
+        $content = file_get_contents($filePath);
+        if ($content === false) {
+            $response->status(500);
+            $response->end('');
+            return;
+        }
         $mime = mime_content_type($filePath) ?: 'application/octet-stream';
         $response->status(200);
         $response->header('Content-Type', $mime);
         $response->header('Cache-Control', 'public, max-age=86400');
-        $response->end((string) file_get_contents($filePath));
+        $response->end($content);
     }
 
     // ── Debug helpers ─────────────────────────────────────────────────────────

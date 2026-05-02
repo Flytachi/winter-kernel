@@ -44,7 +44,7 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Flytachi\\Winter\\Kernel\\Tests\\": "tests"
+            "Flytachi\\Winter\\K2\\Tests\\": "tests"
         }
     },
     "require-dev": {

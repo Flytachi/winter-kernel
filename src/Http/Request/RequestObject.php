@@ -31,6 +31,7 @@ use TypeError;
  *   // In controller (injected via #[RequestBody]):
  *   public function store(#[RequestBody] UserCreateRequest $body): ResponseEntity { ... }
  */
+#[\Deprecated]
 abstract class RequestObject
 {
     // ── Factory methods ───────────────────────────────────────────────────────
