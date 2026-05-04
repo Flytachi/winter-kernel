@@ -24,7 +24,9 @@ readonly class Datetime implements Constraint
     /**
      * @param string|null $format PHP datetime format string. null = flexible ISO 8601 via DateTimeImmutable.
      */
-    public function __construct(public ?string $format = null) {}
+    public function __construct(public ?string $format = null)
+    {
+    }
 
     public function validate(mixed $value, string $field): ?string
     {

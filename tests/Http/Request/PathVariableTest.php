@@ -9,6 +9,8 @@ use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 use Flytachi\Winter\K2\Http\ParameterResolver;
 use Flytachi\Winter\K2\Http\Request\Annotation\PathVariable;
 use Flytachi\Winter\K2\Http\Request\RequestException;
+use Flytachi\Winter\K2\Http\Request\Validation\Positive;
+use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
@@ -47,6 +49,7 @@ class PathVariableFixture
     public function autoMatchRequired(int $id): void {}
     public function bcNumber(#[PathVariable] \BcMath\Number $value): void {}
     public function decimal(#[PathVariable] \Decimal\Decimal $value): void {}
+    public function positiveId(#[PathVariable, Positive] int $id): void {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -354,6 +357,26 @@ class PathVariableTest extends TestCase
         $this->expectException(RequestException::class);
         $this->expectExceptionMessage("must be a numeric value");
         $this->resolve('decimal', ['value' => 'abc']);
+    }
+
+    // ── #[Constraint] on path variable — fires without #[Valid] ──────────────
+
+    public function test_constraint_passes_on_valid_path(): void
+    {
+        [$id] = $this->resolve('positiveId', ['id' => '7']);
+        $this->assertSame(7, $id);
+    }
+
+    public function test_constraint_fails_on_negative_path(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->resolve('positiveId', ['id' => '-1']);
+    }
+
+    public function test_constraint_fails_on_zero_path(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->resolve('positiveId', ['id' => '0']);
     }
 
     // ── Union type ────────────────────────────────────────────────────────────

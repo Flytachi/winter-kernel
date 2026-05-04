@@ -11,6 +11,7 @@ use Flytachi\Winter\K2\Http\Request\Annotation\RequestBody;
 use Flytachi\Winter\K2\Http\Request\Validation\Constraint;
 use Flytachi\Winter\K2\Http\Request\Validation\Min;
 use Flytachi\Winter\K2\Http\Request\Validation\NotBlank;
+use Flytachi\Winter\K2\Http\Request\Validation\Positive;
 use Flytachi\Winter\K2\Http\Request\Validation\Required;
 use Flytachi\Winter\K2\Http\Request\Validation\Valid;
 use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
@@ -70,6 +71,33 @@ class Body_DeepDto
     ) {}
 }
 
+class Body_VariadicItemDto
+{
+    public function __construct(
+        public readonly string $title,
+        #[Positive]
+        public readonly int    $amount,
+    ) {}
+}
+
+class Body_ConstrainedAddressDto
+{
+    public function __construct(
+        #[NotBlank]
+        public readonly string $city,
+        public readonly string $zip,
+    ) {}
+}
+
+class Body_ConstrainedPersonDto
+{
+    public function __construct(
+        #[NotBlank]
+        public readonly string                     $name,
+        public readonly Body_ConstrainedAddressDto $address,
+    ) {}
+}
+
 // ── Fixture controller ────────────────────────────────────────────────────────
 
 class RequestBodyFixture
@@ -86,6 +114,9 @@ class RequestBodyFixture
     public function asXmlArray(#[RequestBody] array $body): void {}
     public function asXmlStdClass(#[RequestBody] \stdClass $body): void {}
     public function asXmlDto(#[RequestBody] Body_SimpleDto $body): void {}
+    public function asVariadic(#[RequestBody] Body_VariadicItemDto ...$items): void {}
+    public function asVariadicValid(#[Valid] #[RequestBody] Body_VariadicItemDto ...$items): void {}
+    public function asConstrainedNested(#[Valid] #[RequestBody] Body_ConstrainedPersonDto $body): void {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -305,6 +336,123 @@ class RequestBodyTest extends TestCase
             $this->assertArrayHasKey('title', $errors);
             $this->assertArrayHasKey('amount', $errors);
         }
+    }
+
+    // ── variadic #[RequestBody] ───────────────────────────────────────────────
+
+    public function test_variadic_empty_array_returns_no_items(): void
+    {
+        $result = $this->resolve('asVariadic', $this->makeRequest('[]'));
+        $this->assertSame([], $result);
+    }
+
+    public function test_variadic_single_item_hydrated(): void
+    {
+        $json = '[{"title":"Order","amount":10}]';
+        $result = $this->resolve('asVariadic', $this->makeRequest($json));
+        $this->assertCount(1, $result);
+        $this->assertInstanceOf(Body_VariadicItemDto::class, $result[0]);
+        $this->assertSame('Order', $result[0]->title);
+        $this->assertSame(10, $result[0]->amount);
+    }
+
+    public function test_variadic_multiple_items_hydrated(): void
+    {
+        $json = '[{"title":"A","amount":1},{"title":"B","amount":2}]';
+        $result = $this->resolve('asVariadic', $this->makeRequest($json));
+        $this->assertCount(2, $result);
+        $this->assertSame('A', $result[0]->title);
+        $this->assertSame('B', $result[1]->title);
+    }
+
+    public function test_variadic_non_array_json_throws(): void
+    {
+        $this->expectException(\Flytachi\Winter\K2\Http\Request\RequestException::class);
+        $this->resolve('asVariadic', $this->makeRequest('{"title":"X","amount":1}'));
+    }
+
+    public function test_variadic_structural_error_uses_index_key(): void
+    {
+        try {
+            $this->resolve('asVariadic', $this->makeRequest('[{"title":"A","amount":1},{"title":"B"}]'));
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('[1].amount', $e->getErrors());
+        }
+    }
+
+    public function test_variadic_errors_from_multiple_elements(): void
+    {
+        try {
+            $this->resolve('asVariadic', $this->makeRequest('[{"amount":1},{"title":"B"}]'));
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $errors = $e->getErrors();
+            $this->assertArrayHasKey('[0].title', $errors);
+            $this->assertArrayHasKey('[1].amount', $errors);
+        }
+    }
+
+    public function test_variadic_valid_constraint_violation_with_index_key(): void
+    {
+        try {
+            $this->resolve('asVariadicValid', $this->makeRequest('[{"title":"A","amount":1},{"title":"B","amount":-1}]'));
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('[1].amount', $e->getErrors());
+        }
+    }
+
+    public function test_variadic_valid_passes_when_all_valid(): void
+    {
+        $json = '[{"title":"A","amount":1},{"title":"B","amount":5}]';
+        $result = $this->resolve('asVariadicValid', $this->makeRequest($json));
+        $this->assertCount(2, $result);
+    }
+
+    // ── nested DTO + #[Valid] constraint cascade ───────────────────────────────
+
+    public function test_nested_valid_constraint_on_outer_field(): void
+    {
+        $json = '{"name":"","address":{"city":"Berlin","zip":"10115"}}';
+        try {
+            $this->resolve('asConstrainedNested', $this->makeRequest($json));
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('name', $e->getErrors());
+        }
+    }
+
+    public function test_nested_valid_constraint_on_inner_field(): void
+    {
+        $json = '{"name":"Alice","address":{"city":"","zip":"10115"}}';
+        try {
+            $this->resolve('asConstrainedNested', $this->makeRequest($json));
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('address.city', $e->getErrors());
+        }
+    }
+
+    public function test_nested_valid_outer_and_inner_errors_both_reported(): void
+    {
+        $json = '{"name":"","address":{"city":"","zip":"10115"}}';
+        try {
+            $this->resolve('asConstrainedNested', $this->makeRequest($json));
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $errors = $e->getErrors();
+            $this->assertArrayHasKey('name', $errors);
+            $this->assertArrayHasKey('address.city', $errors);
+        }
+    }
+
+    public function test_nested_valid_passes_when_all_valid(): void
+    {
+        $json = '{"name":"Alice","address":{"city":"Berlin","zip":"10115"}}';
+        [$dto] = $this->resolve('asConstrainedNested', $this->makeRequest($json));
+        $this->assertSame('Alice', $dto->name);
+        $this->assertSame('Berlin', $dto->address->city);
     }
 
     // ── #[Valid] constraint integration ───────────────────────────────────────

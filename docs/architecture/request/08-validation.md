@@ -17,18 +17,22 @@ use Flytachi\Winter\K2\Http\Request\Validation\Valid;
               │
               ▼
      hydrateFromArray()          ← builds DTO from request body
-              │                    collects missing/type errors (422)
+              │  • collects ALL structural errors (missing / wrong type)
+              │  • when #[Valid]: also runs #[Constraint] checks inline on
+              │    each scalar field and cascades into nested DTOs automatically
               ▼
-       runValidation()           ← reads #[Constraint] attributes
-              │                    on each constructor parameter
+       runValidation()           ← post-hydration pass (only if hydration succeeds)
+              │  • re-checks #[Constraint] on each field value of the outer DTO
+              │  • cascades into nested objects that have #[Valid] on their field
+              │  • cascades into all #[ArrayOf] collections (implicit)
               ▼
-     ValidationException (422)   ← if any constraint fails
+     ValidationException (422)   ← if any error was collected
 ```
 
-1. `hydrateFromArray` maps request body → DTO constructor, collecting ALL structural errors.
-2. If hydration succeeds, `runValidation` runs every `#[Constraint]` attribute on every field.
+1. `hydrateFromArray` maps body → DTO constructor, collecting **all** structural errors and (when `#[Valid]` is set) scalar constraint violations **in one combined pass**. Nested DTOs are processed recursively with the same `$validate` flag — no extra `#[Valid]` annotation needed on nested fields.
+2. If hydration completes without errors, `runValidation` runs a second constraint pass on the constructed object. Nested objects are cascaded when `#[Valid]` appears on the corresponding DTO field.
 3. All constraint violations are collected before responding — you see every error at once.
-4. Error keys use **dot-notation** for nested DTOs: `"filter.minPrice"`.
+4. Error keys use **dot-notation** for nested DTOs: `"address.city"`, and index notation for collections: `"items[0].name"`.
 
 ---
 
@@ -83,7 +87,9 @@ Failed validation returns **422 Unprocessable Entity**:
 
 ## Nested DTO Validation
 
-Place `#[Valid]` on a nested DTO field to trigger recursive validation:
+When `#[Valid]` is placed on the **controller parameter**, constraint checking cascades
+automatically into all nested DTOs during `hydrateFromArray`. No extra `#[Valid]` is
+needed on the nested field itself.
 
 ```php
 class FilterDto
@@ -99,14 +105,33 @@ class FilterDto
 class SearchDto
 {
     public function __construct(
+        #[NotBlank]
         public readonly string $query,
-        #[Valid]
-        public readonly FilterDto $filter,
+        public readonly FilterDto $filter,   // ← no #[Valid] needed here
     ) {}
 }
 
+// Controller:
+public function search(#[Valid] #[RequestBody] SearchDto $dto): ResponseEntity
+
 // Error for nested violation:
 // {"errors": {"filter.minPrice": ["must be at least 0"]}}
+// {"errors": {"query": ["must not be blank"], "filter.maxPrice": ["must not exceed 1000000"]}}
+```
+
+Optionally, place `#[Valid]` on the nested **DTO field** to trigger an additional
+post-hydration `runValidation` cascade on that object. This is only needed when you
+want `runValidation`-specific behavior (e.g., cross-field checks via `#[Assert]`):
+
+```php
+class SearchDto
+{
+    public function __construct(
+        public readonly string $query,
+        #[Valid]                         // explicit cascade in runValidation
+        public readonly FilterDto $filter,
+    ) {}
+}
 ```
 
 ---

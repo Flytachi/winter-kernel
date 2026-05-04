@@ -22,7 +22,9 @@ readonly class Date implements Constraint
     /**
      * @param string $format PHP date format string. Defaults to 'Y-m-d' (e.g. "2024-01-31").
      */
-    public function __construct(public string $format = 'Y-m-d') {}
+    public function __construct(public string $format = 'Y-m-d')
+    {
+    }
 
     public function validate(mixed $value, string $field): ?string
     {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Http\Response;
 
+use Flytachi\Winter\Base\Exception\ExceptionHeader;
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\K2\Http\Header;
 use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
@@ -30,7 +31,7 @@ class ExceptionResponseBase implements ResponseExceptionInterface
         $this->httpCode  = HttpCode::tryFrom((int) $throwable->getCode())
             ?: HttpCode::INTERNAL_SERVER_ERROR;
 
-        if ($throwable instanceof ResponseException) {
+        if ($throwable instanceof ExceptionHeader) {
             foreach ($throwable->getExtraHeaders() as $name => $value) {
                 $this->addHeader($name, $value);
             }

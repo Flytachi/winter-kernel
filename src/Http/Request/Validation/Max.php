@@ -23,7 +23,9 @@ readonly class Max implements Constraint
     /**
      * @param int|float $value Upper bound (inclusive). Value must be ≤ this.
      */
-    public function __construct(public int|float $value) {}
+    public function __construct(public int|float $value)
+    {
+    }
 
     public function validate(mixed $value, string $field): ?string
     {

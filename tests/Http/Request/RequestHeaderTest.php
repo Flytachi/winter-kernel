@@ -9,6 +9,8 @@ use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 use Flytachi\Winter\K2\Http\ParameterResolver;
 use Flytachi\Winter\K2\Http\Request\Annotation\RequestHeader;
 use Flytachi\Winter\K2\Http\Request\RequestException;
+use Flytachi\Winter\K2\Http\Request\Validation\Positive;
+use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
@@ -65,6 +67,9 @@ class RequestHeaderFixture
 
     // required missing
     public function requiredHeader(#[RequestHeader] string $authorization): void {}
+
+    // constraint — fires automatically, no #[Valid] needed
+    public function positiveRetry(#[RequestHeader('X-Retry-Count'), Positive] int $retryCount): void {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -235,5 +240,25 @@ class RequestHeaderTest extends TestCase
         $this->expectException(RequestException::class);
         $this->expectExceptionMessage("must be one of [1, 0]");
         $this->resolve('enumIntHeader', ['X-Code' => '99']);
+    }
+
+    // ── #[Constraint] on header — fires without #[Valid] ─────────────────────
+
+    public function test_constraint_passes_on_valid_header(): void
+    {
+        [$val] = $this->resolve('positiveRetry', ['X-Retry-Count' => '3']);
+        $this->assertSame(3, $val);
+    }
+
+    public function test_constraint_fails_on_zero_header(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->resolve('positiveRetry', ['X-Retry-Count' => '0']);
+    }
+
+    public function test_constraint_fails_on_negative_header(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->resolve('positiveRetry', ['X-Retry-Count' => '-5']);
     }
 }

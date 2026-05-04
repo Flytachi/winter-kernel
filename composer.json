@@ -38,7 +38,9 @@
         "ext-fileinfo": "*"
     },
     "suggest": {
-        "ext-simplexml": "Required for XML file operations (K2\\File\\XML)",
+        "ext-simplexml": "Required for XML file operations and XML body parsing in HTTP parameter resolution",
+        "ext-bcmath": "Optional for BcMath\\Number type casting in HTTP parameter resolution",
+        "ext-decimal": "Optional for Decimal\\Decimal type casting in HTTP parameter resolution",
         "ext-swoole": "Required for coroutine-based connection pooling (Swoole mode)",
         "ext-shmop": "Recommended for Swoole mode — enables PAYLOAD_SHM in Thread dispatch, avoiding fd conflicts with proc_open (fallback: PAYLOAD_PIPE)"
     },

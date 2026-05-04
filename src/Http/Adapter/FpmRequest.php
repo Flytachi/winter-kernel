@@ -15,8 +15,8 @@ use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
  */
 final class FpmRequest implements HttpRequest
 {
-    private readonly array  $headers;
-    private ?string         $rawBody = null;
+    private readonly array $headers;
+    private ?string $rawBody = null;
 
     public function __construct()
     {

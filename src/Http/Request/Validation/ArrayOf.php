@@ -27,5 +27,7 @@ use Attribute;
 readonly class ArrayOf
 {
     /** @param string $class Fully-qualified class name of the element DTO. */
-    public function __construct(public string $class) {}
+    public function __construct(public string $class)
+    {
+    }
 }

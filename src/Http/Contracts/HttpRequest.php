@@ -11,7 +11,7 @@ namespace Flytachi\Winter\K2\Http\Contracts;
  *   - SwooleRequest  — wraps Swoole\Http\Request (coroutine-safe)
  *   - FpmRequest     — wraps $_SERVER / $_GET / $_POST / php://input
  *
- * All K2 internals (Router, ParameterResolver, RequestObject, Middleware)
+ * All K2 internals (Router, ParameterResolver, Middleware)
  * depend only on this interface — never on a concrete transport.
  */
 interface HttpRequest

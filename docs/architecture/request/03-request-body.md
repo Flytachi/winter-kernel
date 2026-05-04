@@ -182,12 +182,26 @@ See [08-validation.md](08-validation.md) for the full list of constraints.
 
 ## Variadic — JSON Array → Collection
 
-Add `...` to map a JSON array of objects to a PHP array of DTOs:
+Add `...` to map a JSON array of objects to a PHP array of DTOs.
+A JSON object `{...}` (not a list) is rejected with `400`.
 
 ```php
 public function bulk(#[RequestBody] CreateOrderDto ...$items): ResponseEntity
 // Body: [{"title":"A","amount":1}, {"title":"B","amount":2}]
 // → [CreateOrderDto, CreateOrderDto]
-// Non-array body → 400: "Expected JSON array for variadic RequestBody"
+// Non-array / JSON object → 400: "Expected JSON array for variadic body"
+
+public function bulk(#[Valid] #[RequestBody] CreateOrderDto ...$items): ResponseEntity
+// → each element is also validated; errors reported with [0].field keys
+```
+
+Errors across all elements are collected before responding:
+```json
+{
+  "errors": {
+    "[0].title": ["is required"],
+    "[1].amount": ["must be greater than 0"]
+  }
+}
 ```
 

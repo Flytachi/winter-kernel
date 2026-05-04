@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Exception;
 
+use Flytachi\Winter\Base\Exception\ExceptionLogLevel;
 use Flytachi\Winter\Base\Exception\ExceptionTrait;
 use Flytachi\Winter\Base\HttpCode;
 use Psr\Log\LogLevel;
@@ -18,7 +19,7 @@ use Psr\Log\LogLevel;
  *   throw new ClientError('Email already taken');
  *   ClientError::throw('Email already taken', HttpCode::UNPROCESSABLE_ENTITY);
  */
-class ClientError extends \RuntimeException implements LogLevelException
+class ClientError extends \RuntimeException implements ExceptionLogLevel
 {
     use ExceptionTrait;
 

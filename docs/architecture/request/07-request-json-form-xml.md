@@ -14,10 +14,11 @@ use Flytachi\Winter\K2\Http\Request\Annotation\RequestXml;
 ## Rules
 
 1. Format is **not** detected from `Content-Type` — forced unconditionally.
-2. Supported parameter types: `array`, `stdClass` / `object`, any class with a constructor.
+2. Supported parameter types: `array`, `stdClass` / `object`, any class with a constructor, variadic `...$items`.
 3. Plain DTO classes are hydrated via reflection — no base class required.
 4. Nested class-typed fields are hydrated recursively (same as `#[RequestBody]`).
-5. Use `#[RequestBody]` instead if you want `Content-Type` auto-detection.
+5. Variadic `...$items` with `#[RequestJson]` or `#[RequestXml]` works like `#[RequestBody]` variadic.
+6. Use `#[RequestBody]` instead if you want `Content-Type` auto-detection.
 
 ---
 
@@ -63,6 +64,10 @@ public function create(#[RequestJson] CreateOrderDto $dto): ResponseEntity
 
 public function list(#[RequestJson] array $filters): ResponseEntity
 // {"status":"active","page":1} → ['status' => 'active', 'page' => 1]
+
+// Variadic — JSON array expected; JSON object → 400
+public function bulk(#[Valid] #[RequestJson] CreateOrderDto ...$items): ResponseEntity
+// [{"title":"A",...},{"title":"B",...}] → [CreateOrderDto, CreateOrderDto]
 ```
 
 ---
@@ -106,6 +111,10 @@ class EventDto
         public readonly int    $id,
     ) {}
 }
+
+// Variadic — single XML document is treated as one element
+public function bulk(#[Valid] #[RequestXml] EventDto ...$events): ResponseEntity
+// <root><type>order</type><id>42</id></root> → [EventDto]
 ```
 
 ---

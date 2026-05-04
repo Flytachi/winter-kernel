@@ -15,6 +15,7 @@ use Flytachi\Winter\K2\Http\Request\Validation\Min;
 use Flytachi\Winter\K2\Http\Request\Validation\NotBlank;
 use Flytachi\Winter\K2\Http\Request\Validation\Required;
 use Flytachi\Winter\K2\Http\Request\Validation\Size;
+use Flytachi\Winter\K2\Http\Request\Validation\Valid;
 use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -141,16 +142,16 @@ class AO_InvoiceDto
 
 class ArrayOfFixture
 {
-    public function order(#[RequestJson] AO_OrderDto $body): void {}
+    public function order(#[RequestJson, Valid] AO_OrderDto $body): void {}
     public function strict(#[RequestJson] AO_StrictOrderDto $body): void {}
-    public function bounded(#[RequestJson] AO_BoundedDto $body): void {}
+    public function bounded(#[RequestJson, Valid] AO_BoundedDto $body): void {}
     public function rich(#[RequestJson] AO_RichOrderDto $body): void {}
-    public function deep(#[RequestJson] AO_DeepOrderDto $body): void {}
-    public function invoice(#[RequestJson] AO_InvoiceDto $body): void {}
+    public function deep(#[RequestJson, Valid] AO_DeepOrderDto $body): void {}
+    public function invoice(#[RequestJson, Valid] AO_InvoiceDto $body): void {}
     public function formOrder(#[RequestForm] AO_OrderDto $body): void {}
-    public function formBounded(#[RequestForm] AO_BoundedDto $body): void {}
+    public function formBounded(#[RequestForm, Valid] AO_BoundedDto $body): void {}
     public function xmlOrder(#[RequestXml] AO_OrderDto $body): void {}
-    public function xmlBounded(#[RequestXml] AO_BoundedDto $body): void {}
+    public function xmlBounded(#[RequestXml, Valid] AO_BoundedDto $body): void {}
     public function xmlDeep(#[RequestXml] AO_DeepOrderDto $body): void {}
 }
 

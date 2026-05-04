@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Exception;
 
+use Flytachi\Winter\Base\Exception\ExceptionLogLevel;
 use Flytachi\Winter\Base\Exception\ExceptionTrait;
 use Flytachi\Winter\Base\HttpCode;
 use Psr\Log\LogLevel;
@@ -19,7 +20,7 @@ use Psr\Log\LogLevel;
  *   throw new KernelError('Router not initialized before handle()');
  *   KernelError::throw('Mapping scan failed: no controllers found');
  */
-class KernelError extends \RuntimeException implements LogLevelException
+class KernelError extends \RuntimeException implements ExceptionLogLevel
 {
     use ExceptionTrait;
 

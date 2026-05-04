@@ -31,7 +31,8 @@ readonly class Digits implements Constraint
     public function __construct(
         public int $integer,
         public int $fraction = 0,
-    ) {}
+    ) {
+    }
 
     public function validate(mixed $value, string $field): ?string
     {

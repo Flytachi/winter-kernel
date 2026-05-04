@@ -25,8 +25,9 @@ readonly class In implements Constraint
      */
     public function __construct(
         public array $values,
-        public bool  $strict = true,
-    ) {}
+        public bool $strict = true,
+    ) {
+    }
 
     public function validate(mixed $value, string $field): ?string
     {

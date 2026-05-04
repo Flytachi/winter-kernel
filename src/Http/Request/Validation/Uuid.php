@@ -26,7 +26,9 @@ readonly class Uuid implements Constraint
     /**
      * @param int|null $version Expected UUID version (1–8). null = accept any version.
      */
-    public function __construct(public ?int $version = null) {}
+    public function __construct(public ?int $version = null)
+    {
+    }
 
     public function validate(mixed $value, string $field): ?string
     {

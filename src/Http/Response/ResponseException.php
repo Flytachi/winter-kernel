@@ -4,7 +4,12 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Http\Response;
 
+use Flytachi\Winter\Base\Exception\ExceptionHeader;
+use Flytachi\Winter\Base\Exception\ExceptionLogLevel;
+use Flytachi\Winter\Base\Exception\ExceptionTrait;
 use Flytachi\Winter\Base\HttpCode;
+use Flytachi\Winter\K2\Exception\ExceptionHeaderTrait;
+use Psr\Log\LogLevel;
 
 /**
  * Throwable HTTP response exception.
@@ -16,40 +21,15 @@ use Flytachi\Winter\Base\HttpCode;
  *   throw new ResponseException('Not found', HttpCode::NOT_FOUND);
  *   ResponseException::throw('Forbidden', HttpCode::FORBIDDEN);
  */
-class ResponseException extends \RuntimeException
+class ResponseException extends \RuntimeException implements ExceptionLogLevel, ExceptionHeader
 {
-    private array $extraHeaders = [];
+    use ExceptionTrait;
+    use ExceptionHeaderTrait;
 
-    public function __construct(
-        string $message = '',
-        private HttpCode $httpCode = HttpCode::INTERNAL_SERVER_ERROR,
-        ?\Throwable $previous = null,
-    ) {
-        parent::__construct($message, $httpCode->value, $previous);
-    }
+    protected $code = HttpCode::BAD_REQUEST->value;
 
-    public function getHttpCode(): HttpCode
+    public function getLogLevel(): string
     {
-        return $this->httpCode;
-    }
-
-    public function withHeader(string $name, string $value): static
-    {
-        $this->extraHeaders[$name] = $value;
-        return $this;
-    }
-
-    public function getExtraHeaders(): array
-    {
-        return $this->extraHeaders;
-    }
-
-    /** @throws static */
-    public static function throw(
-        string $message = '',
-        HttpCode $httpCode = HttpCode::INTERNAL_SERVER_ERROR,
-        ?\Throwable $previous = null,
-    ): never {
-        throw new static($message, $httpCode, $previous);
+        return LogLevel::WARNING;
     }
 }

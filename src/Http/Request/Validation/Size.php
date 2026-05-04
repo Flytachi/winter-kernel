@@ -33,7 +33,8 @@ readonly class Size implements Constraint
     public function __construct(
         public int $max = PHP_INT_MAX,
         public int $min = 0,
-    ) {}
+    ) {
+    }
 
     public function validate(mixed $value, string $field): ?string
     {

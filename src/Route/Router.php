@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Flytachi\Winter\K2\Route;
 
 use Flytachi\Winter\Base\Exception\DebugDumpException;
+use Flytachi\Winter\Base\Exception\ExceptionLogLevel;
 use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\DI\ReflectionCache;
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\DI\Scanner;
 use Flytachi\Winter\K2\Kernel;
-use Flytachi\Winter\K2\Exception\LogLevelException;
 use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 use Flytachi\Winter\K2\Http\Header;
@@ -561,21 +561,12 @@ class Router
         $logger = LoggerFactory::getLogger(self::class);
 
         // Exception carries its own declared log level — highest priority
-        if ($e instanceof LogLevelException) {
+        if ($e instanceof ExceptionLogLevel) {
             $logger->log($e->getLogLevel(), $e->getMessage(), [
                 'exception' => $e::class,
                 'code'      => $code,
                 'file'      => $e->getFile(),
                 'line'      => $e->getLine(),
-            ]);
-            return;
-        }
-
-        // 4xx signals (ResponseException + subclasses: MiddlewareException, RequestException)
-        if ($e instanceof ResponseException && $code >= 400 && $code < 500) {
-            $logger->warning($e->getMessage(), [
-                'exception' => $e::class,
-                'code'      => $code,
             ]);
             return;
         }

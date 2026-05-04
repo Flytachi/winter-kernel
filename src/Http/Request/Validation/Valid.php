@@ -34,4 +34,6 @@ use Attribute;
  * ```
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-readonly class Valid {}
+readonly class Valid
+{
+}

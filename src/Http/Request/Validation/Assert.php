@@ -37,7 +37,9 @@ readonly class Assert implements Constraint
      * @param string $callable Callable string reference: 'ClassName::method' or 'functionName'.
      *                         Signature: function(mixed $value, string $field): ?string
      */
-    public function __construct(public string $callable) {}
+    public function __construct(public string $callable)
+    {
+    }
 
     public function validate(mixed $value, string $field): ?string
     {

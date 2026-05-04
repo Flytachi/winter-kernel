@@ -23,7 +23,9 @@ readonly class Min implements Constraint
     /**
      * @param int|float $value Lower bound (inclusive). Value must be ≥ this.
      */
-    public function __construct(public int|float $value) {}
+    public function __construct(public int|float $value)
+    {
+    }
 
     public function validate(mixed $value, string $field): ?string
     {

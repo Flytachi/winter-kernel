@@ -27,9 +27,10 @@ readonly class Regex implements Constraint
      * @param string|null $message Custom error message. Defaults to "must match pattern {$pattern}".
      */
     public function __construct(
-        public string  $pattern,
+        public string $pattern,
         public ?string $message = null,
-    ) {}
+    ) {
+    }
 
     public function validate(mixed $value, string $field): ?string
     {

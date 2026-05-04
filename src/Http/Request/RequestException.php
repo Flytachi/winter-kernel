@@ -23,7 +23,7 @@ class RequestException extends ResponseException
 {
     public function __construct(
         string $message = '',
-        HttpCode $httpCode = HttpCode::BAD_REQUEST,
+        HttpCode|string|int $httpCode = HttpCode::BAD_REQUEST,
         ?\Throwable $previous = null,
     ) {
         parent::__construct($message, $httpCode, $previous);

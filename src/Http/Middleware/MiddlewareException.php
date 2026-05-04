@@ -23,7 +23,7 @@ class MiddlewareException extends ResponseException
 {
     public function __construct(
         string $message = '',
-        HttpCode $httpCode = HttpCode::UNAUTHORIZED,
+        HttpCode|string|int $httpCode = HttpCode::UNAUTHORIZED,
         ?\Throwable $previous = null,
     ) {
         parent::__construct($message, $httpCode, $previous);

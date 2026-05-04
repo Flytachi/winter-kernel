@@ -9,6 +9,7 @@ use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 use Flytachi\Winter\K2\Http\ParameterResolver;
 use Flytachi\Winter\K2\Http\Request\Annotation\RequestXml;
 use Flytachi\Winter\K2\Http\Request\Validation\NotBlank;
+use Flytachi\Winter\K2\Http\Request\Validation\Positive;
 use Flytachi\Winter\K2\Http\Request\Validation\Required;
 use Flytachi\Winter\K2\Http\Request\Validation\Valid;
 use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
@@ -49,6 +50,24 @@ class Xml_ValidatedDto
     ) {}
 }
 
+class Xml_VariadicItemDto
+{
+    public function __construct(
+        public readonly string $name,
+        #[Positive]
+        public readonly int    $qty,
+    ) {}
+}
+
+class Xml_ConstrainedNestedDto
+{
+    public function __construct(
+        #[NotBlank]
+        public readonly string    $title,
+        public readonly Xml_SimpleDto $location,
+    ) {}
+}
+
 // ── Fixture controller ────────────────────────────────────────────────────────
 
 class RequestXmlFixture
@@ -58,6 +77,9 @@ class RequestXmlFixture
     public function asDto(#[RequestXml] Xml_SimpleDto $body): void {}
     public function asNested(#[RequestXml] Xml_LocationDto $body): void {}
     public function asValidated(#[Valid] #[RequestXml] Xml_ValidatedDto $body): void {}
+    public function asVariadic(#[RequestXml] Xml_VariadicItemDto ...$items): void {}
+    public function asVariadicValid(#[RequestXml, Valid] Xml_VariadicItemDto ...$items): void {}
+    public function asConstrainedNested(#[Valid] #[RequestXml] Xml_ConstrainedNestedDto $body): void {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -168,6 +190,94 @@ class RequestXmlTest extends TestCase
         } catch (ValidationException $e) {
             $this->assertArrayHasKey('coords.lon', $e->getErrors());
         }
+    }
+
+    // ── multiple missing fields — all reported ────────────────────────────────
+
+    public function test_multiple_missing_fields_all_reported(): void
+    {
+        try {
+            $this->resolve('asDto', '<root></root>');
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $errors = $e->getErrors();
+            $this->assertArrayHasKey('city', $errors);
+            $this->assertArrayHasKey('country', $errors);
+        }
+    }
+
+    // ── variadic #[RequestXml] ────────────────────────────────────────────────
+
+    public function test_variadic_single_element_from_xml(): void
+    {
+        // Single XML doc → non-list map → wrapped into one-element variadic
+        $xml = '<root><name>Widget</name><qty>3</qty></root>';
+        $result = $this->resolve('asVariadic', $xml);
+        $this->assertCount(1, $result);
+        $this->assertInstanceOf(Xml_VariadicItemDto::class, $result[0]);
+        $this->assertSame('Widget', $result[0]->name);
+        $this->assertSame(3, $result[0]->qty);
+    }
+
+    public function test_variadic_structural_error_uses_index_key(): void
+    {
+        $xml = '<root><qty>3</qty></root>';
+        try {
+            $this->resolve('asVariadic', $xml);
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('[0].name', $e->getErrors());
+        }
+    }
+
+    public function test_variadic_valid_constraint_violation(): void
+    {
+        $xml = '<root><name>Widget</name><qty>-1</qty></root>';
+        try {
+            $this->resolve('asVariadicValid', $xml);
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('[0].qty', $e->getErrors());
+        }
+    }
+
+    public function test_variadic_valid_passes(): void
+    {
+        $xml = '<root><name>Widget</name><qty>5</qty></root>';
+        $result = $this->resolve('asVariadicValid', $xml);
+        $this->assertCount(1, $result);
+    }
+
+    // ── nested DTO + #[Valid] constraint cascade ───────────────────────────────
+
+    public function test_nested_valid_constraint_on_outer_field(): void
+    {
+        $xml = '<root><title></title><location><city>Berlin</city><country>Germany</country></location></root>';
+        try {
+            $this->resolve('asConstrainedNested', $xml);
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('title', $e->getErrors());
+        }
+    }
+
+    public function test_nested_valid_constraint_on_inner_field(): void
+    {
+        $xml = '<root><title>Report</title><location><city></city><country>Germany</country></location></root>';
+        try {
+            $this->resolve('asConstrainedNested', $xml);
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('location.city', $e->getErrors());
+        }
+    }
+
+    public function test_nested_valid_passes(): void
+    {
+        $xml = '<root><title>Report</title><location><city>Berlin</city><country>Germany</country></location></root>';
+        [$dto] = $this->resolve('asConstrainedNested', $xml);
+        $this->assertSame('Report', $dto->title);
+        $this->assertSame('Berlin', $dto->location->city);
     }
 
     // ── #[Valid] integration ──────────────────────────────────────────────────

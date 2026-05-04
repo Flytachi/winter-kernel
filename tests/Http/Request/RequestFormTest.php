@@ -10,6 +10,7 @@ use Flytachi\Winter\K2\Http\ParameterResolver;
 use Flytachi\Winter\K2\Http\Request\Annotation\RequestForm;
 use Flytachi\Winter\K2\Http\Request\Validation\Min;
 use Flytachi\Winter\K2\Http\Request\Validation\NotBlank;
+use Flytachi\Winter\K2\Http\Request\Validation\Positive;
 use Flytachi\Winter\K2\Http\Request\Validation\Required;
 use Flytachi\Winter\K2\Http\Request\Validation\Valid;
 use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
@@ -37,6 +38,33 @@ class Form_ValidatedDto
     ) {}
 }
 
+class Form_AddressDto
+{
+    public function __construct(
+        #[NotBlank]
+        public readonly string $city,
+        public readonly string $zip,
+    ) {}
+}
+
+class Form_NestedPersonDto
+{
+    public function __construct(
+        #[NotBlank]
+        public readonly string       $name,
+        public readonly Form_AddressDto $address,
+    ) {}
+}
+
+class Form_VariadicItemDto
+{
+    public function __construct(
+        public readonly string $name,
+        #[Positive]
+        public readonly int    $qty,
+    ) {}
+}
+
 // ── Fixture controller ────────────────────────────────────────────────────────
 
 class RequestFormFixture
@@ -45,6 +73,7 @@ class RequestFormFixture
     public function asStdClass(#[RequestForm] \stdClass $body): void {}
     public function asDto(#[RequestForm] Form_ProductDto $body): void {}
     public function asValidated(#[Valid] #[RequestForm] Form_ValidatedDto $body): void {}
+    public function asNestedPerson(#[Valid] #[RequestForm] Form_NestedPersonDto $body): void {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -154,6 +183,67 @@ class RequestFormTest extends TestCase
             $errors = $e->getErrors();
             $this->assertArrayHasKey('name', $errors);
             $this->assertArrayHasKey('price', $errors);
+        }
+    }
+
+    // ── nested DTO hydration from form ────────────────────────────────────────
+
+    public function test_nested_dto_hydrated_from_form(): void
+    {
+        // PHP form encoding supports nested arrays: address[city]=..., address[zip]=...
+        $request = $this->makeRequest([
+            'name'    => 'Alice',
+            'address' => ['city' => 'Berlin', 'zip' => '10115'],
+        ]);
+        [$dto] = ParameterResolver::resolve(
+            new ReflectionMethod(RequestFormFixture::class, 'asNestedPerson'),
+            $request,
+            $this->response,
+            [],
+        );
+        $this->assertInstanceOf(Form_NestedPersonDto::class, $dto);
+        $this->assertSame('Alice', $dto->name);
+        $this->assertInstanceOf(Form_AddressDto::class, $dto->address);
+        $this->assertSame('Berlin', $dto->address->city);
+    }
+
+    public function test_nested_dto_missing_inner_field_dot_path(): void
+    {
+        $request = $this->makeRequest([
+            'name'    => 'Alice',
+            'address' => ['zip' => '10115'],
+        ]);
+        try {
+            ParameterResolver::resolve(
+                new ReflectionMethod(RequestFormFixture::class, 'asNestedPerson'),
+                $request,
+                $this->response,
+                [],
+            );
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('address.city', $e->getErrors());
+        }
+    }
+
+    public function test_nested_valid_outer_and_inner_errors_both_reported(): void
+    {
+        $request = $this->makeRequest([
+            'name'    => '',
+            'address' => ['city' => '', 'zip' => '10115'],
+        ]);
+        try {
+            ParameterResolver::resolve(
+                new ReflectionMethod(RequestFormFixture::class, 'asNestedPerson'),
+                $request,
+                $this->response,
+                [],
+            );
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $errors = $e->getErrors();
+            $this->assertArrayHasKey('name', $errors);
+            $this->assertArrayHasKey('address.city', $errors);
         }
     }
 

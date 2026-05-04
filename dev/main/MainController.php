@@ -3,7 +3,11 @@
 namespace Main;
 
 use Flytachi\Winter\DI\Attribute\Inject;
+use Flytachi\Winter\K2\Http\Request\Annotation\PathVariable;
 use Flytachi\Winter\K2\Http\Request\Annotation\RequestBody;
+use Flytachi\Winter\K2\Http\Request\Annotation\RequestParam;
+use Flytachi\Winter\K2\Http\Request\Validation\Positive;
+use Flytachi\Winter\K2\Http\Request\Validation\Valid;
 use Flytachi\Winter\K2\Http\Response\ResponseEntity;
 use Flytachi\Winter\K2\Route\Annotation\PostMapping;
 use Flytachi\Winter\K2\Route\Annotation\RequestMapping;
@@ -20,19 +24,20 @@ class MainController extends Controller
     #[AuthMiddleware]
     #[PostMapping('test')]
     public function hello(
-        #[RequestBody] array $request,
-    ): ResponseEntity
-    {
-        dd($request);
+        #[RequestParam('id'), Positive] int $id,
+        #[RequestBody, Valid] Order ...$orders,
+    ): ResponseEntity {
+        dd($orders);
 //        $this->service->send();
 //        return ResponseEntity::ok(
 //            $this->service->list()
 //        );
     }
 
-//    #[GetMapping('/test')]
-    public function hello2(): ResponseEntity
+//    #[PostMapping('/test2/{id}')]
+    public function hello2(#[PathVariable('id'), Positive] int $id): ResponseEntity
     {
+//        dd($id);
         return ResponseEntity::ok(
             $this->service->list()
         );

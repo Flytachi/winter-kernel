@@ -9,6 +9,8 @@ use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 use Flytachi\Winter\K2\Http\ParameterResolver;
 use Flytachi\Winter\K2\Http\Request\Annotation\RequestParam;
 use Flytachi\Winter\K2\Http\Request\RequestException;
+use Flytachi\Winter\K2\Http\Request\Validation\Positive;
+use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
@@ -46,6 +48,8 @@ class RequestParamFixture
     public function enumString(#[RequestParam] ReqParamStatus $status): void {}
     public function enumInt(#[RequestParam] ReqParamCode $code): void {}
     public function dateTime(#[RequestParam] \DateTimeImmutable $date): void {}
+    public function camelParam(#[RequestParam] int $pageSize): void {}
+    public function constrainedId(#[RequestParam, Positive] int $id): void {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -379,6 +383,46 @@ class RequestParamTest extends TestCase
         $this->expectException(RequestException::class);
         $this->expectExceptionMessage("must be a numeric value");
         $this->resolve('decimal', ['value' => 'abc']);
+    }
+
+    // ── camelCase → snake_case / kebab-case lookup ────────────────────────────
+
+    public function test_camel_param_resolved_from_camel_case(): void
+    {
+        [$val] = $this->resolve('camelParam', ['pageSize' => '25']);
+        $this->assertSame(25, $val);
+    }
+
+    public function test_camel_param_resolved_from_snake_case(): void
+    {
+        [$val] = $this->resolve('camelParam', ['page_size' => '30']);
+        $this->assertSame(30, $val);
+    }
+
+    public function test_camel_param_resolved_from_kebab_case(): void
+    {
+        [$val] = $this->resolve('camelParam', ['page-size' => '15']);
+        $this->assertSame(15, $val);
+    }
+
+    // ── #[Constraint] on scalar param — fires without #[Valid] ───────────────
+
+    public function test_constraint_passes_on_valid_value(): void
+    {
+        [$id] = $this->resolve('constrainedId', ['id' => '5']);
+        $this->assertSame(5, $id);
+    }
+
+    public function test_constraint_throws_on_violation(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->resolve('constrainedId', ['id' => '-1']);
+    }
+
+    public function test_constraint_throws_on_zero(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->resolve('constrainedId', ['id' => '0']);
     }
 
     // ── Union type ────────────────────────────────────────────────────────────

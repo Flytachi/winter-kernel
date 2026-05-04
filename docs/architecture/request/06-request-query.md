@@ -11,9 +11,9 @@ use Flytachi\Winter\K2\Http\Request\Annotation\RequestQuery;
 
 ## Rules
 
-1. Supported types: `array` or any class with a constructor.
+1. Supported types: `array`, `stdClass`, or any class with a constructor.
 2. Always optional — missing or empty query string produces an empty array / default-filled DTO.
-3. Does **not** support `#[Valid]` directly (use `#[RequestParam]` per field if validation is needed).
+3. Add `#[Valid]` to trigger `#[Constraint]` validation on DTO fields after hydration.
 
 ---
 
@@ -82,11 +82,37 @@ Supported casts match `#[RequestParam]` — see [02-request-param.md](02-request
 
 ---
 
+---
+
+## Constraint Validation with `#[Valid]`
+
+Add `#[Valid]` alongside `#[RequestQuery]` to run `#[Constraint]` attributes
+declared on the DTO's constructor parameters. Works identically to `#[RequestBody]`.
+
+```php
+class PageFilter
+{
+    public function __construct(
+        #[Min(1)]
+        public readonly int $page = 1,
+        #[NotBlank]
+        public readonly string $name,
+    ) {}
+}
+
+public function list(#[RequestQuery, Valid] PageFilter $filter): ResponseEntity
+// GET /items?page=0&name=  → 422 errors: {page: [...], name: [...]}
+```
+
+See [08-validation.md](08-validation.md) for all available constraints.
+
+---
+
 ## When to Use vs `#[RequestParam]`
 
-| Scenario                                      | Use                  |
-|-----------------------------------------------|----------------------|
-| 1–2 independent query params                  | `#[RequestParam]`    |
-| 3+ params forming a filter / search / paging  | `#[RequestQuery]`    |
-| Reusable query DTO shared across methods      | `#[RequestQuery]`    |
-| Per-field validation (`#[Min]`, `#[Email]`)   | `#[RequestParam]`    |
+| Scenario                                         | Use                  |
+|--------------------------------------------------|----------------------|
+| 1–2 independent query params                     | `#[RequestParam]`    |
+| 3+ params forming a filter / search / paging     | `#[RequestQuery]`    |
+| Reusable query DTO shared across methods         | `#[RequestQuery]`    |
+| Per-field constraints with `#[Valid]`            | Either — both work   |

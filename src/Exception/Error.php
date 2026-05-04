@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Exception;
 
+use Flytachi\Winter\Base\Exception\ExceptionLogLevel;
 use Flytachi\Winter\Base\Exception\ExceptionTrait;
 use Flytachi\Winter\Base\HttpCode;
 use Psr\Log\LogLevel;
@@ -22,7 +23,7 @@ use Psr\Log\LogLevel;
  *   throw new Error('Not implemented', HttpCode::NOT_IMPLEMENTED->value);
  *   Error::throw('Not implemented', HttpCode::NOT_IMPLEMENTED);
  */
-class Error extends \RuntimeException implements LogLevelException
+class Error extends \RuntimeException implements ExceptionLogLevel
 {
     use ExceptionTrait;
 
@@ -30,9 +31,12 @@ class Error extends \RuntimeException implements LogLevelException
 
     private string $resolvedLogLevel;
 
-    public function __construct(string $message = '', int $code = 0, ?\Throwable $previous = null)
+    public function __construct(string $message = '', HttpCode|string|int $code = 0, ?\Throwable $previous = null)
     {
-        $httpCode = HttpCode::tryFrom($code ?: $this->code);
+        if ($code instanceof HttpCode) {
+            $code = $code->value;
+        }
+        $httpCode = HttpCode::tryFrom((int) $code ?: $this->code);
 
         $this->resolvedLogLevel = match (true) {
             $httpCode === null          => LogLevel::CRITICAL,
@@ -41,7 +45,7 @@ class Error extends \RuntimeException implements LogLevelException
             default                     => LogLevel::NOTICE,
         };
 
-        parent::__construct($message, $code, $previous);
+        parent::__construct($message, (int) $code, $previous);
     }
 
     public function getLogLevel(): string

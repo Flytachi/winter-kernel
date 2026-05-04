@@ -9,7 +9,10 @@ use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 use Flytachi\Winter\K2\Http\ParameterResolver;
 use Flytachi\Winter\K2\Http\Request\Annotation\RequestQuery;
 use Flytachi\Winter\K2\Http\Request\RequestException;
+use Flytachi\Winter\K2\Http\Request\Validation\Min;
+use Flytachi\Winter\K2\Http\Request\Validation\NotBlank;
 use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
+use Flytachi\Winter\K2\Http\Request\Validation\Valid;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
@@ -50,6 +53,16 @@ class Query_RequiredDto
     ) {}
 }
 
+class Query_ConstrainedDto
+{
+    public function __construct(
+        #[NotBlank]
+        public readonly string $name,
+        #[Min(1)]
+        public readonly int    $page = 1,
+    ) {}
+}
+
 // ── Fixture controller ────────────────────────────────────────────────────────
 
 class RequestQueryFixture
@@ -59,6 +72,7 @@ class RequestQueryFixture
     public function asFilter(#[RequestQuery] Query_FilterDto $filter): void {}
     public function asTyped(#[RequestQuery] Query_TypedDto $dto): void {}
     public function asRequired(#[RequestQuery] Query_RequiredDto $dto): void {}
+    public function asConstrained(#[RequestQuery, Valid] Query_ConstrainedDto $dto): void {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -243,12 +257,41 @@ class RequestQueryTest extends TestCase
         $this->assertSame(30, $dto->age);
     }
 
+    // ── #[Valid] constraint enforcement ──────────────────────────────────────
+
+    public function test_valid_constraint_blank_name_fails(): void
+    {
+        try {
+            $this->resolve('asConstrained', ['name' => '']);
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('name', $e->getErrors());
+        }
+    }
+
+    public function test_valid_constraint_min_page_fails(): void
+    {
+        try {
+            $this->resolve('asConstrained', ['name' => 'Alice', 'page' => '0']);
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('page', $e->getErrors());
+        }
+    }
+
+    public function test_valid_constraint_passes(): void
+    {
+        [$dto] = $this->resolve('asConstrained', ['name' => 'Alice', 'page' => '2']);
+        $this->assertSame('Alice', $dto->name);
+        $this->assertSame(2, $dto->page);
+    }
+
     // ── LogicException for unsupported type ───────────────────────────────────
 
     public function test_unsupported_scalar_type_throws_logic_exception(): void
     {
         $this->expectException(\LogicException::class);
-        $this->expectExceptionMessage('#[RequestQuery]');
+        $this->expectExceptionMessage('Request query string');
 
         $fixture = new class {
             public function action(#[RequestQuery] string $q): void {}

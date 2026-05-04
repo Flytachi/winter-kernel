@@ -7,13 +7,22 @@ namespace Flytachi\Winter\K2\Http\Request\Annotation;
 use Attribute;
 
 /**
- * Deserializes multipart/form-data or application/x-www-form-urlencoded body
- * into a RequestObject subclass.
+ * Forces the request body to be parsed as form data, regardless of Content-Type.
+ * Internally uses getParsedBody() + getQueryParams() (body takes precedence).
  *
- * Analogue of Spring's @ModelAttribute (for form data).
+ * Supported types:
+ *   - array    — merged form + query params as raw array
+ *   - stdClass — merged params as stdClass
+ *   - SomeDto  — hydrated from merged params via constructor (reflection)
+ *              Nested objects supported via PHP bracket notation: address[city]=...
  *
- * Example:
- *   public function store(#[RequestForm] UserCreateRequest $body): ResponseEntity { ... }
+ * Add #[Valid] to trigger #[Constraint] validation on DTO fields after hydration.
+ *
+ * Examples:
+ * ```
+ *   public function submit(#[RequestForm] ContactFormDto $form): ResponseEntity { ... }
+ *   public function search(#[RequestForm] array $params): ResponseEntity { ... }
+ * ```
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 readonly class RequestForm
