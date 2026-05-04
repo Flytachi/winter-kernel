@@ -37,14 +37,15 @@ if (!function_exists('wrIsActiveLink')) {
         string $classNameSuccess = 'active',
         string $classNameNone = ''
     ): string {
-        return RenderContext::current()?->isActiveLink($link, $classNameSuccess, $classNameNone) ?? $classNameNone;
+        return RenderContext::current()
+            ?->isActiveLink($link, $classNameSuccess, $classNameNone) ?? $classNameNone;
     }
 }
 
 if (!function_exists('wrContent')) {
     function wrContent(): void
     {
-        echo RenderContext::current()?->getData('content') ?? '';
+        echo RenderContext::current()?->getResourceContent() ?? '';
     }
 }
 

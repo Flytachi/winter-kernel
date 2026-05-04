@@ -138,6 +138,18 @@ final class RenderContext
 
     // ── Template API ──────────────────────────────────────────────────────────
 
+    private ?string $wrContent = null;
+
+    public function setResourceContent(string $content): void
+    {
+        $this->wrContent = $content;
+    }
+
+    public function getResourceContent(): string
+    {
+        return $this->wrContent ?: '';
+    }
+
     public function getData(?string $key = null): mixed
     {
         return $key === null ? $this->data : ($this->data[$key] ?? null);

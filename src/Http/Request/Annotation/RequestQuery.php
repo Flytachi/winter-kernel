@@ -15,7 +15,8 @@ use Attribute;
  * Supported types: array | stdClass | any class with a constructor.
  *
  * Query string values are cast to constructor parameter types (same logic as #[RequestParam]).
- * Scalar type casting: int, float, bool, string, BackedEnum, DateTimeImmutable, DateTime, BcMath\Number, Decimal\Decimal.
+ * Scalar type casting: int, float, bool, string, BackedEnum,
+ * DateTimeImmutable, DateTime, BcMath\Number, Decimal\Decimal.
  *
  * Add #[Valid] to trigger #[Constraint] validation on DTO fields after hydration.
  *

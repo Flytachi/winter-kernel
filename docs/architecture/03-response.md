@@ -157,7 +157,6 @@ use Flytachi\Winter\K2\Http\Response\ResponseView;
 return ResponseView::view('user/profile', ['user' => $user]);
 
 // Render a resource wrapped inside a layout template
-// Inside the layout: $content holds the already-rendered resource HTML
 return ResponseView::render('layouts/main', 'user/profile', ['user' => $user]);
 ```
 
@@ -165,6 +164,29 @@ All `$data` keys are `extract()`-ed into the template scope as variables.
 `ResponseView` sends `Content-Type: text/html; charset=utf-8`.
 
 In DEBUG mode a debug overlay is appended to the rendered HTML by `RenderContext`.
+
+### Template helper functions
+
+Inside any `.php` template or resource the following global helpers are available:
+
+| Function | Description |
+|---|---|
+| `wrContent()` | Outputs the rendered resource HTML inside a layout template |
+| `wrImport('partial/name')` | Includes another view file in the current scope |
+| `wrData(?string $key)` | Returns a value from `$data` by key, or the full array if `null` |
+| `wrIsActiveLink(string\|array $link, string $success, string $none)` | Returns CSS class based on current request URI |
+
+Example layout (`layouts/main.php`):
+
+```php
+<!doctype html>
+<html>
+<head><title><?= wrData('title') ?></title></head>
+<body>
+    <?php wrContent(); ?>
+</body>
+</html>
+```
 
 ### Custom status / headers
 

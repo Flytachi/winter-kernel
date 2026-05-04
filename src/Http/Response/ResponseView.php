@@ -120,9 +120,10 @@ class ResponseView implements Sendable
         RenderContext::push(self::$basePath, $this->data, $this->templateName, $this->resourceName);
         try {
             $resource = $this->capture($this->resourcePath(), $this->data);
+            RenderContext::current()?->setResourceContent($resource);
 
             $html = $this->templateName !== null
-                ? $this->capture($this->templatePath(), [...$this->data, 'content' => $resource])
+                ? $this->capture($this->templatePath(), $this->data)
                 : $resource;
 
             return $html . RenderContext::current()?->debugger();
