@@ -15,7 +15,8 @@ class Index implements StructureInterface
         public IndexType $type = IndexType::INDEX,
         public IndexMethod $method = IndexMethod::BTREE,
         public ?string $where = null,
-        public array $includeColumns = [] // New property for PostgreSQL INCLUDE clause
+        public array $includeColumns = [], // New property for PostgreSQL INCLUDE clause
+        public ?string $opClass = null // TODO нужно будет добавить create extention (#[Extension(name: ?'pg_trgm')])
     ) {
         if ($name) {
             NameValidator::validate($name);
@@ -24,7 +25,12 @@ class Index implements StructureInterface
 
     public function toSql(string $tableName, string $dialect = 'mysql'): string
     {
-        $columnsSql = ' (' . implode(', ', array_map(fn($col) => $col, $this->columns)) . ')';
+        $cols = array_values($this->columns);
+        if ($this->opClass !== null) {
+            $cols[0] .= ' ' . $this->opClass;
+        }
+        $columnsSql = ' (' . implode(', ', $cols) . ')';
+
         $baseName = $this->name;
         if (!$baseName) {
             $cleanColumns = array_map(fn($col) => preg_replace('/[^a-zA-Z0-9_]/', '', $col), $this->columns);

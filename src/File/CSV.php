@@ -9,8 +9,13 @@ abstract class CSV
     /**
      * @throws FileException
      */
-    public static function read(string $path, string $delimiter = ',', int $rowLength = 1000): array
-    {
+    public static function read(
+        string $path,
+        string $delimiter = ',',
+        string $enclosure = '"',
+        string $escape = '\\',
+        int $rowLength = 1000
+    ): array {
         if (!file_exists($path) || !is_readable($path)) {
             throw new FileException('File does not exist or is not readable');
         }
@@ -18,7 +23,7 @@ abstract class CSV
         $header = null;
         $data = [];
         if (($handle = fopen($path, 'r')) !== false) {
-            while (($row = fgetcsv($handle, $rowLength, $delimiter)) !== false) {
+            while (($row = fgetcsv($handle, $rowLength, $delimiter, $enclosure, $escape)) !== false) {
                 if (!$header) {
                     $header = $row;
                 } else {
