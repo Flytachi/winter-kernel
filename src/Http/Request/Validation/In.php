@@ -21,11 +21,13 @@ readonly class In implements Constraint
 {
     /**
      * @param array $values Allowed values to check against.
-     * @param bool  $strict Use strict comparison (===). Defaults to true.
+     * @param bool $strict Use strict comparison (===). Defaults to true.
+     * @param string|null $message Custom error message that overrides the default one.
      */
     public function __construct(
         public array $values,
         public bool $strict = true,
+        public ?string $message = null,
     ) {
     }
 
@@ -36,6 +38,9 @@ readonly class In implements Constraint
         }
         if (in_array($value, $this->values, $this->strict)) {
             return null;
+        }
+        if ($this->message !== null) {
+            return $this->message;
         }
         $allowed = implode(', ', array_map(
             static fn($v) => is_string($v) ? "\"$v\"" : (string) $v,

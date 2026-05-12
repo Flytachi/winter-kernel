@@ -22,9 +22,12 @@ readonly class Max implements Constraint
 {
     /**
      * @param int|float $value Upper bound (inclusive). Value must be ≤ this.
+     * @param string|null $message Custom error message that overrides the default one.
      */
-    public function __construct(public int|float $value)
-    {
+    public function __construct(
+        public int|float $value,
+        public ?string $message = null,
+    ) {
     }
 
     public function validate(mixed $value, string $field): ?string
@@ -36,7 +39,9 @@ readonly class Max implements Constraint
         if ($n === null) {
             return null;
         }
-        return $n <= (float) $this->value ? null : "must not exceed {$this->value}";
+        return $n <= (float) $this->value
+            ? null
+            : ($this->message ?? "must not exceed {$this->value}");
     }
 
     private static function toFloat(mixed $value): ?float

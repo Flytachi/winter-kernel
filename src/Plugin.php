@@ -18,7 +18,12 @@ final class Plugin
 
     public static function registry(string $package, string $prefix, bool $required = true): void
     {
-        $path = InstalledVersions::getInstallPath($package);
+        try {
+            $path = InstalledVersions::getInstallPath($package);
+        } catch (\OutOfBoundsException) {
+            // Package is not installed at all.
+            $path = null;
+        }
         if ($path === null) {
             if ($required) {
                 Error::throw("Plugin '$package' has no install path");

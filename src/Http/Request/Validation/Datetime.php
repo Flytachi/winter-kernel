@@ -23,9 +23,12 @@ readonly class Datetime implements Constraint
 {
     /**
      * @param string|null $format PHP datetime format string. null = flexible ISO 8601 via DateTimeImmutable.
+     * @param string|null $message Custom error message that overrides the default one.
      */
-    public function __construct(public ?string $format = null)
-    {
+    public function __construct(
+        public ?string $format = null,
+        public ?string $message = null,
+    ) {
     }
 
     public function validate(mixed $value, string $field): ?string
@@ -42,7 +45,7 @@ readonly class Datetime implements Constraint
             $dt     = \DateTime::createFromFormat('!' . $this->format, $str);
             $errors = \DateTime::getLastErrors();
             if ($dt === false || ($errors && ($errors['error_count'] > 0 || $errors['warning_count'] > 0))) {
-                return "must be a valid datetime ({$this->format})";
+                return $this->message ?? "must be a valid datetime ({$this->format})";
             }
             return null;
         }
@@ -52,7 +55,7 @@ readonly class Datetime implements Constraint
             new \DateTimeImmutable($str);
             return null;
         } catch (\Exception) {
-            return 'must be a valid datetime';
+            return $this->message ?? 'must be a valid datetime';
         }
     }
 }

@@ -25,12 +25,14 @@ use Attribute;
 readonly class Digits implements Constraint
 {
     /**
-     * @param int $integer  Max allowed digits in the integer part (before decimal point).
+     * @param int $integer Max allowed digits in the integer part (before decimal point).
      * @param int $fraction Max allowed digits in the fraction part (after decimal point). Defaults to 0.
+     * @param string|null $message Custom error message that overrides the default one.
      */
     public function __construct(
         public int $integer,
         public int $fraction = 0,
+        public ?string $message = null,
     ) {
     }
 
@@ -57,10 +59,10 @@ readonly class Digits implements Constraint
         $fracPart = rtrim($parts[1] ?? '', '0');
 
         if (strlen($intPart) > $this->integer) {
-            return "integer part must not exceed {$this->integer} digits";
+            return $this->message ?? "integer part must not exceed {$this->integer} digits";
         }
         if (strlen($fracPart) > $this->fraction) {
-            return "fraction part must not exceed {$this->fraction} digits";
+            return $this->message ?? "fraction part must not exceed {$this->fraction} digits";
         }
         return null;
     }

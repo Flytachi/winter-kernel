@@ -9,18 +9,18 @@ if (!function_exists('trans')) {
     /**
      * Translates a given key using the loaded dictionary.
      *
-     * This method retrieves the translation string from the dictionary using a dot-separated key.
-     * If parameters are provided, they will be inserted into the translated string using `sprintf()`.
-     * If the key is not found, it returns the key as is.
+     * Looks up a value by dot-separated key. Parameter style is auto-detected:
+     *   - list (sequential keys)   → sprintf substitution: %s, %d, %1$s, …
+     *   - associative (string keys) → :name placeholder substitution via strtr
+     * Missing key → returned as is (graceful fallback).
      *
-     * @param string $key The translation key, using dot notation for nested values.
-     * @param array|null $params Optional parameters to replace placeholders in the translation string.
-     *
-     * @return string The translated string or the key if no translation is found.
+     * @param string $key Dot-notation key, e.g. 'auth.welcome'.
+     * @param array<int|string,mixed>|null $params sprintf args (list) or :name map (assoc).
+     * @return string Translated string or the key itself if not found.
      */
     function trans(string $key, ?array $params = null): string
     {
-        return Locale::translate($key, $params);
+        return Locale::translate($key, $params ?? []);
     }
 }
 

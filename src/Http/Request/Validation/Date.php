@@ -21,9 +21,12 @@ readonly class Date implements Constraint
 {
     /**
      * @param string $format PHP date format string. Defaults to 'Y-m-d' (e.g. "2024-01-31").
+     * @param string|null $message Custom error message that overrides the default one.
      */
-    public function __construct(public string $format = 'Y-m-d')
-    {
+    public function __construct(
+        public string $format = 'Y-m-d',
+        public ?string $message = null,
+    ) {
     }
 
     public function validate(mixed $value, string $field): ?string
@@ -37,7 +40,7 @@ readonly class Date implements Constraint
         $dt     = \DateTime::createFromFormat('!' . $this->format, (string) $value);
         $errors = \DateTime::getLastErrors();
         if ($dt === false || ($errors && ($errors['error_count'] > 0 || $errors['warning_count'] > 0))) {
-            return "must be a valid date ({$this->format})";
+            return $this->message ?? "must be a valid date ({$this->format})";
         }
         return null;
     }

@@ -29,6 +29,7 @@ use Flytachi\Winter\K2\Http\Request\Validation\ArrayOf;
 use Flytachi\Winter\K2\Http\Request\Validation\Constraint;
 use Flytachi\Winter\K2\Http\Request\Validation\Valid;
 use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
+use Flytachi\Winter\K2\Localization\Locale;
 use LogicException;
 use ReflectionAttribute;
 use ReflectionMethod;
@@ -612,8 +613,9 @@ class ParameterResolver
                 }
                 if ($validate) {
                     foreach ($param->getAttributes(Constraint::class, ReflectionAttribute::IS_INSTANCEOF) as $attr) {
-                        if ($msg = $attr->newInstance()->validate($collection, $name)) {
-                            $errors[$key][] = $msg;
+                        $constraint = $attr->newInstance();
+                        if ($msg = $constraint->validate($collection, $name)) {
+                            $errors[$key][] = self::resolveMessage($msg, $name, $constraint);
                         }
                     }
                 }
@@ -627,8 +629,9 @@ class ParameterResolver
                 $args[] = $castedVal;
                 if ($validate) {
                     foreach ($param->getAttributes(Constraint::class, ReflectionAttribute::IS_INSTANCEOF) as $attr) {
-                        if ($msg = $attr->newInstance()->validate($castedVal, $name)) {
-                            $errors[$key][] = $msg;
+                        $constraint = $attr->newInstance();
+                        if ($msg = $constraint->validate($castedVal, $name)) {
+                            $errors[$key][] = self::resolveMessage($msg, $name, $constraint);
                         }
                     }
                 }
@@ -682,8 +685,9 @@ class ParameterResolver
             }
 
             foreach ($param->getAttributes(Constraint::class, ReflectionAttribute::IS_INSTANCEOF) as $attr) {
-                if ($msg = $attr->newInstance()->validate($fieldValue, $name)) {
-                    $errors[$key][] = $msg;
+                $constraint = $attr->newInstance();
+                if ($msg = $constraint->validate($fieldValue, $name)) {
+                    $errors[$key][] = self::resolveMessage($msg, $name, $constraint);
                 }
             }
         }
@@ -698,13 +702,32 @@ class ParameterResolver
         $errors = [];
         $name   = $param->getName();
         foreach ($param->getAttributes(Constraint::class, ReflectionAttribute::IS_INSTANCEOF) as $attr) {
-            if ($msg = $attr->newInstance()->validate($value, $name)) {
-                $errors[$name][] = $msg;
+            $constraint = $attr->newInstance();
+            if ($msg = $constraint->validate($value, $name)) {
+                $errors[$name][] = self::resolveMessage($msg, $name, $constraint);
             }
         }
         if ($errors !== []) {
             throw new ValidationException($errors);
         }
+    }
+
+    /**
+     * Resolves an i18n placeholder in a constraint message.
+     *
+     * Spring-style: a message wrapped in '{...}' is treated as a translation
+     * key and routed through Locale::t(), receiving :field plus all public
+     * properties of the constraint as named placeholders.
+     *
+     * Plain strings (no surrounding braces) are returned as-is.
+     */
+    private static function resolveMessage(string $message, string $field, Constraint $constraint): string
+    {
+        if (preg_match('/^\{(.+)\}$/', $message, $m) !== 1) {
+            return $message;
+        }
+        $params = ['field' => $field] + get_object_vars($constraint);
+        return Locale::t($m[1], $params);
     }
 
     // ── Scalar casting ────────────────────────────────────────────────────────

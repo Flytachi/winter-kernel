@@ -21,6 +21,7 @@ use Attribute;
  *   #[Size(10)]              // max=10, min=0  — up to 10
  *   #[Size(min: 2)]          // min=2, max=∞   — at least 2
  *   #[Size(min: 2, max: 255)] // range 2..255
+ *   #[Size(3, message: 'Имя не длиннее 3 символов')] // custom error text
  * ```
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
@@ -29,10 +30,12 @@ readonly class Size implements Constraint
     /**
      * @param int $max Upper bound (inclusive). First positional arg — #[Size(10)] means max=10.
      * @param int $min Lower bound (inclusive). Defaults to 0 (no lower bound).
+     * @param string|null $message Custom error message that overrides the default one.
      */
     public function __construct(
         public int $max = PHP_INT_MAX,
         public int $min = 0,
+        public ?string $message = null,
     ) {
     }
 
@@ -58,6 +61,9 @@ readonly class Size implements Constraint
             return null;
         }
 
+        if ($this->message !== null) {
+            return $this->message;
+        }
         if ($this->min === 0) {
             return "must not exceed {$this->max}";
         }

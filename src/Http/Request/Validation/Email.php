@@ -18,6 +18,13 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PARAMETER)]
 readonly class Email implements Constraint
 {
+    /**
+     * @param string|null $message Custom error message that overrides the default one.
+     */
+    public function __construct(public ?string $message = null)
+    {
+    }
+
     public function validate(mixed $value, string $field): ?string
     {
         if ($value === null) {
@@ -25,6 +32,6 @@ readonly class Email implements Constraint
         }
         return filter_var((string) $value, FILTER_VALIDATE_EMAIL) !== false
             ? null
-            : 'must be a valid email address';
+            : ($this->message ?? 'must be a valid email address');
     }
 }

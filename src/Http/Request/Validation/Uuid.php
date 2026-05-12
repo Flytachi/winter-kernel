@@ -25,9 +25,12 @@ readonly class Uuid implements Constraint
 
     /**
      * @param int|null $version Expected UUID version (1–8). null = accept any version.
+     * @param string|null $message Custom error message that overrides the default one.
      */
-    public function __construct(public ?int $version = null)
-    {
+    public function __construct(
+        public ?int $version = null,
+        public ?string $message = null,
+    ) {
     }
 
     public function validate(mixed $value, string $field): ?string
@@ -41,6 +44,9 @@ readonly class Uuid implements Constraint
             : self::PATTERN;
 
         if (preg_match($pattern, $str) !== 1) {
+            if ($this->message !== null) {
+                return $this->message;
+            }
             return $this->version !== null
                 ? "must be a valid UUID v{$this->version}"
                 : 'must be a valid UUID';

@@ -19,11 +19,20 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PARAMETER)]
 readonly class NotBlank implements Constraint
 {
+    /**
+     * @param string|null $message Custom error message that overrides the default one.
+     */
+    public function __construct(public ?string $message = null)
+    {
+    }
+
     public function validate(mixed $value, string $field): ?string
     {
         if ($value === null) {
             return null;
         }
-        return trim((string) $value) === '' ? 'must not be blank' : null;
+        return trim((string) $value) === ''
+            ? ($this->message ?? 'must not be blank')
+            : null;
     }
 }

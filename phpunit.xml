@@ -9,6 +9,15 @@
         <testsuite name="Http">
             <directory>tests/Http</directory>
         </testsuite>
+        <testsuite name="Localization">
+            <directory>tests/Localization</directory>
+        </testsuite>
+        <testsuite name="Function">
+            <directory>tests/function</directory>
+        </testsuite>
+        <testsuite name="Configuration">
+            <directory>tests/Configuration</directory>
+        </testsuite>
     </testsuites>
 
     <source>

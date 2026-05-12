@@ -18,6 +18,13 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PARAMETER)]
 readonly class Phone implements Constraint
 {
+    /**
+     * @param string|null $message Custom error message that overrides the default one.
+     */
+    public function __construct(public ?string $message = null)
+    {
+    }
+
     public function validate(mixed $value, string $field): ?string
     {
         if ($value === null) {
@@ -25,6 +32,6 @@ readonly class Phone implements Constraint
         }
         return preg_match('/^\+?[\d\s\-\(\)]{7,20}$/', (string) $value) === 1
             ? null
-            : 'must be a valid phone number';
+            : ($this->message ?? 'must be a valid phone number');
     }
 }

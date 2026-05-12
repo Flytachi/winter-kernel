@@ -18,6 +18,13 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PARAMETER)]
 readonly class Msisdn implements Constraint
 {
+    /**
+     * @param string|null $message Custom error message that overrides the default one.
+     */
+    public function __construct(public ?string $message = null)
+    {
+    }
+
     public function validate(mixed $value, string $field): ?string
     {
         if ($value === null) {
@@ -25,6 +32,6 @@ readonly class Msisdn implements Constraint
         }
         return preg_match('/^\d{7,15}$/', (string) $value) === 1
             ? null
-            : 'must be a valid MSISDN (7–15 digits, no + prefix)';
+            : ($this->message ?? 'must be a valid MSISDN (7–15 digits, no + prefix)');
     }
 }

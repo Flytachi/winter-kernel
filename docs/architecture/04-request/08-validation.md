@@ -174,7 +174,6 @@ class SearchDto
 | `#[Email]`                        | Valid email (RFC 5321 via `filter_var`).           |
 | `#[Url]`                          | Valid URL (RFC 2396 via `filter_var`).             |
 | `#[Regex('/pattern/')]`           | String must match full PHP regex.                 |
-| `#[Regex('/p/', 'custom msg')]`   | With custom error message.                        |
 | `#[In(['a', 'b', 'c'])]`         | Value must be in the list (strict by default).    |
 | `#[In([1, 2], strict: false)]`   | Loose comparison.                                 |
 | `#[Uuid]`                         | Valid UUID (any version, RFC 4122).               |
@@ -253,6 +252,58 @@ public readonly string $slug
 
 ---
 
+## Custom Error Messages
+
+Every constraint accepts an optional named `message:` parameter that overrides the built-in default.
+
+```php
+public function __construct(
+    #[Size(3, message: 'Name is too long')]
+    public readonly string $name,
+
+    #[Min(0, message: 'Quantity cannot be negative')]
+    public readonly int $qty,
+
+    #[Email(message: 'Please provide a valid email')]
+    public readonly string $email,
+) {}
+```
+
+The string is returned verbatim in the `errors` map exactly as written.
+
+### i18n Message Keys
+
+Wrap a translation key in `{...}` to resolve it through [`Locale::t()`](../05-localization.md):
+
+```php
+#[Size(3, message: '{order.name_too_long}')]
+public readonly string $name,
+```
+
+```php
+// lang/ru.php
+return [
+    'order' => [
+        'name_too_long' => 'Поле «:field»: длина не более :max символов',
+    ],
+];
+```
+
+Output: `Поле «name»: длина не более 3 символов`.
+
+**Available placeholders:**
+
+- `:field` — the parameter name (e.g. `name`).
+- `:max`, `:min`, `:value`, `:format`, `:integer`, `:fraction`, `:version`, `:pattern`, `:strict`, `:values` — every public property of the constraint becomes a named placeholder. So `Size`, `Min`, `Date`, `Datetime`, `Time`, `Digits`, `In`, `Uuid`, `Regex` etc. expose their own configured values.
+- Unknown placeholders are left as-is. Extra params are ignored.
+- If the translation key is not found, the framework returns the bare key (e.g. `order.name_too_long`) — never throws.
+
+The resolution happens once, in `ParameterResolver::resolveMessage()` (see `src/Http/ParameterResolver.php:724`), so individual constraint classes know nothing about i18n. Plain strings without `{...}` pass through untouched.
+
+> Tip: prefer named `:placeholder` style in your dictionary entries — `sprintf` (`%s`/`%d`) also works but is positional and harder to maintain.
+
+---
+
 ## Custom Callable — `#[Assert]`
 
 For validation logic that doesn't fit a built-in constraint:
@@ -281,3 +332,67 @@ class CreateOrderDto
 `#[Assert]` is **repeatable** — stack multiple custom validators on one field.
 The callable signature must be: `function(mixed $value, string $field): ?string`.
 Return `null` to pass, return a string to fail with that message.
+
+---
+
+## Legacy: `K1ValidationTrait`
+
+`Flytachi\Winter\K2\Http\Request\K1ValidationTrait` is the older, string-rule API used by `RequestObject` (now `#[\Deprecated]`). It is kept for backwards compatibility — **prefer the attribute-based system above for any new code**.
+
+Key differences from the attribute system:
+
+| Aspect | K1ValidationTrait | Attribute system |
+|---|---|---|
+| Style | Imperative `$this->validate('field', ['rules'])` calls inside `rules()` | Declarative attributes on DTO constructor params |
+| Error reporting | Throws `RequestException` on the **first** failure | Collects **all** errors, throws `ValidationException` (422) once |
+| Per-rule message | One `$message` overrides every rule on the field | Each `#[Constraint]` has its own `message:` |
+| i18n | Same `{key}` syntax (resolved through `Locale::t()`) | Same `{key}` syntax |
+| Placeholders in dictionary | Only `:field` | `:field` + every public property of the constraint |
+
+### Available rules
+
+| Rule | Notes |
+|---|---|
+| `boolean` / `bool` | `is_bool()` |
+| `numeric` / `number` | `is_numeric()` |
+| `string` / `str` | `is_string()` |
+| `array` / `list` | `is_array()` |
+| `positive` / `id` | numeric and `> 0` |
+| `negative` | numeric and `< 0` |
+| `email` | RFC 5321 via `filter_var` |
+| `url` | RFC 2396 via `filter_var` |
+| `ip` / `ipv4` (`ip4`) / `ipv6` (`ip6`) | `filter_var` with the respective flag |
+| `uuid` | RFC 4122 v1–v5 |
+| `msisdn` | E.164 with leading `+` |
+| `phone` | digits, `+`, spaces, dashes, parens, 7–20 chars |
+| `length:min[,max]` / `len:…` | `mb_strlen` of cast string |
+| `range:min,max` / `rg:…` | numeric, inclusive |
+| `in:a,b,c` | strict comparison after cast to string |
+| `datetime[:format]` / `date:…` / `time:…` | `DateTime::createFromFormat`, default format `'Y-m-d H:i:s'` |
+| custom `callable` | any closure / `[$obj,'method']` / `'fn'` returning bool — `false` fails |
+
+### Usage
+
+```php
+use Flytachi\Winter\K2\Http\Request\RequestObject;
+
+final class CreateUserRequest extends RequestObject
+{
+    public function __construct(
+        public readonly ?string $name = null,
+        public readonly ?int    $age  = null,
+        public readonly ?string $email = null,
+    ) {}
+
+    public function rules(): void
+    {
+        $this->validate('name',  ['string', 'length:2,100'])
+             ->validate('age',   ['numeric', 'range:0,150'])
+             ->validate('email', ['email'], message: '{user.email_invalid}');
+    }
+}
+```
+
+`{user.email_invalid}` is resolved through `Locale::t()` with `:field` set to `'email'` — exactly as in the attribute system.
+
+> **Migration tip:** when you move a `RequestObject` to a plain readonly DTO with `#[Constraint]` attributes, you also gain (a) all-errors-at-once reporting, (b) per-rule `message:` overrides, and (c) richer i18n placeholders (`:max`, `:min`, …).

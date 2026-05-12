@@ -18,9 +18,10 @@ use Flytachi\Winter\Base\Tool;
  *   ];
  *
  * Usage:
- *   $svc->translate('auth.unauthorized')          → 'Access denied'
- *   $svc->translate('auth.welcome', ['Alice'])    → 'Welcome, Alice!'
- *   $svc->translate('unknown.key')                → 'unknown.key'
+ *   $svc->translate('auth.unauthorized')                       → 'Access denied'
+ *   $svc->translate('auth.welcome', ['Alice'])                 → 'Welcome, Alice!'   (sprintf, list params)
+ *   $svc->translate('user.greet', ['name' => 'Alice'])         → ':name' placeholder via strtr (assoc params)
+ *   $svc->translate('unknown.key')                             → 'unknown.key'
  */
 class LocaleService
 {
@@ -44,10 +45,14 @@ class LocaleService
     }
 
     /**
-     * Translate a dot-notation key with optional sprintf params.
+     * Translate a dot-notation key with optional params.
      *
-     * @param string       $key    e.g. 'error.not_found'
-     * @param list<mixed>  $params Optional sprintf arguments
+     * Param style is auto-detected:
+     *  - list (sequential keys)  → sprintf substitution: %s, %d, %1$s, …
+     *  - associative (string keys) → :name placeholder substitution via strtr
+     *
+     * @param string $key e.g. 'error.not_found'
+     * @param array<int|string,mixed> $params sprintf args (list) or :name map (assoc)
      */
     public function translate(string $key, array $params = []): string
     {
@@ -58,8 +63,20 @@ class LocaleService
         if (!is_string($value) || $value === '') {
             return $key;
         }
+        if ($params === []) {
+            return $value;
+        }
+        if (array_is_list($params)) {
+            return sprintf($value, ...$params);
+        }
 
-        return $params === [] ? $value : sprintf($value, ...$params);
+        $replace = [];
+        foreach ($params as $name => $v) {
+            $replace[':' . $name] = is_scalar($v) || $v === null
+                ? (string) $v
+                : (is_object($v) && method_exists($v, '__toString') ? (string) $v : '');
+        }
+        return strtr($value, $replace);
     }
 
     private function load(): void

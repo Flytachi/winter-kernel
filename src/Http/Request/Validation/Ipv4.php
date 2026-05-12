@@ -17,6 +17,13 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PARAMETER)]
 readonly class Ipv4 implements Constraint
 {
+    /**
+     * @param string|null $message Custom error message that overrides the default one.
+     */
+    public function __construct(public ?string $message = null)
+    {
+    }
+
     public function validate(mixed $value, string $field): ?string
     {
         if ($value === null) {
@@ -24,6 +31,6 @@ readonly class Ipv4 implements Constraint
         }
         return filter_var((string) $value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false
             ? null
-            : 'must be a valid IPv4 address';
+            : ($this->message ?? 'must be a valid IPv4 address');
     }
 }

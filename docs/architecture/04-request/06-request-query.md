@@ -82,8 +82,6 @@ Supported casts match `#[RequestParam]` — see [02-request-param.md](02-request
 
 ---
 
----
-
 ## Constraint Validation with `#[Valid]`
 
 Add `#[Valid]` alongside `#[RequestQuery]` to run `#[Constraint]` attributes

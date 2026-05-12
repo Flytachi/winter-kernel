@@ -14,10 +14,10 @@ use Flytachi\Winter\K2\Http\Request\Annotation\RequestXml;
 ## Rules
 
 1. Format is **not** detected from `Content-Type` — forced unconditionally.
-2. Supported parameter types: `array`, `stdClass` / `object`, any class with a constructor, variadic `...$items`.
+2. Supported parameter types: `array`, `stdClass` / `object`, any class with a constructor.
 3. Plain DTO classes are hydrated via reflection — no base class required.
 4. Nested class-typed fields are hydrated recursively (same as `#[RequestBody]`).
-5. Variadic `...$items` with `#[RequestJson]` or `#[RequestXml]` works like `#[RequestBody]` variadic.
+5. Variadic `...$items` is supported **only by `#[RequestJson]` and `#[RequestXml]`**, not by `#[RequestForm]`. `#[RequestJson]` expects a JSON array; `#[RequestXml]` wraps a single document into a one-element collection.
 6. Use `#[RequestBody]` instead if you want `Content-Type` auto-detection.
 
 ---

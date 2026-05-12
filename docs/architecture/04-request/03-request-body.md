@@ -200,7 +200,7 @@ Errors across all elements are collected before responding:
 {
   "errors": {
     "[0].title": ["is required"],
-    "[1].amount": ["must be greater than 0"]
+    "[1].amount": ["must be at least 1"]
   }
 }
 ```

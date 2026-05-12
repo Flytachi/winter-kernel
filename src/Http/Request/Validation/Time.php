@@ -22,9 +22,12 @@ readonly class Time implements Constraint
 {
     /**
      * @param string|null $format PHP time format string. null = accept 'H:i' or 'H:i:s'.
+     * @param string|null $message Custom error message that overrides the default one.
      */
-    public function __construct(public ?string $format = null)
-    {
+    public function __construct(
+        public ?string $format = null,
+        public ?string $message = null,
+    ) {
     }
 
     public function validate(mixed $value, string $field): ?string
@@ -40,14 +43,14 @@ readonly class Time implements Constraint
         if ($this->format !== null) {
             return $this->matchesFormat($str, $this->format)
                 ? null
-                : "must be a valid time ({$this->format})";
+                : ($this->message ?? "must be a valid time ({$this->format})");
         }
 
         // default: accept H:i or H:i:s
         if ($this->matchesFormat($str, 'H:i') || $this->matchesFormat($str, 'H:i:s')) {
             return null;
         }
-        return 'must be a valid time (H:i or H:i:s)';
+        return $this->message ?? 'must be a valid time (H:i or H:i:s)';
     }
 
     private function matchesFormat(string $value, string $format): bool

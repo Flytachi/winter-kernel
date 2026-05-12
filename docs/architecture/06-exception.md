@@ -98,7 +98,7 @@ Default code: **500**. Logged at `emergency` level — the highest severity.
 
 ### `MiddlewareException` — abort from middleware
 
-See the [Middleware docs](04-middleware.md) for details. Default code: **401**.
+See the [Middleware docs](02-middleware.md) for details. Default code: **401**.
 
 ---
 
@@ -167,15 +167,16 @@ class NotFoundHandler extends ExceptionResponseBase { ... }
 | `contentData(): array` | JSON / XML body for non-HTML responses |
 | `contentHtml(): string` | Full HTML body for `Accept: text/html` requests |
 
-Protected helpers available in subclasses:
+Helpers available in subclasses (`protected` unless noted):
 
 | Helper | Returns |
 |--------|---------|
-| `$this->throwable` | The original `Throwable` |
-| `$this->httpCode` | `HttpCode` resolved from the throwable's code |
+| `$this->throwable` | The original `Throwable` (protected property) |
+| `$this->httpCode` | `HttpCode` resolved from the throwable's code (protected property) |
 | `validationRequests(): array` | `$errors` map if the throwable is a `ValidationException`, otherwise `[]` |
 | `debugData(): array` | Debug metadata (`date`, `sapi`, `memory`, `time`, `exception`) — empty in production |
-| `addHeader(string, string)` | Append a response header (e.g. from `ExceptionHeader` on the throwable) |
+| `addHeader(string $key, string $value): void` | Append a response header. Inherited `final public` from `ResponseTrait`; called automatically for every `ExceptionHeader` returned by the throwable's `getExtraHeaders()`. |
+| `getHeader(): array` | Return all headers accumulated so far (inherited from `ResponseTrait`). |
 
 ---
 

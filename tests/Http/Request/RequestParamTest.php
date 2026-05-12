@@ -10,7 +10,9 @@ use Flytachi\Winter\K2\Http\ParameterResolver;
 use Flytachi\Winter\K2\Http\Request\Annotation\RequestParam;
 use Flytachi\Winter\K2\Http\Request\RequestException;
 use Flytachi\Winter\K2\Http\Request\Validation\Positive;
+use Flytachi\Winter\K2\Http\Request\Validation\Size;
 use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
+use Flytachi\Winter\K2\Localization\Locale;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
@@ -50,6 +52,15 @@ class RequestParamFixture
     public function dateTime(#[RequestParam] \DateTimeImmutable $date): void {}
     public function camelParam(#[RequestParam] int $pageSize): void {}
     public function constrainedId(#[RequestParam, Positive] int $id): void {}
+    public function constrainedIdWithCustomMessage(
+        #[RequestParam, Positive(message: 'must be > 0')] int $id,
+    ): void {}
+    public function constrainedIdWithI18nMessage(
+        #[RequestParam, Positive(message: '{order.id_must_be_positive}')] int $id,
+    ): void {}
+    public function constrainedNameWithI18nMessage(
+        #[RequestParam, Size(max: 3, message: '{order.name_too_long}')] string $name,
+    ): void {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -423,6 +434,101 @@ class RequestParamTest extends TestCase
     {
         $this->expectException(ValidationException::class);
         $this->resolve('constrainedId', ['id' => '0']);
+    }
+
+    // ── #[Constraint] custom message + {key} i18n resolution ─────────────────
+
+    public function test_custom_message_propagates_through_resolver(): void
+    {
+        try {
+            $this->resolve('constrainedIdWithCustomMessage', ['id' => '-1']);
+            $this->fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            self::assertSame(['id' => ['must be > 0']], $e->getErrors());
+        }
+    }
+
+    public function test_brace_marker_resolved_through_locale(): void
+    {
+        $tmpDir = $this->setUpLangDir([
+            'order' => [
+                'id_must_be_positive' => 'Поле «:field» должно быть положительным',
+            ],
+        ], 'ru');
+        try {
+            try {
+                $this->resolve('constrainedIdWithI18nMessage', ['id' => '-1']);
+                $this->fail('Expected ValidationException');
+            } catch (ValidationException $e) {
+                self::assertSame(
+                    ['id' => ['Поле «id» должно быть положительным']],
+                    $e->getErrors()
+                );
+            }
+        } finally {
+            $this->tearDownLangDir($tmpDir, 'ru');
+        }
+    }
+
+    public function test_brace_marker_substitutes_constraint_props(): void
+    {
+        $tmpDir = $this->setUpLangDir([
+            'order' => [
+                'name_too_long' => 'Поле «:field»: длина не более :max символов',
+            ],
+        ], 'ru');
+        try {
+            try {
+                $this->resolve('constrainedNameWithI18nMessage', ['name' => 'hello']);
+                $this->fail('Expected ValidationException');
+            } catch (ValidationException $e) {
+                // :field → 'name', :max → 3 (from Size's public $max property)
+                self::assertSame(
+                    ['name' => ['Поле «name»: длина не более 3 символов']],
+                    $e->getErrors()
+                );
+            }
+        } finally {
+            $this->tearDownLangDir($tmpDir, 'ru');
+        }
+    }
+
+    public function test_brace_marker_with_unknown_key_falls_back_to_key(): void
+    {
+        $tmpDir = $this->setUpLangDir([], 'en');
+        try {
+            try {
+                $this->resolve('constrainedIdWithI18nMessage', ['id' => '-1']);
+                $this->fail('Expected ValidationException');
+            } catch (ValidationException $e) {
+                self::assertSame(
+                    ['id' => ['order.id_must_be_positive']],
+                    $e->getErrors()
+                );
+            }
+        } finally {
+            $this->tearDownLangDir($tmpDir, 'en');
+        }
+    }
+
+    private function setUpLangDir(array $dictionary, string $lang): string
+    {
+        $tmpDir = sys_get_temp_dir() . '/winter-kernel-i18n-' . bin2hex(random_bytes(4));
+        mkdir($tmpDir);
+        file_put_contents(
+            $tmpDir . "/$lang.php",
+            '<?php return ' . var_export($dictionary, true) . ';'
+        );
+        Locale::setBasePath($tmpDir);
+        Locale::set($lang);
+        return $tmpDir;
+    }
+
+    private function tearDownLangDir(string $tmpDir, string $lang): void
+    {
+        @unlink($tmpDir . "/$lang.php");
+        @rmdir($tmpDir);
+        Locale::setBasePath('');
     }
 
     // ── Union type ────────────────────────────────────────────────────────────

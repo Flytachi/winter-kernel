@@ -5,10 +5,18 @@ declare(strict_types=1);
 namespace Flytachi\Winter\K2\Http\Request;
 
 use DateTime;
+use Flytachi\Winter\K2\Localization\Locale;
 
 /**
- * String-rule validation helpers extracted from the deprecated RequestObject.
- * Kept for backwards compatibility — new code should use #[Constraint] attributes.
+ * Legacy string-rule validation helpers extracted from RequestObject.
+ *
+ * Kept for backwards compatibility — new code should prefer the attribute-based
+ * system (#[Valid] + #[Constraint] under Flytachi\Winter\K2\Http\Request\Validation\*),
+ * which collects all errors at once and integrates with i18n natively.
+ *
+ * This trait still supports the same {key} translation-key syntax in the optional
+ * `$message` parameter as the attribute system: a message wrapped in '{...}' is
+ * resolved through Locale::t() with `:field` available as a named placeholder.
  */
 trait K1ValidationTrait
 {
@@ -21,6 +29,9 @@ trait K1ValidationTrait
      *        'msisdn', 'phone', 'datetime[:format]', 'positive', 'negative'
      *
      * @param array<callable|string> $rules
+     * @param string|null $message Custom error text for any rule failure on this field.
+     *                             If wrapped in '{...}' it is resolved through Locale::t()
+     *                             with `:field` available as a named placeholder.
      */
     final protected function validate(
         string $field,
@@ -35,13 +46,17 @@ trait K1ValidationTrait
         }
 
         if ($required && $value === null && !property_exists($this, $field)) {
-            RequestException::throw($message ?? "Required field '{$field}' not found");
+            $this->fail($field, $message ?? "Required field '{$field}' not found", $message);
         }
 
         foreach ($rules as $rule) {
             if (is_callable($rule)) {
                 if (!$rule($value)) {
-                    RequestException::throw($message ?? "Field '{$field}' failed custom validation");
+                    $this->fail(
+                        $field,
+                        $message ?? "Field '{$field}' failed custom validation",
+                        $message
+                    );
                 }
                 continue;
             }
@@ -54,6 +69,24 @@ trait K1ValidationTrait
         }
 
         return $this;
+    }
+
+    /**
+     * Throws RequestException with the given (already-defaulted) message,
+     * resolving {key} translation markers through Locale::t() when present.
+     *
+     * @param string $field The field name, exposed as :field in translations.
+     * @param string $resolvedMessage The message to throw — either the user override
+     *                                or the rule's default text.
+     * @param string|null $userMessage Original `$message` argument from validate(),
+     *                                 used to detect '{key}' translation markers.
+     */
+    private function fail(string $field, string $resolvedMessage, ?string $userMessage): void
+    {
+        if ($userMessage !== null && preg_match('/^\{(.+)\}$/', $userMessage, $m) === 1) {
+            $resolvedMessage = Locale::t($m[1], ['field' => $field]);
+        }
+        RequestException::throw($resolvedMessage);
     }
 
     private function get(string $field): mixed
@@ -76,7 +109,7 @@ trait K1ValidationTrait
 
     private function applyRule(string $field, mixed $value, string $rule, array $params, ?string $msg): void
     {
-        $fail = static fn(string $m) => RequestException::throw($msg ?? $m);
+        $fail = fn(string $m) => $this->fail($field, $msg ?? $m, $msg);
 
         match ($rule) {
             'boolean', 'bool'          => is_bool($value) || $fail("Field '{$field}' must be boolean"),

@@ -92,10 +92,13 @@ matches `X-Requested-With`, `x-requested-with`, and any other casing the client 
 
 ## Error Messages
 
-| Situation        | HTTP | Message                                          |
-|------------------|------|--------------------------------------------------|
-| Missing required | 400  | `Required header 'X-Requested-With' is missing`  |
-| Invalid int      | 400  | `Header 'X-Retry-Count' must be an integer, got 'abc'` |
+The header name in the error message is whatever the resolver looked up — that means **lowercase** when auto-converted from a PHP parameter name, or **exactly the string you passed** when given explicitly to the attribute.
+
+| Situation                            | HTTP | Message                                                          |
+|--------------------------------------|------|------------------------------------------------------------------|
+| Missing required (auto-converted)    | 400  | `Required header 'x-requested-with' is missing`                  |
+| Missing required (explicit name)     | 400  | `Required header 'X-Trace-Id' is missing`                        |
+| Invalid int (explicit name)          | 400  | `Header 'X-Retry-Count' must be an integer, got 'abc'`           |
 
 ---
 

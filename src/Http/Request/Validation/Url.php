@@ -18,6 +18,13 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PARAMETER)]
 readonly class Url implements Constraint
 {
+    /**
+     * @param string|null $message Custom error message that overrides the default one.
+     */
+    public function __construct(public ?string $message = null)
+    {
+    }
+
     public function validate(mixed $value, string $field): ?string
     {
         if ($value === null) {
@@ -25,6 +32,6 @@ readonly class Url implements Constraint
         }
         return filter_var((string) $value, FILTER_VALIDATE_URL) !== false
             ? null
-            : 'must be a valid URL';
+            : ($this->message ?? 'must be a valid URL');
     }
 }

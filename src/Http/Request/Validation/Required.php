@@ -23,8 +23,15 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PARAMETER)]
 readonly class Required implements Constraint
 {
+    /**
+     * @param string|null $message Custom error message that overrides the default one.
+     */
+    public function __construct(public ?string $message = null)
+    {
+    }
+
     public function validate(mixed $value, string $field): ?string
     {
-        return $value === null ? 'is required' : null;
+        return $value === null ? ($this->message ?? 'is required') : null;
     }
 }

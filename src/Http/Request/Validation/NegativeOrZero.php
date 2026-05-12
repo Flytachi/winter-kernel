@@ -19,6 +19,13 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PARAMETER)]
 readonly class NegativeOrZero implements Constraint
 {
+    /**
+     * @param string|null $message Custom error message that overrides the default one.
+     */
+    public function __construct(public ?string $message = null)
+    {
+    }
+
     public function validate(mixed $value, string $field): ?string
     {
         if ($value === null) {
@@ -28,7 +35,7 @@ readonly class NegativeOrZero implements Constraint
         if ($n === null) {
             return null;
         }
-        return $n <= 0.0 ? null : 'must be negative or zero';
+        return $n <= 0.0 ? null : ($this->message ?? 'must be negative or zero');
     }
 
     private static function toFloat(mixed $value): ?float
