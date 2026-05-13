@@ -162,4 +162,73 @@ final class KernelStoreTest extends TestCase
         self::assertSame(['job_b'],   array_keys(Kernel::showRunnable()));
         self::assertSame(['vol_c'],   array_keys(Kernel::showVolatiles()));
     }
+
+    // ── ensureDirectory — Docker permissions guarantee ──────────────────────
+
+    public function test_ensure_directory_creates_path_with_full_0777_mode(): void
+    {
+        $newDir = $this->tmpDir . '/created/by/ensure';
+        self::assertDirectoryDoesNotExist($newDir);
+
+        // Force a restrictive umask — without ensureDirectory's umask(0) wrapper
+        // the resulting mode would be 0777 & ~0027 = 0750.
+        $previousUmask = umask(0027);
+        try {
+            KernelStore::ensureDirectory($newDir);
+        } finally {
+            umask($previousUmask);
+        }
+
+        self::assertDirectoryExists($newDir);
+        self::assertSame(0777, fileperms($newDir) & 0777);
+    }
+
+    public function test_ensure_directory_creates_intermediate_directories(): void
+    {
+        $deep = $this->tmpDir . '/a/b/c/d';
+        KernelStore::ensureDirectory($deep);
+
+        foreach (['/a', '/a/b', '/a/b/c', '/a/b/c/d'] as $sub) {
+            self::assertDirectoryExists($this->tmpDir . $sub);
+            self::assertSame(0777, fileperms($this->tmpDir . $sub) & 0777);
+        }
+    }
+
+    public function test_ensure_directory_is_idempotent_on_existing_dir(): void
+    {
+        $existing = $this->tmpDir . '/already_here';
+        mkdir($existing, 0750);
+        $beforeMode = fileperms($existing) & 0777;
+
+        KernelStore::ensureDirectory($existing);
+
+        // Existing dir is left alone — we only set the mode on creation.
+        self::assertSame($beforeMode, fileperms($existing) & 0777);
+    }
+
+    public function test_ensure_directory_silently_skips_empty_path(): void
+    {
+        // Common case: a config path is unset; calling with '' must not throw.
+        KernelStore::ensureDirectory('');
+        $this->expectNotToPerformAssertions();
+    }
+
+    public function test_volatile_helper_creates_path_with_0777(): void
+    {
+        // Reproduce the Docker scenario: storage/volatile does not exist yet,
+        // and the process umask is restrictive. Without the fix the directory
+        // would land at 0750 owned by whoever ran first.
+        $this->rmrf($this->tmpDir . '/volatile');
+        self::assertDirectoryDoesNotExist($this->tmpDir . '/volatile');
+
+        $previousUmask = umask(0027);
+        try {
+            Kernel::volatile('routes');
+        } finally {
+            umask($previousUmask);
+        }
+
+        self::assertDirectoryExists($this->tmpDir . '/volatile');
+        self::assertSame(0777, fileperms($this->tmpDir . '/volatile') & 0777);
+    }
 }

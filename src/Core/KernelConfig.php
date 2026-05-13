@@ -90,20 +90,29 @@ abstract class KernelConfig
         self::$pathStorageVolatile = self::changeVolatile($isTmpVolatile);
     }
 
+    /**
+     * Resolves the volatile-storage path **without** creating the directory.
+     *
+     * Eager mkdir during Kernel::init() used to cause two operational issues:
+     *   1. Maintenance commands that never touch storage (e.g. `cfg completion`,
+     *      `make`, completion installers) would still create the dir.
+     *   2. In Docker builds those commands run as root, so the dir ended up
+     *      owned by root. Runtime PHP-FPM workers running as a non-privileged
+     *      user could not write to it later — Job dispatch, route cache and
+     *      di cache all failed with EACCES.
+     *
+     * The directory is now created lazily by the consumer (`KernelStore::volatile`,
+     * `Router::dumpCache`, `Scanner::writeCache`) — at that point the process is
+     * already the runtime user, ownership is correct, and `KernelStore::ensureDirectory`
+     * applies a permissive 0777 mode regardless of the current umask.
+     */
     private static function changeVolatile(bool $isTmpVolatile): string
     {
-        // storage volatile
         if ($isTmpVolatile) {
-            $pathStorageVolatile = sys_get_temp_dir()
+            return sys_get_temp_dir()
                 . '/flytachi.winter.volatile.'
                 . basename(self::$pathRoot);
-        } else {
-            $pathStorageVolatile = self::$pathStorage . '/volatile';
         }
-        if (!is_dir($pathStorageVolatile)) {
-            mkdir($pathStorageVolatile, 0777, true);
-        }
-
-        return $pathStorageVolatile;
+        return self::$pathStorage . '/volatile';
     }
 }

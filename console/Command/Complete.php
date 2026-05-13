@@ -77,6 +77,14 @@ class Complete extends Cmd
         ],
         'mapping show' => [],   // takes optional URL pattern as argument
 
+        // --- di ---
+        'di' => [
+            'build:scan project and write the DI cache file',
+            'clean:delete the DI cache file',
+            'show:list classes in the DI cache (or a live scan if absent)',
+        ],
+        'di show' => [],   // takes optional FQCN substring as argument
+
         // --- storage ---
         'storage' => [
             'init:create storage folders',
