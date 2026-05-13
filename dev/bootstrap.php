@@ -168,7 +168,7 @@ class Boot extends BaseBoot
      */
     protected static function health(): void
     {
-//         Health::configure();
+        // Health::configure();
     }
 
     /**
