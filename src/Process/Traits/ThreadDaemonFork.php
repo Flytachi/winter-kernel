@@ -59,7 +59,7 @@ trait ThreadDaemonFork
                 throw new RuntimeException("Unable to fork process.");
             }
         } catch (\Throwable $e) {
-            $this->logger->alert(
+            $this->logger->critical(
                 $e->getMessage()
                 . (env('DEBUG', false)
                     ? "\n" . $e->getTraceAsString()
@@ -114,7 +114,7 @@ trait ThreadDaemonFork
                 throw new RuntimeException("Unable to fork process.");
             }
         } catch (\Throwable $e) {
-            $this->logger->alert(
+            $this->logger->critical(
                 $e->getMessage()
                 . (env('DEBUG', false)
                     ? "\n" . $e->getTraceAsString()

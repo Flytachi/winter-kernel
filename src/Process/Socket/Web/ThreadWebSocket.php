@@ -86,7 +86,7 @@ abstract class ThreadWebSocket extends Dispatch
         try {
             $this->handleDisconnect($resource);
         } catch (\Throwable $exception) {
-            $this->logger->critical('handlerDisconnect: ' . $exception->getMessage());
+            $this->logger->error('handlerDisconnect: ' . $exception->getMessage());
         }
 
         @fwrite($resource->getConnect(), WebSocketProtocol::encode('Connection closed', 'close', false, 1000));
@@ -151,7 +151,7 @@ abstract class ThreadWebSocket extends Dispatch
                         try {
                             $this->handleConnect($resource);
                         } catch (\Throwable $exception) {
-                            $this->logger->critical('handlerConnect: ' . $exception->getMessage());
+                            $this->logger->error('handlerConnect: ' . $exception->getMessage());
                         }
                     }
                 }
@@ -194,7 +194,7 @@ abstract class ThreadWebSocket extends Dispatch
                     try {
                         $this->handle($resource, $msg);
                     } catch (\Throwable $exception) {
-                        $this->logger->critical('handler: ' . $exception->getMessage());
+                        $this->logger->error('handler: ' . $exception->getMessage());
                     }
                 }
             }

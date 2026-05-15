@@ -531,7 +531,7 @@ abstract class BaseBoot
         }
 
         if (empty($payload)) {
-            $logger->emergency('No payload received');
+            $logger->critical('No payload received');
             fwrite(STDERR, "Error: No payload received.\n");
             exit(1);
         }
@@ -543,7 +543,7 @@ abstract class BaseBoot
         unset($payload);
 
         if (!$runnable instanceof Runnable) {
-            $logger->emergency('Payload is not a valid Runnable object');
+            $logger->critical('Payload is not a valid Runnable object');
             fwrite(STDERR, "Error: The provided payload is not a valid Runnable object.\n");
             exit(1);
         }
@@ -574,7 +574,7 @@ abstract class BaseBoot
             $runnable->run($customArgs);
             exit(0);
         } catch (\Throwable $e) {
-            $logger->alert($e->getMessage(), [
+            $logger->critical($e->getMessage(), [
                 'exception' => $e::class,
                 'file'      => $e->getFile(),
                 'line'      => $e->getLine(),

@@ -60,7 +60,7 @@ abstract class Dispatch implements Dispatchable
                 ? DispatchStore::pop($args['storeKey'])
                 : null);
         } catch (\Throwable $e) {
-            $this->logger->critical(
+            $this->logger->error(
                 $e->getMessage()
                 . (env('DEBUG', false)
                     ? "\n" . $e->getTraceAsString()

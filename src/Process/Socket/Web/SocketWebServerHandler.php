@@ -33,7 +33,7 @@ trait SocketWebServerHandler
     }
     protected function asTermination(): void
     {
-        $this->logger->critical("TERMINATION");
+        $this->logger->warning("TERMINATION");
     }
     protected function asClose(): void
     {
