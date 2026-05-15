@@ -70,9 +70,6 @@ class Make extends Cmd
             if (in_array('d', $this->args['flags'])) {
                 $this->createDto($templateName);
             }
-            if (in_array('q', $this->args['flags'])) {
-                $this->createRequest($templateName);
-            }
             if (in_array('p', $this->args['flags'])) {
                 $this->createResponse($templateName);
             }
@@ -202,20 +199,6 @@ class Make extends Cmd
         $code = str_replace("__namespace__", $info['namespace'], $code);
         $code = str_replace("__className__", $info['className'], $code);
         $this->createFile($info['className'], $info['path'], $code, 'dto');
-    }
-
-    private function createRequest(string $name): void
-    {
-        $info = $this->getInfo($name, 'Request', 'RequestTemplate');
-        $this->smartInfo(
-            $info,
-            'Requests',
-            'Request',
-        );
-        $code = file_get_contents($info['template']);
-        $code = str_replace("__namespace__", $info['namespace'], $code);
-        $code = str_replace("__className__", $info['className'], $code);
-        $this->createFile($info['className'], $info['path'], $code, 'request');
     }
 
     private function createResponse(string $name): void
@@ -539,7 +522,6 @@ class Make extends Cmd
         self::printLabel("Flags — Data", $cl);
         self::printBadge('-e', 'Entity           (no suffix)', $cl, 36);
         self::printBadge('-d', 'Dto              (suffix: Dto)', $cl, 36);
-        self::printBadge('-q', 'Request          (suffix: Request)', $cl, 36);
         self::printBadge('-p', 'Response         (no suffix)', $cl, 36);
         self::printLabel("Flags — Data", $cl);
 

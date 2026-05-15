@@ -14,6 +14,8 @@ use Flytachi\Winter\K2\Http\Adapter\FpmRequest;
 use Flytachi\Winter\K2\Http\Adapter\FpmResponse;
 use Flytachi\Winter\K2\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\K2\Http\Adapter\SwooleResponse;
+use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
+use Flytachi\Winter\K2\Http\Response\ExceptionWrapper;
 use Flytachi\Winter\K2\Route\MemoryWatcher;
 use Flytachi\Winter\K2\Route\Router;
 use Flytachi\Winter\Logger\LoggerFactory;
@@ -43,6 +45,13 @@ use Flytachi\Winter\Thread\Runnable;
  * Boot::cli($argv);   // call              — CLI console
  * Boot::executor($argv); // wKernelExecutor — thread / job runner
  * ```
+ *
+ * Boot-time error handler:
+ *   handleBootError($e, $response) is invoked from web() if anything throws
+ *   above Router::handle() — DI scan failure, ambiguous route mapping, .env
+ *   errors, etc. It mirrors Router::sendError() so boot-time and request-time
+ *   errors flow through the same ExceptionWrapper pipeline. Override the hook
+ *   to integrate Sentry, render a branded page, or change the fallback body.
  */
 abstract class BaseBoot
 {
@@ -272,6 +281,49 @@ abstract class BaseBoot
         return [];
     }
 
+    /**
+     * Last-resort handler for errors thrown before Router::handle() installs
+     * its own try/catch — boot failures, DI scan errors, ambiguous routes, etc.
+     *
+     * Mirrors Router::sendError() so boot-time and request-time errors render
+     * through the same ExceptionWrapper pipeline. Override in your Boot class
+     * to customise (Sentry reporting, branded error page, etc.).
+     */
+    protected static function handleBootError(\Throwable $e, HttpResponse $response): void
+    {
+        try {
+            LoggerFactory::getLogger(static::class)->alert(
+                'Boot failure: ' . $e->getMessage(),
+                ['exception' => $e]
+            );
+        } catch (\Throwable) {
+            error_log(sprintf(
+                '[winter-kernel] Boot failure: %s in %s:%d',
+                $e->getMessage(),
+                $e->getFile(),
+                $e->getLine()
+            ));
+        }
+
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        try {
+            $exc  = ExceptionWrapper::wrap($e);
+            $body = $exc->getBody();
+            $response->status($exc->getHttpCode()->value);
+            foreach ($exc->getHeader() as $key => $value) {
+                $response->header($key, $value);
+            }
+            $response->end($body);
+        } catch (\Throwable) {
+            $response->status(500);
+            $response->header('Content-Type', 'text/plain; charset=utf-8');
+            $response->end('Internal Server Error');
+        }
+    }
+
     // ── Entry points ──────────────────────────────────────────────────────────
 
     /**
@@ -308,12 +360,17 @@ abstract class BaseBoot
      */
     final public static function web(): never
     {
-        self::boot();
-        LoggerFactory::setDefaultChannel('http');
+        $response = new FpmResponse();
+        try {
+            self::boot();
+            LoggerFactory::setDefaultChannel('http');
 
-        $router = Router::resolve(Kernel::$pathRoot);
-        $router->static(Kernel::$pathPublic);
-        $router->handle(new FpmRequest(), new FpmResponse());
+            $router = Router::resolve(Kernel::$pathRoot);
+            $router->static(Kernel::$pathPublic);
+            $router->handle(new FpmRequest(), $response);
+        } catch (\Throwable $e) {
+            self::handleBootError($e, $response);
+        }
 
         exit(0);
     }

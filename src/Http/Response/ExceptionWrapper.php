@@ -6,6 +6,7 @@ namespace Flytachi\Winter\K2\Http\Response;
 
 use Composer\Autoload\ClassLoader;
 use Flytachi\Winter\DI\ReflectionCache;
+use Flytachi\Winter\K2\Ppa\Repository\RepositoryException;
 use ReflectionClass;
 use ReflectionException;
 
@@ -22,6 +23,13 @@ use ReflectionException;
  *   $response = ExceptionWrapper::wrap($e); // at request time
  *
  * If not configured, falls back to ExceptionResponseBase for all Throwables.
+ *
+ * Production message redaction:
+ *   When DEBUG=false, wrap() routes the Throwable through redactMessage()
+ *   before handler matching. Rules live in redactMessage() — extend the
+ *   match expression to mask new sensitive exception types. The original
+ *   $throwable is never mutated (a clone is returned), so upstream logging
+ *   continues to see the real message.
  *
  * Specific handlers (with exception class names) are tried first.
  * Catch-all handlers (without class names) are tried last.
@@ -65,6 +73,10 @@ final class ExceptionWrapper
      */
     public static function wrap(\Throwable $throwable): ResponseExceptionInterface
     {
+        if (!env('DEBUG', false)) {
+            $throwable = self::redactMessage($throwable);
+        }
+
         foreach (self::handlers() as $handler) {
             if (empty($handler['exceptions'])) {
                 return new $handler['className']($throwable);
@@ -81,6 +93,34 @@ final class ExceptionWrapper
     }
 
     // ── Internals ─────────────────────────────────────────────────────────────
+
+    /**
+     * Replace sensitive Throwable messages with safe placeholders in production.
+     * Add cases as new sensitive exception types appear.
+     * Returns a clone — original is left intact for upstream logging.
+     */
+    private static function redactMessage(\Throwable $e): \Throwable
+    {
+        $redacted = match (true) {
+            // $e instanceof FooException => 'Server Error',
+            // is_a($e, 'Main\\Exceptions\\RepositoryException') => 'Server Error', // package (internal error)
+
+            default => null,
+        };
+
+        if ($redacted === null) {
+            return $e;
+        }
+
+        try {
+            $clone = clone $e;
+            $prop  = new \ReflectionProperty($e, 'message');
+            $prop->setValue($clone, $redacted);
+            return $clone;
+        } catch (\ReflectionException) {
+            return $e;
+        }
+    }
 
     /** @return list<array{className: string, exceptions: string[]}> */
     private static function handlers(): array
