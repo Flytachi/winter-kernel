@@ -27,9 +27,11 @@ use ReflectionException;
  * Production message redaction:
  *   When DEBUG=false, wrap() routes the Throwable through redactMessage()
  *   before handler matching. Rules live in redactMessage() — extend the
- *   match expression to mask new sensitive exception types. The original
- *   $throwable is never mutated (a clone is returned), so upstream logging
- *   continues to see the real message.
+ *   match expression to mask new sensitive exception types. redactMessage()
+ *   MUTATES the Throwable's $message in place (clone is not used — some
+ *   Throwables in PHP are not cloneable), so callers must log the original
+ *   message BEFORE invoking wrap(). Router::sendError() and
+ *   BaseBoot::handleBootError() already follow this order.
  *
  * Specific handlers (with exception class names) are tried first.
  * Catch-all handlers (without class names) are tried last.
@@ -97,7 +99,12 @@ final class ExceptionWrapper
     /**
      * Replace sensitive Throwable messages with safe placeholders in production.
      * Add cases as new sensitive exception types appear.
-     * Returns a clone — original is left intact for upstream logging.
+     *
+     * MUTATES the passed Throwable in place — $message is overwritten via
+     * reflection. Cloning is not used because some Throwables in PHP are not
+     * cloneable (subclass __clone() restrictions, trace-bound closures, etc.).
+     * Callers must log the original message BEFORE invoking this method (or
+     * wrap(), which calls it). Returns the same instance for fluent use.
      */
     private static function redactMessage(\Throwable $e): \Throwable
     {
@@ -113,13 +120,11 @@ final class ExceptionWrapper
         }
 
         try {
-            $clone = clone $e;
-            $prop  = new \ReflectionProperty($e, 'message');
-            $prop->setValue($clone, $redacted);
-            return $clone;
+            new \ReflectionProperty($e, 'message')->setValue($e, $redacted);
         } catch (\ReflectionException) {
-            return $e;
+            // Impossible for Throwables — Exception/Error always declare $message.
         }
+        return $e;
     }
 
     /** @return list<array{className: string, exceptions: string[]}> */
