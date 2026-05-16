@@ -15,6 +15,7 @@ class Index implements AttributeDbIdx
         private array $columns = [],
         private readonly ?string $name = null,
         public IndexMethod $method = IndexMethod::BTREE,
+        private readonly ?string $where = null,
         private readonly ?string $opClass = null
     ) {
     }
@@ -33,6 +34,7 @@ class Index implements AttributeDbIdx
             name: $this->name,
             type: IndexType::INDEX,
             method: $this->method,
+            where: $this->where,
             opClass: $this->opClass
         );
     }

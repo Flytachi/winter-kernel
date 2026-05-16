@@ -7,7 +7,7 @@ namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal;
 use Attribute;
 
 #[Attribute(Attribute::TARGET_PROPERTY)]
-readonly class UuidBase implements AttributeDbType
+readonly class Uuid implements AttributeDbType
 {
     public function __construct(
         private bool $asBinary = false

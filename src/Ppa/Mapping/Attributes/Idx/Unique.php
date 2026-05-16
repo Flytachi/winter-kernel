@@ -15,6 +15,8 @@ class Unique implements AttributeDbIdx
         private array $columns = [],
         private readonly ?string $name = null,
         public IndexMethod $method = IndexMethod::BTREE,
+        private readonly ?string $where = null,
+        private readonly ?string $opClass = null
     ) {
     }
 
@@ -32,6 +34,8 @@ class Unique implements AttributeDbIdx
             name: $this->name,
             type: IndexType::UNIQUE,
             method: IndexMethod::BTREE,
+            where: $this->where,
+            opClass: $this->opClass
         );
     }
 }
