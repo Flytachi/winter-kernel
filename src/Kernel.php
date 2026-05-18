@@ -29,7 +29,7 @@ final class Kernel extends KernelStore
         ?string $pathStorageLog = null,
         ?string $pathStorageCache = null,
         ?string $pathStorageRunnable = null,
-        bool $isTmpVolatile = false,
+        bool $isTmpVolatile = true,
     ): void {
         defined('WINTER_STARTUP_TIME') or define('WINTER_STARTUP_TIME', microtime(true));
         parent::init(
