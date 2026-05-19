@@ -13,7 +13,9 @@ class ForeignKey implements StructureInterface
         public string $referencedColumn,
         public FKAction $onUpdate = FKAction::RESTRICT,
         public FKAction $onDelete = FKAction::RESTRICT,
-        public ?string $name = null, // Add name property for the constraint
+        public ?string $name = null,
+        /** Local column the FK is attached to. Required when the FK is rendered via Table-level $foreignKeys. */
+        public ?string $columnName = null,
     ) {
         if ($name) {
             NameValidator::validate($name);

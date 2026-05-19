@@ -48,14 +48,17 @@ class Index implements StructureInterface
 
         $limit = $dialect === 'pgsql' ? 63 : 64;
         if (strlen($nameSql) > $limit) {
-            $nameSql = substr($nameSql, 0, $limit - 5) . '_' . hash('crc32b', $nameSql);
+            // crc32b returns 8 hex chars; reserve 8 + 1 (underscore) so the
+            // truncated name fits exactly inside the identifier length limit.
+            $suffix = '_' . hash('crc32b', $nameSql);
+            $nameSql = substr($nameSql, 0, $limit - strlen($suffix)) . $suffix;
         }
 
         if ($dialect === 'mysql') {
             $methodSql = $this->method !== IndexMethod::BTREE ? " USING {$this->method->value}" : '';
 
             return match ($this->type) {
-                IndexType::PRIMARY => "PRIMARY KEY {$columnsSql}",
+                IndexType::PRIMARY => "PRIMARY KEY" . $columnsSql,
                 IndexType::UNIQUE => "CREATE UNIQUE INDEX {$nameSql} ON {$tableName}{$methodSql}{$columnsSql}",
                 IndexType::INDEX => "CREATE INDEX {$nameSql} ON {$tableName}{$methodSql}{$columnsSql}",
             };
@@ -69,7 +72,7 @@ class Index implements StructureInterface
                 : '';
 
             return match ($this->type) {
-                IndexType::PRIMARY => "PRIMARY KEY {$columnsSql}",
+                IndexType::PRIMARY => "PRIMARY KEY" . $columnsSql,
                 IndexType::UNIQUE => "CREATE UNIQUE INDEX {$nameSql} ON {$tableName}{$usingSql}"
                     . "{$columnsSql}{$includeSql}{$whereSql}",
                 IndexType::INDEX => "CREATE INDEX {$nameSql} ON {$tableName}{$usingSql}"

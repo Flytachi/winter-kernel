@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
-         bootstrap="vendor/autoload.php"
+         bootstrap="tests/bootstrap.php"
          colors="true"
          stopOnFailure="false">
 
@@ -18,7 +18,22 @@
         <testsuite name="Configuration">
             <directory>tests/Configuration</directory>
         </testsuite>
+        <testsuite name="Ppa">
+            <directory>tests/Ppa</directory>
+            <exclude>tests/Ppa/Fixtures</exclude>
+        </testsuite>
+        <testsuite name="Integration">
+            <directory>tests/Integration</directory>
+            <exclude>tests/Integration/Fixtures</exclude>
+        </testsuite>
     </testsuites>
+
+    <groups>
+        <exclude>
+            <group>integration</group>
+            <group>swoole</group>
+        </exclude>
+    </groups>
 
     <source>
         <include>

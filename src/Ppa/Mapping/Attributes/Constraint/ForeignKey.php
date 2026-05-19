@@ -28,6 +28,8 @@ readonly class ForeignKey implements AttributeDbConstraintForeign
             referencedColumn: $this->referencedColumn,
             onUpdate: $this->onUpdate,
             onDelete: $this->onDelete,
+            name: $this->name,
+            columnName: $columnName,
         );
     }
 }

@@ -70,6 +70,12 @@ class Table implements StructureInterface
         }
 
         foreach ($this->foreignKeys as $foreignKey) {
+            if ($foreignKey->columnName === null) {
+                throw new \InvalidArgumentException(
+                    "ForeignKey passed to Table '{$this->name}' must declare \$columnName "
+                    . '(the local column the FK is attached to).',
+                );
+            }
             $internalStatements[] = '  ' . $foreignKey->toSql($tableName, $foreignKey->columnName, $dialect);
         }
 
@@ -171,12 +177,18 @@ class Table implements StructureInterface
 
     public function addForeignKey(ForeignKey $foreignKey, string $dialect = 'mysql'): string
     {
+        if ($foreignKey->columnName === null) {
+            throw new \InvalidArgumentException(
+                "ForeignKey added to Table '{$this->name}' must declare \$columnName "
+                . '(the local column the FK is attached to).',
+            );
+        }
         $this->foreignKeys[] = $foreignKey;
         $tableName = $this->schema ? "{$this->schema}.{$this->name}" : $this->name;
         return sprintf(
             "ALTER TABLE %s ADD %s;",
             $tableName,
-            $foreignKey->toSql($this->name, $foreignKey->referencedColumn, $dialect)
+            $foreignKey->toSql($this->name, $foreignKey->columnName, $dialect),
         );
     }
 

@@ -30,7 +30,7 @@ class Db extends Cmd
     private function resolution(): void
     {
         if (empty($this->args['flags'])) {
-            $this->args['flags'] = ['s', 't', 'i', 'c'];
+            $this->args['flags'] = ['e', 's', 't', 'i', 'c'];
         }
         switch ($this->args['arguments'][1] ?? '') {
             case 'ping':
@@ -119,9 +119,28 @@ class Db extends Cmd
         foreach ($this->resolveTargets() as $label => $rootDir) {
             $declaration = PPAMapping::scanningDeclaration($rootDir);
 
-            foreach ($declaration->getItems() as $item) {
+            $rawItems = $declaration->getItems();
+            if (empty($rawItems)) {
+                self::printWarning("[$label] No DB configs found — no entity has #[Table].");
+                continue;
+            }
+            $items = $this->migratableItems($rawItems);
+            if (empty($items)) {
+                self::printWarning("[$label] No migratable configs — add #[Migratable] to a DbConfig to opt in.");
+                continue;
+            }
+
+            foreach ($items as $item) {
                 $data = $this->processItemData($item);
                 self::printLabel("[$label] " . $item->config::class, 34);
+
+                if (in_array('e', $this->args['flags']) && count($data['sqlExtensions']) > 0) {
+                    self::printLabel("Extensions (" . count($data['sqlExtensions']) . ")", 36);
+                    foreach ($data['sqlExtensions'] as $sql) {
+                        self::printSplit($sql['exec']);
+                    }
+                    self::printLabel("Extensions", 36);
+                }
 
                 if (in_array('s', $this->args['flags']) && count($data['sqlSchemes']) > 0) {
                     self::printLabel("Schemes (" . count($data['sqlSchemes']) . ")", 36);
@@ -165,10 +184,39 @@ class Db extends Cmd
         foreach ($this->resolveTargets() as $label => $rootDir) {
             $declaration = PPAMapping::scanningDeclaration($rootDir);
 
-            foreach ($declaration->getItems() as $item) {
+            $rawItems = $declaration->getItems();
+            if (empty($rawItems)) {
+                self::printWarning("[$label] No DB configs found — no entity has #[Table].");
+                continue;
+            }
+            $items = $this->migratableItems($rawItems);
+            if (empty($items)) {
+                self::printWarning("[$label] No migratable configs — add #[Migratable] to a DbConfig to opt in.");
+                continue;
+            }
+
+            foreach ($items as $item) {
                 $data = $this->processItemData($item);
                 self::printLabel("[$label] " . $item->config::class, 34);
                 $db = $item->config->connection();
+
+                // Extensions (pgsql only)
+                if ($item->config->getDriver() === 'pgsql' && in_array('e', $this->args['flags'])) {
+                    if (count($data['sqlExtensions']) > 0) {
+                        self::printLabel("Extensions (" . count($data['sqlExtensions']) . ")", 36);
+                        foreach ($data['sqlExtensions'] as $sql) {
+                            try {
+                                $db->exec($sql['exec']);
+                                self::printBadge($sql['title'], 'OK', 34, 32);
+                            } catch (\Throwable $e) {
+                                self::printBadge($sql['title'], 'FAILED', 34, 31);
+                                if (env('DEBUG', false)) {
+                                    self::printInfo($e->getMessage());
+                                }
+                            }
+                        }
+                    }
+                }
 
                 // Schemes (pgsql only)
                 if ($item->config->getDriver() === 'pgsql' && in_array('s', $this->args['flags'])) {
@@ -264,16 +312,51 @@ class Db extends Cmd
     }
 
     /**
-     * @return array{sqlSchemes: array, sqlTables: array, sqlIndexes: array, sqlConstraints: array}
+     * Filters items down to those opted into migration via #[Migratable]
+     * and sorts them by declared priority (High → Normal → Low).
+     *
+     * @param  DeclarationItem[] $items
+     * @return DeclarationItem[]
+     */
+    private function migratableItems(array $items): array
+    {
+        $filtered = array_values(array_filter($items, static fn (DeclarationItem $i): bool => $i->isMigratable()));
+        usort(
+            $filtered,
+            static fn (DeclarationItem $a, DeclarationItem $b): int
+                => $a->getPriority()->value <=> $b->getPriority()->value,
+        );
+        return $filtered;
+    }
+
+    /**
+     * @return array{
+     *     sqlExtensions: array,
+     *     sqlSchemes: array,
+     *     sqlTables: array,
+     *     sqlIndexes: array,
+     *     sqlConstraints: array
+     * }
      */
     private function processItemData(DeclarationItem $item): array
     {
+        $sqlExtensions = [];
         $sqlSchemes = [];
         $sqlTables = [];
         $sqlIndexes = [];
         $sqlConstraints = [];
 
         $item->config->setUp();
+        $driver = $item->config->getDriver();
+
+        if ($driver === 'pgsql') {
+            foreach ($item->getExtensions() as $extension) {
+                $sqlExtensions[] = [
+                    'title' => $extension->name,
+                    'exec'  => $extension->toSql($driver),
+                ];
+            }
+        }
 
         foreach ($item->getTables() as $structure) {
             if ($structure instanceof Table) {
@@ -312,6 +395,7 @@ class Db extends Cmd
         }
 
         return [
+            'sqlExtensions'   => $sqlExtensions,
             'sqlSchemes'      => $sqlSchemes,
             'sqlTables'       => $sqlTables,
             'sqlIndexes'      => $sqlIndexes,
@@ -335,11 +419,12 @@ class Db extends Cmd
         self::printLabel("Commands", $cl);
 
         self::printLabel("Flags", $cl);
+        self::printKeyValue("-e", "extensions only (pgsql)", 10, $cl, 36);
         self::printKeyValue("-s", "schemes only", 10, $cl, 36);
         self::printKeyValue("-t", "tables only", 10, $cl, 36);
         self::printKeyValue("-i", "indexes only", 10, $cl, 36);
         self::printKeyValue("-c", "constraints only", 10, $cl, 36);
-        self::printInfo("(no flags = all: -s -t -i -c)");
+        self::printInfo("(no flags = all: -e -s -t -i -c)");
         self::printLabel("Flags", $cl);
 
         self::printLabel("Options", $cl);

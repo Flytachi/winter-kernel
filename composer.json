@@ -7,7 +7,11 @@
     "homepage": "https://winterframe.net",
     "scripts": {
         "test": "vendor/bin/phpunit",
-        "test-detail": "vendor/bin/phpunit --testdox"
+        "test-detail": "vendor/bin/phpunit --testdox",
+        "test-configuration": "vendor/bin/phpunit --testsuite Configuration",
+        "test-http": "vendor/bin/phpunit --testsuite Http",
+        "test-localization": "vendor/bin/phpunit --testsuite Localization",
+        "test-ppa": "vendor/bin/phpunit --testsuite Ppa"
     },
     "support": {
         "source": "https://github.com/flytachi/winter-kernel",

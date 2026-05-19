@@ -57,7 +57,7 @@ class PPAMapping
                 /** @var RepositoryInterface $repository */
                 $repository = $reflectionClass->newInstance();
                 /** @var DbConfigInterface $config */
-                $config = (new ReflectionClass($repository->getDbConfigClassName()))->newInstance();
+                $config = new ReflectionClass($repository->getDbConfigClassName())->newInstance();
                 $config->setUp();
 
                 $reflectionClassEntity = new ReflectionClass($repository->getEntityClassName());

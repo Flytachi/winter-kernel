@@ -43,6 +43,8 @@ readonly class ForeignRepo implements AttributeDbConstraintForeign
             referencedColumn: $referencedRepoInstance->mapIdentifierColumnName(),
             onUpdate: $this->onUpdate,
             onDelete: $this->onDelete,
+            name: $this->name,
+            columnName: $columnName,
         );
     }
 }
