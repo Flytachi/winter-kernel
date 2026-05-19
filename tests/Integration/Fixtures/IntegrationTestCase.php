@@ -110,8 +110,34 @@ abstract class IntegrationTestCase extends TestCase
     // ── PDO helpers ──────────────────────────────────────────────────────────
 
     /**
+     * Opens a raw PDO scoped to the per-class schema/database.
+     *
+     * - pgsql: connects to the base DB and sets `search_path` to the test schema,
+     *   so unqualified table names resolve there.
+     * - mysql/mariadb: connects to the base DB then `USE <test_db>`, so unqualified
+     *   table DDL lands inside the per-class database (MySQL "schema" ≡ "database").
+     *
+     * Used by integration tests that need to run DDL/DML without prefixing every
+     * statement with the per-class schema name.
+     */
+    protected static function pdoOnTestSchema(): \PDO
+    {
+        $pdo = self::rawPdo();
+        if (self::$schemaName === '') {
+            return $pdo;
+        }
+        $stmt = match (static::driverFlavour()) {
+            'pgsql' => 'SET search_path TO "' . self::$schemaName . '"',
+            'mysql', 'mariadb' => 'USE `' . self::$schemaName . '`',
+        };
+        $pdo->exec($stmt);
+        return $pdo;
+    }
+
+    /**
      * Opens a raw PDO connection bypassing the framework's pool.
-     * Used only for schema lifecycle DDL (CREATE/DROP).
+     * Used for schema lifecycle DDL (CREATE/DROP database) and for introspection
+     * queries against `information_schema` (which is reachable from any DB).
      */
     protected static function rawPdo(): \PDO
     {

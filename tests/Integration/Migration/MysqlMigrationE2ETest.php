@@ -30,9 +30,14 @@ class MysqlMigrationE2ETest extends IntegrationTestCase
         return 'mysql';
     }
 
+    /**
+     * MySQL/MariaDB: unqualified table DDL needs the per-class database active.
+     * pdoOnTestSchema() opens a connection and runs `USE wk_xxx` so subsequent
+     * `CREATE TABLE users_simple` lands inside the test database.
+     */
     private function pdo(): \PDO
     {
-        return self::rawPdo();
+        return self::pdoOnTestSchema();
     }
 
     private function runDdl(string $sql): void
