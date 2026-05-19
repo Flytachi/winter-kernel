@@ -25,8 +25,14 @@ use ReflectionClass;
  */
 abstract class IntegrationTestCase extends TestCase
 {
-    /** Cached, per-class. Set in setUpBeforeClass(), read by DbConfig subclasses. */
-    protected static string $schemaName = '';
+    /**
+     * Cached, per-class. Set in setUpBeforeClass(), read by DbConfig subclasses
+     * during PpaConnectionPool::getConfigDb() → setUp().
+     *
+     * Public because PgTestDbConfig / MysqlTestDbConfig / MariadbTestDbConfig
+     * live outside this class hierarchy and need read access.
+     */
+    public static string $schemaName = '';
 
     /**
      * Returns 'pgsql' | 'mysql' | 'mariadb'. The base class reads this to
