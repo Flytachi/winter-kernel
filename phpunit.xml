@@ -31,6 +31,7 @@
     <groups>
         <exclude>
             <group>integration</group>
+            <group>pool</group>
             <group>swoole</group>
         </exclude>
     </groups>

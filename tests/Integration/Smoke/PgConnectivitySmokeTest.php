@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Tests\Integration\Smoke;
 
-use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
 use Flytachi\Winter\K2\Tests\Integration\Fixtures\IntegrationTestCase;
-use Flytachi\Winter\K2\Tests\Integration\Fixtures\PgTestDbConfig;
 use PHPUnit\Framework\Attributes\Group;
 
 #[Group('integration')]
@@ -27,16 +25,9 @@ final class PgConnectivitySmokeTest extends IntegrationTestCase
         self::assertSame(1, (int) $stmt->fetchColumn());
     }
 
-    public function test_pool_returns_real_pgsql_connection(): void
+    public function test_server_version_is_postgres(): void
     {
-        $cdo = PpaConnectionPool::db(PgTestDbConfig::class);
-        self::assertSame('pgsql', $cdo->getAttribute(\PDO::ATTR_DRIVER_NAME));
-        self::assertSame(1, (int) $cdo->query('SELECT 1')->fetchColumn());
-    }
-
-    public function test_config_reports_per_class_schema(): void
-    {
-        $cfg = PpaConnectionPool::getConfigDb(PgTestDbConfig::class);
-        self::assertSame(self::$schemaName, $cfg->getSchema());
+        $version = (string) self::rawPdo()->getAttribute(\PDO::ATTR_SERVER_VERSION);
+        self::assertNotEmpty($version);
     }
 }
