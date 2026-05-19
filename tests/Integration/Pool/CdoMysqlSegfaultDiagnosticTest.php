@@ -19,8 +19,13 @@ use PHPUnit\Framework\Attributes\RunInSeparateProcess;
  * After CI reports the first crashing step, fix lands in winter-cdo
  * (constructor reorder / driver_options) — then `MysqlCrudTest` /
  * `MariadbCrudTest` go back to the `integration` (blocking) group.
+ *
+ * Tagged with its own `cdo-diagnostic` group (excluded by default in
+ * phpunit.xml) so it only runs when explicitly opted in with
+ * `--group cdo-diagnostic` — avoids being killed by other pool-group
+ * tests that crash earlier in the same PHPUnit process.
  */
-#[Group('pool')]
+#[Group('cdo-diagnostic')]
 final class CdoMysqlSegfaultDiagnosticTest extends IntegrationTestCase
 {
     protected static function driverFlavour(): string

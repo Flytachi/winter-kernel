@@ -32,6 +32,7 @@
         <exclude>
             <group>integration</group>
             <group>pool</group>
+            <group>cdo-diagnostic</group>
             <group>swoole</group>
         </exclude>
     </groups>
