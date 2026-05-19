@@ -4,37 +4,18 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Tests\Integration\Pool;
 
-use Flytachi\Winter\K2\Tests\Integration\Fixtures\IntegrationTestCase;
+use Flytachi\Winter\K2\Tests\Integration\Fixtures\MysqlTestDbConfig;
 use PHPUnit\Framework\Attributes\Group;
-use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 
-/**
- * Isolates which operation inside CDO::__construct crashes pdo_mysql on PHP 8.4.
- *
- * Each test reconstructs the CDO connect sequence step-by-step against the
- * MYSQL_TEST_DSN, asserting truthiness after the operation. Tests run in
- * separate PHP processes (`#[RunInSeparateProcess]`) so a segfault in one
- * step does not abort the rest of the diagnostic.
- *
- * After CI reports the first crashing step, fix lands in winter-cdo
- * (constructor reorder / driver_options) — then `MysqlCrudTest` /
- * `MariadbCrudTest` go back to the `integration` (blocking) group.
- *
- * Tagged with its own `cdo-diagnostic` group (excluded by default in
- * phpunit.xml) so it only runs when explicitly opted in with
- * `--group cdo-diagnostic` — avoids being killed by other pool-group
- * tests that crash earlier in the same PHPUnit process.
- */
 #[Group('cdo-diagnostic')]
-final class CdoMysqlSegfaultDiagnosticTest extends IntegrationTestCase
+final class CdoMysqlSegfaultDiagnosticTest extends CdoSegfaultDiagnosticTestCase
 {
     protected static function driverFlavour(): string
     {
         return 'mysql';
     }
 
-    /** @return array{0:string,1:string,2:string} */
-    private static function dsnTriplet(): array
+    protected static function dsnTriplet(): array
     {
         return [
             (string) getenv('MYSQL_TEST_DSN'),
@@ -43,68 +24,8 @@ final class CdoMysqlSegfaultDiagnosticTest extends IntegrationTestCase
         ];
     }
 
-    #[RunInSeparateProcess]
-    public function test_a_raw_pdo_with_default_options(): void
+    protected static function dbConfigClass(): string
     {
-        [$dsn, $u, $p] = self::dsnTriplet();
-        $pdo = new \PDO($dsn, $u, $p);
-        self::assertSame('mysql', $pdo->getAttribute(\PDO::ATTR_DRIVER_NAME));
-    }
-
-    #[RunInSeparateProcess]
-    public function test_b_raw_pdo_with_errmode_exception(): void
-    {
-        [$dsn, $u, $p] = self::dsnTriplet();
-        $pdo = new \PDO($dsn, $u, $p, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
-        self::assertSame(1, (int) $pdo->query('SELECT 1')->fetchColumn());
-    }
-
-    #[RunInSeparateProcess]
-    public function test_c_setAttribute_timeout_after_connect(): void
-    {
-        [$dsn, $u, $p] = self::dsnTriplet();
-        $pdo = new \PDO($dsn, $u, $p);
-        $pdo->setAttribute(\PDO::ATTR_TIMEOUT, 3);
-        self::assertSame(1, (int) $pdo->query('SELECT 1')->fetchColumn());
-    }
-
-    #[RunInSeparateProcess]
-    public function test_d_setAttribute_persistent_after_connect(): void
-    {
-        [$dsn, $u, $p] = self::dsnTriplet();
-        $pdo = new \PDO($dsn, $u, $p);
-        $pdo->setAttribute(\PDO::ATTR_PERSISTENT, false);
-        self::assertSame(1, (int) $pdo->query('SELECT 1')->fetchColumn());
-    }
-
-    #[RunInSeparateProcess]
-    public function test_e_setAttribute_emulate_prepares_after_connect(): void
-    {
-        [$dsn, $u, $p] = self::dsnTriplet();
-        $pdo = new \PDO($dsn, $u, $p);
-        $pdo->setAttribute(\PDO::ATTR_EMULATE_PREPARES, true);
-        self::assertSame(1, (int) $pdo->query('SELECT 1')->fetchColumn());
-    }
-
-    #[RunInSeparateProcess]
-    public function test_f_set_time_zone_via_pdo_exec(): void
-    {
-        [$dsn, $u, $p] = self::dsnTriplet();
-        $pdo = new \PDO($dsn, $u, $p);
-        $pdo->exec("SET time_zone = '+00:00'");
-        self::assertSame(1, (int) $pdo->query('SELECT 1')->fetchColumn());
-    }
-
-    #[RunInSeparateProcess]
-    public function test_g_full_cdo_attribute_sequence(): void
-    {
-        [$dsn, $u, $p] = self::dsnTriplet();
-        $pdo = new \PDO($dsn, $u, $p);
-        $pdo->setAttribute(\PDO::ATTR_TIMEOUT, 3);
-        $pdo->setAttribute(\PDO::ATTR_PERSISTENT, false);
-        $pdo->setAttribute(\PDO::ATTR_EMULATE_PREPARES, true);
-        $pdo->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
-        $pdo->exec("SET time_zone = '+00:00'");
-        self::assertSame(1, (int) $pdo->query('SELECT 1')->fetchColumn());
+        return MysqlTestDbConfig::class;
     }
 }
