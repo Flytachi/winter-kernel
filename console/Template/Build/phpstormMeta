@@ -1,78 +1,73 @@
 <?php
 
-namespace PHPSTORM_META;
+namespace PHPSTORM_META {
 
-override(\env(0), map([
-    'WINTER_THREAD_RUNNER' => '',
-    'WINTER_BINARY_PATH' => '',
-    'WINTER_KEY' => '',
-    'TIME_ZONE' => 'UTC',
-    'DEBUG' => 'false',
+    // 1. Регистрируем набор (set) всех возможных ключей .env
+    registerArgumentsSet('env_keys',
+        'WINTER_THREAD_RUNNER',
+        'WINTER_BINARY_PATH',
+        'WINTER_KEY',
+        'TIME_ZONE',
+        'DEBUG',
+        'LOG_LEVEL',
+        'LOG_FORMAT',
+        'LOG_OUTPUT',
+        'LOG_FILE',
+        'LOG_FILE_MAX',
+        'LOG_SYSLOG_IDENT',
+        'LOG_SYS_LEVEL',
+        'LOG_SYS_FORMAT',
+        'LOG_SYS_OUTPUT',
+        'LOG_SYS_FILE',
+        'LOG_SYS_FILE_MAX',
+        'LOG_SYS_SYSLOG_IDENT',
+        'LOG_HTTP_LEVEL',
+        'LOG_HTTP_FORMAT',
+        'LOG_HTTP_OUTPUT',
+        'LOG_HTTP_FILE',
+        'LOG_HTTP_FILE_MAX',
+        'LOG_HTTP_SYSLOG_IDENT',
+        'LOG_CLI_LEVEL',
+        'LOG_CLI_FORMAT',
+        'LOG_CLI_OUTPUT',
+        'LOG_CLI_FILE',
+        'LOG_CLI_FILE_MAX',
+        'LOG_CLI_SYSLOG_IDENT'
+    );
 
-    // ── Logging — global defaults ──────────────────────────────────────────
-    'LOG_LEVEL' => 'info',
-    'LOG_FORMAT' => 'line',
-    'LOG_OUTPUT' => 'auto',
-    'LOG_FILE' => '',
-    'LOG_FILE_MAX' => '30',
-    'LOG_SYSLOG_IDENT' => 'winter',
+    // 2. Говорим, что 0-й аргумент функции env() должен быть из этого набора
+    expectedArguments(\env(), 0, argumentsSet('env_keys'));
 
-    // ── Logging — sys channel overrides ───────────────────────────────────
-    'LOG_SYS_LEVEL' => '',
-    'LOG_SYS_FORMAT' => '',
-    'LOG_SYS_OUTPUT' => '',
-    'LOG_SYS_FILE' => '',
-    'LOG_SYS_FILE_MAX' => '',
-    'LOG_SYS_SYSLOG_IDENT' => '',
+    // 3. Отдельные наборы для значений второго аргумента (default)
+    registerArgumentsSet('boolean_values', 'true', 'false');
+    registerArgumentsSet('log_levels', 'info', 'debug', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency');
+    registerArgumentsSet('log_formats', 'line', 'json');
+    registerArgumentsSet('log_outputs', 'auto', 'stdout', 'stderr', 'syslog', 'file', 'null');
+    registerArgumentsSet('time_zones', 'UTC', 'Europe/Moscow', 'America/New_York', 'Asia/Tokyo');
 
-    // ── Logging — http channel overrides ──────────────────────────────────
-    'LOG_HTTP_LEVEL' => '',
-    'LOG_HTTP_FORMAT' => '',
-    'LOG_HTTP_OUTPUT' => '',
-    'LOG_HTTP_FILE' => '',
-    'LOG_HTTP_FILE_MAX' => '',
-    'LOG_HTTP_SYSLOG_IDENT' => '',
+    // 4. Связываем: если 0-й аргумент равен X, то для 1-го аргумента предлагаем набор Y
+    expectedArguments(\env(), 1, match (arg(0)) {
+        'DEBUG' => argumentsSet('boolean_values'),
+        'TIME_ZONE' => argumentsSet('time_zones'),
 
-    // ── Logging — cli channel overrides ───────────────────────────────────
-    'LOG_CLI_LEVEL' => '',
-    'LOG_CLI_FORMAT' => '',
-    'LOG_CLI_OUTPUT' => '',
-    'LOG_CLI_FILE' => '',
-    'LOG_CLI_FILE_MAX' => '',
-    'LOG_CLI_SYSLOG_IDENT' => '',
-]));
+        // Глобальные логи
+        'LOG_LEVEL' => argumentsSet('log_levels'),
+        'LOG_FORMAT' => argumentsSet('log_formats'),
+        'LOG_OUTPUT' => argumentsSet('log_outputs'),
 
-expectedArguments(\env(), 1,
-    match (arg(0)) {
-        'WINTER_KEY' => '',
-        'TIME_ZONE' => 'UTC', 'Europe/Moscow', 'America/New_York', 'Asia/Tokyo',
-        'DEBUG' => 'false', 'true',
+        // Системные логи
+        'LOG_SYS_LEVEL' => argumentsSet('log_levels'),
+        'LOG_SYS_FORMAT' => argumentsSet('log_formats'),
+        'LOG_SYS_OUTPUT' => argumentsSet('log_outputs'),
 
-        // global
-        'LOG_LEVEL' => 'info', 'debug', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency',
-        'LOG_FORMAT' => 'line', 'json',
-        'LOG_OUTPUT' => 'auto', 'stdout', 'stderr', 'syslog', 'file', 'null',
-        'LOG_FILE_MAX' => '30', '7', '14', '0',
-        'LOG_SYSLOG_IDENT' => 'winter',
+        // HTTP
+        'LOG_HTTP_LEVEL' => argumentsSet('log_levels'),
+        'LOG_HTTP_FORMAT' => argumentsSet('log_formats'),
+        'LOG_HTTP_OUTPUT' => argumentsSet('log_outputs'),
 
-        // sys channel
-        'LOG_SYS_LEVEL' => 'info', 'debug', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency',
-        'LOG_SYS_FORMAT' => 'line', 'json',
-        'LOG_SYS_OUTPUT' => 'auto', 'stdout', 'stderr', 'syslog', 'file', 'null',
-        'LOG_SYS_FILE_MAX' => '30', '7', '14', '0',
-
-        // http channel
-        'LOG_HTTP_LEVEL' => 'info', 'debug', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency',
-        'LOG_HTTP_FORMAT' => 'line', 'json',
-        'LOG_HTTP_OUTPUT' => 'auto', 'stdout', 'stderr', 'syslog', 'file', 'null',
-        'LOG_HTTP_FILE_MAX' => '30', '7', '14', '0',
-
-        // cli channel
-        'LOG_CLI_LEVEL' => 'info', 'debug', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency',
-        'LOG_CLI_FORMAT' => 'line', 'json',
-        'LOG_CLI_OUTPUT' => 'auto', 'stdout', 'stderr', 'syslog', 'file', 'null',
-        'LOG_CLI_FILE_MAX' => '30', '7', '14', '0',
-
-        default => ''
-    }
-);
+        // CLI
+        'LOG_CLI_LEVEL' => argumentsSet('log_levels'),
+        'LOG_CLI_FORMAT' => argumentsSet('log_formats'),
+        'LOG_CLI_OUTPUT' => argumentsSet('log_outputs'),
+    });
+}

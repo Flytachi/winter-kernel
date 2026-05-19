@@ -139,6 +139,25 @@ throw (new MiddlewareException('Rate limited', HttpCode::TOO_MANY_REQUESTS))
 
 ---
 
+## Built-in middlewares
+
+### `ClientTimezoneMiddleware`
+
+Applies the client's IANA timezone to `date_default_timezone_set()` for the duration of the request. The value is read from `HttpRequest::getClientTimezone()`, which parses the `Timezone` or `X-Timezone` header and validates it against `timezone_identifiers_list()`. When no valid timezone is supplied, `before()` falls back to `env('TIME_ZONE', 'UTC')`; `after()` restores the same canonical default.
+
+```php
+use Flytachi\Winter\K2\Http\Middleware\ClientTimezoneMiddleware;
+
+#[ClientTimezoneMiddleware]
+class ReportController extends Controller { ... }
+```
+
+**Swoole caveat.** `after()` is not invoked when the handler throws — the `catch (\Throwable)` in `Router::dispatch` sits outside the after-loop. In a long-running worker, an unhandled exception leaves the global TZ at the client's value until the next request that passes through this middleware overwrites it. Apply uniformly across routes, or skip the middleware and read `$request->getClientTimezone()` explicitly inside handlers.
+
+See [Client timezone detection](../configuration/01-kernel.md#client-timezone-detection) for the request-side contract and the no-mutation usage pattern.
+
+---
+
 ## Dependency injection
 
 Middleware instances are created via `Container::make()`, so `#[Autowired]` constructor injection works automatically:

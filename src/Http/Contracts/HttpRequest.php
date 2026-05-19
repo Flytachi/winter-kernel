@@ -51,4 +51,40 @@ interface HttpRequest
 
     /** Resolved client IP address (respects X-Forwarded-For / Forwarded). */
     public function getClientIp(): string;
+
+    /**
+     * Client-supplied IANA timezone (e.g. 'Asia/Tokyo') from the
+     * `Timezone` or `X-Timezone` header, validated against
+     * timezone_identifiers_list(). Returns null if absent or unknown.
+     */
+    public function getClientTimezone(): ?string;
+
+    /**
+     * Request scheme — 'http' or 'https'.
+     * Honours `Forwarded` (RFC 7239) → `X-Forwarded-Proto` → direct server flag.
+     * Proxy headers are trusted unconditionally — strip them at the edge
+     * if the application is not behind a reverse proxy.
+     */
+    public function getScheme(): string;
+
+    /**
+     * Hostname only, without port — as the client addressed the server.
+     * Honours `Forwarded: host=` → `X-Forwarded-Host` → `Host` header → `SERVER_NAME`.
+     * Proxy headers are trusted unconditionally.
+     */
+    public function getHost(): string;
+
+    /**
+     * Resolved request port — as the client addressed the server.
+     * Honours `X-Forwarded-Port` → port part of forwarded/Host header → server port.
+     * Falls back to 443 for https / 80 for http when nothing else is available.
+     */
+    public function getPort(): int;
+
+    /**
+     * Convenience base URL `scheme://host[:port]`, omitting standard ports
+     * (80 for http, 443 for https). Equivalent to combining
+     * getScheme() / getHost() / getPort().
+     */
+    public function getBaseUrl(): string;
 }

@@ -142,7 +142,7 @@ The optional `$isHash` argument enables hashed file naming inside the storage (s
 | `WINTER_BINARY_PATH` | — | Custom binary path passed to `Thread::bindBinaryPath()`. |
 | `WINTER_KEY` | — | Serialisation security key for `Thread` payloads (`Opis\Closure` mode). |
 
-The constants `SERVER_SCHEME` and `WINTER_STARTUP_TIME` are defined here if not already set elsewhere.
+The constant `WINTER_STARTUP_TIME` is defined here if not already set elsewhere. For the request's scheme / host / port / base URL use the per-request methods on `HttpRequest` — see [Request addressing](#request-addressing) below.
 
 ### Thread runner discovery
 
@@ -154,6 +154,63 @@ The constants `SERVER_SCHEME` and `WINTER_STARTUP_TIME` are defined here if not 
 4. If none exists, the runner is left unbound — `Thread::dispatch()` will fail at runtime.
 
 When `ext-shmop` is loaded, payload mode is set to `PAYLOAD_SHM` automatically (avoids fd conflicts in Swoole).
+
+---
+
+## Client timezone detection
+
+`HttpRequest::getClientTimezone()` reads the `Timezone` or `X-Timezone` header from the incoming request, validates it against `timezone_identifiers_list()`, and returns the IANA name (or `null` if absent / invalid). The framework does **not** mutate `date_default_timezone_get()` on its own — consumers apply the value where they need it:
+
+```php
+$tz  = new DateTimeZone($request->getClientTimezone() ?? env('TIME_ZONE', 'UTC'));
+$now = new DateTime('now', $tz);
+```
+
+For applications that want the timezone applied globally for the duration of the request, attach `ClientTimezoneMiddleware` to a controller or method:
+
+```php
+use Flytachi\Winter\K2\Http\Middleware\ClientTimezoneMiddleware;
+
+#[ClientTimezoneMiddleware]
+class ReportController extends Controller { ... }
+```
+
+The middleware calls `date_default_timezone_set()` in `before()` with the client value (or `env('TIME_ZONE', 'UTC')` as fallback) and restores the canonical default in `after()`.
+
+**Swoole caveat.** `after()` does not run when the handler throws — `Router::dispatch` catches `Throwable` outside the after-loop. In a long-running worker, an unhandled exception leaves the global TZ at the client's value until the next request that passes through the middleware overwrites it. Apply the middleware uniformly across routes, or skip it and call `getClientTimezone()` explicitly inside handlers.
+
+---
+
+## Request addressing
+
+`HttpRequest` exposes how the **client** addressed the server. Each method is computed per request — there is no boot-time constant — so the values are correct under FPM, Swoole, and any multi-host setup:
+
+| Method | Returns |
+|---|---|
+| `getScheme(): string` | `'http'` or `'https'` |
+| `getHost(): string` | hostname only, no port |
+| `getPort(): int` | actual port (defaults: 80 / 443 by scheme) |
+| `getBaseUrl(): string` | `scheme://host[:port]`, standard ports omitted |
+
+Resolution order (each method short-circuits on the first hit):
+
+1. `Forwarded` header (RFC 7239): `proto=`, `host=`, plus port part of `host=`.
+2. `X-Forwarded-Proto`, `X-Forwarded-Host`, `X-Forwarded-Port`.
+3. Direct request data — `Host` header, `$_SERVER['HTTPS']` / `REQUEST_SCHEME` / `SERVER_PORT` (FPM), `$request->server['server_port']` (Swoole).
+4. Safe defaults — `http`, `localhost`, scheme-derived port.
+
+**Trust policy.** Proxy headers are honoured unconditionally — they take precedence over direct values. If the application is not behind a reverse proxy, strip these headers at the edge (nginx / cloud LB) before they reach PHP. Otherwise a client can spoof `X-Forwarded-Host` and force the backend to return URLs pointing at an attacker domain.
+
+**Swoole SSL.** The Swoole HTTP server does not expose an `https`/`scheme` flag on the request object. Direct-SSL Swoole deployments must terminate TLS at a fronting proxy that sets `X-Forwarded-Proto: https`, otherwise `getScheme()` returns `'http'`.
+
+```php
+public function index(HttpRequest $request): ResponseEntity
+{
+    $callbackUrl = $request->getBaseUrl() . '/oauth/callback';
+    // → "https://example.com/oauth/callback" or "http://localhost:8080/oauth/callback"
+    ...
+}
+```
 
 ---
 

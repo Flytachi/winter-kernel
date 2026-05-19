@@ -47,8 +47,6 @@ final class Kernel extends KernelStore
         Dotenv::createImmutable(self::$pathRoot)
             ->safeLoad();
 
-        defined('SERVER_SCHEME') or define('SERVER_SCHEME', (
-                $_SERVER['REQUEST_SCHEME'] ?? 'http') . "://" . ($_SERVER['SERVER_NAME'] ?? 'localhost'));
         date_default_timezone_set(env('TIME_ZONE', 'UTC'));
 
         if (env('DEBUG', false)) {
