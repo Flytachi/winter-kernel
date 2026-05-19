@@ -176,8 +176,10 @@ abstract class CrudIntegrationTestCase extends IntegrationTestCase
         self::assertSame('fresh', $row['name']);
     }
 
-    public function test_upsert_updates_existing_row_on_conflict(): void
+    public function test_upsert_without_updateColumns_does_nothing_on_conflict(): void
     {
+        // CDO::upsert with $updateColumns=null emits "ON CONFLICT DO NOTHING" (pgsql)
+        // / "INSERT IGNORE" (mysql) — the existing row stays unchanged.
         $this->repo()->insert(['id' => 1, 'name' => 'first', 'price' => 1.0]);
 
         $this->repo()->upsert(
@@ -186,6 +188,23 @@ abstract class CrudIntegrationTestCase extends IntegrationTestCase
         );
 
         self::assertCount(1, $this->fetchAllProducts());
+        self::assertSame('first', $this->fetchProduct(1)['name']);
+    }
+
+    public function test_upsert_with_updateColumns_updates_existing_row(): void
+    {
+        // Passing $updateColumns switches to "ON CONFLICT DO UPDATE SET …" (pgsql)
+        // / "ON DUPLICATE KEY UPDATE …" (mysql) — the matched row is overwritten.
+        $this->repo()->insert(['id' => 1, 'name' => 'first', 'price' => 1.0]);
+
+        $this->repo()->upsert(
+            ['id' => 1, 'name' => 'second', 'price' => 2.0],
+            conflictColumns: ['id'],
+            updateColumns: ['name', 'price'],
+        );
+
+        self::assertCount(1, $this->fetchAllProducts());
         self::assertSame('second', $this->fetchProduct(1)['name']);
+        self::assertSame('2.00', (string) $this->fetchProduct(1)['price']);
     }
 }
