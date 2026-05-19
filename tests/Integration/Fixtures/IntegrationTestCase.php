@@ -83,9 +83,12 @@ abstract class IntegrationTestCase extends TestCase
     {
         $pdo = self::rawPdo();
         $name = self::quoteSchemaName(self::$schemaName);
+        // IF NOT EXISTS — PHPUnit re-invokes setUpBeforeClass inside each
+        // RunInSeparateProcess child, so the second call to createSchema()
+        // must be a no-op rather than fail.
         $stmt = match (static::driverFlavour()) {
-            'pgsql' => "CREATE SCHEMA {$name}",
-            'mysql', 'mariadb' => "CREATE DATABASE {$name} DEFAULT CHARACTER SET utf8mb4",
+            'pgsql' => "CREATE SCHEMA IF NOT EXISTS {$name}",
+            'mysql', 'mariadb' => "CREATE DATABASE IF NOT EXISTS {$name} DEFAULT CHARACTER SET utf8mb4",
         };
         $pdo->exec($stmt);
     }
