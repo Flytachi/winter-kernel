@@ -173,3 +173,51 @@ class UserSummaryRepository extends RepositoryView
 | `getSchema()` | Active schema or `null` |
 | `originTable()` | `'schema.table'` or `'table'` or `''` |
 | `db()` | Active `CDO` connection |
+
+---
+
+## DbConfig class attributes
+
+The repository's `$dbConfigClassName` points at a `DbConfigInterface`
+implementation. Two attributes can decorate that class — both are
+consumed by the migration tooling (`db migrate`), not by the repository
+itself.
+
+### `#[Migratable]` — opt-in for `db migrate`
+
+`Mapping\Attributes\Config\Migratable`. Without it the config (and
+every repository pointing at it) is **silently skipped** by `db sql`
+and `db migrate` — even if entities have `#[Table]`.
+
+```php
+use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Config\Migratable;
+use Flytachi\Winter\K2\Ppa\Mapping\Constants\MigratablePriority;
+
+#[Migratable]                                   // priority: Normal
+final class AppDbConfig extends PgDbConfig { /* … */ }
+
+#[Migratable(MigratablePriority::High)]         // runs before Normal configs
+final class AuthDbConfig extends PgDbConfig { /* … */ }
+```
+
+### `#[Extension]` — PG extension to install (repeatable)
+
+`Mapping\Attributes\Config\Extension`. PostgreSQL-only — silently
+ignored on mysql/mariadb at the SQL-generation step.
+
+```php
+use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Config\Extension;
+
+#[Migratable]
+#[Extension('uuid-ossp')]
+#[Extension('pgcrypto', cascade: true)]
+#[Extension('postgis', schema: 'gis', version: '3.4')]
+final class AppDbConfig extends PgDbConfig { /* … */ }
+```
+
+The Db command emits these as `CREATE EXTENSION IF NOT EXISTS …` before
+any `CREATE SCHEMA`/`CREATE TABLE` so table `DEFAULT` expressions can
+reference extension functions (e.g. `gen_random_uuid()` from `pgcrypto`).
+
+Full rules and the complete column-side attribute catalog live in
+[18-migration.md](18-migration.md).

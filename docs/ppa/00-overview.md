@@ -37,7 +37,12 @@ Entities:
 
 Declaration helpers:
     ├── Declaration                 — registry of table structures per DB config
-    └── DeclarationItem             — one DB config → N table structures
+    └── DeclarationItem             — one DB config → N table structures,
+                                       auto-collects #[Migratable] + #[Extension]
+
+DbConfig attributes (consumed by `db migrate`):
+    ├── #[Migratable(priority)]     — opts the config into the migration scan
+    └── #[Extension(name, …)]       — PG extension to install (repeatable)
 
 Connection pool:
     ├── PpaConnectionPool           — FPM singleton / Swoole coroutine pool
@@ -110,6 +115,7 @@ $repo->update(['status' => 'inactive'], Qb::lt('last_login', '2024-01-01'));
 
 | # | File | Contents |
 |---|------|----------|
-| 15 | [15-declaration.md](15-declaration.md) | `Declaration`, `DeclarationItem` — schema structure registry |
+| 15 | [15-declaration.md](15-declaration.md) | `Declaration`, `DeclarationItem` — schema structure registry, auto-collection of `#[Migratable]` / `#[Extension]` |
 | 16 | [16-advanced-examples.md](16-advanced-examples.md) | Real-world combinations: pagination, reporting, CTEs, multi-join |
 | 17 | [17-pool.md](17-pool.md) | `PpaConnectionPool`, `PpaPoolConfigInterface`, `PpaPoolTrait` — FPM & Swoole connection pool |
+| 18 | [18-migration.md](18-migration.md) | `db migrate` rules — `#[Migratable]`, `#[Extension]`, full column attribute catalog, execution order, idempotency |

@@ -15,12 +15,23 @@ configured table.
 public function insert(object|array $entity): mixed
 ```
 
-Inserts a single record and returns the generated primary key.
+Inserts a single record and returns the generated primary key, or
+`null` when there's no auto-generated id to report (e.g. a MySQL
+INSERT with an explicit value for the PK column, or a table without
+AUTO_INCREMENT). Genuine SQL errors surface as `RepositoryException`.
 
 - `null` values are excluded from the INSERT (database handles defaults).
 - The primary key column is assumed to be the **first key** of `$entity`.
-- PostgreSQL: uses `RETURNING <pk>`.
-- MySQL/MariaDB: uses `PDO::lastInsertId()`.
+- PostgreSQL: uses `INSERT … RETURNING <pk>` — returns the inserted PK.
+- MariaDB ≥ 10.5: also uses `RETURNING <pk>` (driver detected from
+  `PDO::ATTR_SERVER_VERSION`).
+- MySQL: uses `PDO::lastInsertId()` — returns the auto-generated id, or
+  `null` when no AUTO_INCREMENT id was produced (the row is still
+  inserted; the caller already knows the explicit id it supplied).
+
+Requires `winter-cdo` ≥ 3.0.7 — earlier versions threw `CDOException`
+on a `lastInsertId() === "0"` result regardless of whether the INSERT
+itself succeeded.
 
 ```php
 $repo = new UserRepository();
