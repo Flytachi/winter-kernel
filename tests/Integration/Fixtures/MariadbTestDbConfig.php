@@ -5,14 +5,18 @@ declare(strict_types=1);
 namespace Flytachi\Winter\K2\Tests\Integration\Fixtures;
 
 use Flytachi\Winter\Cdo\Config\MySqlDbConfig;
+use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Config\Migratable;
 
 /**
  * MariaDB configuration — separate from MysqlTestDbConfig only so the pool
  * can cache each independently (keyed by class name) and so a single test
  * matrix can exercise both flavours.
  *
+ * `#[Migratable]` enables the Cli Db-command E2E tests (Phase C.5).
+ *
  * Required env: `MARIADB_TEST_DSN`. Optional: `MARIADB_TEST_USER`, `MARIADB_TEST_PASS`.
  */
+#[Migratable]
 final class MariadbTestDbConfig extends MySqlDbConfig
 {
     public function setUp(): void

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\K2\Tests\Integration\Fixtures;
 
 use Flytachi\Winter\Cdo\Config\MySqlDbConfig;
+use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Config\Migratable;
 
 /**
  * MySQL configuration driven by env vars.
@@ -14,8 +15,11 @@ use Flytachi\Winter\Cdo\Config\MySqlDbConfig;
  * class). MySQL "schema" ≡ "database" in PDO; framework treats both as 'mysql'
  * via getDriver().
  *
+ * `#[Migratable]` enables the Cli Db-command E2E tests (Phase C.5).
+ *
  * Required env: `MYSQL_TEST_DSN`. Optional: `MYSQL_TEST_USER`, `MYSQL_TEST_PASS`.
  */
+#[Migratable]
 final class MysqlTestDbConfig extends MySqlDbConfig
 {
     public function setUp(): void

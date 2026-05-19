@@ -6,93 +6,21 @@ namespace Flytachi\Winter\K2\Tests\Integration\Crud;
 
 use Flytachi\Winter\Cdo\CDOBind;
 use Flytachi\Winter\Cdo\Qb;
-use Flytachi\Winter\K2\Ppa\Stereotype\Repository;
-use Flytachi\Winter\K2\Tests\Integration\Fixtures\IntegrationTestCase;
 
 /**
- * Shared base for CRUD integration tests across pgsql / mysql / mariadb.
+ * CRUD test bodies — insert / insertGroup / update / delete / upsert.
  *
- * Lifecycle:
- * - setUpBeforeClass (inherited) creates the per-class schema/database.
- * - This class then provisions a `products` table inside it.
- * - setUp TRUNCATEs the table so every test starts with an empty slate.
- *
- * Schema uses an explicit (non-auto-increment) integer PK. Tests insert
- * rows with known ids and look them up by id — keeps assertions
- * deterministic across all three drivers.
+ * Schema/lifecycle are owned by {@see ProductsTableTestCase}. Tests start
+ * with an empty `products` table (setUp truncates) and insert rows with
+ * explicit ids so assertions can look them up deterministically.
  *
  * winter-cdo ≥ 3.0.7 is required: `CDO::insert()` no longer throws on
  * `lastInsertId() === "0"` (which MySQL returns when the row was inserted
  * with an explicit value into a non-AUTO_INCREMENT column), and MariaDB
  * uses `INSERT ... RETURNING` to return the real id.
  */
-abstract class CrudIntegrationTestCase extends IntegrationTestCase
+abstract class CrudIntegrationTestCase extends ProductsTableTestCase
 {
-    public static function setUpBeforeClass(): void
-    {
-        parent::setUpBeforeClass();
-        if (self::$schemaName !== '') {
-            self::createProductsTable();
-        }
-    }
-
-    protected function setUp(): void
-    {
-        if (self::$schemaName !== '') {
-            self::truncateProducts();
-        }
-    }
-
-    /** @return class-string<Repository> */
-    abstract protected static function repoClass(): string;
-
-    protected function repo(): Repository
-    {
-        /** @var Repository */
-        return new (static::repoClass())();
-    }
-
-    protected static function createProductsTable(): void
-    {
-        $pdo = self::pdoOnTestSchema();
-        $ddl = match (static::driverFlavour()) {
-            'pgsql' => 'CREATE TABLE products (
-                id    INTEGER NOT NULL PRIMARY KEY,
-                name  VARCHAR(255) NOT NULL,
-                price NUMERIC(10, 2)
-            )',
-            'mysql', 'mariadb' => 'CREATE TABLE products (
-                id    INT NOT NULL PRIMARY KEY,
-                name  VARCHAR(255) NOT NULL,
-                price DECIMAL(10, 2)
-            )',
-        };
-        $pdo->exec($ddl);
-    }
-
-    protected static function truncateProducts(): void
-    {
-        self::pdoOnTestSchema()->exec('TRUNCATE TABLE products');
-    }
-
-    /** @return list<array<string, mixed>> */
-    protected function fetchAllProducts(): array
-    {
-        $stmt = self::pdoOnTestSchema()->query('SELECT id, name, price FROM products ORDER BY id');
-        return array_map(
-            static fn (array $r) => array_change_key_case($r),
-            $stmt->fetchAll(\PDO::FETCH_ASSOC),
-        );
-    }
-
-    protected function fetchProduct(int $id): ?array
-    {
-        $stmt = self::pdoOnTestSchema()->prepare('SELECT id, name, price FROM products WHERE id = :id');
-        $stmt->execute([':id' => $id]);
-        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
-        return $row === false ? null : array_change_key_case($row);
-    }
-
     // ── Shared test bodies ──────────────────────────────────────────────────
 
     public function test_insert_returns_value_per_driver(): void
