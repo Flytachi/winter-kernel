@@ -81,13 +81,11 @@ jobs:
       - name: Run unit suites (sanity)
         run: vendor/bin/phpunit
 
-      - name: Run integration suite (smoke + migration via rawPdo)
+      - name: Run integration suite (smoke + migration + CRUD)
         run: vendor/bin/phpunit --group integration
 
-      - name: CDO segfault isolation (process-per-test; non-blocking)
-        continue-on-error: true
+      - name: CDO process-isolated diagnostic
         run: vendor/bin/phpunit --group cdo-diagnostic
 
-      - name: Run CDO/Pool connection tests (diagnostic; non-blocking)
-        continue-on-error: true
+      - name: CDO/Pool connection tests
         run: vendor/bin/phpunit --group pool

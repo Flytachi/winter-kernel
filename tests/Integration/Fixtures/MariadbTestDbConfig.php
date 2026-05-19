@@ -28,11 +28,8 @@ final class MariadbTestDbConfig extends MySqlDbConfig
         $this->username = (string) (getenv('MARIADB_TEST_USER') ?: 'root');
         $this->password = (string) (getenv('MARIADB_TEST_PASS') ?: '');
     }
-
-    final public function getDriver(): string
-    {
-        return 'mysql'; // PDO returns 'mysql' for MariaDB too — framework parity.
-    }
+    // getDriver() is inherited as `final` from MySqlDbConfig — returns 'mysql',
+    // which is correct for MariaDB too (PDO reports both as 'mysql').
 
     /** @return array<string, string> */
     private static function parseDsn(string $dsn): array

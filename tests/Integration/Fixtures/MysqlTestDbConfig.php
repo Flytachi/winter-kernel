@@ -31,11 +31,7 @@ final class MysqlTestDbConfig extends MySqlDbConfig
         $this->username = (string) (getenv('MYSQL_TEST_USER') ?: 'root');
         $this->password = (string) (getenv('MYSQL_TEST_PASS') ?: '');
     }
-
-    final public function getDriver(): string
-    {
-        return 'mysql';
-    }
+    // getDriver() is inherited as `final` from MySqlDbConfig — returns 'mysql'.
 
     /** @return array<string, string> */
     private static function parseDsn(string $dsn): array

@@ -17,8 +17,14 @@ use Flytachi\Winter\K2\Tests\Integration\Fixtures\IntegrationTestCase;
  * - This class then provisions a `products` table inside it.
  * - setUp TRUNCATEs the table so every test starts with an empty slate.
  *
- * Subclasses pick the concrete Repository class via {@see repoClass()};
- * the assertions are dialect-agnostic and shared.
+ * Schema uses an explicit (non-auto-increment) integer PK. Tests insert
+ * rows with known ids and look them up by id — keeps assertions
+ * deterministic across all three drivers.
+ *
+ * winter-cdo ≥ 3.0.7 is required: `CDO::insert()` no longer throws on
+ * `lastInsertId() === "0"` (which MySQL returns when the row was inserted
+ * with an explicit value into a non-AUTO_INCREMENT column), and MariaDB
+ * uses `INSERT ... RETURNING` to return the real id.
  */
 abstract class CrudIntegrationTestCase extends IntegrationTestCase
 {
@@ -69,9 +75,7 @@ abstract class CrudIntegrationTestCase extends IntegrationTestCase
         self::pdoOnTestSchema()->exec('TRUNCATE TABLE products');
     }
 
-    /**
-     * @return list<array<string, mixed>>
-     */
+    /** @return list<array<string, mixed>> */
     protected function fetchAllProducts(): array
     {
         $stmt = self::pdoOnTestSchema()->query('SELECT id, name, price FROM products ORDER BY id');
@@ -89,12 +93,21 @@ abstract class CrudIntegrationTestCase extends IntegrationTestCase
         return $row === false ? null : array_change_key_case($row);
     }
 
-    // ── Shared test bodies (run for every concrete subclass) ─────────────────
+    // ── Shared test bodies ──────────────────────────────────────────────────
 
-    public function test_insert_returns_truthy_identifier(): void
+    public function test_insert_returns_value_per_driver(): void
     {
-        $id = $this->repo()->insert(['id' => 1, 'name' => 'widget', 'price' => 9.99]);
-        self::assertNotEmpty($id);
+        // pgsql / mariadb: RETURNING <first key> → returns the inserted id (1).
+        // mysql: lastInsertId() returns "0" because the PK is not AUTO_INCREMENT;
+        //        CDO::insert() returns null in that case (no auto-id to expose).
+        $result = $this->repo()->insert(['id' => 1, 'name' => 'widget', 'price' => 9.99]);
+
+        if (static::driverFlavour() === 'mysql') {
+            self::assertNull($result);
+        } else {
+            self::assertNotEmpty($result);
+            self::assertSame(1, (int) $result);
+        }
     }
 
     public function test_insert_persists_row(): void
@@ -134,7 +147,7 @@ abstract class CrudIntegrationTestCase extends IntegrationTestCase
     public function test_update_changes_matched_rows_only(): void
     {
         $this->repo()->insertGroup(
-            ['id' => 1, 'name' => 'old', 'price' => 1.0],
+            ['id' => 1, 'name' => 'old',  'price' => 1.0],
             ['id' => 2, 'name' => 'keep', 'price' => 2.0],
         );
 
@@ -144,7 +157,7 @@ abstract class CrudIntegrationTestCase extends IntegrationTestCase
         );
         self::assertSame(1, (int) $affected);
 
-        self::assertSame('new', $this->fetchProduct(1)['name']);
+        self::assertSame('new',  $this->fetchProduct(1)['name']);
         self::assertSame('keep', $this->fetchProduct(2)['name']);
     }
 
@@ -179,7 +192,7 @@ abstract class CrudIntegrationTestCase extends IntegrationTestCase
     public function test_upsert_without_updateColumns_does_nothing_on_conflict(): void
     {
         // CDO::upsert with $updateColumns=null emits "ON CONFLICT DO NOTHING" (pgsql)
-        // / "INSERT IGNORE" (mysql) — the existing row stays unchanged.
+        // / "INSERT IGNORE" (mysql + mariadb) — existing row stays unchanged.
         $this->repo()->insert(['id' => 1, 'name' => 'first', 'price' => 1.0]);
 
         $this->repo()->upsert(
@@ -194,11 +207,8 @@ abstract class CrudIntegrationTestCase extends IntegrationTestCase
     public function test_upsert_with_updateColumns_updates_existing_row(): void
     {
         // `updateColumns` is a map `[column => expression]` with DSL tokens:
-        //   :new     → EXCLUDED.<col> (pgsql) / VALUES(<col>) (mysql) — the INSERT-side value
-        //   :current → <table>.<col>  (pgsql) / <col>          (mysql) — the existing row value
-        //
-        // Generates pgsql:  SET name = EXCLUDED.name, price = EXCLUDED.price
-        // Generates mysql:  SET name = VALUES(name),  price = VALUES(price)
+        //   :new     → EXCLUDED.<col> (pgsql) / VALUES(<col>) (mysql + mariadb)
+        //   :current → <table>.<col>  (pgsql) / <col>          (mysql + mariadb)
         $this->repo()->insert(['id' => 1, 'name' => 'first', 'price' => 1.0]);
 
         $this->repo()->upsert(
