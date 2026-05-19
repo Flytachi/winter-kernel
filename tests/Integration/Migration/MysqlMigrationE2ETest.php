@@ -81,7 +81,10 @@ class MysqlMigrationE2ETest extends IntegrationTestCase
              ORDER BY ordinal_position'
         );
         $stmt->execute([':s' => self::$schemaName, ':t' => 'users_columns']);
-        $cols = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        // MySQL/MariaDB return information_schema column names in upper case
+        // (COLUMN_NAME, DATA_TYPE, ...). Normalise to lower case so the assertions
+        // are dialect-agnostic.
+        $cols = array_map('array_change_key_case', $stmt->fetchAll(\PDO::FETCH_ASSOC));
 
         self::assertCount(4, $cols);
         self::assertSame('id', $cols[0]['column_name']);
