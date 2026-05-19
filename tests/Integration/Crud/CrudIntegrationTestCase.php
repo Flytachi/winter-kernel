@@ -193,14 +193,18 @@ abstract class CrudIntegrationTestCase extends IntegrationTestCase
 
     public function test_upsert_with_updateColumns_updates_existing_row(): void
     {
-        // Passing $updateColumns switches to "ON CONFLICT DO UPDATE SET …" (pgsql)
-        // / "ON DUPLICATE KEY UPDATE …" (mysql) — the matched row is overwritten.
+        // `updateColumns` is a map `[column => expression]` with DSL tokens:
+        //   :new     → EXCLUDED.<col> (pgsql) / VALUES(<col>) (mysql) — the INSERT-side value
+        //   :current → <table>.<col>  (pgsql) / <col>          (mysql) — the existing row value
+        //
+        // Generates pgsql:  SET name = EXCLUDED.name, price = EXCLUDED.price
+        // Generates mysql:  SET name = VALUES(name),  price = VALUES(price)
         $this->repo()->insert(['id' => 1, 'name' => 'first', 'price' => 1.0]);
 
         $this->repo()->upsert(
             ['id' => 1, 'name' => 'second', 'price' => 2.0],
             conflictColumns: ['id'],
-            updateColumns: ['name', 'price'],
+            updateColumns: ['name' => ':new', 'price' => ':new'],
         );
 
         self::assertCount(1, $this->fetchAllProducts());
