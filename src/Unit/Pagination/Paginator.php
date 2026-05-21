@@ -6,7 +6,8 @@ namespace Flytachi\Winter\K2\Unit\Pagination;
 
 use Flytachi\Winter\Cdo\Connection\CDOStatement;
 use Flytachi\Winter\K2\Ppa\Entity\RepositoryInterface;
-use TypeError;
+use Flytachi\Winter\K2\Ppa\Entity\RepositoryViewInterface;
+use ValueError;
 
 /**
  * Class Paginator
@@ -20,47 +21,112 @@ use TypeError;
 final class Paginator
 {
     /**
-     * Стратегия 1.1: Классическая пагинация через Репозиторий БД (с COUNT)
+     * Offset-based repository pagination with total row count (COUNT).
+     *
+     * Issues two queries:
+     *  1. `SELECT ... LIMIT $size OFFSET $offset` — current page rows.
+     *  2. `SELECT COUNT(*) FROM (...)` — without `ORDER BY / LIMIT / OFFSET / FOR`
+     *     (see {@see RepositoryInterface::buildSql()} with `ignoreParts`).
+     *
+     * Mutates the repository — calls `$repo->limit($size, $offset)`. If the
+     * caller plans to reuse `$repo` after pagination, clone it beforehand.
+     *
+     * Example:
+     * ```
+     * $result = Paginator::repo(
+     *     $repo,
+     *     size: 20,
+     *     offset: 40,
+     *     mapper: fn ($row) => ProductResource::from($row),
+     * );
+     * ```
+     *
+     * @template TEntity of object
+     * @template TItem
+     *
+     * @param RepositoryViewInterface $repo Source repository with `WHERE / ORDER BY / ...` already applied.
+     * @param int $size Page size. Must be `>= 1`.
+     * @param int $offset Offset from the start of the result set. Defaults to `0` (first page).
+     * @param (callable(TEntity): TItem)|null $mapper Optional per-item transformer (array_map-style).
+     *                                                Applied to the fetched rows before result assembly.
+     * @param class-string<TEntity>|null $entityClassName Class for row hydration
+     *                                                    (forwarded to {@see RepositoryViewInterface::findAll()}).
+     *                                                    When `null`, falls back to the repository's configured entity class.
+     * @return ($mapper is null
+     *     ? PaginationResult<PaginationMeta, TEntity>
+     *     : PaginationResult<PaginationMeta, TItem>
+     * )
+     * @throws ValueError When `$size < 1`.
      */
-    final public static function repo(
-        RepositoryInterface $repo,
-        ?int $size = null,
-        int $page = 1,
-        ?string $modelClassName = null
+    public static function repo(
+        RepositoryViewInterface $repo,
+        int $size,
+        int $offset = 0,
+        ?callable $mapper = null,
+        ?string $entityClassName = null,
     ): PaginationResult {
-        $page = max($page, 1);
-
-        if (!is_null($size)) {
-            $repo->limit($size, $size * ($page - 1));
-        } elseif (!$repo->getSql('limit')) {
-            throw new TypeError("Missing 'size/limit' value in repository or arguments.");
+        if ($size <= 0) {
+            throw new ValueError("Size must be a positive integer (>= 1), got: $size.");
         }
 
-        $currentSize = (int) $repo->getSql('limit');
-        $totalItem   = self::calculateTotal($repo);
+        $repo->limit($size, $offset);
+        $data = $repo->findAll($entityClassName);
 
         return new PaginationResult(
-            meta: new PaginationMeta(page: $page, size: $currentSize, total: $totalItem),
-            data: $repo->findAll($modelClassName) ?: []
+            meta: new PaginationMeta(
+                offset: $offset,
+                size: $size,
+                total: self::calculateTotal($repo),
+            ),
+            data: $mapper === null ? $data : array_map($mapper, $data),
         );
     }
 
-    final public static function array(
+    /**
+     * Offset-based pagination of an in-memory array.
+     *
+     * Counterpart to {@see self::repo()} for plain arrays — no SQL, no COUNT.
+     * The full collection must be available up front; `total` is `count($items)`.
+     *
+     * Example:
+     * ```
+     * $page = Paginator::array(
+     *     items: $rows,
+     *     size: 50,
+     *     offset: 100,
+     *     mapper: fn ($r) => Row::from($r),
+     * );
+     * ```
+     *
+     * @template TIn
+     * @template TItem
+     *
+     * @param array<TIn> $items Full collection to paginate over.
+     * @param int $size Page size. Must be `>= 1`.
+     * @param int $offset Offset from the start of the array. Defaults to `0`.
+     * @param (callable(TIn): TItem)|null $mapper Optional per-item transformer (array_map-style).
+     *                                            Applied to the sliced page only, not to the full input.
+     * @return ($mapper is null
+     *     ? PaginationResult<PaginationMeta, TIn>
+     *     : PaginationResult<PaginationMeta, TItem>
+     * )
+     * @throws ValueError When `$size < 1`.
+     */
+    public static function array(
         array $items,
         int $size,
-        int $page = 1
+        int $offset = 0,
+        ?callable $mapper = null,
     ): PaginationResult {
         if ($size <= 0) {
-            throw new TypeError("Size must be a positive integer greater than 0.");
+            throw new ValueError("Size must be a positive integer (>= 1), got: $size.");
         }
 
-        $page = max($page, 1);
-        $totalItem = count($items);
-        $offset = $size * ($page - 1);
+        $data = array_slice($items, $offset, $size);
 
         return new PaginationResult(
-            meta: new PaginationMeta(page: $page, size: $size, total: $totalItem),
-            data: array_splice($items, $offset, $size)
+            meta: new PaginationMeta(offset: $offset, size: $size, total: count($items)),
+            data: $mapper === null ? $data : array_map($mapper, $data),
         );
     }
 
@@ -72,14 +138,14 @@ final class Paginator
      * @param int                 $size           Количество запрашиваемых элементов.
      * @param string|null         $cursorAfter    Курсор (after_cursor) для движения вперед (в будущее / вниз по списку).
      * @param string|null         $cursorBefore   Курсор (before_cursor) для движения назад (в прошлое / вверх по списку).
-     * @param string|null         $modelClassName Имя модели для гидрации.
+     * @param string|null         $entityClassName Имя модели для гидрации.
      */
     final public static function cursor(
         RepositoryInterface $repo,
         int $size,
         ?string $cursorAfter = null,
         ?string $cursorBefore = null,
-        ?string $modelClassName = null
+        ?string $entityClassName = null
     ): PaginationResult {
         if ($size <= 0) {
             throw new \TypeError("Size must be greater than 0.");
@@ -106,7 +172,7 @@ final class Paginator
             }
         }
 
-        $list = $repo->findAll($modelClassName) ?: [];
+        $list = $repo->findAll($entityClassName) ?: [];
         $count = count($list);
 
         if ($isReversed) {
@@ -164,12 +230,7 @@ final class Paginator
 
     private static function calculateTotal(RepositoryInterface $repo): int
     {
-        $sql = $repo->buildSql();
-        $sql = preg_replace('/\s+LIMIT\s+\d+/i', '', $sql);
-        $sql = preg_replace('/\s+OFFSET\s+\d+/i', '', $sql);
-        $sql = preg_replace('/\s+FOR\s+UPDATE/i', '', $sql);
-        $sql = preg_replace('/\s+ORDER\s+BY\s+.+$/i', '', $sql);
-
+        $sql = $repo->buildSql(ignoreParts: ['order', 'limit', 'offset', 'for']);
         $countSql = 'SELECT COUNT(*) FROM (' . $sql . ') AS tmp';
 
         $stmt = new CDOStatement($repo->db()->prepare($countSql));
