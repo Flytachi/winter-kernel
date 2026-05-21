@@ -13,7 +13,11 @@ use Flytachi\Winter\K2\Ppa\Entity\RepositoryInterface;
 use Flytachi\Winter\K2\Ppa\Mapping\RepositoryMappingInterface;
 use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
 use Flytachi\Winter\Base\Runtime;
+use PDOStatement;
 use stdClass;
+use Swoole\Coroutine;
+use Throwable;
+use ValueError;
 
 /**
  * Abstract base class for all repository implementations.
@@ -51,7 +55,7 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
     /** @var class-string $dbConfigClassName dbConfig class name (default => DbConfig::class) */
     protected string $dbConfigClassName;
     /** @var class-string $entityClassName object class name (default => \stdClass::class) */
-    protected string $entityClassName = \stdClass::class;
+    protected string $entityClassName = stdClass::class;
     /** @var string|null $schema schema in database */
     protected ?string $schema = null;
     /** @var string $table name of the table in the database */
@@ -111,10 +115,10 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
         if (!Runtime::isSwooleCoroutine()) {
             return $this;
         }
-        $ctx = \Swoole\Coroutine::getContext();
+        $ctx = Coroutine::getContext();
         $key = '__rp_' . spl_object_id($this);
         if (!isset($ctx[$key])) {
-            $state                  = new \stdClass();
+            $state                  = new stdClass();
             $state->sqlParts        = [];
             $state->entityClassName = $this->entityClassName;
             $ctx[$key]              = $state;
@@ -180,33 +184,28 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
     /**
      * @throws RepositoryException
      */
-    public function buildSql(): string
+    public function buildSql(array $ignoreParts = []): string
     {
         try {
             $state = $this->state();
+            $skip = array_flip($ignoreParts);
             $parts = ['SELECT ' . $this->prepareSelect()];
             if (!empty(($state->sqlParts['from'] ?? $this->originTable()))) {
                 $parts[] = 'FROM ' . ($state->sqlParts['from'] ?? $this->originTable());
             }
 
-            foreach (['as', 'join', 'where', 'group', 'having'] as $key) {
-                if (isset($state->sqlParts[$key])) {
+            foreach (['as', 'join', 'where', 'group', 'having', 'union', 'order'] as $key) {
+                if (isset($state->sqlParts[$key]) && !isset($skip[$key])) {
                     $parts[] = trim($state->sqlParts[$key]);
                 }
             }
-            if (isset($state->sqlParts['union'])) {
-                $parts[] = $state->sqlParts['union'];
-            }
-            if (isset($state->sqlParts['order'])) {
-                $parts[] = trim($state->sqlParts['order']);
-            }
-            if (isset($state->sqlParts['limit'])) {
+            if (isset($state->sqlParts['limit']) && !isset($skip['limit'])) {
                 $parts[] = 'LIMIT ' . $state->sqlParts['limit'];
             }
-            if (isset($state->sqlParts['offset'])) {
+            if (isset($state->sqlParts['offset']) && !isset($skip['offset'])) {
                 $parts[] = 'OFFSET ' . $state->sqlParts['offset'];
             }
-            if (isset($state->sqlParts['for'])) {
+            if (isset($state->sqlParts['for']) && !isset($skip['for'])) {
                 $parts[] = 'FOR ' . $state->sqlParts['for'];
             }
 
@@ -216,7 +215,7 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
             }
 
             return implode(' ', $parts);
-        } catch (\Throwable $th) {
+        } catch (Throwable $th) {
             throw new RepositoryException($th->getMessage(), previous: $th);
         }
     }
@@ -253,7 +252,7 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
      * Clears one specific SQL part (by key) or all accumulated SQL parts.
      *
      * In Swoole coroutine mode a full reset (`$param === null`) discards the
-     * entire per-coroutine state object so the next {@see state()} call
+     * entire per-coroutine state object as the next {@see state()} call
      * re-initialises it from the class-defined defaults — including
      * `entityClassName`.
      *
@@ -263,7 +262,7 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
     final public function cleanCache(?string $param = null): void
     {
         if (Runtime::isSwooleCoroutine()) {
-            $ctx = \Swoole\Coroutine::getContext();
+            $ctx = Coroutine::getContext();
             $key = '__rp_' . spl_object_id($this);
             if ($param) {
                 if (isset($ctx[$key]->sqlParts[$param])) {
@@ -452,7 +451,7 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
 
     /**
      * @param string|RepositoryInterface $repository
-     * @param string $on
+     * @param string|Qb $on
      * @return static
      */
     final public function join(string|RepositoryInterface $repository, string|Qb $on): static
@@ -468,7 +467,7 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
 
     /**
      * @param string|RepositoryInterface $repository
-     * @param string $on
+     * @param string|Qb $on
      * @return static
      */
     final public function joinInner(string|RepositoryInterface $repository, string|Qb $on): static
@@ -484,7 +483,7 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
 
     /**
      * @param string|RepositoryInterface $repository
-     * @param string $on
+     * @param string|Qb $on
      * @return static
      */
     final public function joinLeft(string|RepositoryInterface $repository, string|Qb $on): static
@@ -500,7 +499,7 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
 
     /**
      * @param string|RepositoryInterface $repository
-     * @param string $on
+     * @param string|Qb $on
      * @return static
      */
     final public function joinRight(string|RepositoryInterface $repository, string|Qb $on): static
@@ -537,7 +536,7 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
     /**
      * Appends an `AND` condition to the existing `WHERE` clause.
      *
-     * If no WHERE clause exists yet, acts as {@see where()}.
+     * If no WHERE clause exists yet, it acts as {@see where()}.
      *
      * @param Qb $qb Condition builder
      * @return static
@@ -550,7 +549,7 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
     /**
      * Appends an `OR` condition to the existing `WHERE` clause.
      *
-     * If no WHERE clause exists yet, acts as {@see where()}.
+     * If no WHERE clause exists yet, it acts as {@see where()}.
      *
      * @param Qb $qb Condition builder
      * @return static
@@ -561,9 +560,9 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
     }
 
     /**
-     * Appends a `XOR` condition to the existing `WHERE` clause.
+     * Appends an ` XOR ` condition to the existing `WHERE` clause.
      *
-     * If no WHERE clause exists yet, acts as {@see where()}.
+     * If no WHERE clause exists yet, it acts as {@see where()}.
      *
      * @param Qb $qb Condition builder
      * @return static
@@ -675,10 +674,10 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
     final public function limit(int $limit, int $offset = 0): static
     {
         if ($limit < 1) {
-            throw new \TypeError('limit < 1');
+            throw new ValueError("LIMIT must be a positive integer (>= 1), got: $limit.");
         }
         if ($offset < 0) {
-            throw new \TypeError('offset < 0');
+            throw new ValueError("OFFSET must be a non-negative integer (>= 0), got: $offset.");
         }
         $state = $this->state();
         $state->sqlParts['limit'] = $limit;
@@ -733,10 +732,10 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
      * to `bindValue()` (PDOStatement). Called internally by all fetch methods in
      * {@see RepositoryViewTrait} immediately after `prepare()`.
      *
-     * @param CDOStatement|\PDOStatement $stmt Prepared statement to bind values onto
+     * @param CDOStatement|PDOStatement $stmt Prepared statement to bind values onto
      * @return void
      */
-    final protected function useBind(CDOStatement|\PDOStatement $stmt): void
+    final protected function useBind(CDOStatement|PDOStatement $stmt): void
     {
         $state = $this->state();
         if (empty($state->sqlParts['binds'])) {

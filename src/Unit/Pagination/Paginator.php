@@ -44,7 +44,7 @@ final class Paginator
      * @template TEntity of object
      * @template TItem
      *
-     * @param RepositoryViewInterface $repo Source repository with `WHERE / ORDER BY / ...` already applied.
+     * @param RepositoryViewInterface<TEntity> $repo Source repository with `WHERE / ORDER BY / ...` already applied.
      * @param int $size Page size. Must be `>= 1`.
      * @param int $offset Offset from the start of the result set. Defaults to `0` (first page).
      * @param (callable(TEntity): TItem)|null $mapper Optional per-item transformer (array_map-style).

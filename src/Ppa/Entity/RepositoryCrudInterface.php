@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\K2\Ppa\Entity;
 
 use Flytachi\Winter\Cdo\Qb;
+use Flytachi\Winter\K2\Ppa\Repository\RepositoryException;
 
 /**
  * Contract for repository classes that support write operations.
@@ -21,7 +22,7 @@ interface RepositoryCrudInterface extends RepositoryInterface
      *
      * @param object|array $entity Entity object or associative column-value array
      * @return mixed Last insert ID or driver-specific return value
-     * @throws \Flytachi\Winter\K2\Ppa\Repository\RepositoryException
+     * @throws RepositoryException
      */
     public function insert(object|array $entity): mixed;
 
@@ -30,7 +31,7 @@ interface RepositoryCrudInterface extends RepositoryInterface
      *
      * @param array|object ...$entities One or more entities to insert
      * @return void
-     * @throws \Flytachi\Winter\K2\Ppa\Repository\RepositoryException
+     * @throws RepositoryException
      */
     public function insertGroup(array|object ...$entities): void;
 
@@ -40,7 +41,7 @@ interface RepositoryCrudInterface extends RepositoryInterface
      * @param object|array $entity  Column-value map of fields to update
      * @param Qb           $qb      WHERE condition (required — prevents accidental full-table updates)
      * @return int|string Number of affected rows or driver-specific return value
-     * @throws \Flytachi\Winter\K2\Ppa\Repository\RepositoryException
+     * @throws RepositoryException
      */
     public function update(object|array $entity, Qb $qb): int|string;
 
@@ -49,7 +50,7 @@ interface RepositoryCrudInterface extends RepositoryInterface
      *
      * @param Qb $qb WHERE condition (required — prevents accidental full-table deletes)
      * @return int|string Number of affected rows or driver-specific return value
-     * @throws \Flytachi\Winter\K2\Ppa\Repository\RepositoryException
+     * @throws RepositoryException
      */
     public function delete(Qb $qb): int|string;
 
@@ -60,7 +61,7 @@ interface RepositoryCrudInterface extends RepositoryInterface
      * @param array         $conflictColumns Columns that define the conflict target
      * @param array|null    $updateColumns   Columns to update on conflict; null updates all non-conflict columns
      * @return mixed Last insert ID or driver-specific return value
-     * @throws \Flytachi\Winter\K2\Ppa\Repository\RepositoryException
+     * @throws RepositoryException
      */
     public function upsert(object|array $entity, array $conflictColumns, ?array $updateColumns = null): mixed;
 
@@ -71,7 +72,7 @@ interface RepositoryCrudInterface extends RepositoryInterface
      * @param array      $conflictColumns Columns that define the conflict target
      * @param array|null $updateColumns   Columns to update on conflict; null updates all non-conflict columns
      * @return void
-     * @throws \Flytachi\Winter\K2\Ppa\Repository\RepositoryException
+     * @throws RepositoryException
      */
     public function upsertGroup(array $entities, array $conflictColumns, ?array $updateColumns = null): void;
 }

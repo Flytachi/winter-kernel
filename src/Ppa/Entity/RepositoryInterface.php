@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Ppa\Entity;
 
+use Flytachi\Winter\Cdo\CDOBind;
 use Flytachi\Winter\Cdo\Connection\CDO;
 use Flytachi\Winter\Cdo\Qb;
+use Flytachi\Winter\K2\Ppa\Repository\RepositoryException;
+use ValueError;
 
 /**
  * Contract for all repository query-builder implementations.
@@ -64,17 +67,19 @@ interface RepositoryInterface
     /**
      * Assembles and returns the full SQL query string from accumulated parts.
      *
+     * @param string[] $ignoreParts SQL part keys to skip during assembly
+     *                              (e.g. `['order', 'limit', 'offset', 'for']`)
      * @return string Built SQL query
-     * @throws \Flytachi\Winter\K2\Ppa\Repository\RepositoryException
+     * @throws RepositoryException
      */
-    public function buildSql(): string;
+    public function buildSql(array $ignoreParts = []): string;
 
     /**
      * Returns a specific SQL part by key, or the full built SQL when $param is null.
      *
      * @param string|null $param Part key (e.g. `'where'`, `'order'`, `'binds'`)
      * @return mixed SQL part value, or full SQL string
-     * @throws \Flytachi\Winter\K2\Ppa\Repository\RepositoryException
+     * @throws RepositoryException
      */
     public function getSql(?string $param = null): mixed;
 
@@ -136,7 +141,7 @@ interface RepositoryInterface
      *
      * @param string|RepositoryInterface $repository Table name or subquery repository
      * @return static
-     * @throws \Flytachi\Winter\K2\Ppa\Repository\RepositoryException When FROM is already set, or subquery has no alias
+     * @throws RepositoryException When FROM is already set, or subquery has no alias
      */
     public function from(string|RepositoryInterface $repository): static;
 
@@ -207,7 +212,7 @@ interface RepositoryInterface
     /**
      * Appends an `AND` condition to the existing `WHERE` clause.
      *
-     * If no WHERE clause exists yet, acts as {@see where()}.
+     * If no WHERE clause exists yet, it acts as {@see where()}.
      *
      * @param Qb $qb Condition builder
      * @return static
@@ -217,7 +222,7 @@ interface RepositoryInterface
     /**
      * Appends an `OR` condition to the existing `WHERE` clause.
      *
-     * If no WHERE clause exists yet, acts as {@see where()}.
+     * If no WHERE clause exists yet, it acts as {@see where()}.
      *
      * @param Qb $qb Condition builder
      * @return static
@@ -225,9 +230,9 @@ interface RepositoryInterface
     public function orWhere(Qb $qb): static;
 
     /**
-     * Appends a `XOR` condition to the existing `WHERE` clause.
+     * Appends an ` XOR ` condition to the existing `WHERE` clause.
      *
-     * If no WHERE clause exists yet, acts as {@see where()}.
+     * If no WHERE clause exists yet, it acts as {@see where()}.
      *
      * @param Qb $qb Condition builder
      * @return static
@@ -280,7 +285,7 @@ interface RepositoryInterface
      * @param int $limit  Number of rows to return (must be ≥ 1)
      * @param int $offset Number of rows to skip (must be ≥ 0, default 0)
      * @return static
-     * @throws \TypeError When limit < 1 or offset < 0
+     * @throws ValueError When limit < 1 or offset < 0
      */
     public function limit(int $limit, int $offset = 0): static;
 
@@ -299,7 +304,7 @@ interface RepositoryInterface
      *
      * Passing null or an empty array is a safe no-op.
      *
-     * @param \Flytachi\Winter\Cdo\CDOBind[]|null $binds Array of bind objects to merge, or null
+     * @param CDOBind[]|null $binds Array of bind objects to merge, or null
      * @return static
      */
     public function binding(?array $binds): static;

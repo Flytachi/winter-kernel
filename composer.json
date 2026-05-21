@@ -42,6 +42,7 @@
         "ext-fileinfo": "*"
     },
     "suggest": {
+        "ext-pdo": "Required for database access",
         "ext-simplexml": "Required for XML file operations and XML body parsing in HTTP parameter resolution",
         "ext-bcmath": "Optional for BcMath\\Number type casting in HTTP parameter resolution",
         "ext-decimal": "Optional for Decimal\\Decimal type casting in HTTP parameter resolution",

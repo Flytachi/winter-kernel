@@ -16,18 +16,19 @@ use Flytachi\Winter\K2\Ppa\Repository\RepositoryViewTrait;
  * Define {@see RepositoryCore::$dbConfigClassName}, {@see RepositoryCore::$table},
  * and optionally {@see RepositoryCore::$entityClassName} in the subclass.
  *
- * Example:
- * ```
- * class UserViewRepository extends RepositoryView
- * {
- *     protected string $dbConfigClassName = DbConfig::class;
- *     protected string $entityClassName   = UserEntity::class;
- *     public static string $table         = 'users';
- * }
- * ```
+ * Subclasses bind `TEntity` by adding an `@extends` PHPDoc tag on the class
+ * declaration that pins the template parameter to their concrete entity class.
+ * Without the binding, finder return values (`find`, `findAll`, `findById`,
+ * ...) fall back to `object`.
  *
- * @see Repository      For full CRUD + View access
- * @see RepositoryCrud  For write-only access
+ * Required subclass properties: {@see RepositoryCore::$dbConfigClassName},
+ * {@see RepositoryCore::$entityClassName}, {@see RepositoryCore::$table}.
+ *
+ * @template TEntity of object
+ * @implements RepositoryViewInterface<TEntity>
+ * @use RepositoryViewTrait<TEntity>
+ * @see Repository For full CRUD + View access.
+ * @see RepositoryCrud For write-only access.
  */
 abstract class RepositoryView extends RepositoryCore implements RepositoryViewInterface
 {

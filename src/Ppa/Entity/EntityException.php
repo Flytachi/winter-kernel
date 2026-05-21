@@ -7,12 +7,13 @@ namespace Flytachi\Winter\K2\Ppa\Entity;
 use Flytachi\Winter\Base\Exception\ExceptionLogLevel;
 use Flytachi\Winter\Base\Exception\ExceptionTrait;
 use Psr\Log\LogLevel;
+use RuntimeException;
 
 /**
  * Thrown when a required entity is not found or violates a domain rule.
  * Logged at WARNING level (expected, caller-caused).
  */
-class EntityException extends \RuntimeException implements ExceptionLogLevel
+class EntityException extends RuntimeException implements ExceptionLogLevel
 {
     use ExceptionTrait;
 

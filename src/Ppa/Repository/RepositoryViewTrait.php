@@ -11,6 +11,7 @@ use Flytachi\Winter\Cdo\Qb;
 use Flytachi\Winter\K2\Ppa\Entity\EntityException;
 use Flytachi\Winter\K2\Ppa\Entity\RepositoryViewInterface;
 use PDO;
+use Throwable;
 
 /**
  * Provides concrete read-operation implementations for repository classes.
@@ -27,6 +28,10 @@ use PDO;
  * }
  * ```
  *
+ * `TEntity` is bound by the consuming class via an `@use` PHPDoc tag pinning
+ * the template parameter (or transitively through a stereotype's `@extends`).
+ *
+ * @template TEntity of object
  * @mixin RepositoryViewInterface
  */
 trait RepositoryViewTrait
@@ -34,10 +39,13 @@ trait RepositoryViewTrait
     /**
      * Executes a raw SQL query with explicit binds and returns hydrated objects.
      *
-     * @param string      $sql             Raw SQL string with named placeholders
-     * @param CDOBind[]   $binds           Array of {@see CDOBind} objects
-     * @param string|null $entityClassName Override entity class for hydration; null uses repository default
-     * @return array<object> Array of hydrated objects
+     * @template T of object
+     *
+     * @param string $sql Raw SQL string with named placeholders.
+     * @param CDOBind[] $binds Array of {@see CDOBind} objects.
+     * @param class-string<T>|null $entityClassName Override entity class for hydration;
+     *                                              `null` uses the repository default.
+     * @return ($entityClassName is null ? list<TEntity> : list<T>) Array of hydrated objects.
      * @throws RepositoryException
      */
     final public function rawFetch(string $sql, array $binds = [], ?string $entityClassName = null): array
@@ -52,7 +60,7 @@ trait RepositoryViewTrait
                 PDO::FETCH_CLASS,
                 $entityClassName ?: $this->state()->entityClassName
             );
-        } catch (\Throwable $th) {
+        } catch (Throwable $th) {
             throw new RepositoryException($th->getMessage(), previous: $th);
         }
     }
@@ -62,8 +70,10 @@ trait RepositoryViewTrait
      *
      * Automatically applies `LIMIT 1`. Calls {@see cleanCache()} after execution.
      *
-     * @param string|null $entityClassName Override entity class for hydration
-     * @return object|null First matching entity, or null
+     * @template T of object
+     *
+     * @param class-string<T>|null $entityClassName Override entity class for hydration.
+     * @return ($entityClassName is null ? TEntity|null : T|null) First matching entity, or `null`.
      * @throws RepositoryException
      */
     final public function find(?string $entityClassName = null): ?object
@@ -80,7 +90,7 @@ trait RepositoryViewTrait
             $resolvedClass = $entityClassName ?: $state->entityClassName;
             $this->cleanCache();
             return $stmt->getStmt()->fetchObject($resolvedClass) ?: null;
-        } catch (\Throwable $th) {
+        } catch (Throwable $th) {
             throw new RepositoryException($th->getMessage(), previous: $th);
         }
     }
@@ -103,7 +113,7 @@ trait RepositoryViewTrait
             $stmt->getStmt()->execute();
             $this->cleanCache();
             return $stmt->getStmt()->fetchColumn($column);
-        } catch (\Throwable $th) {
+        } catch (Throwable $th) {
             throw new RepositoryException($th->getMessage(), previous: $th);
         }
     }
@@ -113,8 +123,10 @@ trait RepositoryViewTrait
      *
      * Calls {@see cleanCache()} after execution.
      *
-     * @param string|null $entityClassName Override entity class for hydration
-     * @return array<object> Array of hydrated objects
+     * @template T of object
+     *
+     * @param class-string<T>|null $entityClassName Override entity class for hydration.
+     * @return ($entityClassName is null ? list<TEntity> : list<T>) Array of hydrated objects.
      * @throws RepositoryException
      */
     final public function findAll(?string $entityClassName = null): array
@@ -131,7 +143,7 @@ trait RepositoryViewTrait
             $resolvedClass = $entityClassName ?: $state->entityClassName;
             $this->cleanCache();
             return $stmt->getStmt()->fetchAll(PDO::FETCH_CLASS, $resolvedClass);
-        } catch (\Throwable $th) {
+        } catch (Throwable $th) {
             throw new RepositoryException($th->getMessage(), previous: $th);
         }
     }
@@ -154,8 +166,8 @@ trait RepositoryViewTrait
             $this->useBind($stmt);
             $stmt->getStmt()->execute();
             $this->cleanCache();
-            return (int) $stmt->getStmt()->fetchColumn(0);
-        } catch (\Throwable $th) {
+            return (int) $stmt->getStmt()->fetchColumn();
+        } catch (Throwable $th) {
             throw new RepositoryException($th->getMessage(), previous: $th);
         }
     }
@@ -179,8 +191,8 @@ trait RepositoryViewTrait
             $this->useBind($stmt);
             $stmt->getStmt()->execute();
             $this->cleanCache();
-            return (bool) $stmt->getStmt()->fetchColumn(0);
-        } catch (\Throwable $th) {
+            return (bool) $stmt->getStmt()->fetchColumn();
+        } catch (Throwable $th) {
             throw new RepositoryException($th->getMessage(), previous: $th);
         }
     }
@@ -190,9 +202,11 @@ trait RepositoryViewTrait
      *
      * Uses {@see mapIdentifierColumnName()} to determine the PK column (default: `'id'`).
      *
-     * @param int|string  $id              Primary key value
-     * @param string|null $entityClassName Override entity class for hydration
-     * @return object|null Matching entity, or null
+     * @template T of object
+     *
+     * @param int|string $id Primary key value.
+     * @param class-string<T>|null $entityClassName Override entity class for hydration.
+     * @return ($entityClassName is null ? TEntity|null : T|null) Matching entity, or `null`.
      * @throws RepositoryException
      */
     final public static function findById(int|string $id, ?string $entityClassName = null): ?object
@@ -206,27 +220,31 @@ trait RepositoryViewTrait
     /**
      * Finds a single record matching the given condition.
      *
-     * @param Qb          $qb              WHERE condition
-     * @param string|null $entityClassName Override entity class for hydration
-     * @return object|null Matching entity, or null
+     * @template T of object
+     *
+     * @param Qb $qb WHERE condition.
+     * @param class-string<T>|null $entityClassName Override entity class for hydration.
+     * @return ($entityClassName is null ? TEntity|null : T|null) Matching entity, or `null`.
      * @throws RepositoryException
      */
     final public static function findBy(Qb $qb, ?string $entityClassName = null): ?object
     {
-        return (new static())->where($qb)->find($entityClassName);
+        return new static()->where($qb)->find($entityClassName);
     }
 
     /**
-     * Finds all records matching the given condition, or all rows when $qb is null.
+     * Finds all records matching the given condition, or all rows when `$qb` is `null`.
      *
-     * @param Qb|null     $qb              WHERE condition, or null to fetch all rows
-     * @param string|null $entityClassName Override entity class for hydration
-     * @return array<object>
+     * @template T of object
+     *
+     * @param Qb|null $qb WHERE condition, or `null` to fetch all rows.
+     * @param class-string<T>|null $entityClassName Override entity class for hydration.
+     * @return ($entityClassName is null ? list<TEntity> : list<T>)
      * @throws RepositoryException
      */
     final public static function findAllBy(?Qb $qb = null, ?string $entityClassName = null): array
     {
-        return (new static())
+        return new static()
             ->where($qb)
             ->findAll($entityClassName);
     }
@@ -234,12 +252,14 @@ trait RepositoryViewTrait
     /**
      * Finds a record by its primary key, or throws if not found.
      *
-     * @param int|string  $id              Primary key value
-     * @param string|null $entityClassName Override entity class for hydration
-     * @param string      $message         Exception message when not found
-     * @param HttpCode    $httpCode        HTTP status code when not found
-     * @return object Matching entity (never null)
-     * @throws EntityException      When the record is not found
+     * @template T of object
+     *
+     * @param int|string $id Primary key value.
+     * @param class-string<T>|null $entityClassName Override entity class for hydration.
+     * @param string $message Exception message when not found.
+     * @param HttpCode $httpCode HTTP status code when not found.
+     * @return ($entityClassName is null ? TEntity : T) Matching entity (never `null`).
+     * @throws EntityException When the record is not found.
      * @throws RepositoryException
      */
     final public static function findByIdOrThrow(
@@ -258,12 +278,14 @@ trait RepositoryViewTrait
     /**
      * Finds a record matching the given condition, or throws if not found.
      *
-     * @param Qb          $qb              WHERE condition
-     * @param string|null $entityClassName Override entity class for hydration
-     * @param string      $message         Exception message when not found
-     * @param HttpCode    $httpCode        HTTP status code when not found
-     * @return object Matching entity (never null)
-     * @throws EntityException      When no record matches the condition
+     * @template T of object
+     *
+     * @param Qb $qb WHERE condition.
+     * @param class-string<T>|null $entityClassName Override entity class for hydration.
+     * @param string $message Exception message when not found.
+     * @param HttpCode $httpCode HTTP status code when not found.
+     * @return ($entityClassName is null ? TEntity : T) Matching entity (never `null`).
+     * @throws EntityException When no record matches the condition.
      * @throws RepositoryException
      */
     final public static function findByOrThrow(
