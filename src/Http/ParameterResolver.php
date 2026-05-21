@@ -25,7 +25,7 @@ use Flytachi\Winter\K2\Http\Request\Annotation\RequestParam;
 use Flytachi\Winter\K2\Http\Request\Annotation\RequestQuery;
 use Flytachi\Winter\K2\Http\Request\Annotation\RequestXml;
 use Flytachi\Winter\K2\Http\Request\RequestException;
-use Flytachi\Winter\K2\Http\Request\Validation\ArrayOf;
+use Flytachi\Winter\K2\Http\Request\Validation\ListOf;
 use Flytachi\Winter\K2\Http\Request\Validation\Constraint;
 use Flytachi\Winter\K2\Http\Request\Validation\Valid;
 use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
@@ -65,7 +65,7 @@ use ValueError;
  *   - Object / DTO params:
  *     Add #[Valid] to trigger #[Constraint] validation after hydration.
  *     Without #[Valid], only structural errors (missing/wrong-type fields) are reported.
- *   - #[ArrayOf] collections cascade constraints when #[Valid] is on the outer param.
+ *   - #[ListOf] collections cascade constraints when #[Valid] is on the outer param.
  *   - Variadic params: #[Valid] validates each element; all errors collected with [i].field keys.
  */
 class ParameterResolver
@@ -523,7 +523,7 @@ class ParameterResolver
     /**
      * Constructs any class from an associative array.
      * Collects all structural errors (missing/wrong-type fields) before throwing.
-     * When $validate=true, also runs #[Constraint] checks on #[ArrayOf] elements
+     * When $validate=true, also runs #[Constraint] checks on #[ListOf] elements
      * in one combined pass — so structural and constraint errors are reported together.
      *
      * @template T of object
@@ -583,8 +583,8 @@ class ParameterResolver
                 continue;
             }
 
-            // #[ArrayOf] typed collection — structural + constraint in one pass when $validate
-            if ($pTypeName === 'array' && ($arrayAttr = $param->getAttributes(ArrayOf::class)[0] ?? null)) {
+            // #[ListOf] typed collection — structural + constraint in one pass when $validate
+            if ($pTypeName === 'array' && ($arrayAttr = $param->getAttributes(ListOf::class)[0] ?? null)) {
                 if (!is_array($val)) {
                     $errors[$key][] = 'must be an array';
                     $args[] = [];
@@ -653,7 +653,7 @@ class ParameterResolver
     /**
      * Runs #[Constraint] checks on all constructor params of the DTO.
      * Cascades into nested objects with #[Valid] on their field, and into
-     * all #[ArrayOf] collections (implicit cascade).
+     * all #[ListOf] collections (implicit cascade).
      */
     private static function runValidation(object $value, string $prefix = ''): void
     {
@@ -672,7 +672,7 @@ class ParameterResolver
                 }
             }
 
-            if (is_array($fieldValue) && ($param->getAttributes(ArrayOf::class)[0] ?? null)) {
+            if (is_array($fieldValue) && ($param->getAttributes(ListOf::class)[0] ?? null)) {
                 foreach ($fieldValue as $i => $item) {
                     if (is_object($item)) {
                         try {

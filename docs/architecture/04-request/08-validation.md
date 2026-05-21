@@ -24,7 +24,7 @@ use Flytachi\Winter\K2\Http\Request\Validation\Valid;
        runValidation()           ← post-hydration pass (only if hydration succeeds)
               │  • re-checks #[Constraint] on each field value of the outer DTO
               │  • cascades into nested objects that have #[Valid] on their field
-              │  • cascades into all #[ArrayOf] collections (implicit)
+              │  • cascades into all #[ListOf] collections (implicit)
               ▼
      ValidationException (422)   ← if any error was collected
 ```

@@ -7,7 +7,7 @@ namespace Flytachi\Winter\K2\Tests\Http\Request;
 use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 use Flytachi\Winter\K2\Http\ParameterResolver;
-use Flytachi\Winter\K2\Http\Request\Validation\ArrayOf;
+use Flytachi\Winter\K2\Http\Request\Validation\ListOf;
 use Flytachi\Winter\K2\Http\Request\Annotation\RequestForm;
 use Flytachi\Winter\K2\Http\Request\Annotation\RequestJson;
 use Flytachi\Winter\K2\Http\Request\Annotation\RequestXml;
@@ -63,14 +63,14 @@ class AO_TagDto
     ) {}
 }
 
-/** Element that itself has an #[ArrayOf] child */
+/** Element that itself has an #[ListOf] child */
 class AO_LineDto
 {
     public function __construct(
         #[NotBlank]
         public readonly string $product,
         #[Size(min: 1)]
-        #[ArrayOf(AO_TagDto::class)]
+        #[ListOf(AO_TagDto::class)]
         public readonly array  $tags,
     ) {}
 }
@@ -82,7 +82,7 @@ class AO_OrderDto
 {
     public function __construct(
         public readonly string $title,
-        #[ArrayOf(AO_ItemDto::class)]
+        #[ListOf(AO_ItemDto::class)]
         public readonly array  $items = [],
     ) {}
 }
@@ -91,17 +91,17 @@ class AO_OrderDto
 class AO_StrictOrderDto
 {
     public function __construct(
-        #[ArrayOf(AO_ItemDto::class)]
+        #[ListOf(AO_ItemDto::class)]
         public readonly array $items,
     ) {}
 }
 
-/** Size + ArrayOf combined */
+/** Size + ListOf combined */
 class AO_BoundedDto
 {
     public function __construct(
         #[Size(min: 1, max: 5)]
-        #[ArrayOf(AO_ItemDto::class)]
+        #[ListOf(AO_ItemDto::class)]
         public readonly array $items,
     ) {}
 }
@@ -111,7 +111,7 @@ class AO_RichOrderDto
 {
     public function __construct(
         public readonly string $ref,
-        #[ArrayOf(AO_RichItemDto::class)]
+        #[ListOf(AO_RichItemDto::class)]
         public readonly array  $lines,
     ) {}
 }
@@ -121,26 +121,26 @@ class AO_DeepOrderDto
 {
     public function __construct(
         public readonly int   $id,
-        #[ArrayOf(AO_LineDto::class)]
+        #[ListOf(AO_LineDto::class)]
         public readonly array $lines,
     ) {}
 }
 
-/** Outer DTO has both a plain field and an ArrayOf — mixed error sourcing */
+/** Outer DTO has both a plain field and an ListOf — mixed error sourcing */
 class AO_InvoiceDto
 {
     public function __construct(
         #[NotBlank]
         public readonly string $number,
         #[Size(min: 1)]
-        #[ArrayOf(AO_ItemDto::class)]
+        #[ListOf(AO_ItemDto::class)]
         public readonly array  $items,
     ) {}
 }
 
 // ── Fixture controller ────────────────────────────────────────────────────────
 
-class ArrayOfFixture
+class ListOfFixture
 {
     public function order(#[RequestJson, Valid] AO_OrderDto $body): void {}
     public function strict(#[RequestJson] AO_StrictOrderDto $body): void {}
@@ -157,7 +157,7 @@ class ArrayOfFixture
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-class ArrayOfTest extends TestCase
+class ListOfTest extends TestCase
 {
     private HttpResponse $response;
 
@@ -194,7 +194,7 @@ class ArrayOfTest extends TestCase
     private function resolveXml(string $method, string $xml): array
     {
         return ParameterResolver::resolve(
-            new ReflectionMethod(ArrayOfFixture::class, $method),
+            new ReflectionMethod(ListOfFixture::class, $method),
             $this->makeXmlRequest($xml),
             $this->response,
             [],
@@ -204,7 +204,7 @@ class ArrayOfTest extends TestCase
     private function resolveForm(string $method, array $data): array
     {
         return ParameterResolver::resolve(
-            new ReflectionMethod(ArrayOfFixture::class, $method),
+            new ReflectionMethod(ListOfFixture::class, $method),
             $this->makeFormRequest($data),
             $this->response,
             [],
@@ -214,7 +214,7 @@ class ArrayOfTest extends TestCase
     private function resolve(string $method, string $raw): array
     {
         return ParameterResolver::resolve(
-            new ReflectionMethod(ArrayOfFixture::class, $method),
+            new ReflectionMethod(ListOfFixture::class, $method),
             $this->makeJsonRequest($raw),
             $this->response,
             [],
@@ -538,7 +538,7 @@ class ArrayOfTest extends TestCase
     public function test_array_of_works_with_request_form(): void
     {
         $req = ParameterResolver::resolve(
-            new ReflectionMethod(ArrayOfFixture::class, 'formOrder'),
+            new ReflectionMethod(ListOfFixture::class, 'formOrder'),
             $this->makeFormRequest([
                 'title' => 'FormOrder',
                 'items' => [

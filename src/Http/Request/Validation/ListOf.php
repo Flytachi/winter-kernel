@@ -17,14 +17,14 @@ use Attribute;
  * class OrderDto
  * {
  *     public function __construct(
- *         #[ArrayOf(ItemDto::class)]
+ *         #[ListOf(ItemDto::class)]
  *         public array $items = [],
  *     ) {}
  * }
  * ```
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-readonly class ArrayOf
+readonly class ListOf
 {
     /** @param string $class Fully-qualified class name of the element DTO. */
     public function __construct(public string $class)
