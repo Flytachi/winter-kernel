@@ -59,7 +59,7 @@ class RequestParamFixture
         #[RequestParam, Positive(message: '{order.id_must_be_positive}')] int $id,
     ): void {}
     public function constrainedNameWithI18nMessage(
-        #[RequestParam, Size(max: 3, message: '{order.name_too_long}')] string $name,
+        #[RequestParam, Size(min: 0, max: 3, message: '{order.name_too_long}')] string $name,
     ): void {}
 }
 

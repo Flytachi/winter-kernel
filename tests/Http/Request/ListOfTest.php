@@ -69,7 +69,7 @@ class AO_LineDto
     public function __construct(
         #[NotBlank]
         public readonly string $product,
-        #[Size(min: 1)]
+        #[Size(min: 1, max: 100)]
         #[ListOf(AO_TagDto::class)]
         public readonly array  $tags,
     ) {}
@@ -132,7 +132,7 @@ class AO_InvoiceDto
     public function __construct(
         #[NotBlank]
         public readonly string $number,
-        #[Size(min: 1)]
+        #[Size(min: 1, max: 100)]
         #[ListOf(AO_ItemDto::class)]
         public readonly array  $items,
     ) {}

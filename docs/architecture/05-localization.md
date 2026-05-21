@@ -172,7 +172,7 @@ Constraint attributes accept a custom `message:` parameter. Wrap a translation k
 
 ```php
 public function __construct(
-    #[Size(3, message: '{order.name_too_long}')]
+    #[Size(min: 0, max: 3, message: '{order.name_too_long}')]
     public string $name,
 ) {}
 ```

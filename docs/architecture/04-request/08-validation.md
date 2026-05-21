@@ -44,7 +44,7 @@ use Flytachi\Winter\K2\Http\Request\Validation\{Valid, Required, NotBlank, Min, 
 class CreateUserDto
 {
     public function __construct(
-        #[Required] #[NotBlank] #[Size(max: 100)]
+        #[Required] #[NotBlank] #[Size(min: 0, max: 100)]
         public readonly string $name,
 
         #[Required] #[Email]
@@ -161,9 +161,11 @@ class SearchDto
 
 | Constraint                     | Description                                         |
 |--------------------------------|-----------------------------------------------------|
-| `#[Size(10)]`                  | Max 10 chars / items (shorthand for max only).      |
-| `#[Size(min: 2, max: 100)]`    | Between 2 and 100 chars / items.                    |
-| `#[Size(min: 1)]`              | At least 1 char / item.                             |
+| `#[Size(10)]`                  | Exactly 10 chars / items.                           |
+| `#[Size(min: 2, max: 100)]`    | Between 2 and 100 chars / items (inclusive).        |
+| `#[Size(min: 0, max: 255)]`    | Up to 255 chars / items.                            |
+
+Two forms only — exact (`Size(N)`) or full range (`Size(min, max)`). There is no min-only / max-only shorthand.
 
 `Size` measures: strings → `mb_strlen`, arrays → `count`, numbers → digit count.
 
@@ -246,7 +248,7 @@ public readonly ?int $qty
 Stack multiple attributes — all are checked, all failures reported:
 
 ```php
-#[Required] #[NotBlank] #[Size(max: 255)] #[Regex('/^[a-z]+$/')]
+#[Required] #[NotBlank] #[Size(min: 0, max: 255)] #[Regex('/^[a-z]+$/')]
 public readonly string $slug
 ```
 
@@ -258,7 +260,7 @@ Every constraint accepts an optional named `message:` parameter that overrides t
 
 ```php
 public function __construct(
-    #[Size(3, message: 'Name is too long')]
+    #[Size(min: 0, max: 3, message: 'Name is too long')]
     public readonly string $name,
 
     #[Min(0, message: 'Quantity cannot be negative')]
@@ -276,7 +278,7 @@ The string is returned verbatim in the `errors` map exactly as written.
 Wrap a translation key in `{...}` to resolve it through [`Locale::t()`](../05-localization.md):
 
 ```php
-#[Size(3, message: '{order.name_too_long}')]
+#[Size(min: 0, max: 3, message: '{order.name_too_long}')]
 public readonly string $name,
 ```
 

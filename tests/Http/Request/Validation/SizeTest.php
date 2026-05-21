@@ -16,41 +16,16 @@ class SizeTest extends TestCase
         self::assertNull((new Size(10))->validate(null, 'field'));
     }
 
-    // ── string ───────────────────────────────────────────────────────────────
+    // ── string (exact) ───────────────────────────────────────────────────────
 
-    public function testStringWithinMaxPasses(): void
-    {
-        self::assertNull((new Size(10))->validate('hello', 'field'));
-    }
-
-    public function testStringAtMaxPasses(): void
+    public function testStringExactMatchPasses(): void
     {
         self::assertNull((new Size(5))->validate('hello', 'field'));
     }
 
-    public function testStringExceedsMaxFails(): void
+    public function testStringExactMismatchFails(): void
     {
-        self::assertSame('must not exceed 3', (new Size(3))->validate('hello', 'field'));
-    }
-
-    public function testStringWithMinAndMaxInRangePasses(): void
-    {
-        self::assertNull((new Size(max: 10, min: 2))->validate('hello', 'field'));
-    }
-
-    public function testStringBelowMinFails(): void
-    {
-        self::assertSame('size must be between 5 and 10', (new Size(max: 10, min: 5))->validate('hi', 'field'));
-    }
-
-    public function testStringOnlyMinPasses(): void
-    {
-        self::assertNull((new Size(min: 3))->validate('hello', 'field'));
-    }
-
-    public function testStringOnlyMinFails(): void
-    {
-        self::assertSame('must be at least 5', (new Size(min: 5))->validate('hi', 'field'));
+        self::assertSame('must be exactly 3', (new Size(3))->validate('hello', 'field'));
     }
 
     public function testUnicodeStringLength(): void
@@ -58,26 +33,52 @@ class SizeTest extends TestCase
         self::assertNull((new Size(3))->validate('日本語', 'field')); // 3 chars
     }
 
-    // ── array ─────────────────────────────────────────────────────────────────
+    // ── string (range) ───────────────────────────────────────────────────────
 
-    public function testArrayWithinMaxPasses(): void
+    public function testStringInRangePasses(): void
     {
-        self::assertNull((new Size(5))->validate([1, 2, 3], 'field'));
+        self::assertNull((new Size(min: 2, max: 10))->validate('hello', 'field'));
     }
 
-    public function testArrayExceedsMaxFails(): void
+    public function testStringBelowRangeFails(): void
     {
-        self::assertSame('must not exceed 2', (new Size(2))->validate([1, 2, 3], 'field'));
+        self::assertSame(
+            'size must be between 5 and 10',
+            (new Size(min: 5, max: 10))->validate('hi', 'field'),
+        );
+    }
+
+    public function testStringAboveRangeFails(): void
+    {
+        self::assertSame(
+            'size must be between 1 and 3',
+            (new Size(min: 1, max: 3))->validate('hello', 'field'),
+        );
+    }
+
+    // ── array ─────────────────────────────────────────────────────────────────
+
+    public function testArrayExactPasses(): void
+    {
+        self::assertNull((new Size(3))->validate([1, 2, 3], 'field'));
+    }
+
+    public function testArrayExactFails(): void
+    {
+        self::assertSame('must be exactly 2', (new Size(2))->validate([1, 2, 3], 'field'));
     }
 
     public function testArrayInRangePasses(): void
     {
-        self::assertNull((new Size(max: 5, min: 1))->validate([1, 2], 'field'));
+        self::assertNull((new Size(min: 1, max: 5))->validate([1, 2], 'field'));
     }
 
     public function testEmptyArrayBelowMinFails(): void
     {
-        self::assertSame('size must be between 1 and 5', (new Size(max: 5, min: 1))->validate([], 'field'));
+        self::assertSame(
+            'size must be between 1 and 5',
+            (new Size(min: 1, max: 5))->validate([], 'field'),
+        );
     }
 
     // ── number (digit count) ──────────────────────────────────────────────────
@@ -89,7 +90,7 @@ class SizeTest extends TestCase
 
     public function testIntDigitCountFails(): void
     {
-        self::assertSame('must not exceed 2', (new Size(2))->validate(100, 'field')); // "100" → 3
+        self::assertSame('must be exactly 2', (new Size(2))->validate(100, 'field')); // "100" → 3
     }
 
     public function testSingleDigitPasses(): void
@@ -104,7 +105,7 @@ class SizeTest extends TestCase
         }
         // BcMath\Number("100") → "100" → length 3
         self::assertNull((new Size(3))->validate(new \BcMath\Number('100'), 'field'));
-        self::assertSame('must not exceed 2', (new Size(2))->validate(new \BcMath\Number('100'), 'field'));
+        self::assertSame('must be exactly 2', (new Size(2))->validate(new \BcMath\Number('100'), 'field'));
     }
 
     // ── unsupported types skipped ─────────────────────────────────────────────
@@ -120,14 +121,14 @@ class SizeTest extends TestCase
     {
         self::assertSame(
             'too long',
-            (new Size(3, message: 'too long'))->validate('hello', 'field')
+            (new Size(3, message: 'too long'))->validate('hello', 'field'),
         );
     }
 
     public function testCustomMessagePassesThroughOnSuccess(): void
     {
         self::assertNull(
-            (new Size(10, message: 'too long'))->validate('hello', 'field')
+            (new Size(5, message: 'too long'))->validate('hello', 'field'),
         );
     }
 
@@ -137,7 +138,7 @@ class SizeTest extends TestCase
         // happens later in ParameterResolver, not here.
         self::assertSame(
             '{order.name_too_long}',
-            (new Size(3, message: '{order.name_too_long}'))->validate('hello', 'field')
+            (new Size(3, message: '{order.name_too_long}'))->validate('hello', 'field'),
         );
     }
 }

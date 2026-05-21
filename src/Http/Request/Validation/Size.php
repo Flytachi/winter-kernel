@@ -16,25 +16,24 @@ use Attribute;
  *
  * null is skipped — combine with #[Required] if null must be rejected.
  *
- * Constructor (first positional = max for the common "up to N" shorthand):
+ * Two modes only — exact or range:
  * ```
- *   #[Size(10)]              // max=10, min=0  — up to 10
- *   #[Size(min: 2)]          // min=2, max=∞   — at least 2
- *   #[Size(min: 2, max: 255)] // range 2..255
- *   #[Size(3, message: 'Имя не длиннее 3 символов')] // custom error text
+ *   #[Size(3)]      // exact 3
+ *   #[Size(2, 255)] // range 2..255 (inclusive)
+ *   #[Size(3, message: 'Имя должно быть длиной 3 символа')] // custom error text
  * ```
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 readonly class Size implements Constraint
 {
     /**
-     * @param int $max Upper bound (inclusive). First positional arg — #[Size(10)] means max=10.
-     * @param int $min Lower bound (inclusive). Defaults to 0 (no lower bound).
+     * @param int $min Required. Lower bound (inclusive). When `$max` is omitted, also acts as the exact required size.
+     * @param int $max Upper bound (inclusive). Defaults to 0, which means "use `$min`" (exact mode).
      * @param string|null $message Custom error message that overrides the default one.
      */
     public function __construct(
-        public int $max = PHP_INT_MAX,
-        public int $min = 0,
+        public int $min,
+        public int $max = 0,
         public ?string $message = null,
     ) {
     }
@@ -57,19 +56,18 @@ readonly class Size implements Constraint
             return null;
         }
 
-        if ($size >= $this->min && $size <= $this->max) {
+        $max = $this->max === 0 ? $this->min : $this->max;
+
+        if ($size >= $this->min && $size <= $max) {
             return null;
         }
 
         if ($this->message !== null) {
             return $this->message;
         }
-        if ($this->min === 0) {
-            return "must not exceed {$this->max}";
+        if ($this->min === $max) {
+            return "must be exactly {$this->min}";
         }
-        if ($this->max === PHP_INT_MAX) {
-            return "must be at least {$this->min}";
-        }
-        return "size must be between {$this->min} and {$this->max}";
+        return "size must be between {$this->min} and {$max}";
     }
 }
