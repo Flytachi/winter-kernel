@@ -42,20 +42,18 @@ final class Paginator
      * ```
      *
      * @template TEntity of object
-     * @template TItem
      *
      * @param RepositoryViewInterface<TEntity> $repo Source repository with `WHERE / ORDER BY / ...` already applied.
      * @param int $size Page size. Must be `>= 1`.
      * @param int $offset Offset from the start of the result set. Defaults to `0` (first page).
-     * @param (callable(TEntity): TItem)|null $mapper Optional per-item transformer (array_map-style).
-     *                                                Applied to the fetched rows before result assembly.
-     * @param class-string<TEntity>|null $entityClassName Class for row hydration
-     *                                                    (forwarded to {@see RepositoryViewInterface::findAll()}).
-     *                                                    When `null`, falls back to the repository's configured entity class.
-     * @return ($mapper is null
-     *     ? PaginationResult<PaginationMeta, TEntity>
-     *     : PaginationResult<PaginationMeta, TItem>
-     * )
+     * @param callable|null $mapper Optional per-item transformer (array_map-style).
+     *                              Applied to the fetched rows before result assembly.
+     *                              Signature: `fn (TEntity $item): mixed`. When provided,
+     *                              cast the resulting `$data` to your mapper's return type.
+     * @param class-string|null $entityClassName Class for row hydration
+     *                                           (forwarded to {@see RepositoryViewInterface::findAll()}).
+     *                                           When `null`, falls back to the repository's configured entity class.
+     * @return PaginationResult<PaginationMeta, TEntity> Container with {@see PaginationMeta} and page data.
      * @throws ValueError When `$size < 1`.
      */
     public static function repo(
@@ -98,18 +96,16 @@ final class Paginator
      * );
      * ```
      *
-     * @template TIn
      * @template TItem
      *
-     * @param array<TIn> $items Full collection to paginate over.
+     * @param array<TItem> $items Full collection to paginate over.
      * @param int $size Page size. Must be `>= 1`.
      * @param int $offset Offset from the start of the array. Defaults to `0`.
-     * @param (callable(TIn): TItem)|null $mapper Optional per-item transformer (array_map-style).
-     *                                            Applied to the sliced page only, not to the full input.
-     * @return ($mapper is null
-     *     ? PaginationResult<PaginationMeta, TIn>
-     *     : PaginationResult<PaginationMeta, TItem>
-     * )
+     * @param callable|null $mapper Optional per-item transformer (array_map-style).
+     *                              Applied to the sliced page only, not to the full input.
+     *                              Signature: `fn (TItem $item): mixed`. When provided,
+     *                              cast the resulting `$data` to your mapper's return type.
+     * @return PaginationResult<PaginationMeta, TItem> Container with {@see PaginationMeta} and the sliced page data.
      * @throws ValueError When `$size < 1`.
      */
     public static function array(
