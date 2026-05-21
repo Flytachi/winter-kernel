@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Tests\Ppa\Repository;
 
+use Dotenv\Parser\Value;
 use Flytachi\Winter\K2\Tests\Ppa\Repository\Fixtures\UsersRepo;
 use PHPUnit\Framework\TestCase;
 use TypeError;
+use ValueError;
 
 final class GroupOrderLimitTest extends TestCase
 {
@@ -72,15 +74,15 @@ final class GroupOrderLimitTest extends TestCase
 
     public function test_zero_limit_throws(): void
     {
-        $this->expectException(TypeError::class);
-        $this->expectExceptionMessage('limit < 1');
+        $this->expectException(ValueError::class);
+        $this->expectExceptionMessage("LIMIT must be a positive integer (>= 1), got: 0.");
         UsersRepo::instance()->limit(0);
     }
 
     public function test_negative_offset_throws(): void
     {
-        $this->expectException(TypeError::class);
-        $this->expectExceptionMessage('offset < 0');
+        $this->expectException(ValueError::class);
+        $this->expectExceptionMessage("OFFSET must be a non-negative integer (>= 0), got: -1.");
         UsersRepo::instance()->limit(10, -1);
     }
 

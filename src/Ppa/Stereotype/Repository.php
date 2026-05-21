@@ -27,6 +27,7 @@ use Flytachi\Winter\K2\Ppa\Repository\RepositoryViewTrait;
  * {@see RepositoryCore::$entityClassName}, {@see RepositoryCore::$table}.
  *
  * @template TEntity of object
+ * @extends RepositoryCore<TEntity>
  * @implements RepositoryViewInterface<TEntity>
  * @use RepositoryViewTrait<TEntity>
  * @see RepositoryView For read-only access.

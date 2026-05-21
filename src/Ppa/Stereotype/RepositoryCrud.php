@@ -25,6 +25,13 @@ use Flytachi\Winter\K2\Ppa\Repository\RepositoryCrudTrait;
  * }
  * ```
  *
+ * `TEntity` is rarely meaningful for write-only repositories (no finder methods),
+ * but the binding is preserved for symmetry with {@see Repository} and to satisfy
+ * the generic parent {@see RepositoryCore}. Subclasses may omit the `@extends` tag
+ * and `TEntity` falls back to {@see \stdClass}.
+ *
+ * @template TEntity of object
+ * @extends RepositoryCore<TEntity>
  * @see Repository      For full CRUD + View access
  * @see RepositoryView  For read-only access
  */

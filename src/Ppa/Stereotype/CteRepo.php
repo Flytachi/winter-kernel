@@ -27,6 +27,7 @@ use stdClass;
  * $raw = $repo->from('reports r')->findAll();  // list<\stdClass>
  * ```
  *
+ * @extends RepositoryCore<stdClass>
  * @implements RepositoryViewInterface<stdClass>
  * @use RepositoryViewTrait<stdClass>
  * @see RepositoryView For abstract repository classes with a fixed table.

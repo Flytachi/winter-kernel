@@ -35,7 +35,8 @@ final readonly class PaginationMeta implements JsonSerializable
         public int $offset,
         public int $size,
         public int $total,
-    ) {}
+    ) {
+    }
 
     public function jsonSerialize(): array
     {

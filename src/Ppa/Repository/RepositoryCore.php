@@ -47,6 +47,12 @@ use ValueError;
  *     ->findAll();
  * ```
  *
+ * `TEntity` is the entity class declared by a concrete repository via
+ * {@see $entityClassName}. Subclasses bind it through an `@extends` PHPDoc tag
+ * pinning the template parameter — see {@see \Flytachi\Winter\K2\Ppa\Stereotype\Repository}
+ * for details. When unbound, `TEntity` defaults to {@see stdClass}.
+ *
+ * @template TEntity of object
  * @see RepositoryCrudTrait  for INSERT / UPDATE / DELETE / UPSERT operations
  * @see RepositoryViewTrait  for SELECT / find / count / exists operations
  */
@@ -54,7 +60,7 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
 {
     /** @var class-string $dbConfigClassName dbConfig class name (default => DbConfig::class) */
     protected string $dbConfigClassName;
-    /** @var class-string $entityClassName object class name (default => \stdClass::class) */
+    /** @var class-string<TEntity> $entityClassName object class name (default => \stdClass::class) */
     protected string $entityClassName = stdClass::class;
     /** @var string|null $schema schema in database */
     protected ?string $schema = null;
@@ -143,7 +149,7 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
     /**
      * Returns the entity class name used for hydrating query results.
      *
-     * @return class-string
+     * @return class-string<TEntity>
      */
     final public function getEntityClassName(): string
     {

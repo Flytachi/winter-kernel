@@ -37,7 +37,8 @@ final readonly class PaginationResult implements JsonSerializable
     public function __construct(
         public PaginationMeta|PaginationMetaCursor $meta,
         public array $data,
-    ) {}
+    ) {
+    }
 
     public function jsonSerialize(): array
     {

@@ -42,26 +42,29 @@ final class Paginator
      * ```
      *
      * @template TEntity of object
+     * @template TOverride of object
      *
      * @param RepositoryViewInterface<TEntity> $repo Source repository with `WHERE / ORDER BY / ...` already applied.
      * @param int $size Page size. Must be `>= 1`.
      * @param int $offset Offset from the start of the result set. Defaults to `0` (first page).
+     * @param class-string<TOverride>|null $entityClassName Class for row hydration; forwarded to
+     *                                                      {@see RepositoryViewInterface::findAll()}.
+     *                                                      `null` falls back to the repo's default entity.
      * @param callable|null $mapper Optional per-item transformer (array_map-style).
      *                              Applied to the fetched rows before result assembly.
      *                              Signature: `fn (TEntity $item): mixed`. When provided,
      *                              cast the resulting `$data` to your mapper's return type.
-     * @param class-string|null $entityClassName Class for row hydration
-     *                                           (forwarded to {@see RepositoryViewInterface::findAll()}).
-     *                                           When `null`, falls back to the repository's configured entity class.
-     * @return PaginationResult<PaginationMeta, TEntity> Container with {@see PaginationMeta} and page data.
+     * @return ($entityClassName is null
+     *             ? PaginationResult<PaginationMeta, TEntity>
+     *             : PaginationResult<PaginationMeta, TOverride>) Container with {@see PaginationMeta} and page data.
      * @throws ValueError When `$size < 1`.
      */
     public static function repo(
         RepositoryViewInterface $repo,
         int $size,
         int $offset = 0,
-        ?callable $mapper = null,
         ?string $entityClassName = null,
+        ?callable $mapper = null,
     ): PaginationResult {
         if ($size <= 0) {
             throw new ValueError("Size must be a positive integer (>= 1), got: $size.");
@@ -130,14 +133,19 @@ final class Paginator
      * Стратегия 2.0: Двунаправленная Enterprise пагинация по курсорам (Стиль Before/After).
      * Одинаково реактивно работает как на Swoole, так и на стандартном PHP-FPM.
      *
-     * @param RepositoryInterface $repo
-     * @param int                 $size           Количество запрашиваемых элементов.
-     * @param string|null         $cursorAfter    Курсор (after_cursor) для движения вперед (в будущее / вниз по списку).
-     * @param string|null         $cursorBefore   Курсор (before_cursor) для движения назад (в прошлое / вверх по списку).
-     * @param string|null         $entityClassName Имя модели для гидрации.
+     * @template TEntity of object
+     * @template TOverride of object
+     * @param RepositoryViewInterface<TEntity> $repo Source repository with `WHERE / ORDER BY / ...` already applied.
+     * @param int $size Количество запрашиваемых элементов.
+     * @param string|null $cursorAfter Курсор (after_cursor) для движения вперед (в будущее / вниз по списку).
+     * @param string|null $cursorBefore Курсор (before_cursor) для движения назад (в прошлое / вверх по списку).
+     * @param class-string<TOverride>|null $entityClassName Имя модели для гидрации.
+     * @return ($entityClassName is null
+     *             ? PaginationResult<PaginationMetaCursor, TEntity>
+     *             : PaginationResult<PaginationMetaCursor, TOverride>)
      */
     final public static function cursor(
-        RepositoryInterface $repo,
+        RepositoryViewInterface $repo,
         int $size,
         ?string $cursorAfter = null,
         ?string $cursorBefore = null,

@@ -46,7 +46,8 @@ final readonly class PaginationMetaCursor implements JsonSerializable
         public ?string $afterCursor,
         public bool $hasNextPage,
         public bool $hasPrevPage,
-    ) {}
+    ) {
+    }
 
     public function jsonSerialize(): array
     {

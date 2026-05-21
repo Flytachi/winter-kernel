@@ -25,8 +25,9 @@ use Flytachi\Winter\K2\Ppa\Stereotype\Repository;
  * PHPDoc tag pinning the template parameter — see {@see Repository} for details.
  *
  * Finder methods (`find`, `findAll`, `findById`, ...) accept an optional
- * `$entityClassName` override. When provided, the return type is the override
- * class; when omitted, the return type falls back to `TEntity`.
+ * `$entityClassName` override. The return type is inferred via a conditional:
+ * when omitted, the return falls back to `TEntity`; when provided, it is the
+ * `TOverride` class declared via a method-level `@template`.
  *
  * @template TEntity of object
  */
@@ -35,12 +36,12 @@ interface RepositoryViewInterface extends RepositoryInterface
     /**
      * Executes a raw SQL query with explicit binds and returns hydrated objects.
      *
+     * @template TOverride of object
      * @param string $sql Raw SQL string with named placeholders.
      * @param array $binds Array of {@see \Flytachi\Winter\Cdo\CDOBind} objects.
-     * @param class-string|null $entityClassName Override entity class for hydration;
-     *                                           `null` uses the repository default.
-     * @return list<TEntity> Array of hydrated objects.
-     *                       When `$entityClassName` overrides the default, cast the result.
+     * @param class-string<TOverride>|null $entityClassName Override entity class for hydration;
+     *                                                      `null` uses the repository default.
+     * @return ($entityClassName is null ? list<TEntity> : list<TOverride>) Array of hydrated objects.
      * @throws RepositoryException
      */
     public function rawFetch(string $sql, array $binds = [], ?string $entityClassName = null): array;
@@ -50,9 +51,9 @@ interface RepositoryViewInterface extends RepositoryInterface
      *
      * Automatically applies `LIMIT 1`.
      *
-     * @param class-string|null $entityClassName Override entity class for hydration.
-     * @return TEntity|null First matching entity, or `null`.
-     *                      When `$entityClassName` overrides the default, cast the result.
+     * @template TOverride of object
+     * @param class-string<TOverride>|null $entityClassName Override entity class for hydration.
+     * @return ($entityClassName is null ? TEntity|null : TOverride|null) First matching entity, or `null`.
      * @throws RepositoryException
      */
     public function find(?string $entityClassName = null): ?object;
@@ -71,9 +72,9 @@ interface RepositoryViewInterface extends RepositoryInterface
     /**
      * Executes the built query and returns all matching rows.
      *
-     * @param class-string|null $entityClassName Override entity class for hydration.
-     * @return list<TEntity> Array of hydrated objects.
-     *                       When `$entityClassName` overrides the default, cast the result.
+     * @template TOverride of object
+     * @param class-string<TOverride>|null $entityClassName Override entity class for hydration.
+     * @return ($entityClassName is null ? list<TEntity> : list<TOverride>) Array of hydrated objects.
      * @throws RepositoryException
      */
     public function findAll(?string $entityClassName = null): array;
@@ -101,10 +102,10 @@ interface RepositoryViewInterface extends RepositoryInterface
     /**
      * Finds a single record by its primary key.
      *
+     * @template TOverride of object
      * @param int|string $id Primary key value.
-     * @param class-string|null $entityClassName Override entity class for hydration.
-     * @return TEntity|null Matching entity, or `null`.
-     *                      When `$entityClassName` overrides the default, cast the result.
+     * @param class-string<TOverride>|null $entityClassName Override entity class for hydration.
+     * @return ($entityClassName is null ? TEntity|null : TOverride|null) Matching entity, or `null`.
      * @throws RepositoryException
      */
     public static function findById(int|string $id, ?string $entityClassName = null): ?object;
@@ -112,10 +113,10 @@ interface RepositoryViewInterface extends RepositoryInterface
     /**
      * Finds a single record matching the given condition.
      *
+     * @template TOverride of object
      * @param Qb $qb WHERE condition.
-     * @param class-string|null $entityClassName Override entity class for hydration.
-     * @return TEntity|null Matching entity, or `null`.
-     *                      When `$entityClassName` overrides the default, cast the result.
+     * @param class-string<TOverride>|null $entityClassName Override entity class for hydration.
+     * @return ($entityClassName is null ? TEntity|null : TOverride|null) Matching entity, or `null`.
      * @throws RepositoryException
      */
     public static function findBy(Qb $qb, ?string $entityClassName = null): ?object;
@@ -123,10 +124,10 @@ interface RepositoryViewInterface extends RepositoryInterface
     /**
      * Finds all records matching the given condition, or all rows when `$qb` is `null`.
      *
+     * @template TOverride of object
      * @param Qb|null $qb WHERE condition, or `null` to fetch all.
-     * @param class-string|null $entityClassName Override entity class for hydration.
-     * @return list<TEntity> Matching entities.
-     *                       When `$entityClassName` overrides the default, cast the result.
+     * @param class-string<TOverride>|null $entityClassName Override entity class for hydration.
+     * @return ($entityClassName is null ? list<TEntity> : list<TOverride>) Matching entities.
      * @throws RepositoryException
      */
     public static function findAllBy(?Qb $qb = null, ?string $entityClassName = null): array;
@@ -134,12 +135,12 @@ interface RepositoryViewInterface extends RepositoryInterface
     /**
      * Finds a record by its primary key, or throws if not found.
      *
+     * @template TOverride of object
      * @param int|string $id Primary key value.
-     * @param class-string|null $entityClassName Override entity class for hydration.
+     * @param class-string<TOverride>|null $entityClassName Override entity class for hydration.
      * @param string $message Exception message on not-found.
      * @param HttpCode $httpCode HTTP status code on not-found.
-     * @return TEntity Matching entity (never `null`).
-     *                 When `$entityClassName` overrides the default, cast the result.
+     * @return ($entityClassName is null ? TEntity : TOverride) Matching entity (never `null`).
      * @throws EntityException When the record is not found.
      * @throws RepositoryException
      */
@@ -153,12 +154,12 @@ interface RepositoryViewInterface extends RepositoryInterface
     /**
      * Finds a record matching the given condition, or throws if not found.
      *
+     * @template TOverride of object
      * @param Qb $qb WHERE condition.
-     * @param class-string|null $entityClassName Override entity class for hydration.
+     * @param class-string<TOverride>|null $entityClassName Override entity class for hydration.
      * @param string $message Exception message on not-found.
      * @param HttpCode $httpCode HTTP status code on not-found.
-     * @return TEntity Matching entity (never `null`).
-     *                 When `$entityClassName` overrides the default, cast the result.
+     * @return ($entityClassName is null ? TEntity : TOverride) Matching entity (never `null`).
      * @throws EntityException When no record matches the condition.
      * @throws RepositoryException
      */
