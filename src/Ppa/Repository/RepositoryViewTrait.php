@@ -77,15 +77,11 @@ trait RepositoryViewTrait
     final public function find(?string $entityClassName = null): ?object
     {
         try {
-            $state = $this->state();
-            if ($entityClassName) {
-                $state->entityClassName = $entityClassName;
-            }
             $this->limit(1);
+            $resolvedClass = $entityClassName ?: $this->getEntityClassName();
             $stmt = new CDOStatement($this->db()->prepare($this->buildSql()));
             $this->useBind($stmt);
             $stmt->getStmt()->execute();
-            $resolvedClass = $entityClassName ?: $state->entityClassName;
             $this->cleanCache();
             return $stmt->getStmt()->fetchObject($resolvedClass) ?: null;
         } catch (Throwable $th) {
@@ -129,15 +125,10 @@ trait RepositoryViewTrait
     final public function findAll(?string $entityClassName = null): array
     {
         try {
-            $state = $this->state();
-            if ($entityClassName) {
-                $state->entityClassName = $entityClassName;
-            }
-
+            $resolvedClass = $entityClassName ?: $this->getEntityClassName();
             $stmt = new CDOStatement($this->db()->prepare($this->buildSql()));
             $this->useBind($stmt);
             $stmt->getStmt()->execute();
-            $resolvedClass = $entityClassName ?: $state->entityClassName;
             $this->cleanCache();
             return $stmt->getStmt()->fetchAll(PDO::FETCH_CLASS, $resolvedClass);
         } catch (Throwable $th) {

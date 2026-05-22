@@ -149,11 +149,18 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
     /**
      * Returns the entity class name used for hydrating query results.
      *
-     * @return class-string<TEntity>
+     * When a custom {@see select()} is active, the effective hydration target
+     * is {@see stdClass} regardless of the configured entity — a custom SELECT
+     * returns arbitrary columns that may not match the entity's shape.
+     *
+     * Read-only: the configured `$entityClassName` is never mutated.
+     *
+     * @return class-string<TEntity>|class-string<stdClass>
      */
     final public function getEntityClassName(): string
     {
-        return $this->state()->entityClassName;
+        $state = $this->state();
+        return isset($state->sqlParts['option']) ? stdClass::class : $state->entityClassName;
     }
 
     /**
@@ -188,6 +195,10 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
     // -------------------------------------------------------------------------
 
     /**
+     * Assembles the full SQL query string from accumulated parts.
+     *
+     * @param string[] $ignoreParts SQL part keys to skip during assembly
+     *                              (e.g. `['order', 'limit', 'offset', 'for']`)
      * @throws RepositoryException
      */
     public function buildSql(array $ignoreParts = []): string
@@ -341,28 +352,38 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
         return $this;
     }
 
+    /**
+     * Builds the SELECT-list expression for the current query.
+     *
+     * Resolution order:
+     *  1. Custom `select()` (`sqlParts['option']`) — returned as-is.
+     *  2. `$state->entityClassName` — the repository-configured entity.
+     *
+     * Pure read of state: no mutation. Per-call hydration overrides (e.g.
+     * `find(OtherEntity::class)`) do **not** affect the SELECT list; they
+     * only change the hydration target. To select a different column set,
+     * call {@see select()} explicitly.
+     */
     private function prepareSelect(): string
     {
         $state = $this->state();
         if (isset($state->sqlParts['option'])) {
-            $state->entityClassName = stdClass::class;
             return $state->sqlParts['option'];
-        } elseif ($state->entityClassName === 'stdClass' || is_subclass_of($state->entityClassName, stdClass::class)) {
-            return '*';
-        } else {
-            $prefix = isset($state->sqlParts['as']) ? $state->sqlParts['as'] . '.' : '';
-            $values = [];
-            $selection = [];
-            if (is_subclass_of($state->entityClassName, EntityInterface::class)) {
-                $selection = $state->entityClassName::selection();
-            }
-
-            foreach (get_class_vars($state->entityClassName) as $name => $val) {
-                $values[] = $selection[$name] ?? ($prefix . $name);
-            }
-
-            return implode(', ', $values);
         }
+        $entity = $state->entityClassName;
+        if ($entity === stdClass::class || is_subclass_of($entity, stdClass::class)) {
+            return '*';
+        }
+        $prefix = isset($state->sqlParts['as']) ? $state->sqlParts['as'] . '.' : '';
+        $values = [];
+        $selection = [];
+        if (is_subclass_of($entity, EntityInterface::class)) {
+            $selection = $entity::selection();
+        }
+        foreach (get_class_vars($entity) as $name => $val) {
+            $values[] = $selection[$name] ?? ($prefix . $name);
+        }
+        return implode(', ', $values);
     }
 
     // -------------------------------------------------------------------------

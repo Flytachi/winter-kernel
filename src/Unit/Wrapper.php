@@ -4,126 +4,81 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Unit;
 
-use Flytachi\Winter\Cdo\Connection\CDOStatement;
-use Flytachi\Winter\K2\Ppa\Entity\RepositoryInterface;
-use TypeError;
+use Flytachi\Winter\K2\Ppa\Entity\RepositoryViewInterface;
+use Flytachi\Winter\K2\Unit\Pagination\Paginator;
+use Flytachi\Winter\K2\Unit\Pagination\WrapMeta;
+use Flytachi\Winter\K2\Unit\Pagination\WrapResult;
+use ValueError;
 
 /**
  * Class Wrapper
  *
- * The `Wrapper` class provides a set of utility functions associated with pagination.
+ * Thin wrapper around {@see Paginator} that produces a page-centric response
+ * shape (`current`, `pages`, `previous`, `next`) suited for traditional
+ * numbered-page UIs. New code that does not need page-based navigation should
+ * prefer {@see Paginator::repo()} / {@see Paginator::array()} directly —
+ * they return a typed `PaginationResult` with the offset-centric
+ * `PaginationMeta` and native `JsonSerializable` support.
  *
- * The methods provided by `Wrapper` include:
+ * Stateless. Safe for concurrent calls in Swoole.
  *
- * - `paginator(Repository $repo, ?int $limit = null, int $page = 1, ?string $modelClassName = null): array`:
- * Generates the pagination links for a repository results.
- * - `paginatorDecoration(Repository $repo, ?int $limit = null, int $page = 1, ?string $modelClassName = null): array`:
- * Creates a decoration for the paginator.
- * - `panel(Repository $repo): string`: Builds the pagination panel.
- * - `urlToArray(string $url): array`: Converts the URL query string to an associative array.
- * - `arrayToUrl(array $get): string`: Converts an associative array of parameters to a URL query string.
- *
- * @version 4.0
+ * @version 6.0
  * @author Flytachi
  */
 final class Wrapper
 {
-    private static int $totalPages;
-    private static int $totalItem;
-    private static int $currentPage;
-    private static int $limitPage;
-
     /**
-     * Paginate the results of a repository query.
+     * Paginate a repository query or an in-memory array.
      *
-     * @param array|RepositoryInterface $repo The repository to paginate the results from.
-     * @param int|null $limit The maximum number of items per page. If null,
-     * the repository's default limit will be used.
-     * @param int $page The current page number.
-     * @param string|null $modelClassName The name of the model.
+     * Delegates to {@see Paginator::repo()} (for repositories) or
+     * {@see Paginator::array()} (for arrays), then re-shapes the result into
+     * a typed page-centric {@see WrapResult} with {@see WrapMeta}.
      *
-     * @return array The paginated results as an associative array, with the following keys:
-     * - pagination: An array containing information about the pagination, including:
-     *   - current: The current page number.
-     *   - previous: The previous page number. If there is no previous page, this will be 0.
-     *   - next: The next page number. If there is no next page, this will be 0.
-     *   - perPage: The maximum number of items per page.
-     *   - totalItem: The total number of items.
-     *   - totalPage: The total number of pages.
-     * - list: An array of items fetched from the repository using the specified method.
+     * Meta is page-centric (`current`, `pages`, `previous`, `next`) — that's
+     * the difference from the offset-centric {@see PaginationMeta} which
+     * exposes `{offset, size, total}`. New code without page-numbered UI
+     * requirements should prefer `Paginator` directly.
      *
-     * @throws TypeError If the limit is not set and the repository does not have a default limit.
+     * @template TItem
+     *
+     * @param array<TItem>|RepositoryViewInterface<TItem> $repo Source — repository or in-memory list.
+     * @param int $limit Page size. Must be `>= 1`.
+     * @param int $page 1-based page number. Defaults to `1` (first page).
+     * @param class-string|null $entityClassName Hydration override for repositories
+     *                                           (ignored for array input).
+     * @param callable|null $mapper Optional per-item transformer applied to the
+     *                              fetched page before assembly.
+     *
+     * @return WrapResult<TItem> Typed page-centric response (`JsonSerializable`).
+     *
+     * @throws ValueError When `$limit < 1`.
      */
     final public static function paginator(
-        array|RepositoryInterface $repo,
-        ?int $limit = null,
+        array|RepositoryViewInterface $repo,
+        int $limit,
         int $page = 1,
-        ?string $modelClassName = null
-    ): array {
-        if ($repo instanceof RepositoryInterface) {
-            if (!is_null($limit)) {
-                $repo->limit($limit, $limit * ($page - 1));
-            } else {
-                if (!$repo->getSql('limit')) {
-                    throw new TypeError("Not value 'Limit'!");
-                }
-            }
-            self::init($repo);
-            return [
-                'pagination' => [
-                    'current'   => self::$currentPage,
-                    'previous'  => self::$currentPage - 1,
-                    'next'      => (self::$totalPages > self::$currentPage) ? self::$currentPage + 1 : 0,
-                    'perPage'   => self::$limitPage,
-                    'totalItem' => self::$totalItem,
-                    'totalPage' => self::$totalPages,
-                ],
-                'list' => $repo->findAll($modelClassName) ?: [],
-            ];
-        } else {
-            if (is_null($limit)) {
-                throw new TypeError("Not value 'Limit'!");
-            }
-            $totalItem = count($repo);
-            $totalPage = ceil($totalItem / $limit);
-            $offset    = $limit * ($page - 1);
+        ?string $entityClassName = null,
+        ?callable $mapper = null,
+    ): WrapResult {
+        $offset = $limit * ($page - 1);
 
-            return [
-                'pagination' => [
-                    'current'   => $page,
-                    'previous'  => $page - 1,
-                    'next'      => ($totalPage > $page) ? $page + 1 : 0,
-                    'perPage'   => $limit,
-                    'totalItem' => $totalItem,
-                    'totalPage' => ceil($totalItem / $limit),
-                ],
-                'list' => array_splice($repo, $offset, $limit),
-            ];
-        }
-    }
+        $result = is_array($repo)
+            ? Paginator::array($repo, $limit, $offset, $mapper)
+            : Paginator::repo($repo, $limit, $offset, $entityClassName, $mapper);
 
-    private static function init(RepositoryInterface $repo): void
-    {
-        $sql = $repo->buildSql();
-        $sql = preg_replace('/\s+LIMIT\s+\d+/i', '', $sql);
-        $sql = preg_replace('/\s+OFFSET\s+\d+/i', '', $sql);
-        $sql = preg_replace('/\s+FOR\s+UPDATE/i', '', $sql);
+        $total = $result->meta->total;
+        $pages = $total > 0 ? (int) ceil($total / $limit) : 0;
 
-        $countSql = 'SELECT COUNT(*) FROM (' . $sql . ') AS tmp';
-
-        self::$limitPage   = (int) $repo->getSql('limit');
-        self::$currentPage = (self::$limitPage + $repo->getSql('offset')) / self::$limitPage;
-
-        $stmt = new CDOStatement($repo->db()->prepare($countSql));
-        if ($repo->getSql('binds')) {
-            $method = method_exists($stmt, 'bindTypedValue') ? 'bindTypedValue' : 'bindValue';
-            foreach ($repo->getSql('binds') as $bind) {
-                $stmt->{$method}($bind->getName(), $bind->getValue());
-            }
-        }
-
-        $stmt->getStmt()->execute();
-        self::$totalItem  = (int) $stmt->getStmt()->fetchColumn();
-        self::$totalPages = (int) ceil(self::$totalItem / self::$limitPage);
+        return new WrapResult(
+            meta: new WrapMeta(
+                current: $page,
+                size: $limit,
+                total: $total,
+                pages: $pages,
+                previous: $page > 1 ? $page - 1 : null,
+                next: $pages > $page ? $page + 1 : null,
+            ),
+            data: $result->data,
+        );
     }
 }

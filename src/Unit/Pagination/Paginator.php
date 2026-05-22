@@ -71,13 +71,14 @@ final class Paginator
         }
 
         $repo->limit($size, $offset);
-        $data = $repo->findAll($entityClassName);
+        $total = self::calculateTotal($repo);
+        $data = $repo->findAll($entityClassName) ?: [];
 
         return new PaginationResult(
             meta: new PaginationMeta(
                 offset: $offset,
                 size: $size,
-                total: self::calculateTotal($repo),
+                total: $total,
             ),
             data: $mapper === null ? $data : array_map($mapper, $data),
         );
@@ -133,6 +134,7 @@ final class Paginator
      * Стратегия 2.0: Двунаправленная Enterprise пагинация по курсорам (Стиль Before/After).
      * Одинаково реактивно работает как на Swoole, так и на стандартном PHP-FPM.
      *
+     * @experimental
      * @template TEntity of object
      * @template TOverride of object
      * @param RepositoryViewInterface<TEntity> $repo Source repository with `WHERE / ORDER BY / ...` already applied.
