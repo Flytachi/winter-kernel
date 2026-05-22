@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Unit\Pagination;
 
+use JsonException;
+
 /**
  * Internal helper for encoding / decoding {@see Paginator::cursor()} tokens.
  *
@@ -28,6 +30,7 @@ final class CursorToken
      * @param string $signature Shape signature from {@see CursorKey::signature()}.
      * @param list<mixed> $values Cursor position values, in `CursorKey::flatten()` order.
      * @param CursorDirection $direction Navigation direction this token represents.
+     * @throws JsonException
      */
     public static function encode(string $signature, array $values, CursorDirection $direction): string
     {
@@ -56,7 +59,7 @@ final class CursorToken
 
         try {
             $payload = json_decode($raw, associative: true, flags: JSON_THROW_ON_ERROR);
-        } catch (\JsonException $e) {
+        } catch (JsonException $e) {
             throw new InvalidCursorException('Cursor payload is not valid JSON.', previous: $e);
         }
 

@@ -154,10 +154,10 @@ final readonly class CursorKey
      */
     public function signature(): string
     {
-        $repr = $this->column . '|' . $this->direction->value;
+        $data = $this->column . '|' . $this->direction->value;
         if ($this->tiebreaker !== null) {
-            $repr .= '>' . $this->tiebreaker->signature();
+            $data .= '>' . $this->tiebreaker->signature();
         }
-        return substr(hash('xxh3', $repr), 0, 8);
+        return substr(hash('xxh3', $data), 0, 8);
     }
 }

@@ -87,7 +87,7 @@ final class Paginator
 
         $repo->limit($size, $offset);
         $total = self::calculateTotal($repo);
-        $data = $repo->findAll($entityClassName) ?: [];
+        $data = $repo->findAll($entityClassName);
 
         return new PaginationResult(
             meta: new PaginationMeta(
@@ -150,7 +150,7 @@ final class Paginator
      *
      * Owns the `ORDER BY` clause — the input repository must **not** have
      * `orderBy()` pre-applied (any prior `ORDER BY` is overwritten). Pre-applied
-     * `WHERE / JOIN / GROUP BY` are preserved; the cursor condition is added via
+     * `WHERE / JOIN / GROUP BY` is preserved; the cursor condition is added via
      * `andWhere()`.
      *
      * Cursor tokens are opaque, base64-encoded JSON envelopes carrying the
@@ -208,7 +208,7 @@ final class Paginator
             $repo->andWhere(self::buildCursorWhere($triples, $values, forward: !$backward));
         }
 
-        // Paginator owns ORDER BY — invert direction when navigating backward
+        // Paginator owns ORDER BY — invert direction when navigating backward,
         // so the DB returns the rows immediately adjacent to the cursor (not
         // the extreme N rows on the wrong side).
         $repo->orderBy(self::buildCursorOrderBy($triples, invert: $backward));
@@ -232,7 +232,7 @@ final class Paginator
         //   First page  → null                              encode(last)  if $extra else null
         //   Forward     → encode(first)                     encode(last)  if $extra else null
         //   Backward    → encode(first) if $extra else null encode(last)
-        //   Empty page  → null                              null
+        //   Empty page  → null
 
         $isFirstPage = ($cursor === null);
 
@@ -316,8 +316,8 @@ final class Paginator
      * Computes the prev/next cursor tokens for the current page.
      *
      * Each cursor is `null` when navigation in that direction is unavailable —
-     * boolean presence is encoded by null vs non-null so clients do not need
-     * separate `has*` flags.
+     * boolean presence is encoded by null vs. non-null, so clients do not need
+     * to separate `has*` flags.
      *
      * `cursorPrev` is `null` when:
      *   - the page is empty, OR
