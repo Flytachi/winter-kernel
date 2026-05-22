@@ -7,25 +7,32 @@ namespace Flytachi\Winter\K2\Unit\Pagination;
 use JsonSerializable;
 
 /**
- * Cursor-based pagination metadata (bidirectional before/after).
+ * Cursor-based pagination metadata (bidirectional next/prev).
  *
  * Carried by {@see PaginationResult} when produced by {@see Paginator::cursor()}.
  * Unlike {@see PaginationMeta}, no `total` field — cursor pagination intentionally
  * skips the COUNT query to stay constant-cost regardless of set size.
  *
+ * **Boolean presence is encoded by null** — a cursor field is `null` if and
+ * only if that navigation direction is unavailable. No redundant `hasNext` /
+ * `hasPrev` flags: single source of truth, smaller payload, simpler clients.
+ *
+ * ```js
+ * if (meta.cursorNext) showNextButton(meta.cursorNext);
+ * if (meta.cursorPrev) showPrevButton(meta.cursorPrev);
+ * ```
+ *
  * A cursor is an opaque `base64(json({...}))` snapshot of the position in the
- * ordered set. Clients echo it back via `cursorBefore` / `cursorAfter` arguments
- * to navigate; the encoding format is an implementation detail and must not be
- * parsed by clients.
+ * ordered set, with navigation direction encoded inside the token. Clients
+ * echo a single cursor value back via `?cursor=…` to navigate; the encoding
+ * format is an implementation detail and must not be parsed by clients.
  *
  * JSON shape:
  * ```
  * {
- *   "size": 20,
- *   "has_next_page": true,
- *   "has_previous_page": false,
- *   "before_cursor": null,
- *   "after_cursor": "eyJpZCI6MTIzfQ=="
+ *   "size":       20,
+ *   "cursorPrev": null,
+ *   "cursorNext": "eyJzIjoiYTNmMmIxYzgiLCJ2IjpbMTIzXSwiZCI6ImYifQ=="
  * }
  * ```
  */
@@ -33,30 +40,24 @@ final readonly class PaginationMetaCursor implements JsonSerializable
 {
     /**
      * @param int $size Page size that was requested. `>= 1`.
-     * @param string|null $beforeCursor Cursor for navigating backward (toward the start).
-     *                                  `null` when no earlier page exists.
-     * @param string|null $afterCursor Cursor for navigating forward (toward the end).
-     *                                 `null` when no later page exists.
-     * @param bool $hasNextPage Whether a page exists after the current one.
-     * @param bool $hasPrevPage Whether a page exists before the current one.
+     * @param string|null $cursorPrev Cursor for navigating backward (to the previous page).
+     *                                `null` when there is no previous page (first page or empty result).
+     * @param string|null $cursorNext Cursor for navigating forward (to the next page).
+     *                                `null` when there is no next page (last page or empty result).
      */
     public function __construct(
         public int $size,
-        public ?string $beforeCursor,
-        public ?string $afterCursor,
-        public bool $hasNextPage,
-        public bool $hasPrevPage,
+        public ?string $cursorPrev,
+        public ?string $cursorNext
     ) {
     }
 
     public function jsonSerialize(): array
     {
         return [
-            'size'              => $this->size,
-            'has_next_page'     => $this->hasNextPage,
-            'has_previous_page' => $this->hasPrevPage,
-            'before_cursor'     => $this->beforeCursor,
-            'after_cursor'      => $this->afterCursor,
+            'size'       => $this->size,
+            'cursorPrev' => $this->cursorPrev,
+            'cursorNext' => $this->cursorNext,
         ];
     }
 }

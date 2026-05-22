@@ -144,3 +144,59 @@ $count = $base->count();
   [04-result-types.md](04-result-types.md).
 - For collections already in memory, use [02-array.md](02-array.md) instead
   to avoid the SQL roundtrip.
+
+---
+
+## Full controller example
+
+Typical admin-list endpoint with filter, sort, and pagination — what most
+production code looks like:
+
+```php
+final class ProductListController
+{
+    public function index(Request $req): JsonResponse
+    {
+        $repo = ProductRepository::instance('p')
+            ->select('p.id, p.name, p.price, p.created_at, c.name AS category_name')
+            ->joinLeft(CategoryRepository::instance('c'), 'c.id = p.category_id')
+            ->where(Qb::eq('p.deleted', false));
+
+        // Filters
+        if ($req->query('category')) {
+            $repo->andWhere(Qb::eq('p.category_id', (int) $req->query('category')));
+        }
+        if ($req->query('search')) {
+            $repo->andWhere(Qb::like('p.name', "%{$req->query('search')}%", true));
+        }
+
+        // Sort (any string ORDER BY — offset paginator doesn't care)
+        $repo->orderBy($req->query('sort', 'p.created_at DESC'));
+
+        $page    = max(1, (int) $req->query('page', 1));
+        $size    = min(100, max(1, (int) $req->query('size', 20)));
+
+        $result = Paginator::repo(
+            repo: $repo,
+            size: $size,
+            offset: ($page - 1) * $size,
+            mapper: fn (ProductEntity $p) => ProductResource::from($p),
+        );
+
+        return new JsonResponse($result);
+    }
+}
+```
+
+Response:
+
+```json
+{
+  "meta": { "offset": 40, "size": 20, "total": 156 },
+  "data": [ ... 20 ProductResource ... ]
+}
+```
+
+For numbered-page UIs that want `current/pages/previous/next` in the response,
+prefer [05-wrapper.md](05-wrapper.md) instead — same delegation under the
+hood, friendlier shape for classical pagination widgets.

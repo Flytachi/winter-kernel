@@ -8,8 +8,8 @@ The **Pagination** unit provides three strategies for paginating data:
 - **Offset over array** ({@see Paginator::array()}) — pure in-memory slicing,
   no SQL. For collections already loaded into memory.
 - **Cursor (bidirectional)** ({@see Paginator::cursor()}) — opaque before/after
-  cursors, no `COUNT`. Constant cost regardless of set size, suited for feeds
-  and infinite scroll. _Experimental — see [03-cursor.md](03-cursor.md)._
+  cursors with composite-key support, no `COUNT`. Constant cost regardless of
+  set size, suited for feeds and infinite scroll.
 
 All strategies return a `PaginationResult<TMeta, TData>` — a `JsonSerializable`
 container with `meta` and `data` fields ready to ship as an API payload.
@@ -24,14 +24,22 @@ shape on top of `Paginator`. See [05-wrapper.md](05-wrapper.md).
 
 ```
 Paginator (final, static)                          — offset-centric, modern
-    ├── ::repo(repo, size, offset, entity?, mapper?)   → PaginationResult<PaginationMeta, …>
-    ├── ::array(items, size, offset, mapper?)          → PaginationResult<PaginationMeta, …>
-    └── ::cursor(repo, size, before?, after?, entity?) → PaginationResult<PaginationMetaCursor, …>
+    ├── ::repo(repo, size, offset, entity?, mapper?)         → PaginationResult<PaginationMeta, …>
+    ├── ::array(items, size, offset, mapper?)                → PaginationResult<PaginationMeta, …>
+    └── ::cursor(repo, size, key, cursor?, entity?, mapper?) → PaginationResult<PaginationMetaCursor, …>
+
+Cursor types:
+    ├── CursorKey (readonly)             { column, direction (Sort), tiebreaker? (CursorKey), alias? }
+    │       + static compose(...$keys)   flat composition factory
+    ├── Sort enum                        Asc | Desc
+    ├── CursorDirection enum             Forward ('f') | Backward ('b')  — encoded into the token
+    ├── CursorToken (internal)           encode/decode + signature & direction
+    └── InvalidCursorException           thrown on token mismatch / malformed
 
 Result types:
     ├── PaginationResult<TMeta, TItem>   readonly, JsonSerializable
     ├── PaginationMeta                   { offset, size, total }
-    └── PaginationMetaCursor             { size, beforeCursor, afterCursor, hasNextPage, hasPrevPage }
+    └── PaginationMetaCursor             { size, cursorPrev, cursorNext }   — null = direction unavailable
 
 Wrapper (final, static)                            — page-centric, for numbered-page UIs
     └── ::paginator(repo|array, limit, page?, entity?, mapper?)
@@ -73,10 +81,12 @@ echo json_encode($result);
 $page = Paginator::array($rows, size: 50, offset: 100);
 // $page->meta     → PaginationMeta(offset: 100, size: 50, total: count($rows))
 
-// 3. Cursor-based (experimental — see 03-cursor.md)
+// 3. Cursor-based — single $cursor parameter, direction encoded in token
 $result = Paginator::cursor(
-    PostRepository::instance()->orderBy('id DESC'),
+    PostRepository::instance()->where(Qb::eq('published', true)),  // no orderBy here!
     size: 20,
+    key: new CursorKey('id', Sort::Desc),
+    cursor: $req->query('cursor'),
 );
 ```
 

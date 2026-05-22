@@ -82,3 +82,43 @@ pagination on a freshly-loaded full result set defeats the purpose of `LIMIT`.
 - `total = count($items)` — always reflects the full input, regardless of slicing.
 - Result implements `JsonSerializable` — the meta/data shape is identical to
   `repo()` output. Front-end code that consumes both can use the same parser.
+
+---
+
+## Practical use case — paginating a cached list
+
+```php
+final class TagListController
+{
+    public function index(Request $req): JsonResponse
+    {
+        // Tag catalogue is small and rarely changes — cached for the day.
+        $tags = $this->cache->get(
+            'tags:all',
+            ttl: 3600,
+            loader: fn () => TagRepository::instance()->orderBy('name ASC')->findAll(),
+        );
+
+        $page = max(1, (int) $req->query('page', 1));
+        $size = 50;
+
+        $result = Paginator::array(
+            items: $tags,
+            size: $size,
+            offset: ($page - 1) * $size,
+            mapper: fn (TagEntity $t) => TagResource::from($t),
+        );
+
+        return new JsonResponse($result);
+    }
+}
+```
+
+No SQL roundtrip per request — the full list lives in cache, paginator just
+slices the right window. Compare with `Paginator::repo()` which would issue
+`SELECT ... LIMIT/OFFSET` + `COUNT(*)` every time even for a 200-row table.
+
+Use array pagination when:
+- The full dataset comfortably fits in memory (hundreds, maybe low thousands of rows)
+- The data is cacheable for the request lifecycle or longer
+- The cost of loading once + slicing > cost of two SQL queries per request
