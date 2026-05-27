@@ -28,6 +28,11 @@ trait K1ValidationTrait
      *        'email', 'url', 'uuid', 'ip', 'ipv4', 'ipv6',
      *        'msisdn', 'phone', 'datetime[:format]', 'positive', 'negative'
      *
+     * The `*` wildcard expands over every element of the array/object at that
+     * position, e.g. `staffs.*.id` validates the `id` of each item in `staffs`.
+     * Rules apply per existing element; if the parent collection is missing or
+     * empty, no element-level checks run (validate the parent itself separately).
+     *
      * @param array<callable|string> $rules
      * @param string|null $message Custom error text for any rule failure on this field.
      *                             If wrapped in '{...}' it is resolved through Locale::t()
@@ -38,6 +43,27 @@ trait K1ValidationTrait
         array $rules,
         bool $required = true,
         ?string $message = null,
+    ): static {
+        if (str_contains($field, '*')) {
+            foreach ($this->expandWildcard($field) as $resolvedField) {
+                $this->validateField($resolvedField, $rules, $required, $message);
+            }
+            return $this;
+        }
+
+        return $this->validateField($field, $rules, $required, $message);
+    }
+
+    /**
+     * Validate a single, fully-resolved field path (no wildcards).
+     *
+     * @param array<callable|string> $rules
+     */
+    private function validateField(
+        string $field,
+        array $rules,
+        bool $required,
+        ?string $message,
     ): static {
         $value = $this->get($field);
 
@@ -91,7 +117,16 @@ trait K1ValidationTrait
 
     private function get(string $field): mixed
     {
-        $parts  = explode('.', $field);
+        return $this->getByParts(explode('.', $field));
+    }
+
+    /**
+     * Traverse the request graph following an already-split path.
+     *
+     * @param list<string> $parts An empty list resolves to the request itself.
+     */
+    private function getByParts(array $parts): mixed
+    {
         $target = $this;
 
         foreach ($parts as $part) {
@@ -105,6 +140,45 @@ trait K1ValidationTrait
         }
 
         return $target;
+    }
+
+    /**
+     * Expand a path containing `*` wildcards into the concrete paths that exist
+     * in the request graph, e.g. `staffs.*.id` → `staffs.0.id`, `staffs.1.id`.
+     *
+     * Each `*` fans out over the keys of the array/object at that position;
+     * branches where the parent is missing or not iterable are dropped, so a
+     * missing or empty collection yields zero paths.
+     *
+     * @return list<string> Concrete, wildcard-free field paths.
+     */
+    private function expandWildcard(string $field): array
+    {
+        /** @var list<list<string>> $frontier */
+        $frontier = [[]];
+
+        foreach (explode('.', $field) as $segment) {
+            $next = [];
+            foreach ($frontier as $prefix) {
+                if ($segment !== '*') {
+                    $next[] = [...$prefix, $segment];
+                    continue;
+                }
+
+                $target = $this->getByParts($prefix);
+                $keys   = match (true) {
+                    is_array($target)  => array_keys($target),
+                    is_object($target) => array_keys(get_object_vars($target)),
+                    default            => [],
+                };
+                foreach ($keys as $key) {
+                    $next[] = [...$prefix, (string) $key];
+                }
+            }
+            $frontier = $next;
+        }
+
+        return array_map(static fn(array $parts) => implode('.', $parts), $frontier);
     }
 
     private function applyRule(string $field, mixed $value, string $rule, array $params, ?string $msg): void

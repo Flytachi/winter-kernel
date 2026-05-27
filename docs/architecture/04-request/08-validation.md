@@ -397,4 +397,20 @@ final class CreateUserRequest extends RequestObject
 
 `{user.email_invalid}` is resolved through `Locale::t()` with `:field` set to `'email'` — exactly as in the attribute system.
 
+#### Wildcards (`*`)
+
+A `*` segment in the field path fans the rules out over every element of the
+array/object at that position:
+
+```php
+$this->validate('staffs.*',               ['array'])
+     ->validate('staffs.*.id',            ['number'])
+     ->validate('staffs.*.isResponsible', ['bool'], required: false);
+```
+
+Rules apply **per existing element**, and failures report the resolved path
+(e.g. `staffs.1.id`). If the parent collection is missing or empty, no
+element-level checks run — validate the parent itself with a separate
+`$this->validate('staffs', ['array'])` when its presence is required.
+
 > **Migration tip:** when you move a `RequestObject` to a plain readonly DTO with `#[Constraint]` attributes, you also gain (a) all-errors-at-once reporting, (b) per-rule `message:` overrides, and (c) richer i18n placeholders (`:max`, `:min`, …).

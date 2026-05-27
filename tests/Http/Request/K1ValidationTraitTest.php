@@ -198,6 +198,60 @@ final class K1ValidationTraitTest extends TestCase
         self::assertNull((new K1Fixture())->publicGet('nope'));
     }
 
+    // ── wildcard (*) expansion ───────────────────────────────────────────────
+
+    public function test_wildcard_validates_each_element(): void
+    {
+        $f = new K1Fixture(items: [
+            ['id' => 1, 'isResponsible' => true],
+            ['id' => 2, 'isResponsible' => false],
+        ]);
+        $f->publicValidate('items.*', ['array'])
+          ->publicValidate('items.*.id', ['number'])
+          ->publicValidate('items.*.isResponsible', ['bool'], required: false);
+        $this->expectNotToPerformAssertions();
+    }
+
+    public function test_wildcard_reports_failing_element_with_resolved_path(): void
+    {
+        $f = new K1Fixture(items: [
+            ['id' => 1],
+            ['id' => 'oops'], // second element is not numeric
+        ]);
+        $this->expectException(RequestException::class);
+        $this->expectExceptionMessage("Field 'items.1.id' must be numeric");
+        $f->publicValidate('items.*.id', ['number']);
+    }
+
+    public function test_wildcard_optional_skips_missing_element_key(): void
+    {
+        // No 'isResponsible' on either element → optional rule must not fire
+        $f = new K1Fixture(items: [['id' => 1], ['id' => 2]]);
+        $f->publicValidate('items.*.isResponsible', ['bool'], required: false);
+        $this->expectNotToPerformAssertions();
+    }
+
+    public function test_wildcard_required_missing_element_key_fails(): void
+    {
+        $f = new K1Fixture(items: [['id' => 1], ['name' => 'x']]); // 2nd lacks id
+        $this->expectException(RequestException::class);
+        $this->expectExceptionMessage("Required field 'items.1.id' not found");
+        $f->publicValidate('items.*.id', ['number']);
+    }
+
+    public function test_wildcard_over_missing_collection_is_noop(): void
+    {
+        // 'items' is null → zero elements → nothing validated, even when required
+        (new K1Fixture())->publicValidate('items.*.id', ['number']);
+        $this->expectNotToPerformAssertions();
+    }
+
+    public function test_wildcard_over_empty_collection_is_noop(): void
+    {
+        (new K1Fixture(items: []))->publicValidate('items.*', ['array']);
+        $this->expectNotToPerformAssertions();
+    }
+
     // ── custom message override ─────────────────────────────────────────────
 
     public function test_custom_message_replaces_default(): void
