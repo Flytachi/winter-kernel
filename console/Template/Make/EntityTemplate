@@ -2,8 +2,16 @@
 
 namespace __namespace__;
 
+use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Entity\Table;
+use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Hybrid\Id;
+use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Varchar;
+
+#[Table]
 class __className__
 {
+    #[Id]
     public ?int $id = null;
+
+    #[Varchar(255)]
     public string $field;
 }
