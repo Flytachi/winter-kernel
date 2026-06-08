@@ -180,7 +180,7 @@ class Make extends Cmd
         $code = file_get_contents($info['template']);
         $code = str_replace("__namespace__", $info['namespace'], $code);
         $code = str_replace("__className__", $info['className'], $code);
-        $this->createFile($info['className'], $info['path'], $code, 'model');
+        $this->createFile($info['className'], $info['path'], $code, 'entity');
     }
 
     private function createDto(string $name): void
