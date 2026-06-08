@@ -16,9 +16,12 @@ abstract class Printer
 
     public static function printError(\Throwable $exception): never
     {
-        self::printTitle($exception->getMessage(), 31);
-        self::printSplit($exception->getTraceAsString(), 31);
-        self::printTitle($exception->getMessage(), 31);
+        self::printTitle($exception::class, 31);
+        self::printMessage($exception->getMessage(), 31);
+        if (env('DEBUG', false)) {
+            self::printSplit($exception->getTraceAsString(), 31);
+        }
+        self::printTitle($exception::class, 31);
         die();
     }
 
