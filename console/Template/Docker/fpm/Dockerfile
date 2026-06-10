@@ -80,4 +80,16 @@ RUN chown -R winter:nginx /var/www/html \
 RUN ./call cfg completion -if
 
 EXPOSE 80
-ENTRYPOINT ["runsvdir", "/etc/service"]
+
+# Entrypoint: re-own the volatile store to the runtime user (winter) with an
+# owner-only mode (0700) on every container start — before any service boots.
+# `chown -R` neutralizes root-owned artifacts left by build-time or operator
+# `./call` runs (winter owns the dir → may replace any file inside, ownership of
+# individual files is irrelevant for unlink in a non-sticky dir it owns).
+# 0700 (not 0777) is deliberate: the volatile store holds the DI code cache
+# (di.php is require()d PHP) — a world-writable path in shared /tmp would let any
+# other UID inject code that runs as winter. 0700 locks out every non-winter UID.
+# Path = /tmp/flytachi.winter.volatile.<basename WORKDIR>.
+RUN printf '#!/bin/sh\nVOL=/tmp/flytachi.winter.volatile.html\nmkdir -p "$VOL"\nchown -R winter:winter "$VOL"\nchmod 0700 "$VOL"\nexec runsvdir /etc/service\n' > /entrypoint.sh \
+    && chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
