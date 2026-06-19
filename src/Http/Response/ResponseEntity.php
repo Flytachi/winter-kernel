@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\K2\Http\Response;
 
 use Flytachi\Winter\Base\HttpCode;
+use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 use Flytachi\Winter\K2\Http\Header;
 
@@ -48,17 +49,17 @@ class ResponseEntity implements Sendable
 
     public static function ok(mixed $body = null): static
     {
-        return (new static(HttpCode::OK))->body($body);
+        return new static(HttpCode::OK)->body($body);
     }
 
     public static function created(mixed $body = null): static
     {
-        return (new static(HttpCode::CREATED))->body($body);
+        return new static(HttpCode::CREATED)->body($body);
     }
 
     public static function accepted(mixed $body = null): static
     {
-        return (new static(HttpCode::ACCEPTED))->body($body);
+        return new static(HttpCode::ACCEPTED)->body($body);
     }
 
     public static function noContent(): static
@@ -68,37 +69,37 @@ class ResponseEntity implements Sendable
 
     public static function badRequest(mixed $body = null): static
     {
-        return (new static(HttpCode::BAD_REQUEST))->body($body);
+        return new static(HttpCode::BAD_REQUEST)->body($body);
     }
 
     public static function unauthorized(mixed $body = null): static
     {
-        return (new static(HttpCode::UNAUTHORIZED))->body($body);
+        return new static(HttpCode::UNAUTHORIZED)->body($body);
     }
 
     public static function forbidden(mixed $body = null): static
     {
-        return (new static(HttpCode::FORBIDDEN))->body($body);
+        return new static(HttpCode::FORBIDDEN)->body($body);
     }
 
     public static function notFound(mixed $body = null): static
     {
-        return (new static(HttpCode::NOT_FOUND))->body($body);
+        return new static(HttpCode::NOT_FOUND)->body($body);
     }
 
     public static function conflict(mixed $body = null): static
     {
-        return (new static(HttpCode::CONFLICT))->body($body);
+        return new static(HttpCode::CONFLICT)->body($body);
     }
 
     public static function unprocessable(mixed $body = null): static
     {
-        return (new static(HttpCode::UNPROCESSABLE_ENTITY))->body($body);
+        return new static(HttpCode::UNPROCESSABLE_ENTITY)->body($body);
     }
 
     public static function internalError(mixed $body = null): static
     {
-        return (new static(HttpCode::INTERNAL_SERVER_ERROR))->body($body);
+        return new static(HttpCode::INTERNAL_SERVER_ERROR)->body($body);
     }
 
     // ── Builder ───────────────────────────────────────────────────────────────
@@ -137,7 +138,7 @@ class ResponseEntity implements Sendable
      * For structured data (array/object) respects the Accept header.
      * For scalar values always sends text/plain.
      */
-    public function send(HttpResponse $response): void
+    public function send(HttpResponse $response, HttpRequest $request): void
     {
         $response->status($this->code->value);
 

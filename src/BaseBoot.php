@@ -360,7 +360,8 @@ abstract class BaseBoot
      */
     final public static function web(): never
     {
-        $response = new FpmResponse();
+        $isHead   = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'HEAD';
+        $response = new FpmResponse($isHead);
         try {
             self::boot();
             LoggerFactory::setDefaultChannel('http');
@@ -426,7 +427,9 @@ abstract class BaseBoot
 
         $server->on('request', $watcher->wrap(
             static function (\Swoole\Http\Request $req, \Swoole\Http\Response $res) use ($router): void {
-                $router->handle(new SwooleRequest($req), new SwooleResponse($res));
+                $request = new SwooleRequest($req);
+                $isHead  = strtoupper($request->getMethod()) === 'HEAD';
+                $router->handle($request, new SwooleResponse($res, $isHead));
             }
         ));
 
@@ -462,7 +465,7 @@ abstract class BaseBoot
         self::boot();
         LoggerFactory::setDefaultChannel('cli');
 
-        (new Core($argv))->run();
+        new Core($argv)->run();
 
         exit(0);
     }

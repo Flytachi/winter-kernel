@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\K2\Http\Response;
 
 use Flytachi\Winter\Base\HttpCode;
+use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 use Flytachi\Winter\K2\File\XML;
 use SimpleXMLElement;
@@ -27,10 +28,9 @@ use SimpleXMLElement;
  */
 class ResponseFile implements Sendable
 {
+    use FileResponseHeaders;
+
     private string $body;
-    private array $extraHeaders = [];
-    private bool $isAttachment;
-    private int $maxAge;
     private HttpCode $httpCode;
     private string $fileName;
     private string $mimeType;
@@ -130,50 +130,12 @@ class ResponseFile implements Sendable
         return new static($body, $fileName, $mime, $isAttachment, $httpCode, $maxAge);
     }
 
-    // ── Builder ───────────────────────────────────────────────────────────────
-
-    public function attachment(): static
-    {
-        $this->isAttachment = true;
-        return $this;
-    }
-
-    public function inline(): static
-    {
-        $this->isAttachment = false;
-        return $this;
-    }
-
-    public function maxAge(int $seconds): static
-    {
-        $this->maxAge = $seconds;
-        return $this;
-    }
-
-    public function header(string $name, string $value): static
-    {
-        $this->extraHeaders[$name] = $value;
-        return $this;
-    }
-
     // ── Sendable ──────────────────────────────────────────────────────────────
 
-    public function send(HttpResponse $response): void
+    public function send(HttpResponse $response, HttpRequest $request): void
     {
         $response->status($this->httpCode->value);
-
-        $disposition = $this->isAttachment ? 'attachment' : 'inline';
-        $response->header('Content-Type', $this->mimeType);
-        $response->header('Content-Disposition', "{$disposition}; filename=\"{$this->fileName}\"");
-        $response->header('Cache-Control', 'public, max-age=' . $this->maxAge . ', must-revalidate');
-        // Запрещаем сжатие (Swoole/nginx): Content-Length должен совпадать с реальным размером тела.
-        $response->header('Content-Encoding', 'identity');
-        $response->header('Content-Length', (string) mb_strlen($this->body, '8bit'));
-
-        foreach ($this->extraHeaders as $name => $value) {
-            $response->header($name, $value);
-        }
-
+        $this->writeFileHeaders($response, $this->mimeType, $this->fileName, mb_strlen($this->body, '8bit'));
         $response->end($this->body);
     }
 

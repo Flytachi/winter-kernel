@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\K2\Http\Response;
 
 use Flytachi\Winter\Base\HttpCode;
+use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 use Flytachi\Winter\K2\Kernel;
 
@@ -101,7 +102,7 @@ class ResponseView implements Sendable
 
     // ── Sendable ──────────────────────────────────────────────────────────────
 
-    public function send(HttpResponse $response): void
+    public function send(HttpResponse $response, HttpRequest $request): void
     {
         $response->status($this->httpCode->value);
         $response->header('Content-Type', 'text/html; charset=utf-8');

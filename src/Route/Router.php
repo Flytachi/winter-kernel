@@ -524,9 +524,9 @@ class Router
 
             // ── Serialize return value ────────────────────────────────────────
             if ($result instanceof Sendable) {
-                $result->send($res);
+                $result->send($res, $req);
             } elseif ($result !== null) {
-                ResponseEntity::ok($result)->send($res);
+                ResponseEntity::ok($result)->send($res, $req);
             }
         } catch (\Throwable $e) {
             $this->sendError($e, $res);

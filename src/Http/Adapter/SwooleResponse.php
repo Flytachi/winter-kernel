@@ -13,8 +13,14 @@ use Swoole\Http\Response;
  */
 final class SwooleResponse implements HttpResponse
 {
-    public function __construct(private readonly Response $response)
-    {
+    /**
+     * @param Response $response underlying Swoole response
+     * @param bool $headOnly suppress the body (HEAD request) while keeping headers
+     */
+    public function __construct(
+        private readonly Response $response,
+        private readonly bool $headOnly = false,
+    ) {
     }
 
     public function status(int $code): void
@@ -29,12 +35,23 @@ final class SwooleResponse implements HttpResponse
 
     public function end(string $body = ''): void
     {
+        if ($this->headOnly && $body !== '') {
+            // HEAD: keep the Content-Length GET would report, drop the body.
+            $this->response->header('Content-Length', (string) strlen($body));
+            $body = '';
+        }
+
         $this->response->end($body);
     }
 
-    /** Access the underlying Swoole response (e.g. for sendfile). */
-    public function getSwooleResponse(): Response
+    public function sendfile(string $path, int $offset = 0, int $length = 0): void
     {
-        return $this->response;
+        if ($this->headOnly) {
+            // HEAD: Content-Length already set by the caller; send no body.
+            $this->response->end('');
+            return;
+        }
+
+        $this->response->sendfile($path, $offset, $length);
     }
 }

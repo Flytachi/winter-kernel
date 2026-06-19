@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Http\Response;
 
+use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 
 /**
@@ -12,9 +13,13 @@ use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
  * Any value returned from a controller method that implements this interface
  * will be serialized to the HttpResponse by the Router automatically.
  *
- * Implementations: ResponseEntity, ResponseFile, ResponseView
+ * The request is passed so responses can negotiate with it (HTTP Range,
+ * conditional GET, content negotiation). Implementations that do not need it
+ * may simply ignore the argument.
+ *
+ * Implementations: ResponseEntity, ResponseFile, ResponseStreamFile, ResponseView
  */
 interface Sendable
 {
-    public function send(HttpResponse $response): void;
+    public function send(HttpResponse $response, HttpRequest $request): void;
 }
