@@ -69,13 +69,14 @@ Prefer `ResponseEntity::noContent()` for an explicit 204.
 
 ```php
 use Flytachi\Winter\K2\Http\Response\Sendable;
+use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 
 class CsvResponse implements Sendable
 {
     public function __construct(private string $csv, private string $filename) {}
 
-    public function send(HttpResponse $response): void
+    public function send(HttpResponse $response, HttpRequest $request): void
     {
         $response->status(200);
         $response->header('Content-Type', 'text/csv; charset=utf-8');
@@ -85,7 +86,11 @@ class CsvResponse implements Sendable
 }
 ```
 
-Built-in `Sendable` implementations: `ResponseEntity`, `ResponseFile`, `ResponseView`.
+`send()` receives the `HttpRequest` so a response can negotiate with it (HTTP
+Range, conditional GET, content negotiation). Implementations that don't need it
+simply ignore the argument.
+
+Built-in `Sendable` implementations: `ResponseEntity`, `ResponseFile`, `ResponseStreamFile`, `ResponseView`.
 
 ---
 
@@ -133,6 +138,94 @@ ResponseFile::csv($rows, 'export.csv')
 Default `isAttachment`:
 - `binary`, `csv` → `true` (download dialog)
 - `txt`, `json`, `xml`, `file` → `false` (inline)
+
+> `ResponseFile::file()` reads the whole file into memory. For large files prefer
+> `ResponseStreamFile` (below), which streams from disk and supports HTTP Range.
+
+---
+
+## ResponseStreamFile
+
+Streams a file from disk **without loading it fully into memory** — through the
+`HttpResponse::sendfile()` primitive (zero-copy in the kernel on Swoole, a
+memory-light `fpassthru` stream on FPM). Use it for large files (video, audio,
+archives, database dumps) where `ResponseFile::file()` would waste worker memory.
+
+```php
+use Flytachi\Winter\K2\Http\Response\ResponseStreamFile;
+
+return ResponseStreamFile::open('/var/media/video.mp4');                  // inline
+return ResponseStreamFile::open('/var/export/report.pdf')->attachment();  // download
+```
+
+`open()` throws `RuntimeException` if the file does not exist; the MIME type is
+auto-detected.
+
+### Builder options
+
+Same builder as `ResponseFile` (shared `FileResponseHeaders` trait), plus `acceptRanges()`:
+
+```php
+ResponseStreamFile::open('/var/media/clip.mp4')
+    ->attachment()          // Content-Disposition: attachment
+    ->inline()              // Content-Disposition: inline (default)
+    ->maxAge(86400)         // Cache-Control: public, max-age=86400
+    ->header('X-Source', 'cdn')
+    ->acceptRanges(false);  // disable HTTP Range (see below)
+```
+
+### HTTP Range — media seeking & resumable downloads
+
+`ResponseStreamFile` behaves as a correct file server. It advertises
+`Accept-Ranges: bytes` and honors the request `Range` header:
+
+| Request `Range` | Response |
+|---|---|
+| absent | `200 OK`, full file |
+| `bytes=0-1023` | `206 Partial Content` + `Content-Range: bytes 0-1023/<size>` |
+| `bytes=1024-` | `206`, from byte 1024 to EOF |
+| `bytes=-500` | `206`, last 500 bytes |
+| unsatisfiable (`bytes=99999999-`) | `416 Range Not Satisfiable` + `Content-Range: bytes */<size>` |
+| multiple (`bytes=0-9,20-29`) | ignored → `200` full (multipart not supported) |
+
+This is what makes `<video>`/`<audio>` seeking and download-manager resume work.
+
+#### Safe resume — validators
+
+Every response carries an `ETag` (derived from mtime + size, like nginx) and a
+`Last-Modified` date. On resume the client sends `If-Range`; if the validator no
+longer matches (the file changed), the server returns the full `200` instead of a
+partial body — so the client never stitches together inconsistent bytes.
+`If-Range` accepts both forms: an entity-tag or an HTTP-date.
+
+#### Disabling Range
+
+Range is enabled by default. Disable it per endpoint with `acceptRanges(false)`
+when you need atomic full-file delivery — counting full downloads, one-shot
+links, or on-the-fly transformation. The server then sends `Accept-Ranges: none`
+and ignores any incoming `Range`:
+
+```php
+return ResponseStreamFile::open('/var/dl/installer.zip')->acceptRanges(false);
+```
+
+Range is a *mechanism*, not a forced policy — the application decides per endpoint.
+
+### Conditional GET (cache revalidation)
+
+Because the response carries `ETag` / `Last-Modified`, conditional requests are
+honored: a matching `If-None-Match` or `If-Modified-Since` returns `304 Not
+Modified` with no body. Browsers revalidate cached media/downloads without
+re-fetching the bytes.
+
+### `ResponseFile::file()` vs `ResponseStreamFile`
+
+| | `ResponseFile::file()` | `ResponseStreamFile::open()` |
+|---|---|---|
+| File read into memory | yes (whole file) | no (streamed) |
+| HTTP Range / `206` | no | yes |
+| Conditional GET / `304` | no | yes |
+| Best for | small files | large files, media, downloads |
 
 ---
 
@@ -194,3 +287,36 @@ Example layout (`layouts/main.php`):
 return ResponseView::view('errors/404', [], HttpCode::NOT_FOUND)
     ->header('Cache-Control', 'no-store');
 ```
+
+---
+
+## HEAD requests
+
+Body suppression for `HEAD` is handled **centrally by the `HttpResponse` adapter**,
+not by individual responses. When the request method is `HEAD`, every response —
+`ResponseEntity`, `ResponseView`, `ResponseFile`, `ResponseStreamFile`, error
+responses, static files, and custom `Sendable`s — emits the **same status and
+headers as the equivalent `GET`** (including `Content-Length`) but sends no body.
+For `ResponseStreamFile` this also applies to `206` range responses: the adapter
+omits the bytes while keeping the range headers.
+
+> The router does **not** auto-map `HEAD` to `GET` handlers. A `HEAD` request to a
+> route that registers only `GET` returns `405 Method Not Allowed` — register an
+> explicit `HEAD` mapping if a handler must serve it.
+
+---
+
+## HttpResponse contract
+
+Every response object writes through the unified `HttpResponse` abstraction
+(`SwooleResponse` / `FpmResponse`), so the same code runs under Swoole and FPM:
+
+| Method | Purpose |
+|---|---|
+| `status(int $code)` | set the HTTP status code |
+| `header(string $name, string $value)` | add or replace a response header |
+| `end(string $body = '')` | flush the body and finish the response |
+| `sendfile(string $path, int $offset = 0, int $length = 0)` | stream a file (or byte window) from disk and finish; zero-copy on Swoole |
+
+`sendfile()` finishes the response itself — set headers beforehand, and do not
+call `end()` after it.
