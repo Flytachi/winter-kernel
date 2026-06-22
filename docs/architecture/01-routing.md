@@ -125,7 +125,7 @@ Skips all filesystem scanning and reflection. Closure-based handlers (Health act
 `$router->handle(HttpRequest, HttpResponse)` runs a 13-step pipeline per request:
 
 ```
- 1. Header::init()            — snapshot request headers into the static bag
+ 1. Header::init()            — snapshot request headers + origin (scheme/host/port/baseUrl)
  2. Locale::initFromRequest() — detect Accept-Language / locale cookie
  3. Swoole context            — stamp start time, method, uri in coroutine context
  4. Static file check         — short-circuit for existing files (GET only, Swoole)

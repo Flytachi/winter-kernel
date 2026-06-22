@@ -17,16 +17,21 @@ use Flytachi\Winter\Base\Runtime;
  *   Header::get('Authorization')
  *   Header::getBearerToken()
  *   Header::getIpAddress()
+ *   Header::getBaseUrl()
  *
  * Swoole: stores in Coroutine::getContext() — coroutine-safe, per-request isolation.
  * FPM:    stores in a static array — process-wide, safe for single-request lifecycle.
  */
 final class Header
 {
-    private const CTX_KEY = '__k2_headers__';
+    private const CTX_KEY    = '__k2_headers__';
+    private const CTX_ORIGIN = '__k2_origin__';
 
     /** FPM fallback storage */
     private static array $bag = [];
+
+    /** FPM fallback storage for the request origin (scheme/host/port/baseUrl). */
+    private static array $origin = [];
 
     private function __construct()
     {
@@ -40,10 +45,22 @@ final class Header
         $headers = self::normalizeMap($request->getHeaders());
         $headers['Ip-Address'] = $request->getClientIp();
 
+        // Snapshot the request origin separately — `host` must not clobber the
+        // raw `Host` header (which may carry a port) in the header bag.
+        $origin = [
+            'scheme'  => $request->getScheme(),
+            'host'    => $request->getHost(),
+            'port'    => $request->getPort(),
+            'baseUrl' => $request->getBaseUrl(),
+        ];
+
         if (Runtime::isSwooleCoroutine()) {
-            \Swoole\Coroutine::getContext()[self::CTX_KEY] = $headers;
+            $ctx = \Swoole\Coroutine::getContext();
+            $ctx[self::CTX_KEY]    = $headers;
+            $ctx[self::CTX_ORIGIN] = $origin;
         } else {
-            self::$bag = $headers;
+            self::$bag    = $headers;
+            self::$origin = $origin;
         }
     }
 
@@ -89,6 +106,30 @@ final class Header
         return self::storage()['Referer']         ?? null;
     }
 
+    // ── Request origin (captured at init) ─────────────────────────────────────
+
+    /** Absolute scheme://host[:port] of the current request, without trailing slash. */
+    public static function getBaseUrl(): ?string
+    {
+        return self::origin()['baseUrl'] ?? null;
+    }
+
+    public static function getScheme(): ?string
+    {
+        return self::origin()['scheme'] ?? null;
+    }
+
+    /** Host without port (IPv6 returned bracketed, e.g. "[::1]"). */
+    public static function getHost(): ?string
+    {
+        return self::origin()['host'] ?? null;
+    }
+
+    public static function getPort(): ?int
+    {
+        return self::origin()['port'] ?? null;
+    }
+
     public static function getPreferredLanguage(): ?string
     {
         $al = self::storage()['Accept-Language'] ?? null;
@@ -126,6 +167,14 @@ final class Header
             return \Swoole\Coroutine::getContext()[self::CTX_KEY] ?? [];
         }
         return self::$bag;
+    }
+
+    private static function origin(): array
+    {
+        if (Runtime::isSwooleCoroutine()) {
+            return \Swoole\Coroutine::getContext()[self::CTX_ORIGIN] ?? [];
+        }
+        return self::$origin;
     }
 
     /** Normalize a single header key to Title-Case. */

@@ -212,6 +212,30 @@ public function index(HttpRequest $request): ResponseEntity
 }
 ```
 
+### Global access via `Header`
+
+When the `HttpRequest` is not in scope — a service, a static helper, a job dispatched
+mid-request — read the same values through the `Header` accessor. `Header::init($request)`
+runs as the first step of the request pipeline and snapshots the origin alongside the
+headers, so these getters need no `HttpRequest` argument:
+
+```php
+use Flytachi\Winter\K2\Http\Header;
+
+Header::getBaseUrl();  // "https://example.com:8443"
+Header::getScheme();   // "https"
+Header::getHost();     // "example.com"   (host only, no port; IPv6 bracketed)
+Header::getPort();     // 8443 (int)
+```
+
+Each getter returns `null` before `Header::init()` has run (e.g. outside a request, such as
+in a console command). The snapshot is **coroutine-safe** under Swoole — stored in
+`Coroutine::getContext()` so concurrent requests never see each other's origin — and a
+process-wide static under FPM.
+
+> `Header::getHost()` is the parsed host without port. The raw `Host` header is untouched and
+> still available verbatim via `Header::get('Host')` (e.g. `"example.com:8443"`).
+
 ---
 
 ## Entry points
