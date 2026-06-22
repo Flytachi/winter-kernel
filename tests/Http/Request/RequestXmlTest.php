@@ -11,8 +11,10 @@ use Flytachi\Winter\K2\Http\Request\Annotation\RequestXml;
 use Flytachi\Winter\K2\Http\Request\Validation\NotBlank;
 use Flytachi\Winter\K2\Http\Request\Validation\Positive;
 use Flytachi\Winter\K2\Http\Request\Validation\Required;
+use Flytachi\Winter\K2\Http\Request\Validation\Size;
 use Flytachi\Winter\K2\Http\Request\Validation\Valid;
 use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
+use Flytachi\Winter\K2\Http\Request\RequestException;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
@@ -80,6 +82,11 @@ class RequestXmlFixture
     public function asVariadic(#[RequestXml] Xml_VariadicItemDto ...$items): void {}
     public function asVariadicValid(#[RequestXml, Valid] Xml_VariadicItemDto ...$items): void {}
     public function asConstrainedNested(#[Valid] #[RequestXml] Xml_ConstrainedNestedDto $body): void {}
+
+    // ── field mode ──
+    public function fieldString(#[RequestXml(field: 'name'), Size(5, 40)] string $name): void {}
+    public function fieldFloat(#[RequestXml(field: 'coords.lat')] float $lat): void {}
+    public function fieldOptional(#[RequestXml(field: 'name')] ?string $name = null): void {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -298,5 +305,39 @@ class RequestXmlTest extends TestCase
         } catch (ValidationException $e) {
             $this->assertArrayHasKey('code', $e->getErrors());
         }
+    }
+
+    // ── field mode ────────────────────────────────────────────────────────────
+
+    public function test_field_extracted(): void
+    {
+        [$name] = $this->resolve('fieldString', '<root><name>Jonathan</name></root>');
+        $this->assertSame('Jonathan', $name);
+    }
+
+    public function test_field_float_cast_nested(): void
+    {
+        // XML text content arrives as a string — cast applies; dot-notation walks nesting
+        [$lat] = $this->resolve('fieldFloat', '<root><coords><lat>1.5</lat></coords></root>');
+        $this->assertSame(1.5, $lat);
+    }
+
+    public function test_field_missing_required_throws(): void
+    {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionMessage("Required XML field 'name' is missing");
+        $this->resolve('fieldString', '<root><other>x</other></root>');
+    }
+
+    public function test_field_optional_returns_null(): void
+    {
+        [$name] = $this->resolve('fieldOptional', '<root><other>x</other></root>');
+        $this->assertNull($name);
+    }
+
+    public function test_field_constraint_fires_without_valid(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->resolve('fieldString', '<root><name>Jo</name></root>'); // < Size(5, 40)
     }
 }

@@ -13,8 +13,10 @@ use Flytachi\Winter\K2\Http\Request\Validation\Min;
 use Flytachi\Winter\K2\Http\Request\Validation\NotBlank;
 use Flytachi\Winter\K2\Http\Request\Validation\Positive;
 use Flytachi\Winter\K2\Http\Request\Validation\Required;
+use Flytachi\Winter\K2\Http\Request\Validation\Size;
 use Flytachi\Winter\K2\Http\Request\Validation\Valid;
 use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
+use Flytachi\Winter\K2\Http\Request\RequestException;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
@@ -96,6 +98,18 @@ class RequestJsonFixture
     public function asVariadic(#[RequestJson] Json_VariadicItemDto ...$items): void {}
     public function asVariadicValid(#[RequestJson, Valid] Json_VariadicItemDto ...$items): void {}
     public function asConstrainedPerson(#[RequestJson, Valid] Json_ConstrainedPersonDto $body): void {}
+
+    // ── field mode ──
+    public function fieldString(#[RequestJson(field: 'name'), Size(5, 40)] string $name): void {}
+    public function fieldInt(#[RequestJson(field: 'age')] int $age): void {}
+    public function fieldBool(#[RequestJson(field: 'active')] bool $active): void {}
+    public function fieldArray(#[RequestJson(field: 'tags')] array $tags): void {}
+    public function fieldObject(#[RequestJson(field: 'meta')] \stdClass $meta): void {}
+    public function fieldDto(#[RequestJson(field: 'filter'), Valid] Json_FilterDto $filter): void {}
+    public function fieldNested(#[RequestJson(field: 'filter.minPrice')] int $minPrice): void {}
+    public function fieldOptional(#[RequestJson(field: 'name')] ?string $name = null): void {}
+    public function fieldDefault(#[RequestJson(field: 'page')] int $page = 7): void {}
+    public function fieldVariadic(#[RequestJson(field: 'items'), Valid] Json_VariadicItemDto ...$items): void {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -377,5 +391,131 @@ class RequestJsonTest extends TestCase
             $this->assertArrayHasKey('code', $errors,  'hydration error must be present');
             $this->assertArrayHasKey('order', $errors, 'constraint error must be present');
         }
+    }
+
+    // ── field mode: scalar extraction + casting ───────────────────────────────
+
+    public function test_field_string_extracted(): void
+    {
+        [$name] = $this->resolve('fieldString', '{"name":"Jonathan","extra":1}');
+        $this->assertSame('Jonathan', $name);
+    }
+
+    public function test_field_int_cast_from_string(): void
+    {
+        [$age] = $this->resolve('fieldInt', '{"age":"42"}');
+        $this->assertSame(42, $age);
+    }
+
+    public function test_field_int_cast_from_number(): void
+    {
+        [$age] = $this->resolve('fieldInt', '{"age":42}');
+        $this->assertSame(42, $age);
+    }
+
+    public function test_field_bool_cast(): void
+    {
+        [$active] = $this->resolve('fieldBool', '{"active":true}');
+        $this->assertTrue($active);
+    }
+
+    public function test_field_array_extracted(): void
+    {
+        [$tags] = $this->resolve('fieldArray', '{"tags":["a","b","c"]}');
+        $this->assertSame(['a', 'b', 'c'], $tags);
+    }
+
+    public function test_field_object_extracted_as_stdclass(): void
+    {
+        [$meta] = $this->resolve('fieldObject', '{"meta":{"k":"v","n":{"deep":1}}}');
+        $this->assertInstanceOf(\stdClass::class, $meta);
+        $this->assertSame('v', $meta->k);
+        $this->assertSame(1, $meta->n->deep); // nested object, not array
+    }
+
+    public function test_field_hydrates_dto(): void
+    {
+        [$filter] = $this->resolve('fieldDto', '{"filter":{"minPrice":10,"maxPrice":99}}');
+        $this->assertInstanceOf(Json_FilterDto::class, $filter);
+        $this->assertSame(10, $filter->minPrice);
+        $this->assertSame(99, $filter->maxPrice);
+    }
+
+    public function test_field_dot_notation_nested(): void
+    {
+        [$minPrice] = $this->resolve('fieldNested', '{"filter":{"minPrice":15}}');
+        $this->assertSame(15, $minPrice);
+    }
+
+    public function test_field_variadic_list_hydrated(): void
+    {
+        $items = $this->resolve('fieldVariadic', '{"items":[{"name":"a","qty":1},{"name":"b","qty":2}]}');
+        $this->assertCount(2, $items);
+        $this->assertSame('a', $items[0]->name);
+        $this->assertSame(2, $items[1]->qty);
+    }
+
+    // ── field mode: presence / required / optional ────────────────────────────
+
+    public function test_field_missing_required_throws(): void
+    {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionMessage("Required JSON field 'name' is missing");
+        $this->resolve('fieldString', '{"other":1}');
+    }
+
+    public function test_field_explicit_null_treated_as_missing(): void
+    {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionMessage("Required JSON field 'age' is missing");
+        $this->resolve('fieldInt', '{"age":null}');
+    }
+
+    public function test_field_optional_returns_null_when_absent(): void
+    {
+        [$name] = $this->resolve('fieldOptional', '{"x":1}');
+        $this->assertNull($name);
+    }
+
+    public function test_field_default_used_when_absent(): void
+    {
+        [$page] = $this->resolve('fieldDefault', '{"x":1}');
+        $this->assertSame(7, $page);
+    }
+
+    public function test_field_zero_is_not_treated_as_missing(): void
+    {
+        [$age] = $this->resolve('fieldInt', '{"age":0}');
+        $this->assertSame(0, $age);
+    }
+
+    // ── field mode: constraints fire automatically (no #[Valid]) ──────────────
+
+    public function test_field_constraint_passes(): void
+    {
+        [$name] = $this->resolve('fieldString', '{"name":"Jonathan"}');
+        $this->assertSame('Jonathan', $name);
+    }
+
+    public function test_field_constraint_fails_without_valid(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->resolve('fieldString', '{"name":"Jo"}'); // shorter than Size(5, 40)
+    }
+
+    // ── field mode: type mismatches ───────────────────────────────────────────
+
+    public function test_field_int_invalid_throws(): void
+    {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionMessage("JSON field 'age' must be an integer");
+        $this->resolve('fieldInt', '{"age":"abc"}');
+    }
+
+    public function test_field_array_type_mismatch_throws(): void
+    {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionMessage("JSON field 'tags' must be an array");
+        $this->resolve('fieldArray', '{"tags":"not-an-array"}');
     }
 }

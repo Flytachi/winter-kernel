@@ -205,3 +205,29 @@ Errors across all elements are collected before responding:
 }
 ```
 
+---
+
+## Single-field mode — `field:`
+
+Pass `field` to pull **one value** out of the body instead of hydrating the whole payload —
+useful when you only need a field or two and don't want a dedicated DTO. `Content-Type`
+detection still runs first to decode the body (JSON or XML), then the field is extracted and
+cast to the parameter type, exactly like a query param or header.
+
+```php
+public function rename(#[RequestBody(field: 'name'), Size(5, 40)] string $name): ResponseEntity
+// {"name":"Jonathan", ...}  → "Jonathan"
+// <root><name>Jonathan</name></root> (Content-Type: application/xml) → "Jonathan"
+```
+
+It behaves like any other **scalar source**:
+
+- **Required by default** — a missing field or explicit `null` throws `400 Required Body field 'name' is missing`, unless the parameter is nullable (`?T`) or has a default value.
+- **`#[Constraint]` fires automatically** — no `#[Valid]` needed (`Size(5, 40)` above runs on its own).
+- Falsy-but-present values (`0`, `false`, `""`, `[]`) are **not** treated as missing.
+- The value is cast/hydrated to the declared type: scalar, enum, `DateTime`, `BcMath\Number`, `array`, `stdClass`, a DTO (add `#[Valid]` to cascade), or a variadic DTO list.
+- **Nested fields** use dot-notation: `field: 'filter.minPrice'` walks into sub-objects; a missing segment counts as a missing field.
+
+The same `field:` option works on `#[RequestJson]`, `#[RequestForm]` and `#[RequestXml]` —
+see [07-request-json-form-xml.md](07-request-json-form-xml.md#single-field-mode--field).
+

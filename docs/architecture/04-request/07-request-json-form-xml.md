@@ -18,7 +18,8 @@ use Flytachi\Winter\K2\Http\Request\Annotation\RequestXml;
 3. Plain DTO classes are hydrated via reflection — no base class required.
 4. Nested class-typed fields are hydrated recursively (same as `#[RequestBody]`).
 5. Variadic `...$items` is supported **only by `#[RequestJson]` and `#[RequestXml]`**, not by `#[RequestForm]`. `#[RequestJson]` expects a JSON array; `#[RequestXml]` wraps a single document into a one-element collection.
-6. Use `#[RequestBody]` instead if you want `Content-Type` auto-detection.
+6. `#[RequestJson(field: 'x')]` binds a **single field** instead of the whole body — scalar-style, required by default, auto-validated. See [Single-field mode](#single-field-mode--field).
+7. Use `#[RequestBody]` instead if you want `Content-Type` auto-detection.
 
 ---
 
@@ -69,6 +70,54 @@ public function list(#[RequestJson] array $filters): ResponseEntity
 public function bulk(#[Valid] #[RequestJson] CreateOrderDto ...$items): ResponseEntity
 // [{"title":"A",...},{"title":"B",...}] → [CreateOrderDto, CreateOrderDto]
 ```
+
+## Single-field mode — `field:`
+
+`field` is supported by **all four** body annotations — `#[RequestJson]`, `#[RequestForm]`,
+`#[RequestXml]`, and the auto-detecting `#[RequestBody]`. It pulls **one value** out of the
+body instead of hydrating the whole payload — handy when you only need a field or two and
+don't want a dedicated DTO. The extracted value is cast to the parameter type, exactly like a
+query param or header. Only the body source differs:
+
+```php
+public function rename(#[RequestJson(field: 'name'), Size(5, 40)] string $name): ResponseEntity
+// {"name":"Jonathan", ...} → "Jonathan"
+
+public function setAge(#[RequestJson(field: 'age')] int $age): ResponseEntity
+// {"age":"42"} → 42   (cast from string, like #[RequestParam])
+
+public function search(#[RequestForm(field: 'q')] string $query): ResponseEntity
+// q=winter (form/query data) → "winter"
+
+public function lat(#[RequestXml(field: 'coords.lat')] float $lat): ResponseEntity
+// <root><coords><lat>1.5</lat></coords></root> → 1.5
+```
+
+It behaves like any other **scalar source**:
+
+- **Required by default.** A missing field — or an explicit `null` — throws `400 Required <Source> field 'name' is missing` (`<Source>` is `JSON` / `Body` / `Form` / `XML`), unless the parameter is nullable (`?T`) or has a default value.
+- **`#[Constraint]` fires automatically** for scalar fields — no `#[Valid]` needed (`Size(5, 40)` above runs on its own).
+- Falsy-but-present values (`0`, `false`, `""`, `[]`) are **not** treated as missing.
+
+Full type support — the field value is cast/hydrated to the declared type:
+
+- `string`, `int`, `float`, `bool` — scalar cast (same rules as `#[RequestParam]`).
+- backed enum, `DateTime` / `DateTimeImmutable`, `BcMath\Number`, `Decimal\Decimal` — parsed and validated.
+- `array` — the field's array value (`400` if it isn't one).
+- `stdClass` / `object` — the field object, decoded deeply (nested objects stay objects, not arrays).
+- a DTO class — hydrated from the field's object; add `#[Valid]` to cascade constraints into it.
+- `Dto ...$items` (variadic) — the field's JSON array, each element hydrated into one DTO.
+
+**Nested fields** use dot-notation to walk into sub-objects:
+
+```php
+public function minPrice(#[RequestJson(field: 'filter.minPrice')] int $minPrice): ResponseEntity
+// {"filter":{"minPrice":15}} → 15
+```
+
+If any path segment is absent or runs into a non-object, the field counts as missing
+(required / default / nullable rules then apply). A key containing a literal dot cannot be
+addressed this way — the dot is always a level separator.
 
 ---
 

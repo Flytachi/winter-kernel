@@ -12,8 +12,10 @@ use Flytachi\Winter\K2\Http\Request\Validation\Min;
 use Flytachi\Winter\K2\Http\Request\Validation\NotBlank;
 use Flytachi\Winter\K2\Http\Request\Validation\Positive;
 use Flytachi\Winter\K2\Http\Request\Validation\Required;
+use Flytachi\Winter\K2\Http\Request\Validation\Size;
 use Flytachi\Winter\K2\Http\Request\Validation\Valid;
 use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
+use Flytachi\Winter\K2\Http\Request\RequestException;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
@@ -74,6 +76,12 @@ class RequestFormFixture
     public function asDto(#[RequestForm] Form_ProductDto $body): void {}
     public function asValidated(#[Valid] #[RequestForm] Form_ValidatedDto $body): void {}
     public function asNestedPerson(#[Valid] #[RequestForm] Form_NestedPersonDto $body): void {}
+
+    // ── field mode ──
+    public function fieldString(#[RequestForm(field: 'name'), Size(5, 40)] string $name): void {}
+    public function fieldInt(#[RequestForm(field: 'age')] int $age): void {}
+    public function fieldNested(#[RequestForm(field: 'address.city')] string $city): void {}
+    public function fieldOptional(#[RequestForm(field: 'name')] ?string $name = null): void {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -274,5 +282,45 @@ class RequestFormTest extends TestCase
         } catch (ValidationException $e) {
             $this->assertArrayHasKey('passwordLength', $e->getErrors());
         }
+    }
+
+    // ── field mode ────────────────────────────────────────────────────────────
+
+    public function test_field_extracted(): void
+    {
+        [$name] = $this->resolve('fieldString', ['name' => 'Jonathan', 'extra' => 'x']);
+        $this->assertSame('Jonathan', $name);
+    }
+
+    public function test_field_int_cast_from_string(): void
+    {
+        // form values arrive as strings — cast applies, like #[RequestParam]
+        [$age] = $this->resolve('fieldInt', ['age' => '42']);
+        $this->assertSame(42, $age);
+    }
+
+    public function test_field_nested_bracket_notation(): void
+    {
+        [$city] = $this->resolve('fieldNested', ['address' => ['city' => 'Berlin']]);
+        $this->assertSame('Berlin', $city);
+    }
+
+    public function test_field_missing_required_throws(): void
+    {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionMessage("Required Form field 'name' is missing");
+        $this->resolve('fieldString', ['other' => 'x']);
+    }
+
+    public function test_field_optional_returns_null(): void
+    {
+        [$name] = $this->resolve('fieldOptional', ['x' => '1']);
+        $this->assertNull($name);
+    }
+
+    public function test_field_constraint_fires_without_valid(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->resolve('fieldString', ['name' => 'Jo']); // < Size(5, 40)
     }
 }

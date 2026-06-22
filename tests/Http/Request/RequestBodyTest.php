@@ -13,8 +13,10 @@ use Flytachi\Winter\K2\Http\Request\Validation\Min;
 use Flytachi\Winter\K2\Http\Request\Validation\NotBlank;
 use Flytachi\Winter\K2\Http\Request\Validation\Positive;
 use Flytachi\Winter\K2\Http\Request\Validation\Required;
+use Flytachi\Winter\K2\Http\Request\Validation\Size;
 use Flytachi\Winter\K2\Http\Request\Validation\Valid;
 use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
+use Flytachi\Winter\K2\Http\Request\RequestException;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
@@ -117,6 +119,12 @@ class RequestBodyFixture
     public function asVariadic(#[RequestBody] Body_VariadicItemDto ...$items): void {}
     public function asVariadicValid(#[Valid] #[RequestBody] Body_VariadicItemDto ...$items): void {}
     public function asConstrainedNested(#[Valid] #[RequestBody] Body_ConstrainedPersonDto $body): void {}
+
+    // ── field mode ──
+    public function fieldString(#[RequestBody(field: 'name'), Size(5, 40)] string $name): void {}
+    public function fieldInt(#[RequestBody(field: 'age')] int $age): void {}
+    public function fieldNested(#[RequestBody(field: 'filter.minPrice')] int $minPrice): void {}
+    public function fieldOptional(#[RequestBody(field: 'name')] ?string $name = null): void {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -484,5 +492,45 @@ class RequestBodyTest extends TestCase
         } catch (ValidationException $e) {
             $this->assertArrayHasKey('title', $e->getErrors());
         }
+    }
+
+    // ── field mode ────────────────────────────────────────────────────────────
+
+    public function test_field_extracted_and_cast(): void
+    {
+        [$age] = $this->resolve('fieldInt', $this->makeRequest('{"age":"42"}'));
+        $this->assertSame(42, $age);
+    }
+
+    public function test_field_respects_content_type_xml(): void
+    {
+        $xml = '<root><name>Jonathan</name></root>';
+        [$name] = $this->resolve('fieldString', $this->makeRequest($xml, 'application/xml'));
+        $this->assertSame('Jonathan', $name);
+    }
+
+    public function test_field_dot_notation_nested(): void
+    {
+        [$minPrice] = $this->resolve('fieldNested', $this->makeRequest('{"filter":{"minPrice":15}}'));
+        $this->assertSame(15, $minPrice);
+    }
+
+    public function test_field_missing_required_throws(): void
+    {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionMessage("Required Body field 'name' is missing");
+        $this->resolve('fieldString', $this->makeRequest('{"other":1}'));
+    }
+
+    public function test_field_optional_returns_null(): void
+    {
+        [$name] = $this->resolve('fieldOptional', $this->makeRequest('{"x":1}'));
+        $this->assertNull($name);
+    }
+
+    public function test_field_constraint_fires_without_valid(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->resolve('fieldString', $this->makeRequest('{"name":"Jo"}')); // < Size(5, 40)
     }
 }

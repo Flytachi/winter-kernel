@@ -51,6 +51,7 @@ use ValueError;
  *   5.  #[RequestJson]    → body forced as JSON → array | stdClass | any class
  *   6.  #[RequestForm]    → body forced as form → array | stdClass | any class
  *   7.  #[RequestXml]     → body forced as XML  → array | stdClass | any class
+ *       (#[RequestBody/Json/Form/Xml] all accept field: 'x' → extract & cast one field, scalar-style)
  *   8.  #[RequestQuery]   → full query string   → array | any class             (always optional)
  *   9.  #[RequestHeader]  → HTTP header, camelCase/snake_case normalized         (required unless nullable/default)
  *   10. Type = HttpRequest (or subclass)  → raw request object injected
@@ -60,8 +61,8 @@ use ValueError;
  *   14. Nullable type     → null when source is absent
  *
  * Validation:
- *   - Scalar params (#[RequestParam], #[PathVariable], #[RequestHeader]):
- *     #[Constraint] attributes fire automatically — no #[Valid] needed.
+ *   - Scalar params (#[RequestParam], #[PathVariable], #[RequestHeader],
+ *     and #[RequestBody/Json/Form/Xml(field: …)]): #[Constraint] fires automatically — no #[Valid] needed.
  *   - Object / DTO params:
  *     Add #[Valid] to trigger #[Constraint] validation after hydration.
  *     Without #[Valid], only structural errors (missing/wrong-type fields) are reported.
@@ -137,19 +138,19 @@ class ParameterResolver
             return self::resolveRequestParam($attr, $param, $type, $typeName, $request);
         }
         if ($param->getAttributes(RequestBody::class)) {
-            return self::resolveRequestBody($param, $typeName, $request, $withConstraints);
+            return self::resolveRequestBody($param, $type, $typeName, $request, $withConstraints);
         }
         if ($attr = $param->getAttributes(RequestFile::class)[0] ?? null) {
             return self::resolveRequestFile($attr, $param, $type, $typeName, $request);
         }
         if ($param->getAttributes(RequestJson::class)) {
-            return self::resolveRequestJson($param, $typeName, $request, $withConstraints);
+            return self::resolveRequestJson($param, $type, $typeName, $request, $withConstraints);
         }
         if ($param->getAttributes(RequestForm::class)) {
-            return self::resolveRequestForm($param, $typeName, $request, $withConstraints);
+            return self::resolveRequestForm($param, $type, $typeName, $request, $withConstraints);
         }
         if ($param->getAttributes(RequestXml::class)) {
-            return self::resolveRequestXml($param, $typeName, $request, $withConstraints);
+            return self::resolveRequestXml($param, $type, $typeName, $request, $withConstraints);
         }
         if ($param->getAttributes(RequestQuery::class)) {
             return self::resolveRequestQuery($param, $typeName, $request, $withConstraints);
@@ -209,12 +210,26 @@ class ParameterResolver
 
     private static function resolveRequestBody(
         ReflectionParameter $param,
+        ?ReflectionNamedType $type,
         ?string $typeName,
         HttpRequest $request,
         bool $withConstraints,
     ): mixed {
         $raw = $request->getRawBody() ?? '';
         $ct  = strtolower($request->getHeader('content-type') ?? '');
+
+        $field = $param->getAttributes(RequestBody::class)[0]->newInstance()->field;
+        if ($field !== null) {
+            return self::resolveField(
+                $param,
+                $type,
+                $typeName,
+                $field,
+                self::parseBodyAsArray($ct, $raw),
+                'Body field',
+                $withConstraints,
+            );
+        }
 
         if ($typeName === 'string') {
             return $raw;
@@ -355,11 +370,27 @@ class ParameterResolver
 
     private static function resolveRequestJson(
         ReflectionParameter $param,
+        ?ReflectionNamedType $type,
         ?string $typeName,
         HttpRequest $request,
         bool $withConstraints,
     ): mixed {
-        $raw  = $request->getRawBody() ?? '';
+        $raw   = $request->getRawBody() ?? '';
+        $field = $param->getAttributes(RequestJson::class)[0]->newInstance()->field;
+
+        if ($field !== null) {
+            $decoded = json_decode($raw, true);
+            return self::resolveField(
+                $param,
+                $type,
+                $typeName,
+                $field,
+                is_array($decoded) ? $decoded : [],
+                'JSON field',
+                $withConstraints,
+            );
+        }
+
         $data = json_decode($raw, true) ?? [];
 
         if ($typeName === 'array') {
@@ -381,13 +412,112 @@ class ParameterResolver
         ));
     }
 
+    /**
+     * Extracts a single value from a decoded body by (dot-notation) field path and
+     * casts it to the parameter type. Shared by #[RequestJson], #[RequestBody],
+     * #[RequestForm] and #[RequestXml]. Acts like a scalar source: required by default,
+     * optional via a nullable type or PHP default value; an absent field and an
+     * explicit null are treated the same. #[Constraint] attributes fire automatically
+     * on scalar fields (handled by validateScalar in resolveParam).
+     *
+     * @param array<string,mixed> $data   Decoded body to read from.
+     * @param string              $source Human label for errors, e.g. "JSON field".
+     */
+    private static function resolveField(
+        ReflectionParameter $param,
+        ?ReflectionNamedType $type,
+        ?string $typeName,
+        string $field,
+        array $data,
+        string $source,
+        bool $withConstraints,
+    ): mixed {
+        [$found, $val] = self::digJsonField($data, $field);
+
+        if (!$found || $val === null) {
+            if ($param->isDefaultValueAvailable()) {
+                return $param->getDefaultValue();
+            }
+            if ($type?->allowsNull()) {
+                return null;
+            }
+            RequestException::throw("Required $source '$field' is missing");
+        }
+
+        $label = "$source '$field'";
+
+        if ($typeName === 'array') {
+            return is_array($val)
+                ? $val
+                : RequestException::throw("$label must be an array");
+        }
+        if ($typeName === 'object' || $typeName === stdClass::class) {
+            return is_array($val)
+                ? json_decode(json_encode($val))
+                : RequestException::throw("$label must be an object");
+        }
+        if (self::isHydratableClass($typeName)) {
+            if (!is_array($val)) {
+                RequestException::throw("$label must be an object");
+            }
+            if ($param->isVariadic()) {
+                return self::resolveVariadicBody(json_encode($val), $typeName, $withConstraints);
+            }
+            return self::hydrateFromArray($val, $typeName, $field, $withConstraints);
+        }
+
+        return self::cast($val, $typeName, $label);
+    }
+
+    /**
+     * Walks a dot-notation path into a decoded JSON array.
+     *
+     * @return array{0: bool, 1: mixed} [found, value] — found is false if any
+     *                                  segment is missing or a non-array is traversed.
+     */
+    private static function digJsonField(array $data, string $field): array
+    {
+        $cursor = $data;
+        foreach (explode('.', $field) as $segment) {
+            if (!is_array($cursor) || !array_key_exists($segment, $cursor)) {
+                return [false, null];
+            }
+            $cursor = $cursor[$segment];
+        }
+        return [true, $cursor];
+    }
+
+    /**
+     * True when $typeName is a user class that should be hydrated from an array,
+     * as opposed to a scalar-castable type (enum, DateTime, BcMath\Number, Decimal).
+     */
+    private static function isHydratableClass(?string $typeName): bool
+    {
+        static $castable = [
+            DateTime::class,
+            DateTimeImmutable::class,
+            'BcMath\Number',
+            'Decimal\Decimal',
+        ];
+        return $typeName !== null
+            && class_exists($typeName)
+            && !enum_exists($typeName)
+            && !in_array($typeName, $castable, true);
+    }
+
     private static function resolveRequestForm(
         ReflectionParameter $param,
+        ?ReflectionNamedType $type,
         ?string $typeName,
         HttpRequest $request,
         bool $withConstraints,
     ): mixed {
         $data = $request->getParsedBody() + $request->getQueryParams();
+
+        $field = $param->getAttributes(RequestForm::class)[0]->newInstance()->field;
+        if ($field !== null) {
+            return self::resolveField($param, $type, $typeName, $field, $data, 'Form field', $withConstraints);
+        }
 
         if ($typeName === 'array') {
             return $data;
@@ -407,6 +537,7 @@ class ParameterResolver
 
     private static function resolveRequestXml(
         ReflectionParameter $param,
+        ?ReflectionNamedType $type,
         ?string $typeName,
         HttpRequest $request,
         bool $withConstraints,
@@ -414,6 +545,11 @@ class ParameterResolver
         $raw  = $request->getRawBody() ?? '';
         $xml  = @simplexml_load_string($raw);
         $data = $xml ? (json_decode(json_encode($xml), true) ?: []) : [];
+
+        $field = $param->getAttributes(RequestXml::class)[0]->newInstance()->field;
+        if ($field !== null) {
+            return self::resolveField($param, $type, $typeName, $field, $data, 'XML field', $withConstraints);
+        }
 
         if ($typeName === 'array') {
             return $data;
