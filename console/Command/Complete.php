@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Console\Command;
 
-use Composer\Autoload\ClassLoader;
 use Flytachi\Winter\Console\Core;
 use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\Console\Inc\CmdCustom;
-use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\K2\Collector\ImplementorCollector;
+use Flytachi\Winter\K2\Collector\SubclassCollector;
+use Flytachi\Winter\K2\Core\ClassScanner;
 use Flytachi\Winter\K2\Process\Core\Dispatchable;
+use Flytachi\Winter\K2\Process\ThreadDaemon;
 
 class Complete extends Cmd
 {
@@ -96,9 +98,8 @@ class Complete extends Cmd
         // --- thread / th ---
         'thread' => [
             'list:list all Dispatchable classes',
-            'run:run task in foreground',
+            'daemons:list daemons with live status',
         ],
-        'thread run' => ['-d:dispatch as background process'],
 
         // --- db ---
         'db' => [
@@ -136,18 +137,19 @@ class Complete extends Cmd
         // Current (possibly partial) word the user is typing
         $current = str_ends_with($input, ' ') ? '' : (array_pop($tokens) ?? '');
 
-        // tokens[0] = script name, tokens[1] = cmd, tokens[2] = sub
+        // tokens[0] = script name, tokens[1] = cmd, tokens[2] = sub, tokens[3] = action
         $cmd = isset($tokens[1]) ? strtolower($tokens[1]) : null;
         $sub = isset($tokens[2]) ? strtolower($tokens[2]) : null;
+        $act = isset($tokens[3]) ? strtolower($tokens[3]) : null;
 
-        $suggestions = $this->suggest($cmd, $sub, $current);
+        $suggestions = $this->suggest($cmd, $sub, $act, $current);
 
         if (!empty($suggestions)) {
             echo implode("\n", $suggestions) . "\n";
         }
     }
 
-    private function suggest(?string $cmd, ?string $sub, string $current): array
+    private function suggest(?string $cmd, ?string $sub, ?string $act, string $current): array
     {
         // Level 1: no command typed yet → all command names
         if ($cmd === null) {
@@ -173,8 +175,27 @@ class Complete extends Cmd
             $base = array_merge($base, $this->getScriptClasses());
         }
 
-        // thread run: append discovered Dispatchable class names
-        if ($resolved === 'thread' && $sub === 'run') {
+        // thread: list + classes at top level; once a class is selected,
+        // suggestions depend on the action level:
+        //   no action yet  → lifecycle commands + -d (no-command/toggle flag)
+        //   after `status` → -v (detailed status flag)
+        if ($resolved === 'thread' && $sub !== null && !in_array($sub, ['list', 'daemons'], true)) {
+            $isDaemon = in_array($sub, array_map('strtolower', $this->getDaemonClasses()));
+            if ($act === null) {
+                $base = $isDaemon
+                    ? [
+                        'start:start daemon in background',
+                        'stop:stop running daemon',
+                        'status:show daemon status (-v for detail)',
+                        '-d:toggle start in background',
+                    ]
+                    : ['-d:dispatch as background process'];
+            } elseif ($isDaemon && $act === 'status') {
+                $base = ['-v:detailed status (resources + forks)'];
+            } else {
+                $base = [];
+            }
+        } elseif ($resolved === 'thread' && $sub === null) {
             $base = array_merge($this->getDispatchableClasses(), $base);
         }
 
@@ -217,91 +238,35 @@ class Complete extends Cmd
 
     private function getScriptClasses(): array
     {
-        $loaders = ClassLoader::getRegisteredLoaders();
-        $loader  = reset($loaders);
-        $nsMap   = $loader->getPrefixesPsr4();
-        $vendor  = realpath(Kernel::$pathRoot . '/vendor');
-        $classes = [];
+        $collector = new SubclassCollector(Cmd::class, CmdCustom::class);
+        ClassScanner::scan($collector);
 
-        foreach ($nsMap as $nsPrefix => $dirs) {
-            foreach ($dirs as $dir) {
-                $realDir = realpath($dir);
-                if (!$realDir || !str_starts_with($realDir, Kernel::$pathRoot)) {
-                    continue;
-                }
-                if ($vendor && str_starts_with($realDir, $vendor)) {
-                    continue;
-                }
-                $files = new \RecursiveIteratorIterator(
-                    new \RecursiveDirectoryIterator($realDir, \FilesystemIterator::SKIP_DOTS)
-                );
-                foreach ($files as $file) {
-                    if ($file->getExtension() !== 'php') {
-                        continue;
-                    }
-                    $relative  = substr($file->getRealPath(), strlen($realDir));
-                    $relative  = substr(ltrim(str_replace('/', '\\', $relative), '\\'), 0, -4);
-                    $className = rtrim($nsPrefix, '\\') . '\\' . $relative;
-                    if (!class_exists($className)) {
-                        continue;
-                    }
-                    try {
-                        $ref = new \ReflectionClass($className);
-                        if (
-                            !$ref->isAbstract()
-                            && ($ref->isSubclassOf(Cmd::class) || $ref->isSubclassOf(CmdCustom::class))
-                        ) {
-                            $classes[] = str_replace('\\', '.', $className);
-                        }
-                    } catch (\ReflectionException) {
-                    }
-                }
-            }
-        }
-        return $classes;
+        return array_map(
+            fn(\ReflectionClass $ref) => str_replace('\\', '.', $ref->getName()),
+            $collector->getResult()
+        );
     }
 
     private function getDispatchableClasses(): array
     {
-        $loaders = ClassLoader::getRegisteredLoaders();
-        $loader  = reset($loaders);
-        $nsMap   = $loader->getPrefixesPsr4();
-        $vendor  = realpath(Kernel::$pathRoot . '/vendor');
-        $classes = [];
+        $collector = new ImplementorCollector(Dispatchable::class);
+        ClassScanner::scan($collector);
 
-        foreach ($nsMap as $nsPrefix => $dirs) {
-            foreach ($dirs as $dir) {
-                $realDir = realpath($dir);
-                if (!$realDir || !str_starts_with($realDir, Kernel::$pathRoot)) {
-                    continue;
-                }
-                if ($vendor && str_starts_with($realDir, $vendor)) {
-                    continue;
-                }
-                $files = new \RecursiveIteratorIterator(
-                    new \RecursiveDirectoryIterator($realDir, \FilesystemIterator::SKIP_DOTS)
-                );
-                foreach ($files as $file) {
-                    if ($file->getExtension() !== 'php') {
-                        continue;
-                    }
-                    $relative  = substr($file->getRealPath(), strlen($realDir));
-                    $relative  = substr(ltrim(str_replace('/', '\\', $relative), '\\'), 0, -4);
-                    $className = rtrim($nsPrefix, '\\') . '\\' . $relative;
-                    if (!class_exists($className)) {
-                        continue;
-                    }
-                    try {
-                        $ref = new \ReflectionClass($className);
-                        if (!$ref->isAbstract() && $ref->implementsInterface(Dispatchable::class)) {
-                            $classes[] = str_replace('\\', '.', $className);
-                        }
-                    } catch (\ReflectionException) {
-                    }
-                }
-            }
-        }
-        return $classes;
+        return array_map(
+            fn(\ReflectionClass $ref) => str_replace('\\', '.', $ref->getName()),
+            $collector->getResult()
+        );
+    }
+
+    private function getDaemonClasses(): array
+    {
+        $collector = new SubclassCollector(ThreadDaemon::class);
+        ClassScanner::scan($collector);
+
+        return array_map(
+            fn(\ReflectionClass $ref) => str_replace('\\', '.', $ref->getName()),
+            $collector->getResult()
+        );
     }
 
     public static function help(): void

@@ -69,7 +69,7 @@ abstract class ThreadDaemon extends Dispatch
         $info = static::status();
         if ($info) {
             throw new DaemonException(
-                "Cluster process already exist [PID:{$info->status->pid}] ({$info->status->getStartedAt()})",
+                "Daemon already exist [PID:{$info->status->pid}] ({$info->status->getStartedAt()})",
                 HttpCode::LOCKED->value
             );
         } else {
@@ -125,7 +125,7 @@ abstract class ThreadDaemon extends Dispatch
         if ($info) {
             return Signal::interrupt($info->status->pid);
         } else {
-            throw new DaemonException('Cluster process has not started', HttpCode::LOCKED->value);
+            throw new DaemonException('Daemon has not started', HttpCode::LOCKED->value);
         }
     }
 }

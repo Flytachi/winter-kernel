@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Console\Command;
 
-use Composer\Autoload\ClassLoader;
 use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\Console\Inc\CmdCustom;
-use Flytachi\Winter\K2\Kernel;
-use Flytachi\Winter\K2\Plugin;
+use Flytachi\Winter\K2\Collector\SubclassCollector;
+use Flytachi\Winter\K2\Core\ClassScanner;
 
 class Script extends Cmd
 {
@@ -70,60 +69,9 @@ class Script extends Cmd
 
     private function listArg(): void
     {
-        $loaders      = ClassLoader::getRegisteredLoaders();
-        $loader       = reset($loaders);
-        $namespaceMap = $loader->getPrefixesPsr4();
-
-        $vendorPath = realpath(Kernel::$pathRoot . '/vendor');
-        $pluginRealPaths = array_filter(array_map('realpath', Plugin::getPlugins()));
-
-        $scripts = [];
-        foreach ($namespaceMap as $nsPrefix => $dirs) {
-            foreach ($dirs as $dir) {
-                $realDir = realpath($dir);
-                if (!$realDir || !str_starts_with($realDir, Kernel::$pathRoot)) {
-                    continue;
-                }
-                if ($vendorPath && str_starts_with($realDir, $vendorPath)) {
-                    $isPlugin = false;
-                    foreach ($pluginRealPaths as $pluginPath) {
-                        if (str_starts_with($realDir, $pluginPath)) {
-                            $isPlugin = true;
-                            break;
-                        }
-                    }
-                    if (!$isPlugin) {
-                        continue;
-                    }
-                }
-                $files = new \RecursiveIteratorIterator(
-                    new \RecursiveDirectoryIterator($realDir, \FilesystemIterator::SKIP_DOTS)
-                );
-                foreach ($files as $file) {
-                    if ($file->getExtension() !== 'php') {
-                        continue;
-                    }
-                    $relative  = substr($file->getRealPath(), strlen($realDir));
-                    $relative  = substr(ltrim(str_replace('/', '\\', $relative), '\\'), 0, -4);
-                    $className = rtrim($nsPrefix, '\\') . '\\' . $relative;
-
-                    if (!class_exists($className)) {
-                        continue;
-                    }
-                    try {
-                        $ref = new \ReflectionClass($className);
-                        if (
-                            !$ref->isAbstract()
-                            && ($ref->isSubclassOf(Cmd::class) || $ref->isSubclassOf(CmdCustom::class))
-                        ) {
-                            $scripts[] = $ref;
-                        }
-                    } catch (\ReflectionException) {
-                        // skip unresolvable classes
-                    }
-                }
-            }
-        }
+        $collector = new SubclassCollector(Cmd::class, CmdCustom::class);
+        ClassScanner::scan($collector);
+        $scripts = $collector->getResult();
 
         self::printLabel("Available Scripts", 34);
         if (empty($scripts)) {
@@ -162,13 +110,13 @@ class Script extends Cmd
         self::printDivider($cl);
 
         self::printLabel("Examples", $cl);
-        self::printInfo("call sc list");
-        self::printInfo("call sc my.custom.Task");
-        self::printInfo("call sc app.console.SeedUsers");
+        self::printInfo("call script list");
+        self::printInfo("call script my.custom.Task");
+        self::printInfo("call script app.console.SeedUsers");
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net/docs/2.0.0/cmd-script");
+        self::printInfo("Docs: https://winterframe.net/docs/3.0.0/cmd-script");
 
         self::printTitle("Script Help", $cl);
     }
