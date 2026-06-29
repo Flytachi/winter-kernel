@@ -474,7 +474,7 @@ abstract class BaseBoot
     /**
      * Thread / job executor entry point.
      *
-     * Deserialises a Runnable object from stdin (PAYLOAD_PIPE) or shared memory
+     * Deserializes a Runnable object from stdin (PAYLOAD_PIPE) or shared memory
      * (PAYLOAD_SHM, requires ext-shmop) and executes it in a child process
      * spawned by the Thread dispatcher.
      *
