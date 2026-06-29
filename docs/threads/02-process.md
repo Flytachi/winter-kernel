@@ -67,8 +67,8 @@ are usable in children).
 |---------------------------------------------------------------|----------|
 | `QueueWorker::start()`                                        | Foreground |
 | `QueueWorker::dispatch()`                                     | Background fork; returns PID |
-| `call thread run app.threads.processes.QueueWorker`           | CLI foreground |
-| `call thread run app.threads.processes.QueueWorker -d`        | CLI background |
+| `call thread app.threads.processes.QueueWorker`               | CLI foreground |
+| `call thread app.threads.processes.QueueWorker -d`            | CLI background |
 
 There is **no cluster lock** on `Process` — `dispatch()` of the same
 class twice will spin up two independent supervisors. If you want

@@ -62,8 +62,8 @@ DI works identically — `Container::make()` instantiates the class,
 |-----------------------------------------------------------------|----------|
 | `Chat::start(['ip' => '0.0.0.0', 'port' => 9001])`              | Foreground |
 | `Chat::dispatch(['ip' => '0.0.0.0', 'port' => 9001])`           | Background fork; returns PID |
-| `call thread run app.threads.websockets.Chat`                   | CLI foreground |
-| `call thread run app.threads.websockets.Chat -d`                | CLI background |
+| `call thread app.threads.websockets.Chat`                       | CLI foreground |
+| `call thread app.threads.websockets.Chat -d`                    | CLI background |
 
 The optional `$data` map is read by `resolution()` and overrides the
 `$ip` / `$port` properties for that run, so the same class can be
@@ -303,5 +303,5 @@ class StressTest extends WebSocket
 
 - [00-overview.md](00-overview.md) — `Dispatch` lifecycle and DI
 - [03-daemon.md](03-daemon.md) — to make the server a supervised singleton
-- [`../console/09-thread.md`](../console/09-thread.md) — `call thread run`
+- [`../console/09-thread.md`](../console/09-thread.md) — `call thread <class>`
 - [`../console/02-make.md`](../console/02-make.md) — scaffold with `-W`

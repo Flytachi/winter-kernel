@@ -58,12 +58,15 @@ forks inherit the instance.
 | `Cleanup::start()`                                         | Foreground (current process). Same lock-protected lifecycle inside `resolution()`. |
 | `Cleanup::status($showStats = false)`                      | `?TDInfo` — `null` if not running |
 | `Cleanup::stop()`                                          | Send SIGINT to the running PID; `bool` |
-| `call thread run app.threads.daemons.Cleanup -d`           | CLI background |
-| `call thread run app.threads.daemons.Cleanup`              | CLI foreground |
+| `call thread app.threads.daemons.Cleanup start`            | CLI background start |
+| `call thread app.threads.daemons.Cleanup stop`             | CLI stop |
+| `call thread app.threads.daemons.Cleanup status [-v]`      | CLI status (`-v` = resources + forks) |
+| `call thread app.threads.daemons.Cleanup`                  | CLI toggle (foreground); add `-d` for background |
 
 For production, run the daemon under a supervisor (`systemd`, Docker
-`restart: always`) and let `call thread run … ` run in foreground —
-let the supervisor own the lifecycle. Use `-d` only for ad-hoc kicks.
+`restart: always`) in foreground — let the supervisor own the lifecycle.
+The `start` / `stop` / `-d` actions are for ad-hoc management; see
+[../console/09-thread.md](../console/09-thread.md) for the full lifecycle.
 
 ---
 
@@ -341,6 +344,6 @@ public function status(): ?array
 
 - [00-overview.md](00-overview.md) — `Dispatch` lifecycle and DI
 - [02-process.md](02-process.md) — the unlocked, lighter forking variant
-- [`../console/09-thread.md`](../console/09-thread.md) — `call thread run -d`
+- [`../console/09-thread.md`](../console/09-thread.md) — `call thread <daemon> start|stop|status` / `daemons`
 - [`../console/02-make.md`](../console/02-make.md) — scaffold with `-N`
 - [`../configuration/02-logging.md`](../configuration/02-logging.md) — per-channel logs

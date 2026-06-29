@@ -46,8 +46,8 @@ when `Container::make()` instantiates the class inside the child.
 |-------------------------------------------------------------------|----------|
 | `SendInvoice::start(['orderId' => 42])`                           | Foreground — blocks the caller |
 | `SendInvoice::dispatch(['orderId' => 42])`                        | Background fork; returns child PID |
-| `call thread run app.threads.jobs.SendInvoice`                    | CLI foreground |
-| `call thread run app.threads.jobs.SendInvoice -d`                 | CLI background |
+| `call thread app.threads.jobs.SendInvoice`                        | CLI foreground |
+| `call thread app.threads.jobs.SendInvoice -d`                     | CLI background |
 
 `$data` is whatever serializable payload the job needs. It is marshaled
 to the child through `DispatchStore` (see
@@ -129,7 +129,7 @@ SendInvoice::dispatch(['orderId' => $order->id]);
 RebuildSearchIndex::start();
 
 // from CLI for ad-hoc execution
-// call thread run app.threads.jobs.SendInvoice -d
+// call thread app.threads.jobs.SendInvoice -d
 ```
 
 ---
@@ -155,5 +155,5 @@ RebuildSearchIndex::start();
 
 - [00-overview.md](00-overview.md) — `Dispatch` lifecycle, DI, data passing
 - [02-process.md](02-process.md) — forking workers
-- [`../console/09-thread.md`](../console/09-thread.md) — `call thread run`
+- [`../console/09-thread.md`](../console/09-thread.md) — `call thread <class>`
 - [`../console/02-make.md`](../console/02-make.md) — `call make .X -J` scaffold

@@ -63,9 +63,10 @@ Every `Dispatchable` exposes two static entry points (defined on
 From the CLI:
 
 ```bash
-call thread run app.threads.jobs.SendInvoice        # foreground
-call thread run app.threads.jobs.SendInvoice -d     # background
+call thread app.threads.jobs.SendInvoice            # foreground
+call thread app.threads.jobs.SendInvoice -d         # background
 call thread list                                    # discover Dispatchable classes
+call thread daemons                                 # daemons with live status
 ```
 
 See [`../console/09-thread.md`](../console/09-thread.md).
@@ -257,6 +258,6 @@ Live WebSocket server                          WebSocket
 
 ## See also
 
-- [`../console/09-thread.md`](../console/09-thread.md) — `call thread run` / `list`
+- [`../console/09-thread.md`](../console/09-thread.md) — `call thread <class>` / `list` / `daemons`
 - [`../console/02-make.md`](../console/02-make.md) — scaffolding (`-J`, `-P`, `-N`, `-W`)
 - [`../configuration/02-logging.md`](../configuration/02-logging.md) — log channels

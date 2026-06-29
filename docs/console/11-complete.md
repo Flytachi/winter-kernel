@@ -41,8 +41,9 @@ The completion script and the runtime endpoint are wired together by
 
 ```
 tokens[0]  = script name        (e.g. "call")
-tokens[1]  = command            (e.g. "make")
-tokens[2]  = subcommand         (e.g. "build")
+tokens[1]  = command            (e.g. "thread")
+tokens[2]  = subcommand / class (e.g. "build", or a Dispatchable class)
+tokens[3]  = action             (e.g. "status" after a daemon class)
 current    = word being typed   (may be "" if a space precedes the cursor)
 ```
 
@@ -53,9 +54,13 @@ Suggestions are produced in this order:
 2. **Command typed (no subcommand)** → static suggestions from the
    `$map['<cmd>']` entry in `Complete.php`, plus dynamic entries:
    - `script` / `sc` → discovered `Cmd` / `CmdCustom` FQCNs (dot-notation).
+   - `thread` / `th` → discovered `Dispatchable` FQCNs (dot-notation).
    - `help` → command-name list.
-3. **Subcommand typed** → `$map['<cmd> <sub>']` entry; for
-   `thread run`, the discovered `Dispatchable` classes are prepended.
+3. **Class / subcommand typed** → context-aware for `thread`:
+   - after a non-daemon class → `-d`;
+   - after a daemon class → `start` / `stop` / `status` / `-d`;
+   - after `<daemon> status` → `-v`;
+   - otherwise the `$map['<cmd> <sub>']` entry.
 4. The candidate set is then **prefix-filtered** by the current word.
 
 Suggestion strings can carry an inline description after a colon,
@@ -85,7 +90,10 @@ It lives at the top of `console/Command/Complete.php` and looks like:
     '--fpm:PHP-FPM + Nginx mode (default)',
     '--swoole:Swoole HTTP server mode',
 ],
-'thread run' => ['-d:dispatch as background process'],
+'thread' => [
+    'list:list all Dispatchable classes',
+    'daemons:list daemons with live status',
+],
 ```
 
 **Adding suggestions for a new command**: add the appropriate `cmd` and
@@ -98,13 +106,16 @@ It lives at the top of `console/Command/Complete.php` and looks like:
 
 Three branches in `suggest()` enrich the static map at runtime:
 
-| Branch                | Adds                                        |
-|-----------------------|---------------------------------------------|
-| `script` / `sc` (no sub) | All `Cmd` / `CmdCustom` classes under PSR-4 (dot-notation) |
-| `thread run`             | All `Dispatchable` classes under PSR-4    |
-| `help` (no sub)          | All built-in command names                |
+| Branch                      | Adds                                              |
+|-----------------------------|---------------------------------------------------|
+| `script` / `sc` (no sub)    | All `Cmd` / `CmdCustom` classes (dot-notation)    |
+| `thread` / `th` (no sub)    | All `Dispatchable` classes (dot-notation)         |
+| `thread <daemon>`           | `start` / `stop` / `status` / `-d`                |
+| `thread <daemon> status`    | `-v`                                              |
+| `help` (no sub)             | All built-in command names                        |
 
-Walks are scoped to `Kernel::$pathRoot` and skip `vendor/`.
+Discovery runs via `ClassScanner` over `Kernel::$pathRoot` **and registered
+plugins**, skipping the rest of `vendor/`.
 
 ---
 
@@ -150,4 +161,4 @@ Each prints the candidate list to stdout, one per line.
 - [03-cfg.md](03-cfg.md#cfg-completion--shell-tab-completion) — installing completion
 - [01-help.md](01-help.md) — `call help` discovery
 - [05-script.md](05-script.md) — `call sc list` (same discovery as `sc` completion)
-- [09-thread.md](09-thread.md) — `call thread list` (same discovery as `thread run` completion)
+- [09-thread.md](09-thread.md) — `call thread list` / `daemons` (same discovery as `thread` completion)
