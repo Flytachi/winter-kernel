@@ -20,6 +20,7 @@ use Flytachi\Winter\K2\Route\MemoryWatcher;
 use Flytachi\Winter\K2\Route\Router;
 use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\Thread\Runnable;
+use Psr\Log\LoggerInterface;
 
 /**
  * Application bootstrap base — Java Boot-style entry point.
@@ -604,6 +605,13 @@ abstract class BaseBoot
         )
             ->collect(new DICollector($c))
             ->execute();
+
+        // Default contextual logger: #[Autowired] LoggerInterface $logger resolves to a
+        // logger named after the class it is injected into. Override in providers() by
+        // re-registering contextual(LoggerInterface::class, …).
+        $c->contextual(LoggerInterface::class,
+            static fn(Container $c, ?string $consumer) => LoggerFactory::getLogger($consumer ?? 'app'),
+        );
 
         static::providers($c);
         static::channels();

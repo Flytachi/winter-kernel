@@ -161,12 +161,15 @@ Must be called **after** `Kernel::init()` and **before** the first log write on 
 ### `line` (default)
 
 ```
-[datetime] [LEVEL] -channel-: message {json}
-[datetime] [LEVEL] -channel- (ClassName): message {json}
+[datetime] [LEVEL] -channel- [pid]: message {json}
+[datetime] [LEVEL] -channel- [pid] (ClassName): message {json}
 ```
 
-The `(ClassName)` segment appears only when the logger was obtained via
-`LoggerFactory::getLogger(MyClass::class)`. Raw `channel()` calls omit it.
+The `[pid]` segment is the OS process id of the emitting process — always present,
+so forked children (daemons, workers) are distinguishable from the parent. The
+`(ClassName)` segment appears only when the logger was obtained via
+`LoggerFactory::getLogger(MyClass::class)` or injected as `#[Autowired] LoggerInterface`.
+Raw `channel()` calls omit it.
 
 **Level labels (fixed width):**
 
@@ -184,12 +187,12 @@ The `(ClassName)` segment appears only when the logger was obtained via
 **Examples:**
 
 ```
-[2024-01-01 12:00:00] [INFO ] -http-: request handled {"request_id":"abc-123"}
-[2024-01-01 12:00:00] [DEBUG] -http- (UserService): db query {"class":"App\\Service\\UserService","request_id":"abc-123"}
-[2024-01-01 12:00:00] [WARN ] -http- (PaymentService): retry {"class":"App\\PaymentService","attempt":3}
-[2024-01-01 12:00:00] [ERROR] -http- (OrderController): checkout failed {"class":"App\\OrderController","order_id":99}
-[2024-01-01 12:00:00] [DEBUG] -cli- (MyJob): step done {"class":"App\\Job\\MyJob","job_id":"xyz"}
-[2024-01-01 12:00:00] [INFO ] -sys-: kernel booted
+[2024-01-01 12:00:00] [INFO ] -http- [4821]: request handled {"request_id":"abc-123"}
+[2024-01-01 12:00:00] [DEBUG] -http- [4821] (UserService): db query {"class":"App\\Service\\UserService","request_id":"abc-123"}
+[2024-01-01 12:00:00] [WARN ] -http- [4821] (PaymentService): retry {"class":"App\\PaymentService","attempt":3}
+[2024-01-01 12:00:00] [ERROR] -http- [4821] (OrderController): checkout failed {"class":"App\\OrderController","order_id":99}
+[2024-01-01 12:00:00] [DEBUG] -cli- [5012] (MyJob): step done {"class":"App\\Job\\MyJob","job_id":"xyz"}
+[2024-01-01 12:00:00] [INFO ] -sys- [4821]: kernel booted
 ```
 
 ### `json`
@@ -204,7 +207,63 @@ One JSON object per line — ready for log aggregators:
 
 ## Usage in application code
 
-### Per-class logger (recommended)
+### Injected logger — `#[Autowired]` (recommended for DI-managed classes)
+
+Controllers, services, jobs — anything the container builds — can simply declare a
+typed `LoggerInterface` property. No `getLogger()` boilerplate, no `self::class`:
+
+```php
+use Psr\Log\LoggerInterface;
+use Flytachi\Winter\DI\Attribute\Autowired;
+
+class OrderController extends Controller
+{
+    #[Autowired]
+    private LoggerInterface $logger;
+
+    public function index(): void
+    {
+        $this->logger->info('order placed', ['total' => 99.0]);
+        // → [INFO ] -http- [4821] (OrderController): order placed {"total":99,"class":"...OrderController"}
+    }
+}
+```
+
+**How it works.** `BaseBoot` registers a [contextual binding](https://github.com/flytachi/winter-di)
+for `Psr\Log\LoggerInterface` by default — the container resolves the injected
+logger to `LoggerFactory::getLogger(<the consuming class>)`. So the logger is
+automatically named after the class it lives in, with the same per-class
+`(ClassName)` output you'd get from the factory — but injected by type.
+
+**Override** the default in `Boot::providers()` — e.g. pin a channel or swap the
+factory entirely (re-registering wins, since `contextual()` is last-write for the key):
+
+```php
+protected static function providers(Container $c): void
+{
+    $c->contextual(
+        \Psr\Log\LoggerInterface::class,
+        fn(Container $c, ?string $consumer) => LoggerFactory::getLogger($consumer ?? 'app', 'http'),
+    );
+}
+```
+
+> Tip: a true circular dependency between two injected services can be broken with
+> `#[Lazy]` (a deferred proxy) — see winter-di's `#[Lazy]` attribute.
+
+**Which approach to use:**
+
+| Situation | Use |
+|-----------|-----|
+| Class built by the container (controller, service, job) | `#[Autowired] private LoggerInterface $logger` |
+| Static context / object not resolved by DI | `LoggerFactory::getLogger(self::class)` |
+| Quick one-off on the default channel | `Log::info(...)` facade |
+| A specific non-default channel | `LoggerFactory::getLogger($this, 'job')` |
+
+### Per-class logger via factory
+
+For code **not** built by the container (static helpers, manual `new`), get a
+logger explicitly:
 
 ```php
 use Flytachi\Winter\Logger\LoggerFactory;
@@ -270,7 +329,7 @@ $ctx->set('user_id', $auth->id());
 
 // Every subsequent log call in this request automatically includes request_id + user_id
 LoggerFactory::getLogger(OrderService::class)->info('order placed', ['total' => 99.0]);
-// → [INFO ] -http- (OrderService): order placed {"total":99,"request_id":"abc","user_id":42,"class":"..."}
+// → [INFO ] -http- [4821] (OrderService): order placed {"total":99,"request_id":"abc","user_id":42,"class":"..."}
 ```
 
 ### Swoole — `CoroutineContext`
@@ -324,7 +383,7 @@ $logger->info('login attempt', [
     'password' => 'hunter2',          // ← masked
     'meta'     => ['token' => 'jwt'], // ← nested, also masked
 ]);
-// → [INFO ] -http-: login attempt {"username":"alice","password":"***","meta":{"token":"***"}}
+// → [INFO ] -http- [4821]: login attempt {"username":"alice","password":"***","meta":{"token":"***"}}
 ```
 
 ---
