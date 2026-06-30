@@ -190,7 +190,7 @@ The middleware calls `date_default_timezone_set()` in `before()` with the client
 | `getScheme(): string` | `'http'` or `'https'` |
 | `getHost(): string` | hostname only, no port |
 | `getPort(): int` | actual port (defaults: 80 / 443 by scheme) |
-| `getBaseUrl(): string` | `scheme://host[:port]`, standard ports omitted |
+| `getBaseUrl(): string` | `scheme://host[:port]`, standard ports omitted; an https URL never carries `:80` |
 
 Resolution order (each method short-circuits on the first hit):
 
@@ -202,6 +202,8 @@ Resolution order (each method short-circuits on the first hit):
 **Trust policy.** Proxy headers are honoured unconditionally — they take precedence over direct values. If the application is not behind a reverse proxy, strip these headers at the edge (nginx / cloud LB) before they reach PHP. Otherwise a client can spoof `X-Forwarded-Host` and force the backend to return URLs pointing at an attacker domain.
 
 **Swoole SSL.** The Swoole HTTP server does not expose an `https`/`scheme` flag on the request object. Direct-SSL Swoole deployments must terminate TLS at a fronting proxy that sets `X-Forwarded-Proto: https`, otherwise `getScheme()` returns `'http'`.
+
+**Contradictory `https:80`.** Behind a TLS-terminating proxy that forwards the scheme but not the port (or with a misconfigured `HTTPS` flag), the backend server port is often `80` while the scheme is `https`. Since TLS on port 80 is unreachable, `getPort()` drops that contradiction to the https default `443`, so `getBaseUrl()` returns `https://example.com`, never `https://example.com:80`. The mirror case is intentionally **not** collapsed: plain HTTP on `443` is reachable, so `http://example.com:443` is kept explicit. Non-standard ports (`:8443`, `:8080`) are always preserved.
 
 ```php
 public function index(HttpRequest $request): ResponseEntity

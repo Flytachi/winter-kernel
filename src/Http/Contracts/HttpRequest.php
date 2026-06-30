@@ -78,6 +78,12 @@ interface HttpRequest
      * Resolved request port — as the client addressed the server.
      * Honours `X-Forwarded-Port` → port part of forwarded/Host header → server port.
      * Falls back to 443 for https / 80 for http when nothing else is available.
+     *
+     * A backend server port of 80 under an https scheme is treated as noise
+     * (a TLS-terminating proxy hop or a misconfigured HTTPS flag) and replaced
+     * by the https default 443 — it is never reported as an unreachable
+     * https:80. Every other port, including a non-standard one, is kept as-is;
+     * in particular http on 443 is reported unchanged.
      */
     public function getPort(): int;
 
@@ -85,6 +91,11 @@ interface HttpRequest
      * Convenience base URL `scheme://host[:port]`, omitting standard ports
      * (80 for http, 443 for https). Equivalent to combining
      * getScheme() / getHost() / getPort().
+     *
+     * Because getPort() collapses a contradictory https/80 to the https
+     * default, an https base URL never carries `:80`. A plain-http URL on
+     * `:443` is kept explicit (it is reachable), as are all non-standard
+     * ports (e.g. `:8443`).
      */
     public function getBaseUrl(): string;
 }
