@@ -120,14 +120,30 @@ final class SwooleRequest implements HttpRequest
 
     public function getScheme(): string
     {
+        $proto = $this->forwardedProto();
+        if ($proto !== null) {
+            return $proto;
+        }
+        // Swoole does not populate a scheme/https flag; SSL detection relies on
+        // proxy headers or explicit server configuration upstream.
+        return 'http';
+    }
+
+    /**
+     * Scheme advertised by a trusted proxy via the Forwarded or
+     * x-forwarded-proto header, or null when the request is not proxied.
+     */
+    private function forwardedProto(): ?string
+    {
         $h = $this->request->header ?? [];
 
-        if (!empty($h['forwarded'])) {
-            if (preg_match('/proto=([A-Za-z]+)/i', $h['forwarded'], $m)) {
-                $proto = strtolower($m[1]);
-                if ($proto === 'http' || $proto === 'https') {
-                    return $proto;
-                }
+        if (
+            !empty($h['forwarded'])
+            && preg_match('/proto=([A-Za-z]+)/i', $h['forwarded'], $m)
+        ) {
+            $proto = strtolower($m[1]);
+            if ($proto === 'http' || $proto === 'https') {
+                return $proto;
             }
         }
         if (!empty($h['x-forwarded-proto'])) {
@@ -136,9 +152,7 @@ final class SwooleRequest implements HttpRequest
                 return $proto;
             }
         }
-        // Swoole does not populate a scheme/https flag; SSL detection relies on
-        // proxy headers or explicit server configuration upstream.
-        return 'http';
+        return null;
     }
 
     public function getHost(): string
@@ -171,8 +185,16 @@ final class SwooleRequest implements HttpRequest
                 return $port;
             }
         }
+        // server_port is the backend's own listener. Port 80 under an https
+        // scheme is a contradiction — a TLS-terminating proxy hop or a
+        // misconfigured HTTPS flag — that would yield an unreachable
+        // https://host:80. Drop that noise and use the scheme default; every
+        // other server_port (matching or non-standard) is honoured as-is.
         if (!empty($this->request->server['server_port'])) {
-            return (int) $this->request->server['server_port'];
+            $serverPort = (int) $this->request->server['server_port'];
+            if (!($serverPort === 80 && $this->getScheme() === 'https')) {
+                return $serverPort;
+            }
         }
         return $this->getScheme() === 'https' ? 443 : 80;
     }

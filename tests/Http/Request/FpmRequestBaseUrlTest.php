@@ -70,7 +70,9 @@ class FpmRequestBaseUrlTest extends TestCase
         );
     }
 
-    // ── Scheme/port mismatches stay explicit (443 is only standard for https) ──
+    // ── Scheme/port mismatches ────────────────────────────────────────────────
+    // http on 443 is kept explicit (plain HTTP on 443 is reachable). https on 80
+    // is a contradiction (no TLS on :80) — the port is dropped to the https default.
 
     public function test_http_on_443_keeps_port(): void
     {
@@ -80,10 +82,10 @@ class FpmRequestBaseUrlTest extends TestCase
         );
     }
 
-    public function test_https_on_80_keeps_port(): void
+    public function test_https_on_80_drops_contradictory_port(): void
     {
         $this->assertSame(
-            'https://example.com:80',
+            'https://example.com',
             $this->baseUrl(['HTTP_HOST' => 'example.com', 'HTTPS' => 'on', 'SERVER_PORT' => '80']),
         );
     }
@@ -128,6 +130,33 @@ class FpmRequestBaseUrlTest extends TestCase
                 'HTTP_HOST'              => 'example.com',
                 'HTTP_X_FORWARDED_PROTO' => 'https',
                 'HTTP_X_FORWARDED_PORT'  => '8443',
+            ]),
+        );
+    }
+
+    public function test_forwarded_proto_https_without_forwarded_port_ignores_backend_default(): void
+    {
+        // TLS-terminating proxy sets the scheme but no X-Forwarded-Port; the
+        // backend SERVER_PORT (80) is the proxy→app hop, not the public port.
+        $this->assertSame(
+            'https://example.com',
+            $this->baseUrl([
+                'HTTP_HOST'              => 'example.com',
+                'HTTP_X_FORWARDED_PROTO' => 'https',
+                'SERVER_PORT'            => '80',
+            ]),
+        );
+    }
+
+    public function test_forwarded_proto_https_keeps_nonstandard_backend_port(): void
+    {
+        // A non-default SERVER_PORT behind a proxy is intentional — keep it.
+        $this->assertSame(
+            'https://example.com:8443',
+            $this->baseUrl([
+                'HTTP_HOST'              => 'example.com',
+                'HTTP_X_FORWARDED_PROTO' => 'https',
+                'SERVER_PORT'            => '8443',
             ]),
         );
     }

@@ -127,6 +127,19 @@ class SwooleRequestBaseUrlTest extends TestCase
         );
     }
 
+    public function test_forwarded_proto_https_without_forwarded_port_ignores_backend_default(): void
+    {
+        // Proxy sets the scheme but no x-forwarded-port; backend server_port 80
+        // is the proxy→app hop, not the public port — must not produce :80.
+        $this->assertSame(
+            'https://example.com',
+            $this->baseUrl(
+                ['host' => 'example.com', 'x-forwarded-proto' => 'https'],
+                ['server_port' => 80],
+            ),
+        );
+    }
+
     public function test_forwarded_header_proto_and_host(): void
     {
         $this->assertSame(

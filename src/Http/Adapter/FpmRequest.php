@@ -135,19 +135,9 @@ final class FpmRequest implements HttpRequest
 
     public function getScheme(): string
     {
-        if (!empty($_SERVER['HTTP_FORWARDED'])) {
-            if (preg_match('/proto=([A-Za-z]+)/i', $_SERVER['HTTP_FORWARDED'], $m)) {
-                $proto = strtolower($m[1]);
-                if ($proto === 'http' || $proto === 'https') {
-                    return $proto;
-                }
-            }
-        }
-        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
-            $proto = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
-            if ($proto === 'http' || $proto === 'https') {
-                return $proto;
-            }
+        $proto = $this->forwardedProto();
+        if ($proto !== null) {
+            return $proto;
         }
         if (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off') {
             return 'https';
@@ -191,10 +181,42 @@ final class FpmRequest implements HttpRequest
                 return $port;
             }
         }
+        // SERVER_PORT is the backend's own listener. Port 80 under an https
+        // scheme is a contradiction — a TLS-terminating proxy hop or a
+        // misconfigured HTTPS flag — that would yield an unreachable
+        // https://host:80. Drop that noise and use the scheme default; every
+        // other SERVER_PORT (matching or non-standard) is honoured as-is.
         if (!empty($_SERVER['SERVER_PORT'])) {
-            return (int) $_SERVER['SERVER_PORT'];
+            $serverPort = (int) $_SERVER['SERVER_PORT'];
+            if (!($serverPort === 80 && $this->getScheme() === 'https')) {
+                return $serverPort;
+            }
         }
         return $this->getScheme() === 'https' ? 443 : 80;
+    }
+
+    /**
+     * Scheme advertised by a trusted proxy via the Forwarded or
+     * X-Forwarded-Proto header, or null when the request is not proxied.
+     */
+    private function forwardedProto(): ?string
+    {
+        if (
+            !empty($_SERVER['HTTP_FORWARDED'])
+            && preg_match('/proto=([A-Za-z]+)/i', $_SERVER['HTTP_FORWARDED'], $m)
+        ) {
+            $proto = strtolower($m[1]);
+            if ($proto === 'http' || $proto === 'https') {
+                return $proto;
+            }
+        }
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+            $proto = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
+            if ($proto === 'http' || $proto === 'https') {
+                return $proto;
+            }
+        }
+        return null;
     }
 
     public function getBaseUrl(): string
