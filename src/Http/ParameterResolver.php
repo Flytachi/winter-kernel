@@ -972,7 +972,9 @@ class ParameterResolver
             RequestException::throw("$label must be a numeric value (int or decimal string), got '$value'");
         }
         try {
-            return new Decimal((string) $value);
+            return method_exists(Decimal::class, 'valueOf')
+                ? Decimal::valueOf((string) $value)
+                : new Decimal((string) $value);
         } catch (Throwable) {
             RequestException::throw("$label must be a numeric value (int or decimal string), got '$value'");
         }

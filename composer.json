@@ -4,18 +4,13 @@
     "keywords": ["Winter Kernel", "winter kernel", "framework kernel", "kernel"],
     "type": "library",
     "license": "MIT",
-    "homepage": "https://winterframe.net",
     "scripts": {
-        "test": "vendor/bin/phpunit",
-        "test-detail": "vendor/bin/phpunit --testdox",
-        "test-configuration": "vendor/bin/phpunit --testsuite Configuration",
-        "test-http": "vendor/bin/phpunit --testsuite Http",
-        "test-localization": "vendor/bin/phpunit --testsuite Localization",
-        "test-ppa": "vendor/bin/phpunit --testsuite Ppa"
-    },
-    "support": {
-        "source": "https://github.com/flytachi/winter-kernel",
-        "docs": "https://winterframe.net/docs"
+        "test": "phpunit",
+        "test-detail": "phpunit --testdox",
+        "test-configuration": "phpunit --testsuite Configuration",
+        "test-http": "phpunit --testsuite Http",
+        "test-localization": "phpunit --testsuite Localization",
+        "test-ppa": "phpunit --testsuite Ppa"
     },
     "autoload": {
         "psr-4": {
@@ -26,6 +21,12 @@
             "function/dependencies.php"
         ]
     },
+    "autoload-dev": {
+        "psr-4": {
+            "Flytachi\\Winter\\K2\\Tests\\": "tests"
+        }
+    },
+    "bin": ["wKernelExecutor"],
     "require": {
         "php": ">=8.4",
         "flytachi/winter-di": "^1.0",
@@ -41,6 +42,12 @@
         "ext-posix": "*",
         "ext-fileinfo": "*"
     },
+    "require-dev": {
+        "phpunit/phpunit": "@stable",
+        "squizlabs/php_codesniffer": "@stable",
+        "swoole/ide-helper": "^6.0",
+        "monolog/monolog": "@stable"
+    },
     "suggest": {
         "ext-pdo": "Required for database access",
         "ext-simplexml": "Required for XML file operations and XML body parsing in HTTP parameter resolution",
@@ -49,22 +56,16 @@
         "ext-swoole": "Required for coroutine-based connection pooling (Swoole mode)",
         "ext-shmop": "Recommended for Swoole mode — enables PAYLOAD_SHM in Thread dispatch, avoiding fd conflicts with proc_open (fallback: PAYLOAD_PIPE)"
     },
-    "autoload-dev": {
-        "psr-4": {
-            "Flytachi\\Winter\\K2\\Tests\\": "tests"
-        }
+    "homepage": "https://winterframe.net",
+    "support": {
+        "issues": "https://github.com/flytachi/winter-kernel/issues",
+        "source": "https://github.com/flytachi/winter-kernel",
+        "docs": "https://winterframe.net/docs"
     },
-    "require-dev": {
-        "phpunit/phpunit": "@stable",
-        "squizlabs/php_codesniffer": "@stable",
-        "swoole/ide-helper": "^6.0",
-        "monolog/monolog": "@stable"
-    },
-    "bin": ["wKernelExecutor"],
     "authors": [
         {
             "name": "Flytachi",
-            "email": "jasur.rakhmatov03@gmail.com"
+            "email": "jason.khan.x@gmail.com"
         }
     ]
 }
