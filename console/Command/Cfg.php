@@ -200,16 +200,37 @@ class Cfg extends Cmd
 
     private function dockerArg(): void
     {
-        $isSwoole = array_key_exists('swoole', $this->args['options']);
-        $mode = $isSwoole ? 'swoole' : 'fpm';
+        $runtime = array_key_exists('swoole', $this->args['options']) ? 'swoole' : 'fpm';
 
-        multiCopy($this->templatePath . '/Docker/shared', Kernel::$pathRoot);
-        multiCopy($this->templatePath . '/Docker/' . $mode, Kernel::$pathRoot);
-        self::printBadge('mode', $mode, 34, 36);
+        // Single unified template: one stable Dockerfile + docker/ (fpm, swoole,
+        // dependencies.sh) + compose. The runtime is selected by the RUNTIME
+        // build arg, not by which files are copied.
+        multiCopy($this->templatePath . '/Docker', Kernel::$pathRoot);
+        $this->setComposeRuntime($runtime);
+
+        self::printBadge('runtime', $runtime, 34, 36);
         self::printBadge('docker/', 'CREATED', 34, 32);
+        self::printBadge('docker/dependencies.sh', 'CREATED', 34, 32);
         self::printBadge('.dockerignore', 'CREATED', 34, 32);
         self::printBadge('docker-compose.yml', 'CREATED', 34, 32);
         self::printBadge('Dockerfile', 'CREATED', 34, 32);
+        self::printInfo("Switch runtime anytime: set RUNTIME (fpm|swoole) in docker-compose.yml");
+        self::printInfo("Add extensions/cron: edit docker/dependencies.sh");
+    }
+
+    /**
+     * Pin the default RUNTIME build arg in the freshly scaffolded compose file.
+     * The template ships `RUNTIME: fpm`; on `--swoole` we flip it to swoole so
+     * `docker compose build` picks the requested runtime out of the box.
+     */
+    private function setComposeRuntime(string $runtime): void
+    {
+        $compose = Kernel::$pathRoot . '/docker-compose.yml';
+        if (is_file($compose)) {
+            $content = file_get_contents($compose);
+            $content = preg_replace('/(RUNTIME:\s*)(?:fpm|swoole)/', '${1}' . $runtime, $content, 1);
+            file_put_contents($compose, $content);
+        }
     }
 
     private function completionArg(): void
@@ -335,8 +356,11 @@ class Cfg extends Cmd
 
         // docker
         self::printLabel("docker — scaffold Docker files", $cl);
-        self::print("--fpm        PHP-FPM + Nginx mode (default)", $cl);
-        self::print("--swoole     Swoole HTTP server mode", $cl);
+        self::print("--fpm        default runtime = PHP-FPM + Nginx (default)", $cl);
+        self::print("--swoole     default runtime = Swoole HTTP server", $cl);
+        self::print("             one stable Dockerfile serves both; switch via", $cl);
+        self::print("             RUNTIME in docker-compose.yml. Extra packages,", $cl);
+        self::print("             redis/pgsql/mysql, cron → docker/dependencies.sh", $cl);
         self::printLabel("docker — scaffold Docker files", $cl);
 
         // examples

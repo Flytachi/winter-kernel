@@ -5,6 +5,9 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
+        # Runtime: fpm | swoole. Change this one line to switch — no regenerate.
+        RUNTIME: fpm
+        # Dev: opcache off so mounted code changes are picked up live.
         DISABLE_OPCACHE: "true"
     environment:
       - COMPOSE_BAKE=true
