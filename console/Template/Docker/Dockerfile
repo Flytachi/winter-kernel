@@ -53,12 +53,23 @@ RUN apk add --no-cache php85 \
     && adduser winter nginx \
     && mkdir -p /var/run/ && touch /run/php8.5-fpm.pid \
     && echo "variables_order = 'EGPCS'" > /etc/php85/conf.d/99-custom.ini \
-    && sed -i '/^\[global\]/a error_log = syslog' /etc/php85/php-fpm.conf \
-    && mkdir -p /etc/service/syslog /etc/service/php-fpm /etc/service/nginx \
-    && printf '#!/bin/sh\nwhile [ ! -S /dev/log ]; do sleep 1; done\nexec php-fpm85 -F\n' > /etc/service/php-fpm/run \
-    && printf '#!/bin/sh\nwhile [ ! -S /dev/log ]; do sleep 1; done\nexec nginx -g "daemon off;"\n' > /etc/service/nginx/run \
+    && sed -i '/^\[global\]/a error_log = /proc/self/fd/2' /etc/php85/php-fpm.conf \
+    && mkdir -p /etc/service/php-fpm /etc/service/nginx \
+    && printf '#!/bin/sh\n[ -e /etc/service/syslog/run ] && while [ ! -S /dev/log ]; do sleep 1; done\nexec php-fpm85 -F\n' > /etc/service/php-fpm/run \
+    && printf '#!/bin/sh\n[ -e /etc/service/syslog/run ] && while [ ! -S /dev/log ]; do sleep 1; done\nexec nginx -g "daemon off;"\n' > /etc/service/nginx/run \
+    && chmod +x /etc/service/php-fpm/run /etc/service/nginx/run
+
+# ── syslog (ENABLED by default — comment this whole block to DISABLE) ─────────
+# syslogd tails /dev/log and streams it to stdout, so `docker logs` shows nginx +
+# php-fpm + app logs together. The php-fpm/nginx run scripts wait for /dev/log
+# ONLY while this service exists, so disabling it never hangs startup.
+# To disable: comment this block, then switch to the stdout/stderr variants in
+# docker/fpm/nginx.conf and docker/fpm/php-fpm.conf (both marked in-file).
+RUN mkdir -p /etc/service/syslog \
     && printf '#!/bin/sh\nexec syslogd -n -O /dev/stdout\n' > /etc/service/syslog/run \
-    && chmod +x /etc/service/php-fpm/run /etc/service/nginx/run /etc/service/syslog/run
+    && chmod +x /etc/service/syslog/run \
+    && sed -i 's#^error_log = /proc/self/fd/2#error_log = syslog#' /etc/php85/php-fpm.conf
+# ─────────────────────────────────────────────────────────────────────────────
 
 COPY docker/fpm/nginx.conf     /etc/nginx/nginx.conf
 COPY docker/fpm/php-fpm.conf   /etc/php85/php-fpm.d/www.conf
