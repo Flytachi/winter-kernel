@@ -30,8 +30,13 @@ use Psr\Log\LoggerInterface;
  * ## Pool size
  * Configs that implement {@see PpaPoolConfigInterface} (via {@see PpaPoolTrait})
  * control `poolMaxConnections` and `poolWaitTimeout`.
- * Configs that do NOT implement the interface default to **1 connection**
- * (safe for any driver, consistent with FPM behaviour).
+ * Configs that do NOT implement the interface default to {@see DEFAULT_POOL_SIZE}
+ * connections (Swoole only — FPM uses a single {@see $static} CDO and never
+ * touches the pool). The default is a modest middle ground: it unblocks
+ * coroutine concurrency without letting `worker_num × poolMax × instances`
+ * exhaust the database connection limit. Deployments with high concurrency
+ * should implement {@see PpaPoolConfigInterface} and tune the size against
+ * their database `max_connections`.
  *
  * ## Works with every CDO driver
  * The pool operates on `CDO` objects produced by `DbConfigInterface::connection()`,
@@ -39,6 +44,13 @@ use Psr\Log\LoggerInterface;
  */
 final class PpaConnectionPool
 {
+    /**
+     * Default Swoole pool size for configs that don't implement PpaPoolConfigInterface.
+     * Modest by design: keeps `worker_num × poolMax × instances` within typical
+     * database connection limits while still allowing coroutine concurrency.
+     */
+    private const int DEFAULT_POOL_SIZE = 5;
+
     /**
      * Swoole: one ConnectionPool per config class.
      * @var array<string, \Swoole\ConnectionPool>
@@ -205,7 +217,7 @@ final class PpaConnectionPool
             $config  = self::getConfigDb($configClass);
             $maxConn = $config instanceof PpaPoolConfigInterface
                 ? $config->getPoolMaxConnections()
-                : 1;
+                : self::DEFAULT_POOL_SIZE;
 
             self::logger()->debug("pool created: {$configClass} maxConnections={$maxConn}");
 
