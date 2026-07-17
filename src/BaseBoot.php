@@ -16,10 +16,10 @@ use Flytachi\Winter\K2\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\K2\Http\Adapter\SwooleResponse;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 use Flytachi\Winter\K2\Http\Response\ExceptionWrapper;
+use Flytachi\Winter\K2\Process\Core\WinterRunner;
 use Flytachi\Winter\K2\Route\MemoryWatcher;
 use Flytachi\Winter\K2\Route\Router;
 use Flytachi\Winter\Logger\LoggerFactory;
-use Flytachi\Winter\Thread\Runnable;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -501,92 +501,8 @@ abstract class BaseBoot
     {
         self::boot();
         LoggerFactory::setDefaultChannel('cli');
-        $logger = LoggerFactory::getLogger('Executor');
-
-        $options = getopt('', ['namespace::', 'name::', 'tag::', 'debug', 'shmkey::']);
-
-        set_time_limit(0);
-        ob_implicit_flush();
-        ignore_user_abort(true);
-
-        if (isset($options['debug'])) {
-            error_reporting(E_ALL);
-            ini_set('display_errors', '1');
-            ini_set('display_startup_errors', '1');
-        } else {
-            error_reporting(0);
-            ini_set('display_errors', '0');
-            ini_set('display_startup_errors', '0');
-        }
-
-        // Read payload from shared memory or stdin
-        if (isset($options['shmkey'])) {
-            $shmKey = (int) $options['shmkey'];
-            $shm = @shmop_open($shmKey, 'a', 0, 0);
-            if ($shm === false) {
-                fwrite(STDERR, "Error: Failed to open shared memory segment (key=$shmKey).\n");
-                exit(1);
-            }
-            $payload = shmop_read($shm, 0, shmop_size($shm));
-            shmop_delete($shm);
-            unset($shm);
-        } else {
-            $payload = stream_get_contents(STDIN);
-        }
-
-        if (empty($payload)) {
-            $logger->critical('No payload received');
-            fwrite(STDERR, "Error: No payload received.\n");
-            exit(1);
-        }
-
-        // Deserialize Runnable
-        $runnable = function_exists('\Opis\Closure\serialize')
-            ? \Opis\Closure\unserialize($payload, \Flytachi\Winter\Thread\Thread::getSerSecurity())
-            : unserialize($payload);
-        unset($payload);
-
-        if (!$runnable instanceof Runnable) {
-            $logger->critical('Payload is not a valid Runnable object');
-            fwrite(STDERR, "Error: The provided payload is not a valid Runnable object.\n");
-            exit(1);
-        }
-
-        // Set process title
-        if (function_exists('cli_set_process_title')) {
-            $ns   = isset($options['namespace']) ? ($options['namespace'] . ' ') : '';
-            $tag  = $options['tag'] ?? 'runnable';
-            $name = $options['name'] ?? substr($runnable::class, strrpos($runnable::class, '\\') + 1);
-            cli_set_process_title("Winter $ns-> $name@$tag");
-        }
-
-        // Parse --arg-key=value / --arg-key flags
-        $customArgs = [];
-        foreach (array_slice($argv, 1) as $arg) {
-            if (str_starts_with($arg, '--arg-')) {
-                $content = substr($arg, 6);
-                if (str_contains($content, '=')) {
-                    [$key, $value] = explode('=', $content, 2);
-                    $customArgs[$key] = $value;
-                } else {
-                    $customArgs[$content] = true;
-                }
-            }
-        }
-
-        try {
-            $runnable->run($customArgs);
-            exit(0);
-        } catch (\Throwable $e) {
-            $logger->critical($e->getMessage(), [
-                'exception' => $e::class,
-                'file'      => $e->getFile(),
-                'line'      => $e->getLine(),
-            ]);
-            fwrite(STDERR, "Uncaught exception: " . $e->getMessage() . "\n");
-            fwrite(STDERR, $e->getTraceAsString() . "\n");
-            exit(1);
-        }
+        $options = getopt('', ['namespace::', 'name::', 'tag::', 'debug', 'detach', 'shmkey::']);
+        exit(WinterRunner::adaptive()->execute($options));
     }
 
     // ── Internal ──────────────────────────────────────────────────────────────

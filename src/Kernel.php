@@ -6,6 +6,7 @@ namespace Flytachi\Winter\K2;
 
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\K2\Core\KernelStore;
+use Flytachi\Winter\Thread\Launch\CliLauncher;
 use Flytachi\Winter\Thread\Thread;
 use Flytachi\Winter\Logger\Context\ProcessContext;
 use Flytachi\Winter\Logger\LoggerFactory;
@@ -62,7 +63,10 @@ final class Kernel extends KernelStore
         self::bootLogger();
 
         // thread
-        self::bindThread();
+        Thread::bindLauncher(CliLauncher::adaptive(
+            secret: env('WINTER_KEY', ''),
+            runnerPath: self::threadRunnerPath(),
+        ));
     }
 
     private static function bootLogger(): void
@@ -143,38 +147,12 @@ final class Kernel extends KernelStore
         return Runtime::isSwoole() ? 'stdout' : 'stderr';
     }
 
-    private static function bindThread(): void
+    private static function threadRunnerPath(): string
     {
-        // thread runner
-        $pathBinCustom = env('WINTER_THREAD_RUNNER', '');
-        if (!empty($pathBinCustom) && file_exists($pathBinCustom)) {
-            Thread::bindRunner($pathBinCustom);
-        } else {
-            $pathBin = self::$pathRoot . '/vendor/bin/wKernelExecutor';
-            if (!file_exists($pathBin)) {
-                $pathBin = self::$pathRoot . '/vendor/bin/wExecutor';
-                if (!file_exists($pathBin)) {
-                    return;
-                }
-            }
-            Thread::bindRunner($pathBin);
+        $runner = env('WINTER_THREAD_RUNNER');
+        if (!empty($runner) && file_exists($runner)) {
+            return $runner;
         }
-
-        // thread binary path
-        $binaryPath = env('WINTER_BINARY_PATH', '');
-        if (!empty($binaryPath)) {
-            Thread::bindBinaryPath($binaryPath);
-        }
-
-        // thread security
-        $key = env('WINTER_KEY', '');
-        if (!empty($key)) {
-            Thread::bindSerSecurity($key);
-        }
-
-        // thread payload mode
-        if (extension_loaded('shmop')) {
-            Thread::bindPayloadMode(Thread::PAYLOAD_SHM);
-        }
+        return Kernel::$pathRoot . '/vendor/bin/wKernelRunner';
     }
 }

@@ -37,7 +37,9 @@ abstract class Dispatch implements Dispatchable
             $arguments['storeKey'] = $storeKey;
         }
 
-        return $thread->start(arguments: $arguments);
+        return $thread->start(
+            arguments: $arguments
+        );
     }
 
     final public static function start(mixed $data = null): void
