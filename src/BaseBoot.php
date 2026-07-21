@@ -10,6 +10,8 @@ use Flytachi\Winter\Console\Core;
 use Flytachi\Winter\DI\Collector\DICollector;
 use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\DI\Scanner;
+use Flytachi\Winter\K2\Dev\Async\AsyncCollector;
+use Flytachi\Winter\K2\Dev\Async\Proxy\ProxyFactory;
 use Flytachi\Winter\K2\Http\Adapter\FpmRequest;
 use Flytachi\Winter\K2\Http\Adapter\FpmResponse;
 use Flytachi\Winter\K2\Http\Adapter\SwooleRequest;
@@ -522,19 +524,33 @@ abstract class BaseBoot
         static::configure();
 
         $c = Container::init();
+        $debug = (bool) env('DEBUG', false);
+
+        // Swaps classes carrying #[Async] for their generated proxies. Shares the
+        // scan with DICollector and must run after it — that collector rebinds a
+        // class to itself, which would undo the substitution.
+        $async = new AsyncCollector(
+            $c,
+            ProxyFactory::forKernel($debug),
+            $debug ? null : Kernel::$pathStorageVolatile . '/async.php',
+        );
 
         Scanner::run(
             rootDir: Kernel::$pathRoot,
-            cache: env('DEBUG', false) ? null
+            cache: $debug ? null
                 : Kernel::$pathStorageVolatile . '/di.php',
         )
             ->collect(new DICollector($c))
+            ->collect($async)
             ->execute();
+
+        $async->flush();
 
         // Default contextual logger: #[Autowired] LoggerInterface $logger resolves to a
         // logger named after the class it is injected into. Override in providers() by
         // re-registering contextual(LoggerInterface::class, …).
-        $c->contextual(LoggerInterface::class,
+        $c->contextual(
+            LoggerInterface::class,
             static fn(Container $c, ?string $consumer) => LoggerFactory::getLogger($consumer ?? 'app'),
         );
 

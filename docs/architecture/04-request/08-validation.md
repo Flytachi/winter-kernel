@@ -339,7 +339,9 @@ Return `null` to pass, return a string to fail with that message.
 
 ## Legacy: `K1ValidationTrait`
 
-`Flytachi\Winter\K2\Http\Request\K1ValidationTrait` is the older, string-rule API used by `RequestObject` (now `#[\Deprecated]`). It is kept for backwards compatibility — **prefer the attribute-based system above for any new code**.
+`Flytachi\Winter\K2\Http\Request\K1ValidationTrait` is the older, string-rule API. It is kept for backwards compatibility — **prefer the attribute-based system above for any new code**.
+
+Use it on any DTO of your own; there is no base class to extend.
 
 Key differences from the attribute system:
 
@@ -376,10 +378,12 @@ Key differences from the attribute system:
 ### Usage
 
 ```php
-use Flytachi\Winter\K2\Http\Request\RequestObject;
+use Flytachi\Winter\K2\Http\Request\K1ValidationTrait;
 
-final class CreateUserRequest extends RequestObject
+final class CreateUserRequest
 {
+    use K1ValidationTrait;
+
     public function __construct(
         public readonly ?string $name = null,
         public readonly ?int    $age  = null,
@@ -413,4 +417,4 @@ Rules apply **per existing element**, and failures report the resolved path
 element-level checks run — validate the parent itself with a separate
 `$this->validate('staffs', ['array'])` when its presence is required.
 
-> **Migration tip:** when you move a `RequestObject` to a plain readonly DTO with `#[Constraint]` attributes, you also gain (a) all-errors-at-once reporting, (b) per-rule `message:` overrides, and (c) richer i18n placeholders (`:max`, `:min`, …).
+> **Migration tip:** when you move a `K1ValidationTrait` DTO to `#[Constraint]` attributes, you also gain (a) all-errors-at-once reporting, (b) per-rule `message:` overrides, and (c) richer i18n placeholders (`:max`, `:min`, …).

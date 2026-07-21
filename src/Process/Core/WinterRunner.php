@@ -72,7 +72,7 @@ final readonly class WinterRunner extends AdaptiveRunner
             return 0;
         } catch (\Throwable $e) {
             $logger->critical('Uncaught exception in background process: ' . $e->getMessage());
-            if (env('DEBUG' , false)) {
+            if (env('DEBUG', false)) {
                 $logger->critical($e->getTraceAsString());
             }
             return 1;

@@ -8,7 +8,7 @@ use DateTime;
 use Flytachi\Winter\K2\Localization\Locale;
 
 /**
- * Legacy string-rule validation helpers extracted from RequestObject.
+ * Legacy string-rule validation helpers, usable on any request DTO.
  *
  * Kept for backwards compatibility — new code should prefer the attribute-based
  * system (#[Valid] + #[Constraint] under Flytachi\Winter\K2\Http\Request\Validation\*),

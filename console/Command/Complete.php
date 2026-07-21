@@ -81,11 +81,13 @@ class Complete extends Cmd
 
         // --- di ---
         'di' => [
-            'build:scan project and write the DI cache file',
-            'clean:delete the DI cache file',
+            'build:scan project once — write the DI cache and generate #[Async] proxies',
+            'clean:delete the DI cache and every generated proxy',
             'show:list classes in the DI cache (or a live scan if absent)',
+            'async:list #[Async] methods and whether their proxy is built',
         ],
         'di show' => [],   // takes optional FQCN substring as argument
+        'di async' => [],  // takes optional FQCN substring as argument
 
         // --- storage ---
         'storage' => [
