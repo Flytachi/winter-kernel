@@ -327,6 +327,14 @@ abstract class BaseBoot
 
     // ── Entry points ──────────────────────────────────────────────────────────
 
+    public static function base(?string $defaultChannelName = null): void
+    {
+        self::boot();
+        if ($defaultChannelName !== null) {
+            LoggerFactory::setDefaultChannel($defaultChannelName);
+        }
+    }
+
     /**
      * FPM entry point — one request per process lifecycle.
      *
