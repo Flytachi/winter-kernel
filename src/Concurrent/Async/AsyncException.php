@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Dev\Async;
+namespace Flytachi\Winter\K2\Concurrent\Async;
 
 /**
  * Thrown when an {@see Async} method cannot be proxied.

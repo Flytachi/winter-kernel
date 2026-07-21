@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Dev\Concurrent\Executor;
+namespace Flytachi\Winter\K2\Concurrent\Executor;
 
-use Flytachi\Winter\K2\Dev\Concurrent\CompletableFuture;
-use Flytachi\Winter\K2\Dev\Concurrent\ExecutorService;
-use Flytachi\Winter\K2\Dev\Concurrent\Future;
-use Flytachi\Winter\K2\Dev\Concurrent\RejectedExecutionException;
+use Flytachi\Winter\K2\Concurrent\CompletableFuture;
+use Flytachi\Winter\K2\Concurrent\ExecutorService;
+use Flytachi\Winter\K2\Concurrent\Future;
+use Flytachi\Winter\K2\Concurrent\RejectedExecutionException;
 use Flytachi\Winter\Logger\LoggerFactory;
 
 /**
@@ -32,7 +32,7 @@ use Flytachi\Winter\Logger\LoggerFactory;
  * Note that `max_execution_time` and FPM's `request_terminate_timeout` keep
  * counting during the drain: a long deferred task can still be killed.
  *
- * @see \Flytachi\Winter\K2\Dev\Concurrent\Executors
+ * @see \Flytachi\Winter\K2\Concurrent\Executors
  */
 final class DeferredExecutorService implements ExecutorService
 {

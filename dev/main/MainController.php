@@ -3,7 +3,7 @@
 namespace Main;
 
 use Flytachi\Winter\DI\Attribute\Inject;
-use Flytachi\Winter\K2\Dev\Concurrent\Executors;
+use Flytachi\Winter\K2\Concurrent\Executors;
 use Flytachi\Winter\K2\Http\Request\Annotation\PathVariable;
 use Flytachi\Winter\K2\Http\Request\Annotation\RequestBody;
 use Flytachi\Winter\K2\Http\Request\Annotation\RequestParam;

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Dev\Concurrent;
+namespace Flytachi\Winter\K2\Concurrent;
 
 /**
  * Handle to the result of an asynchronous computation.

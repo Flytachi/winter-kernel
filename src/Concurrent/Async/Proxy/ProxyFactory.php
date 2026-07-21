@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Dev\Async\Proxy;
+namespace Flytachi\Winter\K2\Concurrent\Async\Proxy;
 
-use Flytachi\Winter\K2\Dev\Async\AsyncException;
+use Flytachi\Winter\K2\Concurrent\Async\AsyncException;
 use Flytachi\Winter\K2\Kernel;
 
 /**
@@ -73,15 +73,18 @@ final class ProxyFactory
     {
         /** @var class-string $proxyClass */
         $proxyClass = ProxyGenerator::proxyClass($class->getName());
+        $file = $this->fileFor($class->getName());
+
+        // The file is reconciled before the class is, because the two can
+        // disagree: `call di build` clears the directory in a process whose
+        // boot has already loaded the proxies, and skipping the write here
+        // would leave the build reporting success over an empty directory.
+        if ($this->isStale($file, $class)) {
+            $this->write($file, ProxyGenerator::generate($class));
+        }
 
         if (class_exists($proxyClass, false)) {
             return $proxyClass;
-        }
-
-        $file = $this->fileFor($class->getName());
-
-        if ($this->isStale($file, $class)) {
-            $this->write($file, ProxyGenerator::generate($class));
         }
 
         require_once $file;

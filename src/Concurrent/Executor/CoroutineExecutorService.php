@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Dev\Concurrent\Executor;
+namespace Flytachi\Winter\K2\Concurrent\Executor;
 
 use Flytachi\Winter\Base\Runtime;
-use Flytachi\Winter\K2\Dev\Concurrent\CompletableFuture;
-use Flytachi\Winter\K2\Dev\Concurrent\ExecutorService;
-use Flytachi\Winter\K2\Dev\Concurrent\Future;
-use Flytachi\Winter\K2\Dev\Concurrent\RejectedExecutionException;
+use Flytachi\Winter\K2\Concurrent\CompletableFuture;
+use Flytachi\Winter\K2\Concurrent\ExecutorService;
+use Flytachi\Winter\K2\Concurrent\Future;
+use Flytachi\Winter\K2\Concurrent\RejectedExecutionException;
 use Flytachi\Winter\Logger\LoggerFactory;
 
 /**
@@ -25,10 +25,10 @@ use Flytachi\Winter\Logger\LoggerFactory;
  * repository query state) is deliberately **not** inherited: everything a task
  * needs must be passed through its arguments.
  *
- * Requires an active coroutine; use {@see \Flytachi\Winter\K2\Dev\Concurrent\Executors::common()}
+ * Requires an active coroutine; use {@see \Flytachi\Winter\K2\Concurrent\Executors::common()}
  * to get the right backend for the current runtime.
  *
- * @see \Flytachi\Winter\K2\Dev\Concurrent\Executors
+ * @see \Flytachi\Winter\K2\Concurrent\Executors
  */
 final class CoroutineExecutorService implements ExecutorService
 {

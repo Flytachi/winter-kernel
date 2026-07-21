@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Dev\Concurrent;
+namespace Flytachi\Winter\K2\Concurrent;
 
 use Flytachi\Winter\Base\Runtime;
-use Flytachi\Winter\K2\Dev\Concurrent\Executor\CoroutineExecutorService;
-use Flytachi\Winter\K2\Dev\Concurrent\Executor\DeferredExecutorService;
+use Flytachi\Winter\K2\Concurrent\Executor\CoroutineExecutorService;
+use Flytachi\Winter\K2\Concurrent\Executor\DeferredExecutorService;
 
 /**
  * Factory for {@see ExecutorService} instances.

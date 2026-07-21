@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Dev\Async;
+namespace Flytachi\Winter\K2\Concurrent\Async;
 
 use Flytachi\Winter\DI\Attribute\Request;
 use Flytachi\Winter\DI\Attribute\Singleton;
 use Flytachi\Winter\DI\Attribute\Transient;
 use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\DI\Contract\CollectorInterface;
-use Flytachi\Winter\K2\Dev\Async\Proxy\ProxyFactory;
-use Flytachi\Winter\K2\Dev\Async\Proxy\ProxyGenerator;
+use Flytachi\Winter\K2\Concurrent\Async\Proxy\ProxyFactory;
+use Flytachi\Winter\K2\Concurrent\Async\Proxy\ProxyGenerator;
 use Flytachi\Winter\K2\Kernel;
 
 /**

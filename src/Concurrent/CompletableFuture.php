@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Dev\Concurrent;
+namespace Flytachi\Winter\K2\Concurrent;
 
 /**
  * A {@see Future} whose completion can be driven explicitly.

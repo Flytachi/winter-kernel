@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Dev\Concurrent;
+namespace Flytachi\Winter\K2\Concurrent;
 
 /**
  * Thrown by {@see Future::get()} when the given timeout elapsed before the task completed.

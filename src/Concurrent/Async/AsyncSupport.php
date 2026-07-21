@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Dev\Async;
+namespace Flytachi\Winter\K2\Concurrent\Async;
 
-use Flytachi\Winter\K2\Dev\Concurrent\ExecutorService;
-use Flytachi\Winter\K2\Dev\Concurrent\Future;
+use Flytachi\Winter\K2\Concurrent\ExecutorService;
+use Flytachi\Winter\K2\Concurrent\Future;
 
 /**
  * Runtime helper called by generated proxies.
