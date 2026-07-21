@@ -331,7 +331,7 @@ abstract class BaseBoot
     {
         self::boot();
         if ($defaultChannelName !== null) {
-            LoggerFactory::channel($defaultChannelName);
+            Kernel::channel($defaultChannelName);
             LoggerFactory::setDefaultChannel($defaultChannelName);
         }
     }
