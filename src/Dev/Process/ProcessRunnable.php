@@ -1,0 +1,31 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Flytachi\Winter\K2\Dev\Process;
+
+use Flytachi\Winter\Thread\Runnable;
+
+/**
+ * Serializable entry point that runs a {@see Process} in a detached background
+ * process.
+ *
+ * The launcher (via {@see \Flytachi\Winter\Thread\Thread}) re-execs the runner
+ * binary, which boots the framework and then calls {@see run()}. Only the class
+ * name travels across the process boundary — the process itself is rebuilt from
+ * the container in the child, so nothing non-serializable is captured.
+ */
+final class ProcessRunnable implements Runnable
+{
+    /**
+     * @param class-string<Process> $class
+     */
+    public function __construct(private string $class)
+    {
+    }
+
+    public function run(array $args): void
+    {
+        ($this->class)::start();
+    }
+}
