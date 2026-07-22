@@ -91,6 +91,46 @@ abstract class Process
         return $this->engine->running();
     }
 
+    /**
+     * Requests a graceful stop from inside the body or a signal hook — flips
+     * {@see running()} to false so the loop exits on its next check.
+     */
+    final protected function requestStop(): void
+    {
+        $this->engine->requestStop();
+    }
+
+    // -------------------------------------------------------------------------
+    // Signal hooks — override to react to a specific signal
+    // -------------------------------------------------------------------------
+
+    /**
+     * SIGTERM — the standard "please stop" signal (what {@see stop()} sends).
+     * Default: graceful stop. Override to add cleanup before the loop exits.
+     */
+    protected function onTerminate(): void
+    {
+        $this->requestStop();
+    }
+
+    /**
+     * SIGINT — interrupt (Ctrl-C). Default: graceful stop.
+     */
+    protected function onInterrupt(): void
+    {
+        $this->requestStop();
+    }
+
+    /**
+     * SIGHUP — the connection/terminal closed, conventionally "reload".
+     * Default: graceful stop. Override to reload config without stopping
+     * (simply do not call {@see requestStop()}).
+     */
+    protected function onClose(): void
+    {
+        $this->requestStop();
+    }
+
     // -------------------------------------------------------------------------
     // Lifecycle
     // -------------------------------------------------------------------------
@@ -201,7 +241,11 @@ abstract class Process
         $this->logger = LoggerFactory::getLogger(static::class);
         $this->engine = Engines::common($this->concurrency);
 
-        $this->engine->enter(fn() => $this->run());
+        $this->engine->enter(fn() => $this->run(), [
+            SIGTERM => fn() => $this->onTerminate(),
+            SIGINT => fn() => $this->onInterrupt(),
+            SIGHUP => fn() => $this->onClose(),
+        ]);
     }
 
     final protected static function key(): string

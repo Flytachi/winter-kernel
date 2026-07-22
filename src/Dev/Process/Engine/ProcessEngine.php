@@ -20,12 +20,13 @@ use Flytachi\Winter\K2\Concurrent\Future;
 interface ProcessEngine
 {
     /**
-     * Establishes the runtime context, runs the body, then drains outstanding
-     * tasks before returning.
+     * Establishes the runtime context, installs the signal handlers, runs the
+     * body, then drains outstanding tasks before returning.
      *
      * @param callable $body The process body (its `run()` method).
+     * @param array<int, callable> $signals Map of signal number to handler, installed with the runtime-appropriate mechanism.
      */
-    public function enter(callable $body): void;
+    public function enter(callable $body, array $signals = []): void;
 
     /**
      * Dispatches a task concurrently, capped by the configured concurrency.

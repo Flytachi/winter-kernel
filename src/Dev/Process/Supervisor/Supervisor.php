@@ -25,10 +25,15 @@ final class Supervisor
     private const float BACKOFF_CAP = 30.0;
 
     private bool $stop = false;
+    /** @var array<int, true> Live worker PIDs. */
+    private array $workers = [];
 
     /**
      * Runs the supervision loop until every worker is done or a stop signal
      * arrives. Returns the terminal state.
+     *
+     * SIGTERM/SIGINT stop the daemon (workers are stopped, no restart). SIGHUP is
+     * forwarded to the workers — a "reload" that does not stop the supervisor.
      *
      * @param Daemon $daemon Daemon supplying policy (replicas, restart, limits).
      * @param callable $worker Worker body run in each forked child.
@@ -39,21 +44,21 @@ final class Supervisor
         pcntl_async_signals(true);
         pcntl_signal(SIGTERM, fn() => $this->stop = true);
         pcntl_signal(SIGINT, fn() => $this->stop = true);
+        pcntl_signal(SIGHUP, fn() => $this->reloadWorkers());
 
         $replicas = $daemon->replicas();
         $policy = $daemon->restartPolicy();
         $maxRestarts = $daemon->maxRestarts();
         $base = max(0.0, $daemon->backoffBase());
 
-        /** @var array<int, true> $workers Live worker PIDs. */
-        $workers = [];
+        $this->workers = [];
         for ($i = 0; $i < $replicas; $i++) {
-            $workers[$this->spawn($worker)] = true;
+            $this->workers[$this->spawn($worker)] = true;
         }
 
         $restarts = 0;
         $failures = 0;
-        $onChange($restarts, array_keys($workers));
+        $onChange($restarts, array_keys($this->workers));
 
         while (!$this->stop) {
             $pid = pcntl_waitpid(-1, $status, WNOHANG);
@@ -63,7 +68,7 @@ final class Supervisor
                 continue;
             }
 
-            unset($workers[$pid]);
+            unset($this->workers[$pid]);
             $crashed = !pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0;
 
             if ($this->stop) {
@@ -71,10 +76,10 @@ final class Supervisor
             }
 
             if (!$policy->shouldRestart($crashed)) {
-                if ($workers === []) {
+                if ($this->workers === []) {
                     return ProcessState::TERMINATED;
                 }
-                $onChange($restarts, array_keys($workers));
+                $onChange($restarts, array_keys($this->workers));
                 continue;
             }
 
@@ -82,7 +87,7 @@ final class Supervisor
             $failures = $crashed ? $failures + 1 : 0;
 
             if ($maxRestarts > 0 && $restarts >= $maxRestarts) {
-                $this->stopAll($workers);
+                $this->stopAll();
                 return ProcessState::FAILED;
             }
 
@@ -91,12 +96,24 @@ final class Supervisor
                 break;
             }
 
-            $workers[$this->spawn($worker)] = true;
-            $onChange($restarts, array_keys($workers));
+            $this->workers[$this->spawn($worker)] = true;
+            $onChange($restarts, array_keys($this->workers));
         }
 
-        $this->stopAll($workers);
+        $this->stopAll();
         return ProcessState::TERMINATED;
+    }
+
+    /**
+     * Forwards SIGHUP to every worker — a reload that leaves the supervisor
+     * running. Each worker's {@see \Flytachi\Winter\K2\Dev\Process\Process::onClose()}
+     * decides what reload means.
+     */
+    private function reloadWorkers(): void
+    {
+        foreach (array_keys($this->workers) as $pid) {
+            posix_kill($pid, SIGHUP);
+        }
     }
 
     /**
@@ -110,6 +127,7 @@ final class Supervisor
         if ($pid === 0) {
             pcntl_signal(SIGTERM, SIG_DFL);
             pcntl_signal(SIGINT, SIG_DFL);
+            pcntl_signal(SIGHUP, SIG_DFL);
             try {
                 $worker();
                 exit(0);
@@ -147,16 +165,15 @@ final class Supervisor
 
     /**
      * Signals every worker to stop and waits for them to exit.
-     *
-     * @param array<int, true> $workers
      */
-    private function stopAll(array $workers): void
+    private function stopAll(): void
     {
-        foreach (array_keys($workers) as $pid) {
+        foreach (array_keys($this->workers) as $pid) {
             posix_kill($pid, SIGTERM);
         }
-        foreach (array_keys($workers) as $pid) {
+        foreach (array_keys($this->workers) as $pid) {
             pcntl_waitpid($pid, $status);
         }
+        $this->workers = [];
     }
 }

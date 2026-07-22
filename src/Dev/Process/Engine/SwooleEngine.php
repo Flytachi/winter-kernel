@@ -30,11 +30,11 @@ final class SwooleEngine implements ProcessEngine
     {
     }
 
-    public function enter(callable $body): void
+    public function enter(callable $body, array $signals = []): void
     {
         $error = null;
 
-        \Swoole\Coroutine\run(function () use ($body, &$error): void {
+        \Swoole\Coroutine\run(function () use ($body, $signals, &$error): void {
             if ($this->concurrency > 0) {
                 $this->semaphore = new \Swoole\Coroutine\Channel($this->concurrency);
                 for ($i = 0; $i < $this->concurrency; $i++) {
@@ -42,8 +42,9 @@ final class SwooleEngine implements ProcessEngine
                 }
             }
 
-            \Swoole\Process::signal(SIGTERM, fn() => $this->requestStop());
-            \Swoole\Process::signal(SIGINT, fn() => $this->requestStop());
+            foreach ($signals as $signo => $handler) {
+                \Swoole\Process::signal($signo, $handler);
+            }
 
             try {
                 $body();

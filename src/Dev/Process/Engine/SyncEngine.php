@@ -31,12 +31,13 @@ final class SyncEngine implements ProcessEngine
         $this->hasPcntl = extension_loaded('pcntl');
     }
 
-    public function enter(callable $body): void
+    public function enter(callable $body, array $signals = []): void
     {
         if ($this->hasPcntl) {
             pcntl_async_signals(true);
-            pcntl_signal(SIGTERM, fn() => $this->requestStop());
-            pcntl_signal(SIGINT, fn() => $this->requestStop());
+            foreach ($signals as $signo => $handler) {
+                pcntl_signal($signo, $handler);
+            }
         }
 
         $body();
