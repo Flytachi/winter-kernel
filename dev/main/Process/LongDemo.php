@@ -17,11 +17,27 @@ class LongDemo extends Process
         $this->logger->info('LongDemo START pid=' . $this->pid);
 
         $tick = 0;
-        while ($this->running()) {
+        while ($this->isRunning()) {
             $this->logger->info('LongDemo tick ' . (++$tick));
             $this->sleep(1.0);
+            $this->spawn(function () {
+                $this->logger->notice('spawner');
+                $i = 10;
+                while ($this->isRunning()) {
+                    $i--;
+                    if ($i == 0) {
+                        break;
+                    }
+                    $this->sleep(1);
+                }
+            });
         }
 
         $this->logger->info('LongDemo graceful exit after ' . $tick . ' ticks');
+    }
+
+    protected function onShutdown(): void
+    {
+        $this->logger->alert('LongDemo shutdown');
     }
 }

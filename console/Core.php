@@ -12,6 +12,7 @@ class Core extends CoreHandle
     protected static array $aliases = [
         'sc' => 'Script',
         'th' => 'Thread',
+        'proc' => 'Process',
     ];
 
     public function __construct($args)

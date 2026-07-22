@@ -21,7 +21,7 @@ class StableDaemon extends Daemon
     {
         $this->logger->info('StableDaemon worker START pid=' . $this->pid);
         $tick = 0;
-        while ($this->running()) {
+        while ($this->isRunning()) {
             $this->logger->info('StableDaemon worker ' . $this->pid . ' tick ' . (++$tick));
             $this->sleep(1.0);
         }

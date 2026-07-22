@@ -10,6 +10,7 @@ use Flytachi\Winter\Console\Inc\CmdCustom;
 use Flytachi\Winter\K2\Collector\ImplementorCollector;
 use Flytachi\Winter\K2\Collector\SubclassCollector;
 use Flytachi\Winter\K2\Core\ClassScanner;
+use Flytachi\Winter\K2\Dev\Process\Process as ProcessUnit;
 use Flytachi\Winter\K2\Process\Core\Dispatchable;
 use Flytachi\Winter\K2\Process\ThreadDaemon;
 
@@ -101,6 +102,11 @@ class Complete extends Cmd
         'thread' => [
             'list:list all Dispatchable classes',
             'daemons:list daemons with live status',
+        ],
+
+        // --- process / proc ---
+        'process' => [
+            'list:list all processes with live state',
         ],
 
         // --- db ---
@@ -201,6 +207,27 @@ class Complete extends Cmd
             $base = array_merge($this->getDispatchableClasses(), $base);
         }
 
+        // process: list + classes at top level; once a class is selected,
+        // suggest lifecycle actions, then flags per action.
+        if ($resolved === 'process' && $sub !== null && $sub !== 'list') {
+            if ($act === null) {
+                $base = [
+                    'start:start (foreground; -d for background)',
+                    'stop:send graceful stop (SIGTERM)',
+                    'status:show status (-v for detail)',
+                    '-d:start detached in background',
+                ];
+            } elseif ($act === 'status') {
+                $base = ['-v:detailed status (resources + workers)'];
+            } elseif ($act === 'start') {
+                $base = ['-d:start detached in background'];
+            } else {
+                $base = [];
+            }
+        } elseif ($resolved === 'process' && $sub === null) {
+            $base = array_merge($this->getProcessClasses(), $base);
+        }
+
         // help: suggest command names
         if ($resolved === 'help' && $sub === null) {
             $base = $this->getCommandNames();
@@ -214,9 +241,10 @@ class Complete extends Cmd
         if ($current === '') {
             return $items;
         }
-        return array_values(array_filter($items, function (string $s) use ($current): bool {
+        $needle = strtolower($current);
+        return array_values(array_filter($items, function (string $s) use ($needle): bool {
             $word = strstr($s, ':', true) ?: $s;
-            return str_starts_with($word, $current);
+            return str_starts_with(strtolower($word), $needle);
         }));
     }
 
@@ -263,6 +291,17 @@ class Complete extends Cmd
     private function getDaemonClasses(): array
     {
         $collector = new SubclassCollector(ThreadDaemon::class);
+        ClassScanner::scan($collector);
+
+        return array_map(
+            fn(\ReflectionClass $ref) => str_replace('\\', '.', $ref->getName()),
+            $collector->getResult()
+        );
+    }
+
+    private function getProcessClasses(): array
+    {
+        $collector = new SubclassCollector(ProcessUnit::class);
         ClassScanner::scan($collector);
 
         return array_map(

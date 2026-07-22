@@ -25,8 +25,15 @@ interface ProcessEngine
      *
      * @param callable $body The process body (its `run()` method).
      * @param array<int, callable> $signals Map of signal number to handler, installed with the runtime-appropriate mechanism.
+     * @param callable|null $onForceExit Run just before the grace timer forces the process down.
+     * @param callable|null $onHeartbeat Run about once a second while the body runs (e.g. to flush status).
      */
-    public function enter(callable $body, array $signals = []): void;
+    public function enter(
+        callable $body,
+        array $signals = [],
+        ?callable $onForceExit = null,
+        ?callable $onHeartbeat = null,
+    ): void;
 
     /**
      * Dispatches a task concurrently, capped by the configured concurrency.
@@ -39,21 +46,27 @@ interface ProcessEngine
     public function spawn(callable $task): Future;
 
     /**
-     * Pauses the body without blocking sibling tasks under Swoole.
+     * Pauses the body without blocking sibling tasks under Swoole. Throws
+     * {@see \Flytachi\Winter\K2\Dev\Process\InterruptedException} once if the body
+     * was interrupted (an IDLE wait woken by a stop request).
      *
      * @param float $seconds Seconds to pause.
      */
     public function sleep(float $seconds): void;
 
     /**
-     * Returns false once a stop signal (SIGTERM/SIGINT) has been received.
+     * Returns false once a stop has been requested.
      */
     public function running(): bool;
 
     /**
      * Requests a graceful stop, flipping {@see running()} to false.
+     *
+     * @param bool $interrupt Wake a blocked (IDLE) body so it unwinds at once.
+     *                        Pass false while an inline unit is BUSY so it is not
+     *                        aborted mid-work.
      */
-    public function requestStop(): void;
+    public function requestStop(bool $interrupt): void;
 
     /**
      * Number of dispatched tasks that have not settled yet.

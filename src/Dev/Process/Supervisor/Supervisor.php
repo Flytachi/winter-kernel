@@ -46,7 +46,10 @@ final class Supervisor
         pcntl_async_signals(true);
         pcntl_signal(SIGTERM, fn() => $this->stop = true);
         pcntl_signal(SIGINT, fn() => $this->stop = true);
-        pcntl_signal(SIGHUP, fn() => $this->reloadWorkers());
+        // Control signals are forwarded to the workers, leaving the supervisor up.
+        pcntl_signal(SIGHUP, fn() => $this->forwardToWorkers(SIGHUP));
+        pcntl_signal(SIGUSR1, fn() => $this->forwardToWorkers(SIGUSR1));
+        pcntl_signal(SIGUSR2, fn() => $this->forwardToWorkers(SIGUSR2));
 
         $replicas = $daemon->replicas();
         $policy = $daemon->restartPolicy();
@@ -107,14 +110,13 @@ final class Supervisor
     }
 
     /**
-     * Forwards SIGHUP to every worker — a reload that leaves the supervisor
-     * running. Each worker's {@see \Flytachi\Winter\K2\Dev\Process\Process::onClose()}
-     * decides what reload means.
+     * Forwards a control signal (HUP/USR1/USR2) to every worker, leaving the
+     * supervisor running. Each worker's hook decides what it means.
      */
-    private function reloadWorkers(): void
+    private function forwardToWorkers(int $signo): void
     {
         foreach (array_keys($this->workers) as $pid) {
-            posix_kill($pid, SIGHUP);
+            posix_kill($pid, $signo);
         }
     }
 
@@ -127,9 +129,12 @@ final class Supervisor
     {
         $pid = pcntl_fork();
         if ($pid === 0) {
+            // Drop inherited handlers; the worker's engine installs its own.
             pcntl_signal(SIGTERM, SIG_DFL);
             pcntl_signal(SIGINT, SIG_DFL);
             pcntl_signal(SIGHUP, SIG_DFL);
+            pcntl_signal(SIGUSR1, SIG_DFL);
+            pcntl_signal(SIGUSR2, SIG_DFL);
             try {
                 $worker();
                 exit(0);

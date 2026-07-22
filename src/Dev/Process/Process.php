@@ -9,35 +9,33 @@ use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\K2\Concurrent\Future;
 use Flytachi\Winter\K2\Dev\Process\Engine\Engines;
 use Flytachi\Winter\K2\Dev\Process\Engine\ProcessEngine;
-use Flytachi\Winter\K2\Process\Entity\TStats;
 use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\Thread\Thread;
 use Psr\Log\LoggerInterface;
 
 /**
- * Base for a managed, runtime-agnostic process.
+ * Base for a managed, runtime-agnostic process — the skeleton that turns a body
+ * into a controllable unit.
  *
- * A process is a body the developer writes once in {@see run()}. The framework
- * supplies the lifecycle (start / stop / status, visible from CLI and web), the
- * runtime (coroutines under Swoole, forks otherwise), a shared PPA pool, and
- * graceful shutdown — none of which the body has to know about.
- *
- * The body may be one-shot (walk the database, build an archive, return) or
- * long-lived (loop on a connection until stopped). Concurrency is opt-in: call
- * {@see spawn()} only where it helps.
+ * You write {@see run()}; the framework supplies the runtime (coroutines under
+ * Swoole, forks otherwise), concurrency ({@see spawn()}), cooperative
+ * cancellation ({@see isRunning()} / {@see sleep()} + {@see InterruptedException}),
+ * a signal contract (5 hooks), an activity state ({@see Activity}), guaranteed
+ * teardown ({@see onShutdown()}) and lifecycle control from CLI/web.
  *
  * ```
- * class BillingConsumer extends Process
+ * class Consumer extends Process
  * {
- *     protected int $concurrency = 20;
- *
  *     public function run(): void
  *     {
  *         $ch = $this->rabbit->connect();
- *         while ($this->running()) {
- *             $msg = $ch->get();
- *             if ($msg === null) { $this->sleep(0.2); continue; }
- *             $this->spawn(fn() => $this->handle($msg));
+ *         while ($this->isRunning()) {
+ *             $msg = $ch->get(timeout: 1.0);
+ *             if ($msg === null) { continue; }
+ *             $this->markBusy();
+ *             $this->handle($msg);
+ *             $ch->ack($msg);
+ *             $this->markIdle();
  *         }
  *         $ch->close();
  *     }
@@ -48,11 +46,23 @@ abstract class Process
 {
     /** Maximum simultaneous {@see spawn()} tasks; 0 means unlimited. */
     protected int $concurrency = 0;
+    /** Seconds to wait for a BUSY unit / in-flight spawns to drain on stop before forcing. 0 = wait forever. */
+    protected float $grace = 0.0;
+    /** Title shown in `ps` / status; defaults to the short class name. */
+    protected ?string $processTitle = null;
 
     protected LoggerInterface $logger;
     protected int $pid;
     private ProcessEngine $engine;
     private bool $stopping = false;
+    private bool $shutdownDone = false;
+    private bool $inlineBusy = false;
+
+    // Status store bookkeeping (a bare process owns its record; a daemon worker does not).
+    private bool $ownsRecord = false;
+    private int $startedAt = 0;
+    private ProcessState $state = ProcessState::NEW;
+    private ?Activity $writtenActivity = null;
 
     final public function __construct()
     {
@@ -68,16 +78,16 @@ abstract class Process
     // -------------------------------------------------------------------------
 
     /**
-     * Dispatches a task concurrently (coroutine under Swoole, fork otherwise),
-     * capped by {@see $concurrency}.
+     * Keep looping? False once a stop has been requested (signal or {@see requestStop()}).
      */
-    final protected function spawn(callable $task): Future
+    final protected function isRunning(): bool
     {
-        return $this->engine->spawn($task);
+        return $this->engine->running();
     }
 
     /**
-     * Pauses the body — non-blocking under Swoole.
+     * Interruptible pause — non-blocking under Swoole. Throws
+     * {@see InterruptedException} if an IDLE wait is woken by a stop.
      */
     final protected function sleep(float $seconds): void
     {
@@ -85,60 +95,94 @@ abstract class Process
     }
 
     /**
-     * False once a stop signal has arrived; drive loops with it.
+     * Dispatches a task concurrently (coroutine under Swoole, fork otherwise),
+     * capped by {@see $concurrency}. The process always waits for its spawns to
+     * finish before exiting; while any is in flight the process is BUSY.
      */
-    final protected function running(): bool
+    final protected function spawn(callable $task): Future
     {
-        return $this->engine->running();
+        return $this->engine->spawn($task);
     }
 
     /**
-     * Requests a graceful stop from inside the body or a signal hook — flips
-     * {@see running()} to false so the loop exits on its next check.
+     * Requests a graceful stop of this process from inside the body — the
+     * cooperative equivalent of receiving SIGTERM.
      */
     final protected function requestStop(): void
     {
-        $this->engine->requestStop();
+        // Do not abort an inline BUSY unit; wake only an IDLE wait.
+        $this->engine->requestStop(!$this->inlineBusy);
+    }
+
+    /**
+     * Marks the start of an inline unit of work (no {@see spawn()}). Keeps the
+     * process BUSY so it is not interrupted mid-unit and not scaled down.
+     */
+    final protected function markBusy(): void
+    {
+        $this->inlineBusy = true;
+    }
+
+    /**
+     * Marks the end of an inline unit of work.
+     */
+    final protected function markIdle(): void
+    {
+        $this->inlineBusy = false;
+    }
+
+    /**
+     * Current activity: BUSY while an inline unit is marked or any spawn is in
+     * flight, IDLE otherwise.
+     */
+    final protected function activity(): Activity
+    {
+        return $this->inlineBusy || $this->engine->inFlight() > 0
+            ? Activity::BUSY
+            : Activity::IDLE;
     }
 
     // -------------------------------------------------------------------------
     // Signal hooks — override to react to a specific signal
     // -------------------------------------------------------------------------
 
-    /**
-     * SIGTERM — the standard "please stop" signal (what {@see stop()} sends).
-     * Default: graceful stop. Override to add cleanup before the loop exits.
-     */
+    /** SIGTERM — stop is guaranteed; override only to react. */
     protected function onTerminate(): void
     {
-        $this->requestStop();
     }
 
-    /**
-     * SIGINT — interrupt (Ctrl-C). Default: graceful stop.
-     */
+    /** SIGINT — Ctrl-C; stop is guaranteed. */
     protected function onInterrupt(): void
     {
-        $this->requestStop();
     }
 
-    /**
-     * SIGHUP — the connection/terminal closed, conventionally "reload".
-     * Default: graceful stop. Override to reload config without stopping
-     * (simply do not call {@see requestStop()}).
-     */
-    protected function onClose(): void
+    /** SIGHUP — reload configuration. Does NOT stop by default. */
+    protected function onReload(): void
     {
-        $this->requestStop();
+    }
+
+    /** SIGUSR1 — a user-defined action (e.g. reopen log files). */
+    protected function onUser1(): void
+    {
+    }
+
+    /** SIGUSR2 — a user-defined action (e.g. dump stats, toggle debug). */
+    protected function onUser2(): void
+    {
+    }
+
+    /** Guaranteed teardown — runs on every exit path (graceful, forced, fatal). */
+    protected function onShutdown(): void
+    {
     }
 
     // -------------------------------------------------------------------------
-    // Lifecycle
+    // Control surface (CLI / web)
     // -------------------------------------------------------------------------
 
     /**
      * Runs the process in the foreground, registering it in the store so
-     * {@see status()} and {@see stop()} can reach it from another terminal.
+     * {@see status()} / {@see stop()} reach it from another terminal.
      */
     public static function start(): void
     {
@@ -148,9 +192,7 @@ abstract class Process
     }
 
     /**
-     * Launches the process detached in the background and returns its PID. The
-     * child registers itself in the store, so {@see status()} / {@see stop()}
-     * reach it exactly as with a foreground start.
+     * Launches the process detached in the background and returns its PID.
      *
      * @param string|null $output '/dev/null' (default) or a file path for the child's stdio.
      */
@@ -166,9 +208,9 @@ abstract class Process
     /**
      * Current status, or null when the process is not running.
      *
-     * @param bool $stats Attach live resource stats (CPU/memory via `ps`).
+     * @param bool $usage Attach live resource usage (CPU/memory via `ps`).
      */
-    final public static function status(bool $stats = false): ?ProcessStatus
+    final public static function status(bool $usage = false): ?ProcessStatus
     {
         try {
             $store = static::store();
@@ -178,12 +220,13 @@ abstract class Process
             if (!$status) {
                 return null;
             }
-            if (!posix_getpgid($status->pid)) {
+            // Drop a stale record whose process is gone (e.g. a forced exit).
+            if (!posix_kill($status->pid, 0)) {
                 $store->del($key);
                 return null;
             }
-            if ($stats) {
-                $status->stats = TStats::ofPid($status->pid);
+            if ($usage) {
+                $status->usage = ResourceUsage::ofPid($status->pid);
             }
             return $status;
         } catch (\Throwable) {
@@ -192,7 +235,7 @@ abstract class Process
     }
 
     /**
-     * Sends a graceful stop signal. Returns false when nothing is running.
+     * Sends a graceful stop signal (SIGTERM). Returns false when nothing is running.
      */
     final public static function stop(): bool
     {
@@ -209,59 +252,144 @@ abstract class Process
 
     private function boot(): void
     {
-        $store = static::store();
-        $key = static::key();
-        $store->write($key, new ProcessStatus(
-            pid: getmypid(),
-            className: static::class,
-            state: ProcessState::RUNNING,
-            startedAt: time(),
-            concurrency: $this->concurrency,
-        ));
+        $this->prepareWorker();
+        $this->ownsRecord = true;
+        $this->writeStatus();
 
         try {
-            $this->runWorker();
-        } catch (\Throwable $e) {
-            $this->logger->critical(
-                $e->getMessage()
-                . (env('DEBUG', false) ? "\n" . $e->getTraceAsString() : '')
-            );
+            $this->runBody();
         } finally {
-            $store->del($key);
+            static::store()->del(static::key());
         }
     }
 
     /**
-     * Sets up the runtime and runs the body. No store bookkeeping — this is the
-     * unit a {@see Daemon} supervisor forks per worker. A throwable propagates so
-     * the supervisor can observe a failed exit.
+     * Worker entry point used by a {@see Daemon} supervisor: sets up the runtime
+     * and runs the body, without owning the store record (the supervisor owns it).
+     *
+     * @internal Not for application code — calling it re-enters the engine.
      */
     protected function runWorker(): void
     {
+        $this->prepareWorker();
+        $this->runBody();
+    }
+
+    private function prepareWorker(): void
+    {
         $this->pid = getmypid();
         $this->logger = LoggerFactory::getLogger(static::class);
-        $this->engine = Engines::common($this->concurrency);
+        $this->startedAt = time();
+        $this->state = ProcessState::RUNNING;
+        $this->applyProcessTitle();
 
-        $this->engine->enter(fn() => $this->run(), [
-            SIGTERM => fn() => $this->onStopSignal(fn() => $this->onTerminate()),
-            SIGINT => fn() => $this->onStopSignal(fn() => $this->onInterrupt()),
-            SIGHUP => fn() => $this->onClose(),
-        ]);
+        // Fatal backstop for onShutdown; the explicit calls below cover normal paths.
+        register_shutdown_function(fn() => $this->invokeShutdown());
+
+        $this->engine = Engines::common($this->concurrency, $this->grace);
+    }
+
+    private function runBody(): void
+    {
+        try {
+            $this->engine->enter(
+                fn() => $this->run(),
+                [
+                    SIGTERM => fn() => $this->onStopSignal(fn() => $this->onTerminate()),
+                    SIGINT => fn() => $this->onStopSignal(fn() => $this->onInterrupt()),
+                    SIGHUP => fn() => $this->onReload(),
+                    SIGUSR1 => fn() => $this->onUser1(),
+                    SIGUSR2 => fn() => $this->onUser2(),
+                ],
+                fn() => $this->invokeShutdown(),
+                fn() => $this->flushStatus(),
+            );
+        } finally {
+            $this->invokeShutdown();
+        }
     }
 
     /**
-     * Guards the stop signals: the first one runs the hook (graceful — the body
-     * may finish its loop and drain in-flight tasks); a repeated one forces the
-     * process down, so a blocked or one-shot body can always be interrupted.
+     * First stop signal begins a graceful stop and runs the hook; further stop
+     * signals are ignored (force is the grace timer or an external SIGKILL).
      */
     private function onStopSignal(callable $hook): void
     {
         if ($this->stopping) {
-            $this->logger->warning('Forced exit on repeated stop signal.');
-            exit(1);
+            return;
         }
         $this->stopping = true;
+        $this->state = ProcessState::STOPPING;
+        $this->requestStop();
+        $this->writeStatus();
         $hook();
+    }
+
+    /**
+     * Runs {@see onShutdown()} exactly once, on whichever exit path reaches it.
+     */
+    private function invokeShutdown(): void
+    {
+        if ($this->shutdownDone) {
+            return;
+        }
+        $this->shutdownDone = true;
+        try {
+            $this->onShutdown();
+        } catch (\Throwable $e) {
+            $this->logger->error('onShutdown() failed: ' . $e->getMessage());
+        }
+    }
+
+    private function applyProcessTitle(): void
+    {
+        if (!function_exists('cli_set_process_title')) {
+            return;
+        }
+        $title = $this->processTitle ?? new \ReflectionClass(static::class)->getShortName();
+        @cli_set_process_title('winter-process: ' . $title);
+    }
+
+    // -------------------------------------------------------------------------
+    // Status store — in-memory authoritative, throttled + deduped write
+    // -------------------------------------------------------------------------
+
+    /**
+     * Called on the heartbeat (~1s): persists the record only when the activity
+     * actually changed, so a per-message BUSY/IDLE flip never storms the disk. A
+     * no-op for a daemon worker (the supervisor owns the record).
+     */
+    private function flushStatus(): void
+    {
+        if (!$this->ownsRecord) {
+            return;
+        }
+        if ($this->activity() === $this->writtenActivity) {
+            return;
+        }
+        $this->writeStatus();
+    }
+
+    private function writeStatus(): void
+    {
+        if (!$this->ownsRecord) {
+            return;
+        }
+        $activity = $this->activity();
+        try {
+            static::store()->write(static::key(), new ProcessStatus(
+                pid: $this->pid,
+                className: static::class,
+                state: $this->state,
+                activity: $activity,
+                startedAt: $this->startedAt,
+                concurrency: $this->concurrency,
+            ));
+        } catch (\Throwable $e) {
+            $this->logger->warning('Status write failed: ' . $e->getMessage());
+            return;
+        }
+        $this->writtenActivity = $activity;
     }
 
     final protected static function key(): string

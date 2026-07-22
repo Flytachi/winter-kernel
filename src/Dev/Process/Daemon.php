@@ -29,7 +29,7 @@ use Flytachi\Winter\Logger\LoggerFactory;
  *     public function run(): void
  *     {
  *         $ch = $this->rabbit->connect();
- *         while ($this->running()) {
+ *         while ($this->isRunning()) {
  *             $msg = $ch->get();
  *             if ($msg === null) { $this->sleep(0.2); continue; }
  *             $this->spawn(fn() => $this->handle($msg));
@@ -95,6 +95,7 @@ abstract class Daemon extends Process
                 pid: $this->pid,
                 className: static::class,
                 state: $state,
+                activity: $workers === [] ? Activity::IDLE : Activity::BUSY,
                 startedAt: $startedAt,
                 concurrency: $this->concurrency,
                 restarts: $restarts,
@@ -103,6 +104,9 @@ abstract class Daemon extends Process
         };
 
         $write(ProcessState::RUNNING, 0, []);
+
+        // Backstop the finally below against a forced/fatal exit that skips it.
+        register_shutdown_function(static fn() => $store->del($key));
 
         try {
             $final = (new Supervisor())->run(

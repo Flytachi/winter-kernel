@@ -22,11 +22,12 @@ final class Engines
 
     /**
      * @param int $concurrency Maximum simultaneous tasks; 0 means unlimited.
+     * @param float $grace Seconds to wait after a stop request before forcing exit.
      */
-    public static function common(int $concurrency): ProcessEngine
+    public static function common(int $concurrency, float $grace): ProcessEngine
     {
         return extension_loaded('swoole')
-            ? new SwooleEngine($concurrency)
-            : new SyncEngine($concurrency);
+            ? new SwooleEngine($concurrency, $grace)
+            : new SyncEngine($concurrency, $grace);
     }
 }
