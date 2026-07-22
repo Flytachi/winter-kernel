@@ -23,6 +23,8 @@ final class Supervisor
 {
     /** Upper bound on exponential back-off between restarts, in seconds. */
     private const float BACKOFF_CAP = 30.0;
+    /** How long to wait for workers to exit on SIGTERM before SIGKILL, in seconds. */
+    private const float STOP_GRACE = 5.0;
 
     private bool $stop = false;
     /** @var array<int, true> Live worker PIDs. */
@@ -164,16 +166,44 @@ final class Supervisor
     }
 
     /**
-     * Signals every worker to stop and waits for them to exit.
+     * Signals every worker to stop gracefully, then SIGKILLs any that outlast the
+     * grace window — so a blocked worker can never hang the supervisor.
      */
     private function stopAll(): void
     {
+        if ($this->workers === []) {
+            return;
+        }
+
         foreach (array_keys($this->workers) as $pid) {
             posix_kill($pid, SIGTERM);
         }
-        foreach (array_keys($this->workers) as $pid) {
-            pcntl_waitpid($pid, $status);
+
+        $deadline = microtime(true) + self::STOP_GRACE;
+        while ($this->workers !== [] && microtime(true) < $deadline) {
+            $this->reap();
+            if ($this->workers !== []) {
+                usleep(100_000);
+                pcntl_signal_dispatch();
+            }
         }
-        $this->workers = [];
+
+        foreach (array_keys($this->workers) as $pid) {
+            posix_kill($pid, SIGKILL);
+            pcntl_waitpid($pid, $status);
+            unset($this->workers[$pid]);
+        }
+    }
+
+    /**
+     * Reaps any workers that have already exited, without blocking.
+     */
+    private function reap(): void
+    {
+        foreach (array_keys($this->workers) as $pid) {
+            if (pcntl_waitpid($pid, $status, WNOHANG) !== 0) {
+                unset($this->workers[$pid]);
+            }
+        }
     }
 }

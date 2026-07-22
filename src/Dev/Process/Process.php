@@ -52,6 +52,7 @@ abstract class Process
     protected LoggerInterface $logger;
     protected int $pid;
     private ProcessEngine $engine;
+    private bool $stopping = false;
 
     final public function __construct()
     {
@@ -242,10 +243,25 @@ abstract class Process
         $this->engine = Engines::common($this->concurrency);
 
         $this->engine->enter(fn() => $this->run(), [
-            SIGTERM => fn() => $this->onTerminate(),
-            SIGINT => fn() => $this->onInterrupt(),
+            SIGTERM => fn() => $this->onStopSignal(fn() => $this->onTerminate()),
+            SIGINT => fn() => $this->onStopSignal(fn() => $this->onInterrupt()),
             SIGHUP => fn() => $this->onClose(),
         ]);
+    }
+
+    /**
+     * Guards the stop signals: the first one runs the hook (graceful — the body
+     * may finish its loop and drain in-flight tasks); a repeated one forces the
+     * process down, so a blocked or one-shot body can always be interrupted.
+     */
+    private function onStopSignal(callable $hook): void
+    {
+        if ($this->stopping) {
+            $this->logger->warning('Forced exit on repeated stop signal.');
+            exit(1);
+        }
+        $this->stopping = true;
+        $hook();
     }
 
     final protected static function key(): string
