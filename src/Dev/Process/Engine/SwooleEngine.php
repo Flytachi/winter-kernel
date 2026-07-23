@@ -69,6 +69,8 @@ final class SwooleEngine implements ProcessEngine
                 $this->heartbeatTimerId = \Swoole\Timer::tick(1000, static fn() => $onHeartbeat());
             }
 
+            $signos = array_keys($signals);
+
             try {
                 $body();
                 // Drain in-flight tasks on the normal path; skip when cancelled
@@ -77,15 +79,20 @@ final class SwooleEngine implements ProcessEngine
                     \Swoole\Coroutine::sleep(0.01);
                 }
             } catch (InterruptedException) {
-                // Stop requested mid-block: unwind cleanly.
             } catch (\Throwable $e) {
                 $error = $e;
             } finally {
-                // Drop timers so a graceful exit is not held back once the body is done.
+                // Drop timers and signal listeners so the reactor can go idle and
+                // Coroutine\run returns. Registered signal handlers keep the event
+                // loop alive on their own — without this the process hangs after the
+                // body is done, only escaping via the grace timer (or never, grace=0).
                 $this->disarmGrace();
                 if ($this->heartbeatTimerId !== null) {
                     \Swoole\Timer::clear($this->heartbeatTimerId);
                     $this->heartbeatTimerId = null;
+                }
+                foreach ($signos as $signo) {
+                    \Swoole\Process::signal($signo, null);
                 }
             }
         });
