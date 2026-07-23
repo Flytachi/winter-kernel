@@ -9,6 +9,7 @@ use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\K2\Concurrent\Future;
 use Flytachi\Winter\K2\Dev\Process\Engine\Engines;
 use Flytachi\Winter\K2\Dev\Process\Engine\ProcessEngine;
+use Flytachi\Winter\K2\Kernel;
 use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\Thread\Thread;
 use Psr\Log\LoggerInterface;
@@ -57,6 +58,8 @@ abstract class Process
     private bool $stopping = false;
     private bool $shutdownDone = false;
     private bool $inlineBusy = false;
+    /** @var resource|null Held for the process lifetime; the flock is the singleton guard. */
+    private $lockHandle = null;
 
     // Status store bookkeeping (a bare process owns its record; a daemon worker does not).
     private bool $ownsRecord = false;
@@ -186,6 +189,8 @@ abstract class Process
      */
     public static function start(): void
     {
+        static::ensureNotRunning();
+
         /** @var static $self */
         $self = Container::getInstance()->make(static::class);
         $self->boot();
@@ -198,11 +203,28 @@ abstract class Process
      */
     final public static function dispatch(?string $output = '/dev/null'): int
     {
+        static::ensureNotRunning();
+
         return new Thread(
             new ProcessRunnable(static::class),
             'process',
             new \ReflectionClass(static::class)->getShortName(),
         )->start(outputTarget: $output, detached: true);
+    }
+
+    /**
+     * Refuses to launch a second instance of the same class.
+     *
+     * @throws ProcessAlreadyRunningException If one is already running.
+     */
+    protected static function ensureNotRunning(): void
+    {
+        $info = static::status();
+        if ($info !== null) {
+            throw new ProcessAlreadyRunningException(
+                static::class . " is already running [PID {$info->pid}] (since {$info->getStartedAt()})."
+            );
+        }
     }
 
     /**
@@ -252,6 +274,17 @@ abstract class Process
 
     private function boot(): void
     {
+        // The status check in start()/dispatch() catches the common case; this
+        // exclusive lock closes the race between two near-simultaneous launches.
+        // A flock is released automatically when the process dies, so it is never
+        // left stale — unlike a PID file.
+        if (!$this->acquireLock()) {
+            LoggerFactory::getLogger(static::class)->notice(
+                static::class . ' is already running; not starting a second instance.'
+            );
+            return;
+        }
+
         $this->prepareWorker();
         $this->ownsRecord = true;
         $this->writeStatus();
@@ -260,7 +293,41 @@ abstract class Process
             $this->runBody();
         } finally {
             static::store()->del(static::key());
+            $this->releaseLock();
         }
+    }
+
+    /**
+     * Takes the per-class singleton lock. Returns false when another instance
+     * already holds it; true when acquired (or when a lock file cannot be created,
+     * in which case it proceeds best-effort rather than block on a filesystem issue).
+     */
+    protected function acquireLock(): bool
+    {
+        $handle = @fopen($this->lockPath(), 'c');
+        if ($handle === false) {
+            return true;
+        }
+        if (!flock($handle, LOCK_EX | LOCK_NB)) {
+            fclose($handle);
+            return false;
+        }
+        $this->lockHandle = $handle;
+        return true;
+    }
+
+    protected function releaseLock(): void
+    {
+        if ($this->lockHandle !== null) {
+            flock($this->lockHandle, LOCK_UN);
+            fclose($this->lockHandle);
+            $this->lockHandle = null;
+        }
+    }
+
+    protected function lockPath(): string
+    {
+        return Kernel::$pathStorageRunnable . '/' . str_replace('\\', '.', static::class) . '.lock';
     }
 
     /**

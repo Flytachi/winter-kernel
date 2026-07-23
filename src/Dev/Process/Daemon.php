@@ -76,6 +76,8 @@ abstract class Daemon extends Process
      */
     final public static function start(): void
     {
+        static::ensureNotRunning();
+
         /** @var static $self */
         $self = Container::getInstance()->make(static::class);
         $self->supervise();
@@ -83,6 +85,13 @@ abstract class Daemon extends Process
 
     private function supervise(): void
     {
+        if (!$this->acquireLock()) {
+            LoggerFactory::getLogger(static::class)->notice(
+                static::class . ' is already running; not starting a second supervisor.'
+            );
+            return;
+        }
+
         $this->pid = getmypid();
         $this->logger = LoggerFactory::getLogger(static::class);
 
@@ -125,6 +134,7 @@ abstract class Daemon extends Process
             );
         } finally {
             $store->del($key);
+            $this->releaseLock();
         }
     }
 }
