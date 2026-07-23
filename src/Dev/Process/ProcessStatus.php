@@ -10,8 +10,10 @@ namespace Flytachi\Winter\K2\Dev\Process;
  * Written to the runnable store while the process lives, read back by the CLI
  * and the web layer. {@see ResourceUsage} is live and never persisted — it is
  * attached on read via {@see Process::status()}.
+ *
+ * Serialises to a stable JSON shape so a controller can return it directly.
  */
-final class ProcessStatus
+final class ProcessStatus implements \JsonSerializable
 {
     /**
      * @param array<int> $workers Worker PIDs supervised by a daemon (empty for a bare process).
@@ -32,5 +34,24 @@ final class ProcessStatus
     public function getStartedAt(): string
     {
         return date('Y-m-d H:i:s P', $this->startedAt);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function jsonSerialize(): array
+    {
+        return [
+            'pid'         => $this->pid,
+            'class'       => $this->className,
+            'state'       => $this->state->name,       // NEW | RUNNING | STOPPING | …
+            'activity'    => $this->activity->value,   // idle | busy
+            'started_at'  => $this->startedAt,
+            'uptime'      => time() - $this->startedAt,
+            'concurrency' => $this->concurrency,
+            'restarts'    => $this->restarts,
+            'workers'     => $this->workers,
+            'usage'       => $this->usage,             // ResourceUsage|null (also JsonSerializable)
+        ];
     }
 }

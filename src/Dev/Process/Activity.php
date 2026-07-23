@@ -12,9 +12,11 @@ namespace Flytachi\Winter\K2\Dev\Process;
  * {@see Process::spawn()} task is in flight; IDLE otherwise. It drives
  * drain-to-idle on stop, the status view, and (later) a daemon's scale-down
  * decision — never stop a BUSY worker.
+ *
+ * Backed by a string so it serialises cleanly to JSON and logs.
  */
-enum Activity
+enum Activity: string
 {
-    case IDLE;
-    case BUSY;
+    case IDLE = 'idle';
+    case BUSY = 'busy';
 }

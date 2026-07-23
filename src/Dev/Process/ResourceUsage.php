@@ -11,7 +11,7 @@ namespace Flytachi\Winter\K2\Dev\Process;
  * web layer — never a hot path: each read forks the `ps` binary. Use it to look
  * at a process from the outside; a process does not measure itself with it.
  */
-final class ResourceUsage
+final class ResourceUsage implements \JsonSerializable
 {
     public function __construct(
         public int $pid,
@@ -63,5 +63,21 @@ final class ResourceUsage
     public function rssMb(): float
     {
         return $this->rssKb / 1024;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function jsonSerialize(): array
+    {
+        return [
+            'pid'     => $this->pid,
+            'ppid'    => $this->ppid,
+            'user'    => $this->user,
+            'cpu'     => $this->cpu,
+            'memory'  => $this->memory,
+            'rss_mb'  => round($this->rssMb(), 1),
+            'elapsed' => $this->elapsed,
+        ];
     }
 }

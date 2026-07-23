@@ -242,9 +242,14 @@ abstract class Process
             if (!$status) {
                 return null;
             }
-            // Drop a stale record whose process is gone (e.g. a forced exit).
-            if (!posix_kill($status->pid, 0)) {
-                $store->del($key);
+            // Liveness via getpgid, not kill(pid, 0): getpgid needs no permission,
+            // so a status check from another user (web as `winter`, process as
+            // root) cannot mistake a live process for a dead one. And status() is a
+            // pure read — it never deletes: a read must have no side effect, or any
+            // caller who can query could evict a running process's record. A stale
+            // record left by a crash is harmless (this returns null) and is
+            // overwritten by the next start().
+            if (posix_getpgid($status->pid) === false) {
                 return null;
             }
             if ($usage) {
