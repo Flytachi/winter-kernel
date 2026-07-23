@@ -6,7 +6,7 @@ namespace Flytachi\Winter\K2;
 
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\K2\Core\KernelStore;
-use Flytachi\Winter\Thread\Launch\CliLauncher;
+use Flytachi\Winter\Thread\Launch\AdaptiveLauncher;
 use Flytachi\Winter\Thread\Thread;
 use Flytachi\Winter\Logger\Context\ProcessContext;
 use Flytachi\Winter\Logger\LoggerFactory;
@@ -62,8 +62,9 @@ final class Kernel extends KernelStore
 
         self::bootLogger();
 
-        // thread
-        Thread::bindLauncher(CliLauncher::adaptive(
+        // thread — route each launch by runtime: Swoole\Process inside a coroutine
+        // (proc_open corrupts the reactor's fds there), proc_open everywhere else.
+        Thread::bindLauncher(AdaptiveLauncher::adaptive(
             secret: env('WINTER_KEY', ''),
             runnerPath: self::threadRunnerPath(),
         ));
