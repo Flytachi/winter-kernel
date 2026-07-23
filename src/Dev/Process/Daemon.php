@@ -100,7 +100,7 @@ abstract class Daemon extends Process
         $startedAt = time();
 
         $write = function (ProcessState $state, int $restarts, array $workers) use ($store, $key, $startedAt): void {
-            $store->write($key, new ProcessStatus(
+            $store->write($key, new DaemonStatus(
                 pid: $this->pid,
                 className: static::class,
                 state: $state,

@@ -9,6 +9,7 @@ use Flytachi\Winter\K2\Collector\SubclassCollector;
 use Flytachi\Winter\K2\Core\ClassScanner;
 use Flytachi\Winter\K2\Dev\Process\Activity;
 use Flytachi\Winter\K2\Dev\Process\Daemon as DaemonUnit;
+use Flytachi\Winter\K2\Dev\Process\DaemonStatus;
 use Flytachi\Winter\K2\Dev\Process\Process as ProcessUnit;
 use Flytachi\Winter\K2\Dev\Process\ResourceUsage;
 
@@ -143,7 +144,7 @@ class Process extends Cmd
         if ($info->concurrency > 0) {
             self::printKeyValue("Concurrency", (string) $info->concurrency, 12, 34, 36);
         }
-        if ($isDaemon) {
+        if ($info instanceof DaemonStatus) {
             self::printKeyValue("Workers", (string) count($info->workers), 12, 34, 36);
             self::printKeyValue("Restarts", (string) $info->restarts, 12, 34, 36);
         }
@@ -165,7 +166,7 @@ class Process extends Cmd
             self::printKeyValue("Elapsed", $u->elapsed, 12, 34, 35);
         }
 
-        if ($detailed && $info->workers !== []) {
+        if ($detailed && $info instanceof DaemonStatus && $info->workers !== []) {
             self::printDivider();
             self::printLabel("Workers (" . count($info->workers) . ")", 34);
             foreach ($info->workers as $wpid) {
@@ -228,7 +229,7 @@ class Process extends Cmd
         $uptime = $this->formatDuration(time() - $info->startedAt);
         echo "\033[32m[● {$info->state->name}]"
             . $this->activityTag($info->activity)
-            . ($isDaemon ? "\033[36m [w:" . count($info->workers) . "]" : '')
+            . ($info instanceof DaemonStatus ? "\033[36m [w:" . count($info->workers) . "]" : '')
             . "\033[90m {$uptime}\033[0m\n";
 
         return true;

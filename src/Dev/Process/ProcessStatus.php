@@ -11,13 +11,11 @@ namespace Flytachi\Winter\K2\Dev\Process;
  * and the web layer. {@see ResourceUsage} is live and never persisted — it is
  * attached on read via {@see Process::status()}.
  *
- * Serialises to a stable JSON shape so a controller can return it directly.
+ * Serialises to a stable JSON shape so a controller can return it directly. A
+ * supervised {@see Daemon} records the richer {@see DaemonStatus} subclass.
  */
-final class ProcessStatus implements \JsonSerializable
+class ProcessStatus implements \JsonSerializable
 {
-    /**
-     * @param array<int> $workers Worker PIDs supervised by a daemon (empty for a bare process).
-     */
     public function __construct(
         public int $pid,
         public string $className,
@@ -25,8 +23,6 @@ final class ProcessStatus implements \JsonSerializable
         public Activity $activity,
         public int $startedAt,
         public int $concurrency = 0,
-        public int $restarts = 0,
-        public array $workers = [],
         public ?ResourceUsage $usage = null,
     ) {
     }
@@ -49,8 +45,6 @@ final class ProcessStatus implements \JsonSerializable
             'started_at'  => $this->startedAt,
             'uptime'      => time() - $this->startedAt,
             'concurrency' => $this->concurrency,
-            'restarts'    => $this->restarts,
-            'workers'     => $this->workers,
             'usage'       => $this->usage,             // ResourceUsage|null (also JsonSerializable)
         ];
     }
