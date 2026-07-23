@@ -413,13 +413,30 @@ abstract class Process
         }
     }
 
-    private function applyProcessTitle(): void
+    protected function applyProcessTitle(): void
     {
         if (!function_exists('cli_set_process_title')) {
             return;
         }
-        $title = $this->processTitle ?? new \ReflectionClass(static::class)->getShortName();
-        @cli_set_process_title('winter-process: ' . $title);
+        @cli_set_process_title($this->buildProcessTitle());
+    }
+
+    /**
+     * The display name for this process, without the runtime prefix: the explicit
+     * {@see $processTitle} when set, otherwise the class short name.
+     */
+    protected function titleName(): string
+    {
+        return $this->processTitle ?? new \ReflectionClass(static::class)->getShortName();
+    }
+
+    /**
+     * The full OS process title. Overridable so a {@see Daemon} can label its
+     * master and numbered workers distinctly (e.g. `winter-daemon: X worker#2`).
+     */
+    protected function buildProcessTitle(): string
+    {
+        return 'winter-process: ' . $this->titleName();
     }
 
     // -------------------------------------------------------------------------
