@@ -78,6 +78,7 @@ final class ResourceUsage implements \JsonSerializable
             'memory'  => $this->memory,
             'rss_mb'  => round($this->rssMb(), 1),
             'elapsed' => $this->elapsed,
+            'command' => $this->command,
         ];
     }
 }
