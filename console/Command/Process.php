@@ -7,12 +7,13 @@ namespace Flytachi\Winter\Console\Command;
 use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\K2\Collector\SubclassCollector;
 use Flytachi\Winter\K2\Core\ClassScanner;
-use Flytachi\Winter\K2\Dev\Process\Activity;
-use Flytachi\Winter\K2\Dev\Process\Daemon as DaemonUnit;
-use Flytachi\Winter\K2\Dev\Process\DaemonStatus;
-use Flytachi\Winter\K2\Dev\Process\Process as ProcessUnit;
-use Flytachi\Winter\K2\Dev\Process\ResourceUsage;
+use Flytachi\Winter\K2\Process\Activity;
+use Flytachi\Winter\K2\Process\Daemon\Daemon as DaemonUnit;
+use Flytachi\Winter\K2\Process\Process as ProcessUnit;
 
+/**
+ * Manages bare {@see ProcessUnit} units. Daemons are managed by `call daemon`.
+ */
 class Process extends Cmd
 {
     public static string $title = "manage Process units (start/stop/status)";
@@ -50,6 +51,11 @@ class Process extends Cmd
         if (!is_subclass_of($class, ProcessUnit::class)) {
             self::printWarning("Class '$name' does not extend Process.");
             self::printInfo("Resolved: $class");
+            return;
+        }
+        if (is_subclass_of($class, DaemonUnit::class)) {
+            self::printWarning("Class '$name' is a Daemon, not a bare Process.");
+            self::printInfo("Use 'call daemon " . str_replace('\\', '.', $class) . " ...' instead.");
             return;
         }
 
@@ -127,8 +133,7 @@ class Process extends Cmd
             return;
         }
 
-        $isDaemon = is_subclass_of($class, DaemonUnit::class);
-        self::printBadge($dot, ($isDaemon ? 'Daemon ' : 'Process ') . '● ' . $info->state->name, 34, 32);
+        self::printBadge($dot, 'Process ● ' . $info->state->name, 34, 32);
         self::printDivider();
         self::printKeyValue("PID", (string) $info->pid, 12, 34, 36);
         self::printKeyValue("State", $info->state->name, 12, 34, 36);
@@ -143,10 +148,6 @@ class Process extends Cmd
         self::printKeyValue("Uptime", $this->formatDuration(time() - $info->startedAt), 12, 34, 36);
         if ($info->concurrency > 0) {
             self::printKeyValue("Concurrency", (string) $info->concurrency, 12, 34, 36);
-        }
-        if ($info instanceof DaemonStatus) {
-            self::printKeyValue("Workers", (string) count($info->workers), 12, 34, 36);
-            self::printKeyValue("Restarts", (string) $info->restarts, 12, 34, 36);
         }
 
         if ($detailed && $info->usage) {
@@ -166,18 +167,6 @@ class Process extends Cmd
             self::printKeyValue("Elapsed", $u->elapsed, 12, 34, 35);
         }
 
-        if ($detailed && $info instanceof DaemonStatus && $info->workers !== []) {
-            self::printDivider();
-            self::printLabel("Workers (" . count($info->workers) . ")", 34);
-            foreach ($info->workers as $wpid) {
-                $ws = ResourceUsage::ofPid($wpid);
-                $line = $ws
-                    ? sprintf("#%-7d cpu %s%%  rss %s MB", $wpid, $ws->cpu, round($ws->rssMb(), 1))
-                    : sprintf("#%-7d (gone)", $wpid);
-                self::print($line, 36);
-            }
-        }
-
         self::printLabel("Process Status", 34);
     }
 
@@ -185,21 +174,22 @@ class Process extends Cmd
     {
         $collector = new SubclassCollector(ProcessUnit::class);
         ClassScanner::scan($collector);
-        $processes = $collector->getResult();
+        $processes = array_filter(
+            $collector->getResult(),
+            static fn($ref) => !$ref->isSubclassOf(DaemonUnit::class)
+        );
 
         self::printLabel("Available Processes", 34);
         if (empty($processes)) {
             self::printWarning("No Process classes found.");
-            self::printInfo("Create one that extends Process.");
+            self::printInfo("Create one that extends Process. (Daemons: 'call daemon list'.)");
             self::printLabel("Available Processes", 34);
             return;
         }
 
         $running = 0;
         foreach ($processes as $ref) {
-            $class = $ref->getName();
-            $isDaemon = $ref->isSubclassOf(DaemonUnit::class);
-            if ($this->printRow($class, $isDaemon)) {
+            if ($this->printRow($ref->getName())) {
                 $running++;
             }
         }
@@ -214,13 +204,12 @@ class Process extends Cmd
      *
      * @param class-string<ProcessUnit> $class
      */
-    private function printRow(string $class, bool $isDaemon): bool
+    private function printRow(string $class): bool
     {
         $dot = str_replace('\\', '.', $class);
-        $tag = $isDaemon ? 'D' : 'P';
         $info = $class::status();
 
-        echo "\033[34m" . str_pad(" |\t [{$tag}] {$dot} ", 72, '.') . " ";
+        echo "\033[34m" . str_pad(" |\t [P] {$dot} ", 72, '.') . " ";
         if (!$info) {
             echo "\033[31m[○ STOPPED]\033[0m\n";
             return false;
@@ -229,7 +218,6 @@ class Process extends Cmd
         $uptime = $this->formatDuration(time() - $info->startedAt);
         echo "\033[32m[● {$info->state->name}]"
             . $this->activityTag($info->activity)
-            . ($info instanceof DaemonStatus ? "\033[36m [w:" . count($info->workers) . "]" : '')
             . "\033[90m {$uptime}\033[0m\n";
 
         return true;
@@ -291,31 +279,16 @@ class Process extends Cmd
         self::printLabel("Usage", $cl);
 
         self::printLabel("Commands", $cl);
-        self::printBadge('list', 'list all processes with live state', $cl, 36);
+        self::printBadge('list', 'list all bare processes with live state', $cl, 36);
         self::printBadge('<dot.notation.Class>', 'start in foreground (default)', $cl, 36);
-        self::printBadge('<dot.notation.Class> start', 'start in foreground', $cl, 36);
         self::printBadge('<dot.notation.Class> start -d', 'start detached in background', $cl, 36);
         self::printBadge('<dot.notation.Class> stop', 'send graceful stop signal (SIGTERM)', $cl, 36);
-        self::printBadge('<dot.notation.Class> status', 'show status', $cl, 36);
-        self::printBadge('<dot.notation.Class> status -v', 'detailed: resources + workers', $cl, 36);
+        self::printBadge('<dot.notation.Class> status -v', 'detailed: resource usage', $cl, 36);
         self::printLabel("Commands", $cl);
 
-        self::printLabel("Flags", $cl);
-        self::printKeyValue("-d", "start detached in background", 10, $cl, 36);
-        self::printKeyValue("-v", "verbose status (resource usage)", 10, $cl, 36);
-        self::printLabel("Flags", $cl);
-
         self::printDivider($cl);
-
-        self::printLabel("Examples", $cl);
-        self::printInfo("call process list");
-        self::printInfo("call process main.process.Consumer -d");
-        self::printInfo("call process main.process.Consumer status -v");
-        self::printInfo("call proc main.process.Consumer stop");
-        self::printLabel("Examples", $cl);
-
-        self::printDivider($cl);
-        self::printInfo("Row tags: [P] process, [D] daemon | ● running, ○ stopped | [BUSY]/[idle]");
+        self::printInfo("Daemons (supervised fleets) are managed by 'call daemon'.");
+        self::printInfo("Row tags: [P] process | ● running, ○ stopped | [BUSY]/[idle]");
 
         self::printTitle("Process Help", $cl);
     }

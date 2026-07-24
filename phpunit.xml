@@ -26,6 +26,10 @@
             <directory>tests/Integration</directory>
             <exclude>tests/Integration/Fixtures</exclude>
         </testsuite>
+        <testsuite name="Process">
+            <directory>tests/Process</directory>
+            <exclude>tests/Process/Fixtures</exclude>
+        </testsuite>
     </testsuites>
 
     <groups>

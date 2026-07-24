@@ -206,8 +206,12 @@ is worse than a slow shutdown — a video transcode, a large export — keep `gr
 at `0` and let an external `SIGKILL` (or, for queue work, the broker's redelivery)
 be the ultimate stop. If you need a hard ceiling — a container orchestrator that
 will `SIGKILL` after thirty seconds anyway — set `grace` to just under that so the
-process controls its own forced exit. A repeated `stop`, or `kill -9`, always
-forces immediately, regardless of `grace`.
+process controls its own forced exit. A **repeated** `stop` on a bare process is
+ignored — the first request already began the graceful stop, and a second SIGTERM
+changes nothing; the only forced exits are its own `grace` timer (when `grace > 0`)
+or an external `kill -9`. (The "second signal forces now" behaviour belongs to a
+[Daemon](daemon/03-control.md#stopping-the-fleet), whose supervisor collapses the
+drain deadline on a repeat signal.)
 
 ---
 

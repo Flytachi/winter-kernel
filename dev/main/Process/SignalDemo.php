@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Main\Process;
 
-use Flytachi\Winter\K2\Dev\Process\InterruptedException;
-use Flytachi\Winter\K2\Dev\Process\Process;
+use Flytachi\Winter\K2\Process\InterruptedException;
+use Flytachi\Winter\K2\Process\Process;
 
 /**
  * Reference of the signal contract with canonical PSR-3 log levels.

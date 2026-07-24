@@ -8,11 +8,11 @@ use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\K2\Collector\ImplementorCollector;
 use Flytachi\Winter\K2\Collector\SubclassCollector;
 use Flytachi\Winter\K2\Core\ClassScanner;
-use Flytachi\Winter\K2\Process\Core\Dispatchable;
-use Flytachi\Winter\K2\Process\DaemonException;
-use Flytachi\Winter\K2\Process\ThreadDaemon;
-use Flytachi\Winter\K2\Process\ThreadJob;
-use Flytachi\Winter\K2\Process\ThreadProcess;
+use Flytachi\Winter\K2\Old\Process\Core\Dispatchable;
+use Flytachi\Winter\K2\Old\Process\DaemonException;
+use Flytachi\Winter\K2\Old\Process\ThreadDaemon;
+use Flytachi\Winter\K2\Old\Process\ThreadJob;
+use Flytachi\Winter\K2\Old\Process\ThreadProcess;
 
 class Thread extends Cmd
 {

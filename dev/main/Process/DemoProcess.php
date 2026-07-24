@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Main\Process;
 
-use Flytachi\Winter\K2\Dev\Process\Process;
+use Flytachi\Winter\K2\Process\Process;
 
 /**
  * One-shot demo: dispatch 6 tasks with a concurrency cap of 2 and exit.

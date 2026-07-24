@@ -6,6 +6,8 @@ namespace Flytachi\Winter\K2;
 
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\K2\Core\KernelStore;
+use Flytachi\Winter\K2\Process\ForkReset;
+use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
 use Flytachi\Winter\Thread\Launch\AdaptiveLauncher;
 use Flytachi\Winter\Thread\Thread;
 use Flytachi\Winter\Logger\Context\ProcessContext;
@@ -68,6 +70,10 @@ final class Kernel extends KernelStore
             secret: env('WINTER_KEY', ''),
             runnerPath: self::threadRunnerPath(),
         ));
+
+        // fork-safety — a forked daemon worker inherits the parent's DB sockets;
+        // reset the pool in the child (Process::afterFork) so it reconnects fresh.
+        ForkReset::register(static fn() => PpaConnectionPool::reset());
     }
 
     private static function bootLogger(): void

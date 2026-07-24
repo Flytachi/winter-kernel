@@ -13,6 +13,7 @@ class Core extends CoreHandle
         'sc' => 'Script',
         'th' => 'Thread',
         'proc' => 'Process',
+        'dmn' => 'Daemon',
     ];
 
     public function __construct($args)

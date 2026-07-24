@@ -10,9 +10,10 @@ use Flytachi\Winter\Console\Inc\CmdCustom;
 use Flytachi\Winter\K2\Collector\ImplementorCollector;
 use Flytachi\Winter\K2\Collector\SubclassCollector;
 use Flytachi\Winter\K2\Core\ClassScanner;
-use Flytachi\Winter\K2\Dev\Process\Process as ProcessUnit;
-use Flytachi\Winter\K2\Process\Core\Dispatchable;
-use Flytachi\Winter\K2\Process\ThreadDaemon;
+use Flytachi\Winter\K2\Process\Daemon\Daemon as DaemonUnit;
+use Flytachi\Winter\K2\Process\Process as ProcessUnit;
+use Flytachi\Winter\K2\Old\Process\Core\Dispatchable;
+use Flytachi\Winter\K2\Old\Process\ThreadDaemon;
 
 class Complete extends Cmd
 {
@@ -107,6 +108,11 @@ class Complete extends Cmd
         // --- process / proc ---
         'process' => [
             'list:list all processes with live state',
+        ],
+
+        // --- daemon / dmn ---
+        'daemon' => [
+            'list:list all daemons with live state',
         ],
 
         // --- db ---
@@ -228,6 +234,27 @@ class Complete extends Cmd
             $base = array_merge($this->getProcessClasses(), $base);
         }
 
+        // daemon: list + classes at top level; once a class is selected,
+        // suggest lifecycle actions, then flags per action.
+        if ($resolved === 'daemon' && $sub !== null && $sub !== 'list') {
+            if ($act === null) {
+                $base = [
+                    'start:supervise (foreground; -d for background)',
+                    'stop:graceful stop (drains the fleet)',
+                    'status:show status + worker fleet',
+                    '-d:supervise detached in background',
+                ];
+            } elseif ($act === 'status') {
+                $base = ['-v:also master resource usage'];
+            } elseif ($act === 'start') {
+                $base = ['-d:supervise detached in background'];
+            } else {
+                $base = [];
+            }
+        } elseif ($resolved === 'daemon' && $sub === null) {
+            $base = array_merge($this->getDaemonUnitClasses(), $base);
+        }
+
         // help: suggest command names
         if ($resolved === 'help' && $sub === null) {
             $base = $this->getCommandNames();
@@ -302,6 +329,22 @@ class Complete extends Cmd
     private function getProcessClasses(): array
     {
         $collector = new SubclassCollector(ProcessUnit::class);
+        ClassScanner::scan($collector);
+
+        $bare = array_filter(
+            $collector->getResult(),
+            static fn(\ReflectionClass $ref) => !$ref->isSubclassOf(DaemonUnit::class)
+        );
+
+        return array_map(
+            fn(\ReflectionClass $ref) => str_replace('\\', '.', $ref->getName()),
+            $bare
+        );
+    }
+
+    private function getDaemonUnitClasses(): array
+    {
+        $collector = new SubclassCollector(DaemonUnit::class);
         ClassScanner::scan($collector);
 
         return array_map(

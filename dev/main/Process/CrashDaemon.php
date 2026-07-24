@@ -4,21 +4,25 @@ declare(strict_types=1);
 
 namespace Main\Process;
 
-use Flytachi\Winter\K2\Dev\Process\Daemon;
-use Flytachi\Winter\K2\Dev\Process\RestartPolicy;
+use Flytachi\Winter\K2\Process\Daemon\Daemon;
+use Flytachi\Winter\K2\Process\Daemon\RestartMode;
+use Flytachi\Winter\K2\Process\Daemon\RestartPolicy;
 
 /**
  * Worker crashes after a couple of ticks. Exercises ON_FAILURE restart with
- * exponential back-off and the maxRestarts ceiling → FAILED.
+ * exponential back-off (slot reused, worker#{n} stable) and the maxRestarts
+ * ceiling → FAILED.
  */
 class CrashDaemon extends Daemon
 {
     protected int $replicas = 1;
-    protected RestartPolicy $restart = RestartPolicy::ON_FAILURE;
-    protected int $maxRestarts = 3;
-    protected float $backoff = 0.5;
 
-    public function run(): void
+    protected function restart(): RestartPolicy
+    {
+        return new RestartPolicy(mode: RestartMode::ON_FAILURE, maxRestarts: 3, backoff: 0.5);
+    }
+
+    protected function workerRun(): void
     {
         $this->logger->info('CrashDaemon worker START pid=' . $this->pid);
         $this->sleep(0.6);

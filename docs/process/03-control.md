@@ -120,7 +120,7 @@ call process list                             # every process, with live state
 call process main.EmailDispatchWorker         # start in the foreground (blocks the shell)
 call process main.EmailDispatchWorker start -d   # start detached in the background
 call process main.EmailDispatchWorker status     # the status card
-call process main.EmailDispatchWorker status -v  # + resource usage (and, for a daemon, its workers)
+call process main.EmailDispatchWorker status -v  # + live resource usage (CPU/memory)
 call process main.EmailDispatchWorker stop        # graceful stop
 ```
 
@@ -229,8 +229,9 @@ are always the real process; you never target the wrong thing.
 [01-lifecycle.md](01-lifecycle.md): it stops taking new work, lets the current unit
 finish, drains its in-flight `spawn()`ed tasks, runs `onShutdown()`, and exits. How
 long that takes is bounded by the worker's `$grace` — `0` means it waits for the
-drain for as long as the drain needs. If you cannot wait, a second `stop`, or an
-external `kill -9`, forces the process down at once, skipping the drain.
+drain for as long as the drain needs. A second `stop` on a bare process is ignored;
+if you cannot wait, an external `kill -9` forces it down at once, and a `grace > 0`
+gives it its own hard ceiling.
 
 Operating a *fleet* of workers — starting and stopping individual instances by
 their activity so that a `BUSY` one is never the one you remove, and scaling the

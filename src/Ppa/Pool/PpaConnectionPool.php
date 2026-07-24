@@ -129,6 +129,28 @@ final class PpaConnectionPool
         return self::$configs;
     }
 
+    /**
+     * Drops every cached connection, pool and config so the next `db()` opens
+     * fresh sockets — the fork-safety reset.
+     *
+     * A fork copies file descriptors, so any connection cached before the fork
+     * would be shared with the parent and corrupt the wire protocol. A forked
+     * daemon worker runs this via {@see \Flytachi\Winter\K2\Process\ForkReset}
+     * (registered in {@see \Flytachi\Winter\K2\Kernel::init()}), then re-opens
+     * lazily in the child. Because access is static — repositories call
+     * `PpaConnectionPool::db()`, never an injected instance — clearing the caches
+     * is a complete "reconnect": nothing holds a stale reference.
+     *
+     * Keep connections lazy (do not query from a supervisor before it forks
+     * workers) so this stays a cheap no-op in the common case.
+     */
+    public static function reset(): void
+    {
+        self::$pools = [];
+        self::$static = [];
+        self::$configs = [];
+    }
+
     // -------------------------------------------------------------------------
     // Internals
     // -------------------------------------------------------------------------
