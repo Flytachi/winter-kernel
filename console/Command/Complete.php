@@ -115,6 +115,15 @@ class Complete extends Cmd
             'list:list all daemons with live state',
         ],
 
+        // --- schedule / sch ---
+        'schedule' => [
+            'list:list all #[Scheduled] tasks and cadence',
+            'start:run the scheduler (foreground; -d for background)',
+            'stop:send graceful stop (SIGTERM)',
+            'status:scheduler run state + task count',
+        ],
+        'schedule start' => ['-d:run detached in background'],
+
         // --- db ---
         'db' => [
             'ping:check DB connection and latency',

@@ -14,6 +14,7 @@ class Core extends CoreHandle
         'th' => 'Thread',
         'proc' => 'Process',
         'dmn' => 'Daemon',
+        'sch' => 'Schedule',
     ];
 
     public function __construct($args)

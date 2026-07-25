@@ -30,6 +30,10 @@
             <directory>tests/Process</directory>
             <exclude>tests/Process/Fixtures</exclude>
         </testsuite>
+        <testsuite name="Schedule">
+            <directory>tests/Schedule</directory>
+            <exclude>tests/Schedule/Fixtures</exclude>
+        </testsuite>
     </testsuites>
 
     <groups>
