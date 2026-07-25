@@ -105,3 +105,9 @@ Everything below the body is the supervisor's job — you never write it:
   `ScalingPolicy` damping model, `RestartPolicy`, and the master hooks.
 - **[Control](03-control.md)** — `start` / `dispatch` / `status` / `stop`, the CLI,
   the stop sequence, and the per-worker fleet view.
+
+## See also
+
+- [`process/00-overview.md`](../00-overview.md) — the bare Process a Daemon supervises and extends
+- [`concurrent/05-pools.md`](../../concurrent/05-pools.md) — an in-process bounded pool; a Daemon is the tool when a workstream needs its *own processes* instead
+- [`schedule/00-overview.md`](../../schedule/00-overview.md) — the Scheduler, for time-triggered rather than always-on work

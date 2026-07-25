@@ -48,6 +48,21 @@ Requires an active coroutine at submit time; otherwise every call throws
 A fresh deferred executor. Chiefly useful in tests, and when you deliberately
 want synchronous behaviour inside a Swoole process.
 
+### `newFixedExecutor(int $concurrency, int $queue = 0, RejectPolicy $onReject = RejectPolicy::ABORT): BoundedExecutorService`
+
+A fresh **fixed-size pool**: at most `$concurrency` tasks run at once, the rest
+wait for a slot. `Executors.newFixedThreadPool(n)` for coroutines. Register it in
+the container to give an `#[Async('id')]` method a dedicated, capped pool.
+
+```php
+$pool = Executors::newFixedExecutor(5);         // cap at 5 concurrent
+$pool->submit(fn() => $gateway->send($msg));
+```
+
+The cap is enforced under Swoole; without coroutines the pool runs tasks
+sequentially and the size is a no-op. Full treatment — the reject policy, the
+occupancy gauges, the per-process caveat — is in [05-pools.md](05-pools.md).
+
 ### `shutdownCommon(?float $timeout = null): bool`
 
 Stops the shared executors accepting new work and waits for what is already
@@ -186,6 +201,15 @@ Two limits keep counting during the drain: `max_execution_time` and FPM's
 > used when present). Under CLI and the built-in dev server the response is
 > simply sent when the script ends.
 
+### `FixedExecutorService` — a bounded pool
+
+A decorator over the two backends above: under Swoole it gates each task with a
+`Channel` semaphore of N tokens (so no more than N coroutines run the body at
+once); without coroutines it delegates to the deferred backend, where the bound
+is moot. It adds occupancy gauges (`activeCount()`, `queuedCount()`,
+`remainingCapacity()`) and a reject policy for a bounded queue. Created via
+`newFixedExecutor()` — see [05-pools.md](05-pools.md).
+
 ---
 
 ## Errors
@@ -206,4 +230,5 @@ The first is raised at submit time, the rest by `Future::get()` — see
 
 - [02-future.md](02-future.md) — the handle `submit()` returns
 - [03-async.md](03-async.md) — declaring asynchrony on the method instead
+- [05-pools.md](05-pools.md) — fixed-size pools, reject policies, occupancy gauges
 - [`ppa/`](../ppa/00-overview.md) — connection pool a task borrows from

@@ -49,7 +49,8 @@ Executors                 ← entry point, picks the backend for the runtime
    ├── ExecutorService    ← the contract: submit / execute / invokeAll
    │      ↑
    │      ├── CoroutineExecutorService   (Swoole)  go() + Channel
-   │      └── DeferredExecutorService    (FPM/CLI) lazy + fastcgi_finish_request
+   │      ├── DeferredExecutorService    (FPM/CLI) lazy + fastcgi_finish_request
+   │      └── FixedExecutorService       (pool)    N-slot semaphore over the above
    │
    └── Future             ← handle on a result
           ↑
@@ -116,6 +117,7 @@ contract. It requires the object to come from the DI container — see
 | A service that is asynchronous by nature | `#[Async]` |
 | Static method, `final` class, manual `new` | `Executors::common()` |
 | Fan-out over several external calls | `invokeAll()` |
+| Cap the parallelism of a workstream | `Executors::newFixedExecutor(n)` — [05-pools.md](05-pools.md) |
 
 ---
 
@@ -142,6 +144,7 @@ result:
 | 02 | [02-future.md](02-future.md) | `Future`, `CompletableFuture`, results and failures |
 | 03 | [03-async.md](03-async.md) | `#[Async]` — contract, proxying, pitfalls |
 | 04 | [04-build.md](04-build.md) | Caches, `call di build`, deployment |
+| 05 | [05-pools.md](05-pools.md) | Fixed-size pools — sizing, reject policies, gauges |
 
 ## See also
 

@@ -88,9 +88,11 @@ final class Scheduler extends Process
     /**
      * Dispatches one task: mark it in flight and spawn the run — resolve its class
      * from the container and invoke the method, logging any failure so it is never
-     * fatal. The run's completion is picked up later by {@see reap()}; the spawned
-     * closure deliberately does not touch task state, because under the fork
-     * runtime it executes in a separate process.
+     * fatal. Bean resolution and the method call are reported separately, so a
+     * class that cannot be autowired is distinguished from a method that threw. The
+     * run's completion is picked up later by {@see reap()}; the spawned closure
+     * deliberately does not touch task state, because under the fork runtime it
+     * executes in a separate process.
      */
     private function fire(int $index, ScheduledTask $task): void
     {
@@ -100,9 +102,19 @@ final class Scheduler extends Process
         $this->running[$index] = $this->spawn(function () use ($task): void {
             try {
                 $bean = Container::getInstance()->make($task->className);
+            } catch (\Throwable $e) {
+                $this->logger->error(
+                    'Scheduled ' . $task->id() . ': cannot resolve ' . $task->className
+                    . ' from the container — check its constructor and #[Autowired] dependencies ('
+                    . $e->getMessage() . ').'
+                );
+                return;
+            }
+
+            try {
                 $bean->{$task->methodName}();
             } catch (\Throwable $e) {
-                $this->logger->error('Scheduled ' . $task->id() . ' failed: ' . $e->getMessage());
+                $this->logger->error('Scheduled ' . $task->id() . ' threw: ' . $e->getMessage());
             }
         });
     }

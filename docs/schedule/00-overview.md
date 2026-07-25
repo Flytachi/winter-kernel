@@ -96,3 +96,16 @@ call schedule stop          # graceful SIGTERM
 
 See [Usage](01-usage.md) for the attribute in depth, the execution model, and the
 fork-safety note under the non-Swoole runtime.
+
+## Pages
+
+| # | File | Contents |
+|---|------|----------|
+| 00 | this page | What the layer is, triggers, when it runs |
+| 01 | [01-usage.md](01-usage.md) | Quick start, recipes, triggers, execution, running in production |
+
+## See also
+
+- [`concurrent/05-pools.md`](../concurrent/05-pools.md) — bound a scheduled task to a named pool it shares with the API
+- [`concurrent/03-async.md`](../concurrent/03-async.md) — `#[Async]` on a scheduled method
+- [`process/00-overview.md`](../process/00-overview.md) — the Process layer the Scheduler runs on

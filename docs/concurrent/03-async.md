@@ -231,6 +231,24 @@ public function build(int $month): Future { … }
 The argument is a container id resolved at call time. Omitted, the method uses
 `Executors::common()`.
 
+To back a method with a **bounded pool** — cap its parallelism, or share one
+budget across several methods — register an executor under that id as a singleton
+and name it:
+
+```php
+// Boot::providers()
+$c->singleton('reports', fn() => Executors::newFixedExecutor(3));   // at most 3 at once
+
+// the method
+#[Async(executor: 'reports')]
+public function build(int $month): Future { … }
+```
+
+Now every `build()` call runs on the `reports` pool, three concurrently, the rest
+queued. Any `ExecutorService` registered under the id works; a fixed pool is the
+usual choice. See [05-pools.md](05-pools.md) for pool sizing, reject policies and
+the per-process caveat.
+
 ---
 
 ## When not to use it

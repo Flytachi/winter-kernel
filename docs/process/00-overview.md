@@ -116,6 +116,12 @@ is I/O-bound and the units are independent. That is the subject of
 Concurrency is opt-in. A process that never calls `spawn()` is an ordinary
 sequential program, and that is a perfectly good thing to be.
 
+**Triggered by a clock, not a loop?** When the question is *when* to run rather
+than *how* to loop — every night at 02:00, every five minutes — you usually do
+not write a Process at all: annotate a plain method with `#[Scheduled]` and the
+**Scheduler** runs it on time. The Scheduler is itself a Process, built on
+everything this page describes; see [`schedule/`](../schedule/00-overview.md).
+
 ---
 
 ## The two runtimes
@@ -173,4 +179,6 @@ layer *inside* a single worker — the two compose rather than compete.
 ## See also
 
 - [`concurrent/00-overview.md`](../concurrent/00-overview.md) — `Executors` and `Future`, the primitive `spawn()` is built on
+- [`schedule/00-overview.md`](../schedule/00-overview.md) — the Scheduler, a Process that runs `#[Scheduled]` methods on a clock
+- [`process/daemon/00-overview.md`](daemon/00-overview.md) — a supervised fleet of identical processes
 - [`ppa/00-overview.md`](../ppa/00-overview.md) — the database connection pool a process shares across its coroutines

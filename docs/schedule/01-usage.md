@@ -1,5 +1,46 @@
 # Winter Schedule — Usage
 
+## Quick start
+
+Three steps, no wiring.
+
+**1. Annotate a method** on any class the container can build:
+
+```php
+use Flytachi\Winter\K2\Schedule\Scheduled;
+use Psr\Log\LoggerInterface;
+
+class ReportService
+{
+    #[Autowired] private LoggerInterface $logger;
+
+    #[Scheduled(cron: '0 2 * * *')]        // every night at 02:00
+    public function nightly(): void
+    {
+        $this->logger->info('rolling yesterday’s metrics');
+        // ... work ...
+    }
+}
+```
+
+**2. See what was found** (a static scan — nothing has to be running):
+
+```
+$ call schedule list
+  TASK                                     TRIGGER
+  App\ReportService::nightly               cron 0 2 * * *
+```
+
+**3. Run the scheduler:**
+
+```
+call schedule start        # foreground (Ctrl-C to stop)
+call schedule start -d     # background; stop with: call schedule stop
+```
+
+That is the whole loop. Everything below is detail on the triggers, the execution
+model, and running it in production.
+
 ## The attribute
 
 `#[Scheduled]` marks a method to be run on a cadence. It is repeatable, so one
@@ -93,6 +134,45 @@ public function warmThenPoll(): void { /* ... */ }
 Seconds to wait after boot before the first run — handy for letting dependencies
 warm up, or staggering tasks that would otherwise all fire at boot.
 
+## Recipes
+
+Copy-paste starting points for the common cadences.
+
+```php
+// every 30 seconds, measured from the start of each run
+#[Scheduled(fixedRate: 30.0)]
+public function poll(): void { /* ... */ }
+
+// 5 seconds after each run finishes (gap immune to run duration)
+#[Scheduled(fixedDelay: 5.0)]
+public function drainQueue(): void { /* ... */ }
+
+// warm up, then poll every 10s starting 60s after boot
+#[Scheduled(fixedRate: 10.0, initialDelay: 60.0)]
+public function refreshCache(): void { /* ... */ }
+
+// every night at 02:00
+#[Scheduled(cron: '0 2 * * *')]
+public function nightlyCleanup(): void { /* ... */ }
+
+// 08:00 on weekdays
+#[Scheduled(cron: '0 8 * * 1-5')]
+public function weekdayReport(): void { /* ... */ }
+
+// top of every hour
+#[Scheduled(cron: '0 * * * *')]
+public function hourlyRollup(): void { /* ... */ }
+
+// every 15 minutes, on the quarter
+#[Scheduled(cron: '*/15 * * * *')]
+public function everyQuarterHour(): void { /* ... */ }
+
+// two triggers on one method — both fire it
+#[Scheduled(cron: '0 9 * * *')]     // 09:00 daily
+#[Scheduled(cron: '0 17 * * *')]    // and 17:00 daily
+public function twiceADay(): void { /* ... */ }
+```
+
 ## The execution model
 
 The Scheduler loops: on each pass it fires every task that is due and not already
@@ -132,6 +212,67 @@ work, either break it into chunks that yield (`\Swoole\Coroutine::sleep(0)` /
 periodic I/O), or run the Scheduler under the fork runtime so each run is a
 separate process. Blocking *I/O* is not a problem: Swoole's runtime hooks turn it
 into a yield.
+
+## Bounding concurrency with a named pool
+
+A scheduled method may also be an `#[Async]` method — the two compose. When the
+scheduler fires it, the `#[Async]` proxy routes the body onto its executor, exactly
+as it would for an API call. Point both at the same **named pool** and scheduled
+runs and API-triggered runs share one bounded set of workers.
+
+Register the pool once (a fixed-size executor) in your Boot's `providers()`:
+
+```php
+use Flytachi\Winter\K2\Concurrent\Executors;
+
+protected static function providers(Container $c): void
+{
+    // at most 5 running at once; unbounded wait queue (the default)
+    $c->singleton('mailPool', fn() => Executors::newFixedExecutor(5));
+}
+```
+
+Then reference it by id from `#[Async]`:
+
+```php
+class MailService
+{
+    #[Scheduled(cron: '* * * * *')]   // the scheduler fires it every minute
+    #[Async('mailPool')]              // …onto mailPool
+    public function drain(): void { /* ... */ }
+}
+
+// an API endpoint can trigger the same work onto the same pool
+$this->mail->drain();   // returns immediately, queued on mailPool
+```
+
+Both paths now funnel through `mailPool`: at most 5 concurrent runs across the
+scheduler and the web workers **of one process**. Two things to keep in mind:
+
+- **Register it as a `singleton`.** The cap lives in the pool instance's state, so
+  every `#[Async('mailPool')]` call must resolve the *same* instance. A `bind()` /
+  transient registration would hand out a fresh pool per call and the cap would
+  never hold.
+- **The pool is per-process.** The scheduler process and each web worker hold
+  their own `mailPool` instance, so the cap is 5 *per process*, not 5 globally.
+  A single shared cap across processes/hosts needs an external broker, not this
+  in-memory pool.
+- **With `#[Async]`, the scheduler's own no-overlap guard steps aside** (the async
+  hand-off returns immediately), so overlap is governed by the pool. That is what
+  the pool is for — bound it (`Executors::newFixedExecutor(5)`), and a slow run
+  simply queues instead of piling up unbounded coroutines.
+
+The pool enforces its cap only under Swoole (coroutines). Without coroutines
+(FPM, plain CLI) there is no parallelism to bound, so tasks run sequentially and
+the size is a no-op. For cost control set a bounded queue and a reject policy:
+
+```php
+use Flytachi\Winter\K2\Concurrent\RejectPolicy;
+
+$c->singleton('mailPool', fn() => Executors::newFixedExecutor(
+    concurrency: 5, queue: 50, onReject: RejectPolicy::DISCARD,
+));
+```
 
 ## Fork-safety under the non-Swoole runtime
 

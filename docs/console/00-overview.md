@@ -28,12 +28,15 @@ three buckets:
 | `options`    | `--key` or `--key=v`| `--port=8000`, `--mvc`           |
 
 The first positional argument is the command name; if omitted, `Help` runs.
-Two short aliases are wired in `console/Core.php`:
+Short aliases are wired in `console/Core.php`:
 
-| Alias | Resolves to |
-|-------|-------------|
-| `sc`  | `Script`    |
-| `th`  | `Thread`    |
+| Alias  | Resolves to |
+|--------|-------------|
+| `sc`   | `Script`    |
+| `th`   | `Thread`    |
+| `proc` | `Process`   |
+| `dmn`  | `Daemon`    |
+| `sch`  | `Schedule`  |
 
 A command name is mapped to `Flytachi\Winter\Console\Command\<Name>` via
 `ucwords()`, and `::script($parsed)` is called on it.
@@ -182,6 +185,12 @@ it directly. See [11-complete.md](11-complete.md).
 | [09](09-thread.md)   | `thread`  | Run `Dispatchable` tasks (alias `th`)               |
 | [10](10-di.md)       | `di`      | Build / clean / show DI scanner cache               |
 | [11](11-complete.md) | `complete`| Shell-completion endpoint (internal)                |
+| [12](12-schedule.md) | `schedule`| Run the scheduler; list `#[Scheduled]` tasks (alias `sch`) |
+
+The **`process`** and **`daemon`** commands (aliases `proc` / `dmn`) manage
+long-lived worker processes and supervised fleets; they are documented with the
+runtime itself in [`process/03-control.md`](../process/03-control.md) and
+[`process/daemon/03-control.md`](../process/daemon/03-control.md).
 
 ---
 

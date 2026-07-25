@@ -34,6 +34,9 @@
             <directory>tests/Schedule</directory>
             <exclude>tests/Schedule/Fixtures</exclude>
         </testsuite>
+        <testsuite name="Concurrent">
+            <directory>tests/Concurrent</directory>
+        </testsuite>
     </testsuites>
 
     <groups>

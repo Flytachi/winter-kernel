@@ -7,6 +7,7 @@ namespace Flytachi\Winter\K2\Concurrent;
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\K2\Concurrent\Executor\CoroutineExecutorService;
 use Flytachi\Winter\K2\Concurrent\Executor\DeferredExecutorService;
+use Flytachi\Winter\K2\Concurrent\Executor\FixedExecutorService;
 
 /**
  * Factory for {@see ExecutorService} instances.
@@ -73,6 +74,31 @@ final class Executors
     public static function newDeferredExecutor(): ExecutorService
     {
         return new DeferredExecutorService();
+    }
+
+    /**
+     * Returns a fresh fixed-size pool: at most $concurrency tasks run at once.
+     *
+     * Mirrors `Executors.newFixedThreadPool(n)`. The bound is enforced under Swoole
+     * (coroutine semaphore); without coroutines the pool runs tasks sequentially
+     * (deferred), where the bound is a no-op. Register the result in the container
+     * to back an `#[Async('id')]` method with a dedicated, capped pool.
+     *
+     * ```
+     * $c->singleton('mailPool', fn() => Executors::newFixedExecutor(5));
+     * // then: #[Async('mailPool')] public function send(): void { ... }
+     * ```
+     *
+     * @param int $concurrency Maximum simultaneous tasks (>= 1).
+     * @param int $queue Waiting slots before the reject policy applies; 0 = unbounded (never rejects).
+     * @param RejectPolicy $onReject What to do with a task when a bounded queue is full.
+     */
+    public static function newFixedExecutor(
+        int $concurrency,
+        int $queue = 0,
+        RejectPolicy $onReject = RejectPolicy::ABORT,
+    ): BoundedExecutorService {
+        return new FixedExecutorService($concurrency, $queue, $onReject);
     }
 
     /**
