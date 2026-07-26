@@ -66,7 +66,7 @@ class Complete extends Cmd
             '--tasks=:number of Swoole task workers',
             '--max_request=:max requests per worker',
             '--max_request_grace=:graceful drain count',
-            '-w:enable MemoryWatcher',
+            '-w:enable DevWatcher (memory + hot-reload)',
         ],
         'run dev' => [
             '--host=:bind host (default: 0.0.0.0)',

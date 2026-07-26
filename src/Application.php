@@ -12,7 +12,7 @@ use Flytachi\Winter\K2\App\ComponentKind;
 use Flytachi\Winter\K2\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\K2\Http\Adapter\SwooleResponse;
 use Flytachi\Winter\K2\Process\ForkReset;
-use Flytachi\Winter\K2\Route\MemoryWatcher;
+use Flytachi\Winter\K2\Route\DevWatcher;
 use Flytachi\Winter\K2\Route\Router;
 use Flytachi\Winter\Logger\Context\CoroutineContext;
 use Flytachi\Winter\Logger\Context\ProcessContext;
@@ -50,8 +50,8 @@ use Psr\Log\LoggerInterface;
  * {@see run()} is the CLI front door: it just dispatches the console (`run`,
  * `run dev`, `make`, `daemon`, `schedule`, …). The application itself is brought
  * up by `call run` / `call run dev`, which call {@see serve()}:
- *   - `call run`     → production: every component, MemoryWatcher OFF;
- *   - `call run dev` → development: every component, MemoryWatcher ON.
+ *   - `call run`     → production: every component, DevWatcher OFF;
+ *   - `call run dev` → development: every component, DevWatcher ON (memory + hot-reload).
  *
  * Server mode is Swoole's strength — one process, many concerns, like a JVM. The
  * one {@see Component::http()} (if declared) becomes the HTTP server; the rest run
@@ -94,11 +94,12 @@ abstract class Application extends BaseBoot
      *
      * With a {@see Component::http()} declared: builds one Swoole HTTP server and
      * attaches every other component as a supervised `addProcess`, co-terminating
-     * with the server. MemoryWatcher is attached only when $watch is true
-     * (`call run dev`). With no Http component: runs headless — a single component
-     * in the foreground, or several under a small pcntl supervisor.
+     * with the server. The {@see DevWatcher} (memory reporting + code hot-reload)
+     * is attached only when $watch is true (`call run dev`). With no Http component:
+     * runs headless — a single component in the foreground, or several under a small
+     * pcntl supervisor.
      *
-     * @param bool $watch Attach the MemoryWatcher (development).
+     * @param bool $watch Attach the DevWatcher — memory + hot-reload (development).
      */
     final public static function serve(bool $watch = false): never
     {
@@ -205,10 +206,12 @@ abstract class Application extends BaseBoot
             LoggerFactory::setDefaultChannel('http');
         };
 
-        if ($watch) {
-            $memory = new MemoryWatcher();
-            $memory->attach($server, $workerStart);
-            $server->on('request', $memory->wrap($handler));
+        // Dev mode: the DevWatcher reports memory and hot-reloads on code changes
+        // by restarting the whole process (see reexec() after start()).
+        $dev = $watch ? new DevWatcher([Kernel::$pathRoot]) : null;
+        if ($dev !== null) {
+            $dev->attach($server, $workerStart);
+            $server->on('request', $dev->wrap($handler));
         } else {
             $server->on('workerStart', $workerStart);
             $server->on('request', $handler);
@@ -223,6 +226,13 @@ abstract class Application extends BaseBoot
         ));
 
         $server->start();
+
+        // start() returns when a dev code change stopped the server — re-exec into
+        // a fresh `call run dev` so the change is fully picked up.
+        if ($dev !== null && $dev->reloadRequested()) {
+            $dev->reexec();
+        }
+
         exit(0);
     }
 

@@ -41,8 +41,8 @@ class Run extends Cmd
         self::printTitle("Run Help", $cl);
 
         self::printLabel("Usage", $cl);
-        self::print("call run       - run the application (production; MemoryWatcher off)", $cl);
-        self::print("call run dev   - run the application (development; MemoryWatcher on)", $cl);
+        self::print("call run       - run the application (production; DevWatcher off)", $cl);
+        self::print("call run dev   - run the application (development; DevWatcher: memory + hot-reload)", $cl);
         self::printLabel("Usage", $cl);
 
         self::printDivider($cl);
@@ -59,7 +59,7 @@ class Run extends Cmd
         self::printDivider($cl);
 
         self::printLabel("Options", $cl);
-        self::print("-w / --watcher   force the MemoryWatcher on (same as `run dev`)", $cl);
+        self::print("-w / --watcher   force the DevWatcher on (same as `run dev`)", $cl);
         self::printLabel("Options", $cl);
 
         self::printDivider($cl);
