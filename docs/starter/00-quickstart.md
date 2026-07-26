@@ -9,8 +9,8 @@ composer require flytachi/winter-kernel
 ```
 
 Now you have `vendor/` and nothing else. This page adds the handful of files a
-project needs, explains the **one entry point** (`App::run()`), and shows every
-way to start the app.
+project needs, explains the **one entry point** (`App::run()`), and shows how to
+run the app.
 
 If you would rather not type these files by hand, skip to
 [Using the starter template](#using-the-starter-template) — `composer
@@ -22,22 +22,25 @@ create-project flytachi/winter` writes all of them for you.
 
 You write **one** application class that declares **what your app contains** —
 its *components*. A component is any long-lived thing: the web server, a
-WebSocket endpoint, a background `Process`, a supervised `Daemon`, the
-`Scheduler`. One entry point (`App::run($argv)`) turns that declaration into a
-running program.
+background `Process`, a supervised `Daemon`, the `Scheduler`. One command brings
+them all up in a single process.
 
 ```
-                      App::run($argv)          ← the one entry (your java main())
-                       /            \
-             argv = "start"        argv = anything else
-                    │                        │
-              server mode                console mode
-        (all components in ONE          (make / run / daemon /
-          Swoole process)                schedule / your command)
+   App::components() = [ http, process, daemon, scheduler ]
+                                   │
+                             php call run          ← run the whole app (prod)
+                             php call run dev       ← same + MemoryWatcher (dev)
+                                   │
+                        ONE Swoole process
+                 ┌─────────────┬──────────┬───────────┐
+              HTTP :8000     Process     Daemon     Scheduler
+                            (addProcess, supervised, co-terminating)
 ```
 
-- **Swoole** hosts *everything in one process* — HTTP + Process + Daemon +
-  Scheduler together, like a JVM. This is `php call start`.
+- The web tier is **just a component** (`Component::http()`), not a hard
+  requirement. Declare it and `call run` serves HTTP; omit it and the app runs
+  **headless** (background components only).
+- **Swoole** hosts everything in one process, like a JVM.
 - **FPM** hosts *only the web tier*, one request at a time — because php-fpm is
   not your process. Anything long-lived runs as its own `call` process next to
   it. (See [Deployment shapes](#deployment-shapes).)
@@ -107,7 +110,7 @@ final class App extends Application
     protected static function components(): array
     {
         return [
-            Component::http(port: 8000),   // the web server (main)
+            Component::http(port: 8000),   // web server (optional)
             // Component::process(\Main\KernelSys::class),
             // Component::daemon(\Main\Emails::class),
             // Component::scheduler(),
@@ -136,13 +139,14 @@ This is your `java -jar`. Every runtime flows through it.
 if (PHP_VERSION_ID >= 80300) {
     chdir(__DIR__);
     require './bootstrap.php';
-    App::run($argv);            // ← the single entry point
+    App::run($argv);            // ← the single entry point (the app's main())
 } else {
     echo "Please use PHP 8.3 or higher.\n";
 }
 ```
 
-Make it executable:
+`App::run($argv)` boots once and dispatches the console command — `run`,
+`run dev`, `make`, `daemon`, `schedule`, or your own. Make it executable:
 
 ```bash
 chmod +x call
@@ -150,8 +154,8 @@ chmod +x call
 
 ### `public/index.php` — the FPM web adapter
 
-FPM is not a persistent process, so it cannot go through `App::run()`. It gets
-its own two-line front controller that runs the web tier per request:
+FPM is not a persistent process, so it cannot go through `call run`. It gets its
+own two-line front controller that runs the web tier per request:
 
 ```php
 <?php
@@ -159,8 +163,8 @@ require '../bootstrap.php';
 App::web();
 ```
 
-You only need this file if you deploy under PHP-FPM (or the PHP built-in dev
-server). Under Swoole it is unused — `Component::http()` is the server.
+You only need this file if you deploy under PHP-FPM. Under Swoole it is unused —
+`Component::http()` is the server.
 
 ---
 
@@ -241,26 +245,25 @@ my-app/
 └── vendor/
 ```
 
-Start it:
+Run it:
 
 | Command | What runs |
 |---|---|
-| `php call start` | **Server mode (Swoole)** — every component in one process |
-| `php call run dev` | Web only, PHP built-in server (no swoole needed) |
-| `php call run` | Web only, Swoole HTTP server |
-| `php call <command>` | Console mode — `make`, `mapping`, `di`, your commands |
+| `php call run` | **Production** — every component in one Swoole process, MemoryWatcher off |
+| `php call run dev` | **Development** — same, MemoryWatcher on |
+| `php call <command>` | Console — `make`, `mapping`, `di`, your commands |
 | nginx → `public/index.php` | Web only, under PHP-FPM |
 
-With only `Component::http()` declared, `php call start` is a web server. Open
+With only `Component::http()` declared, `php call run` is a web server. Open
 `http://0.0.0.0:8000` → `Hello from Winter`. On the console you will see:
 
 ```
 Application up: http://0.0.0.0:8000
 ```
 
-> `call start` needs ext-swoole (`pecl install swoole`). Without it, use
-> `call run dev` for local web, and run background components individually
-> (below).
+> `call run` with a web tier needs ext-swoole (`pecl install swoole`). Without a
+> web tier the app runs headless and works without swoole (each component picks
+> its own engine).
 
 ---
 
@@ -302,7 +305,7 @@ protected static function components(): array
 }
 ```
 
-Now `php call start` runs **both** in one Swoole process:
+Now `php call run` runs **both** in one Swoole process:
 
 ```
 Application up: http://0.0.0.0:8000 + [KernelSys]
@@ -313,7 +316,27 @@ master supervises the companion and terminates it with the server.
 
 The same works for a `Daemon` (`Component::daemon(...)`) and the scheduler
 (`Component::scheduler()`). Each companion behaves exactly as if you had launched
-it standalone — see below.
+it standalone (`call daemon|process|schedule`).
+
+### Headless (no web)
+
+Drop `Component::http()` and `call run` runs only the background components — one
+in the foreground, several under a small supervisor. Useful for a worker-only or
+scheduler-only deployment:
+
+```php
+protected static function components(): array
+{
+    return [
+        Component::daemon(\Main\Emails::class),
+        Component::scheduler(),
+    ];
+}
+```
+
+```
+Application up (headless): [Emails, Scheduler]
+```
 
 ---
 
@@ -324,7 +347,7 @@ The same code runs two ways; only the process layout differs.
 ### Swoole — all in one (the JVM shape)
 
 ```
-php call start ── ONE process
+php call run ── ONE process
    ├─ HTTP :8000
    ├─ KernelSys       (addProcess, supervised)
    ├─ Emails daemon   (addProcess, supervised)
@@ -351,7 +374,7 @@ hosted by the request process; you start them yourself. One Docker image, and th
 container's `command:` picks the role:
 
 ```yaml
-web:        command: php call start          # or php-fpm for the FPM shape
+web:        command: php call run          # or php-fpm for the FPM shape
 worker:     command: php call daemon main.Emails start
 scheduler:  command: php call schedule start
 ```
@@ -359,8 +382,8 @@ scheduler:  command: php call schedule start
 > **Why FPM is the odd one out:** php-fpm master is not your process — it invokes
 > your code per request and recycles the worker. There is no persistent loop for a
 > daemon or scheduler to live in, so those always need their own process. If your
-> app has WebSocket / daemon / scheduler, you already need a persistent process —
-> at that point Swoole (`call start`) is usually the simpler choice.
+> app has a daemon or scheduler, you already need a persistent process — at that
+> point Swoole (`call run`) is usually the simpler choice.
 
 ---
 
@@ -374,9 +397,8 @@ chmod +x call
 php call cfg key -g
 
 # run
-php call start            # Swoole: all components in one process
-php call run dev          # local web, no swoole
-php call run              # Swoole web only
+php call run              # production: all components, one process
+php call run dev          # development: + MemoryWatcher
 php call mapping show     # list routes
 
 # run a single component standalone (split / FPM deploy)
@@ -398,7 +420,7 @@ Everything above is generated for you by the starter repository:
 ```bash
 composer create-project flytachi/winter my-app
 cd my-app
-php call start
+php call run
 ```
 
 See [`../starter.md`](../starter.md) for the file-by-file breakdown of the

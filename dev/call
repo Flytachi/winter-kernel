@@ -27,7 +27,7 @@ if (PHP_VERSION_ID >= 80300) {
     */
     require './bootstrap.php';
 
-    Boot::cli($argv);
+    Boot::run($argv);
 
 } else {
     echo "\033[33m"." Please use PHP version 8.3 or higher.\n";

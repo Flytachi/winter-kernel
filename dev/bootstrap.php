@@ -3,7 +3,8 @@
 declare(strict_types=1);
 
 use Flytachi\Winter\DI\Container;
-use Flytachi\Winter\K2\BaseBoot;
+use Flytachi\Winter\K2\App\Component;
+use Flytachi\Winter\K2\Application;
 use Flytachi\Winter\K2\Http\Cors;
 use Flytachi\Winter\K2\Http\Health\Health;
 use Flytachi\Winter\K2\Kernel;
@@ -32,8 +33,25 @@ require __DIR__ . '/vendor/autoload.php';
  *   Boot::cli($argv)       call              — CLI console
  *   Boot::executor($argv)  wKernelExecutor   — thread / job runner
  */
-class Boot extends BaseBoot
+class Boot extends Application
 {
+    /**
+     * Components — what this application is made of.
+     *
+     * `call run` / `call run dev` bring these up: the Http one becomes the Swoole
+     * server, the rest run beside it (addProcess). Remove Http to run headless.
+     *
+     * @return list<Component>
+     */
+    protected static function components(): array
+    {
+        return [
+            Component::http(port: 8000),
+            // Component::process(\Main\KernelSys::class),
+            // Component::scheduler(),
+        ];
+    }
+
     /**
      * Kernel — paths, .env, logging, timezone.
      *
