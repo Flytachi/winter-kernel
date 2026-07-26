@@ -160,7 +160,7 @@ abstract class Application extends BaseBoot
         $router = Router::fromScan(Kernel::$pathRoot);
         $router->static(Kernel::$pathPublic);
 
-        \Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL ^ SWOOLE_HOOK_PROC);
+        \Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL);
         Runtime::boot(RuntimeMode::Swoole);
 
         $server = new \Swoole\Http\Server($http->host, $http->port);
@@ -173,9 +173,10 @@ abstract class Application extends BaseBoot
             $server->addProcess(new \Swoole\Process(
                 static function () use ($class): void {
                     // The bundle process turned runtime hooks on for the HTTP
-                    // reactor; reset them so this child is a clean plain process
-                    // and each component boots its own runtime inside start().
-                    \Swoole\Runtime::enableCoroutine(false);
+                    // reactor; clear them (flags = 0) so this child is a clean
+                    // plain process and each component boots its own runtime
+                    // inside start(), exactly as a standalone launch would.
+                    \Swoole\Runtime::enableCoroutine(0);
                     // The fork copies the parent's open fds; drop them so the
                     // component reconnects in place (see Process::afterFork()).
                     ForkReset::runAll();
@@ -251,7 +252,7 @@ abstract class Application extends BaseBoot
             }
             if ($pid === 0) {
                 if (extension_loaded('swoole')) {
-                    \Swoole\Runtime::enableCoroutine(false);
+                    \Swoole\Runtime::enableCoroutine(0);
                 }
                 ForkReset::runAll();
                 $class::start();
