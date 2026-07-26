@@ -518,7 +518,12 @@ abstract class BaseBoot
 
     // ── Internal ──────────────────────────────────────────────────────────────
 
-    private static function boot(): void
+    /**
+     * Runs the boot sequence once (kernel init, DI scan, providers, channels,
+     * plugins, CORS, health). Every entry point calls this first. Protected so a
+     * subclass entry point (e.g. {@see Application::serve()}) can reuse it.
+     */
+    protected static function boot(): void
     {
         self::$bootClass = static::class;
         static::configure();
