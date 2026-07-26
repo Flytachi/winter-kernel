@@ -110,7 +110,7 @@ class HealthIndicator implements HealthIndicatorInterface
         $globalFormat = env('LOG_FORMAT', 'line');
 
         $channels = [];
-        foreach (['sys', 'http', 'cli'] as $name) {
+        foreach (['sys', 'http'] as $name) {
             $prefix   = 'LOG_' . strtoupper($name) . '_';
             $level    = env($prefix . 'LEVEL')  ?? $globalLevel;
             $output   = env($prefix . 'OUTPUT') ?? $globalOutput;

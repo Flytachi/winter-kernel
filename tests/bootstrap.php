@@ -29,5 +29,9 @@ $null = [
 
 LoggerFactory::setManager(new LoggerManager(
     contextStorage: new ProcessContext(),
-    channels: ['sys' => $null, 'http' => $null, 'cli' => $null],
+    channels: ['sys' => $null, 'http' => $null],
 ));
+
+// LoggerFactory's built-in default channel is 'cli'; pin it to 'sys' to match
+// Kernel::init() now that 'cli' is no longer a registered channel.
+LoggerFactory::setDefaultChannel('sys');

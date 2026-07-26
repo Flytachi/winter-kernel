@@ -27,10 +27,9 @@ require __DIR__ . '/vendor/autoload.php';
  *   6. httpCors()   — global CORS policy
  *   7. health()     — /actuator endpoints
  *
- * Entry points (call one from each runtime file):
- *   Boot::web()            public/index.php  — FPM
- *   Boot::swoole()         server.php        — Swoole HTTP server
- *   Boot::cli($argv)       call              — CLI console
+ * Entry points:
+ *   Boot::run($argv)       call              — CLI + `call run` (Swoole, all components)
+ *   Boot::web()            public/index.php  — FPM (web tier, per request)
  *   Boot::executor($argv)  wKernelExecutor   — thread / job runner
  */
 class Boot extends Application

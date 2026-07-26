@@ -110,7 +110,7 @@ called in a fixed order from every entry point.
 1. configure()        ← Kernel::init() — paths, .env, logging, timezone
 2. DI scan            ← auto-discovers #[Singleton] / #[Request] / #[Transient]
 3. providers($c)      ← manual bindings, factories, scalar values
-4. channels()         ← extra log channels beyond sys / http / cli
+4. channels()         ← extra log channels beyond http / sys
 5. plugins()          ← route-prefixed sub-applications
 6. httpCors()         ← global CORS policy
 7. health()           ← /actuator endpoints
@@ -180,7 +180,7 @@ class Boot extends BaseBoot
     }
 
     /**
-     * Logging — extra channels beyond sys / http / cli.
+     * Logging — extra channels beyond http / sys.
      * Each channel reads LOG_{NAME}_* env with the same fallback chain.
      */
     protected static function channels(): void
@@ -323,7 +323,7 @@ Variables:
 | `LOG_FILE_MAX`     | Number of daily-rotating files to keep                                 |
 | `LOG_SYSLOG_IDENT` | Program identity tag in syslog (`journalctl -t winter`)                |
 
-For per-channel overrides (`LOG_HTTP_*`, `LOG_CLI_*`, custom channels)
+For per-channel overrides (`LOG_HTTP_*`, `LOG_SYS_*`, custom channels)
 see [`configuration/02-logging.md`](configuration/02-logging.md).
 
 **Regenerate the key** any time:

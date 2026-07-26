@@ -11,27 +11,27 @@ over [Monolog](https://github.com/Seldaek/monolog) designed for multi-runtime PH
 ```
 Kernel::init()
     └── LoggerManager           ← built once, holds all channel configs
-            ├── channel 'sys'   ← system / kernel-level events
-            ├── channel 'http'  ← HTTP request lifecycle
-            └── channel 'cli'   ← console commands and jobs
+            ├── channel 'http'  ← HTTP request lifecycle (coroutine-isolated)
+            └── channel 'sys'   ← everything else: kernel, CLI, background components
 
 Entry point (index.php / call / run)
-    └── LoggerFactory::setDefaultChannel('http' | 'cli')
+    └── LoggerFactory::setDefaultChannel('http' | 'sys')
 
 Application code
     └── LoggerFactory::getLogger(MyClass::class)
             └── Logger (wraps Monolog, merges class FQCN into every record)
 ```
 
-**Key principle — entry-point driven.** The kernel registers all channels and sets `sys` as
-the default. Entry points switch to the channel that matches the runtime:
+**Key principle — entry-point driven.** The kernel registers both channels and sets `sys` as
+the default. Only the HTTP request path switches to `http`; everything else stays on `sys`:
 
 | Entry point | Channel | Context storage |
 |-------------|---------|-----------------|
-| `public/index.php` | `http` | `ProcessContext` (per FPM worker) |
-| `call run` (Swoole) | `http` | `CoroutineContext` (per coroutine) |
-| `call` (CLI) | `cli` | `ProcessContext` (per process) |
-| `wKernelExecutor` (threads/jobs) | `cli` | `ProcessContext` |
+| `public/index.php` (FPM) | `http` | `ProcessContext` (per FPM worker) |
+| `call run` — request workers | `http` | `CoroutineContext` (per coroutine) |
+| `call run` — master + components (Process/Daemon/Scheduler) | `sys` | `ProcessContext` (per process) |
+| `call` (CLI commands) | `sys` | `ProcessContext` (per process) |
+| `wKernelExecutor` (threads/jobs) | `sys` | `ProcessContext` |
 
 ---
 
@@ -127,10 +127,6 @@ LOG_HTTP_FILE_MAX=14
 LOG_SYS_OUTPUT=syslog
 LOG_SYS_SYSLOG_IDENT=myapp-sys
 
-# cli channel — debug level, stderr
-LOG_CLI_LEVEL=debug
-LOG_CLI_OUTPUT=stderr
-
 # custom 'job' channel (registered via Kernel::channel('job'))
 LOG_JOB_LEVEL=debug
 LOG_JOB_OUTPUT=file
@@ -142,7 +138,7 @@ LOG_JOB_FILE_MAX=7
 
 ## Custom channels
 
-Built-in channels (`sys`, `http`, `cli`) are registered automatically by `Kernel::init()`.
+Built-in channels (`http`, `sys`) are registered automatically by `Kernel::init()`.
 Add extra channels in `bootstrap.php` using `Kernel::channel()`:
 
 ```php
@@ -191,7 +187,7 @@ Raw `channel()` calls omit it.
 [2024-01-01 12:00:00] [DEBUG] -http- [4821] (UserService): db query {"class":"App\\Service\\UserService","request_id":"abc-123"}
 [2024-01-01 12:00:00] [WARN ] -http- [4821] (PaymentService): retry {"class":"App\\PaymentService","attempt":3}
 [2024-01-01 12:00:00] [ERROR] -http- [4821] (OrderController): checkout failed {"class":"App\\OrderController","order_id":99}
-[2024-01-01 12:00:00] [DEBUG] -cli- [5012] (MyJob): step done {"class":"App\\Job\\MyJob","job_id":"xyz"}
+[2024-01-01 12:00:00] [DEBUG] -sys- [5012] (MyJob): step done {"class":"App\\Job\\MyJob","job_id":"xyz"}
 [2024-01-01 12:00:00] [INFO ] -sys- [4821]: kernel booted
 ```
 
@@ -295,7 +291,7 @@ Equivalent to `LoggerFactory::logger()->{level}(...)` — always writes to the c
 
 ```php
 LoggerFactory::channel('http')->warning('rate limit hit');
-LoggerFactory::channel('cli')->debug('job started');
+LoggerFactory::channel('sys')->debug('job started');
 ```
 
 No `(ClassName)` in output. Throws `InvalidArgumentException` if the channel is not registered.
@@ -420,9 +416,6 @@ LOG_SYSLOG_IDENT=winter  # syslog program tag
 
 # LOG_SYS_OUTPUT=syslog
 # LOG_SYS_SYSLOG_IDENT=myapp
-
-# LOG_CLI_OUTPUT=stderr
-# LOG_CLI_LEVEL=debug
 
 # Custom channels (registered via Kernel::channel('job') in bootstrap.php)
 # LOG_JOB_LEVEL=debug

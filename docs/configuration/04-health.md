@@ -245,9 +245,8 @@ See [`../architecture/02-middleware.md`](../architecture/02-middleware.md) for m
 
 ```json
 {
-  "sys":  {"level": "INFO",  "output": "syslog", "format": "line"},
   "http": {"level": "WARN",  "output": "file",   "format": "json", "file": {"path": "storage/logs/http.log", "max_files": 14}},
-  "cli":  {"level": "DEBUG", "output": "stderr", "format": "line"}
+  "sys":  {"level": "INFO",  "output": "syslog", "format": "line"}
 }
 ```
 

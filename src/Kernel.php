@@ -92,8 +92,9 @@ final class Kernel extends KernelStore
         if (empty($levelStr)) {
             LoggerFactory::setManager(new LoggerManager(
                 contextStorage: new ProcessContext(),
-                channels: ['sys' => $null, 'http' => $null, 'cli' => $null],
+                channels: ['sys' => $null, 'http' => $null],
             ));
+            LoggerFactory::setDefaultChannel('sys');
             return;
         }
 
@@ -102,7 +103,6 @@ final class Kernel extends KernelStore
             channels: [
                 'sys'  => self::buildChannelConfig('sys'),
                 'http' => self::buildChannelConfig('http'),
-                'cli'  => self::buildChannelConfig('cli'),
             ],
         ));
 

@@ -15,6 +15,7 @@ use Flytachi\Winter\K2\Process\ForkReset;
 use Flytachi\Winter\K2\Route\MemoryWatcher;
 use Flytachi\Winter\K2\Route\Router;
 use Flytachi\Winter\Logger\Context\CoroutineContext;
+use Flytachi\Winter\Logger\Context\ProcessContext;
 use Flytachi\Winter\Logger\LoggerFactory;
 use Psr\Log\LoggerInterface;
 
@@ -150,13 +151,15 @@ abstract class Application extends BaseBoot
     private static function serveHttp(Component $http, array $companions, bool $watch, LoggerInterface $logger): never
     {
         if (!extension_loaded('swoole')) {
-            fwrite(STDERR, "[winter] `call run` with a web tier needs ext-swoole (pecl install swoole).\n");
-            exit(1);
+            throw new ApplicationConfigException(
+                '`call run` with a web tier needs ext-swoole (pecl install swoole).'
+            );
         }
 
-        LoggerFactory::setContextStorage(new CoroutineContext());
-        LoggerFactory::setDefaultChannel('http');
-
+        // The 'http' channel + coroutine context belong to request workers only
+        // (set in workerStart below). The master and the addProcess companions
+        // stay on 'sys' with process context — a background component must not
+        // log as if it were an HTTP request.
         $router = Router::fromScan(Kernel::$pathRoot);
         $router->static(Kernel::$pathPublic);
 
@@ -177,6 +180,10 @@ abstract class Application extends BaseBoot
                     // plain process and each component boots its own runtime
                     // inside start(), exactly as a standalone launch would.
                     \Swoole\Runtime::enableCoroutine(0);
+                    // Background component: log on the system channel with process
+                    // context, exactly like a standalone launch.
+                    LoggerFactory::setContextStorage(new ProcessContext());
+                    LoggerFactory::setDefaultChannel('sys');
                     // The fork copies the parent's open fds; drop them so the
                     // component reconnects in place (see Process::afterFork()).
                     ForkReset::runAll();
@@ -191,11 +198,19 @@ abstract class Application extends BaseBoot
             $router->handle($request, new SwooleResponse($res, $isHead));
         };
 
+        // Request workers log on 'http' with per-request coroutine isolation.
+        // addProcess companions never receive workerStart, so they keep 'sys'.
+        $workerStart = static function (\Swoole\Http\Server $server, int $workerId): void {
+            LoggerFactory::setContextStorage(new CoroutineContext());
+            LoggerFactory::setDefaultChannel('http');
+        };
+
         if ($watch) {
             $memory = new MemoryWatcher();
-            $memory->attach($server);
+            $memory->attach($server, $workerStart);
             $server->on('request', $memory->wrap($handler));
         } else {
+            $server->on('workerStart', $workerStart);
             $server->on('request', $handler);
         }
 
@@ -222,12 +237,10 @@ abstract class Application extends BaseBoot
     private static function serveHeadless(array $companions, LoggerInterface $logger): never
     {
         if ($companions === []) {
-            fwrite(
-                STDERR,
-                "[winter] Nothing to run: components() is empty. Declare at least one "
-                . "Component::http()/process()/daemon()/scheduler().\n"
+            throw new ApplicationConfigException(
+                'Nothing to run: components() is empty. Declare at least one '
+                . 'Component::http()/process()/daemon()/scheduler().'
             );
-            exit(1);
         }
 
         if (count($companions) === 1) {
@@ -238,8 +251,9 @@ abstract class Application extends BaseBoot
         }
 
         if (!function_exists('pcntl_fork')) {
-            fwrite(STDERR, "[winter] Running several headless components needs ext-pcntl.\n");
-            exit(1);
+            throw new ApplicationConfigException(
+                'Running several headless components needs ext-pcntl.'
+            );
         }
 
         $children = [];
@@ -247,13 +261,14 @@ abstract class Application extends BaseBoot
             $class = (string) $companion->class;
             $pid = pcntl_fork();
             if ($pid === -1) {
-                fwrite(STDERR, "[winter] fork failed for {$class}.\n");
-                exit(1);
+                throw new \RuntimeException("Application: fork failed for {$class}.");
             }
             if ($pid === 0) {
                 if (extension_loaded('swoole')) {
                     \Swoole\Runtime::enableCoroutine(0);
                 }
+                LoggerFactory::setContextStorage(new ProcessContext());
+                LoggerFactory::setDefaultChannel('sys');
                 ForkReset::runAll();
                 $class::start();
                 exit(0);

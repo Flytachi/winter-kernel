@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2;
 
-use Flytachi\Winter\Base\Runtime;
-use Flytachi\Winter\Base\RuntimeMode;
 use Flytachi\Winter\Console\Core;
 use Flytachi\Winter\DI\Collector\DICollector;
 use Flytachi\Winter\DI\Container;
@@ -14,12 +12,9 @@ use Flytachi\Winter\K2\Concurrent\Async\AsyncCollector;
 use Flytachi\Winter\K2\Concurrent\Async\Proxy\ProxyFactory;
 use Flytachi\Winter\K2\Http\Adapter\FpmRequest;
 use Flytachi\Winter\K2\Http\Adapter\FpmResponse;
-use Flytachi\Winter\K2\Http\Adapter\SwooleRequest;
-use Flytachi\Winter\K2\Http\Adapter\SwooleResponse;
 use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
 use Flytachi\Winter\K2\Http\Response\ExceptionWrapper;
 use Flytachi\Winter\K2\Old\Process\Core\WinterRunner;
-use Flytachi\Winter\K2\Route\MemoryWatcher;
 use Flytachi\Winter\K2\Route\Router;
 use Flytachi\Winter\Logger\LoggerFactory;
 use Psr\Log\LoggerInterface;
@@ -44,10 +39,12 @@ use Psr\Log\LoggerInterface;
  * Entry points:
  * ```
  * Boot::web();        // public/index.php  — FPM
- * Boot::swoole();     // server.php        — Swoole HTTP server
  * Boot::cli($argv);   // call              — CLI console
  * Boot::executor($argv); // wKernelExecutor — thread / job runner
  * ```
+ *
+ * The Swoole HTTP server is no longer a BaseBoot entry point — it is built by
+ * {@see Application::serve()} from the declared components (`call run`).
  *
  * Boot-time error handler:
  *   handleBootError($e, $response) is invoked from web() if anything throws
@@ -87,10 +84,10 @@ abstract class BaseBoot
      * ```
      *
      * Logging is driven entirely by .env — no code changes needed for basic setup.
-     * Three built-in channels are always registered: sys, http, cli.
+     * Two built-in channels are always registered: http, sys.
      * Entry points switch the active channel automatically:
-     *   - web() / swoole()    → 'http'
-     *   - cli() / executor()  → 'cli'
+     *   - web() / swoole()    → 'http' (per-request, coroutine context)
+     *   - cli() / executor()  → 'sys'  (everything else)
      *
      * Global .env variables:
      *   LOG_LEVEL=info          Minimum severity (DEBUG|INFO|NOTICE|WARNING|ERROR|...)
@@ -139,7 +136,7 @@ abstract class BaseBoot
     /**
      * Register additional log channels via Kernel::channel().
      *
-     * Built-in channels (sys, http, cli) are registered automatically by Kernel::init().
+     * Built-in channels (http, sys) are registered automatically by Kernel::init().
      * Call this hook to add custom channels. Each channel reads LOG_{NAME}_* env vars
      * with the same fallback chain as the built-in channels.
      *
@@ -389,67 +386,6 @@ abstract class BaseBoot
     }
 
     /**
-     * Swoole coroutine HTTP server entry point.
-     *
-     * Performs a single filesystem scan on startup — routes stay in memory for
-     * the entire server lifetime. All requests share the same Router instance
-     * via the on('request') callback; coroutine isolation keeps per-request
-     * state separate.
-     *
-     * Requires ext-swoole. SWOOLE_HOOK_ALL is enabled automatically so that
-     * all blocking I/O (PDO, cURL, file, sleep, …) is coroutine-friendly.
-     *
-     * Server configuration is supplied via swooleConfig() — override it in Boot:
-     * ```
-     * protected static function swooleConfig(): array
-     * {
-     *     return ['worker_num' => swoole_cpu_num() * 2, 'max_request' => 5000];
-     * }
-     * ```
-     *
-     * Request pipeline (per coroutine):
-     *   1. Header::init()            — snapshot request headers into coroutine ctx
-     *   2. Locale::initFromRequest() — detect Accept-Language / locale cookie
-     *   3. Swoole ctx stamp          — record start time, method, URI
-     *   4. Static file check         — serve files from Kernel::$pathPublic
-     *   5. Global CORS headers       — applied before dispatch
-     *   6. OPTIONS preflight         — returns 204 before handler invocation
-     *   7. Route dispatch            — same pipeline as web()
-     *   8–12. identical to web()
-     *
-     * @param string $host Listen address (default: 0.0.0.0)
-     * @param int    $port Listen port    (default: 9501)
-     */
-    final public static function swoole(string $host = '0.0.0.0', int $port = 9501): never
-    {
-        self::boot();
-        LoggerFactory::setDefaultChannel('http');
-
-        $router = Router::fromScan(Kernel::$pathRoot);
-        $router->static(Kernel::$pathPublic);
-
-        \Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL);
-        Runtime::boot(RuntimeMode::Swoole);
-
-        $server = new \Swoole\Http\Server($host, $port);
-        $server->set(static::swooleConfig());
-
-        $watcher = new MemoryWatcher();
-        $watcher->attach($server);
-
-        $server->on('request', $watcher->wrap(
-            static function (\Swoole\Http\Request $req, \Swoole\Http\Response $res) use ($router): void {
-                $request = new SwooleRequest($req);
-                $isHead  = strtoupper($request->getMethod()) === 'HEAD';
-                $router->handle($request, new SwooleResponse($res, $isHead));
-            }
-        ));
-
-        $server->start();
-        exit(0);
-    }
-
-    /**
      * CLI console entry point.
      *
      * Parses $argv and dispatches to the matching console command class under
@@ -466,7 +402,7 @@ abstract class BaseBoot
      * ./call help
      * ```
      *
-     * The 'cli' log channel is activated so all log writes go to the CLI output.
+     * The 'sys' log channel is activated so all log writes go to the system output.
      * To inject per-session fields into every log line:
      *   LoggerFactory::contextStorage()->set('job', 'import');
      *
@@ -475,7 +411,7 @@ abstract class BaseBoot
     final public static function cli(array $argv = []): never
     {
         self::boot();
-        LoggerFactory::setDefaultChannel('cli');
+        LoggerFactory::setDefaultChannel('sys');
 
         new Core($argv)->run();
 
@@ -511,7 +447,7 @@ abstract class BaseBoot
     final public static function executor(array $argv = []): never
     {
         self::boot();
-        LoggerFactory::setDefaultChannel('cli');
+        LoggerFactory::setDefaultChannel('sys');
         $options = getopt('', ['namespace::', 'name::', 'tag::', 'debug', 'detach', 'shmkey::']);
         exit(WinterRunner::adaptive()->execute($options));
     }
