@@ -37,6 +37,9 @@
         <testsuite name="Concurrent">
             <directory>tests/Concurrent</directory>
         </testsuite>
+        <testsuite name="App">
+            <directory>tests/App</directory>
+        </testsuite>
     </testsuites>
 
     <groups>
