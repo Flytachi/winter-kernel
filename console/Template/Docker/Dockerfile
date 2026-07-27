@@ -92,6 +92,8 @@ RUN apk add --no-cache su-exec procps \
     && rm -rf /var/cache/apk/* \
     && adduser -D -H -s /sbin/nologin winter
 
+RUN docker-php-ext-install -j"$(nproc)" pcntl
+
 # Opcache (swoole-flavored: enable_cli=1). Toggle off for dev via DISABLE_OPCACHE=true.
 ARG DISABLE_OPCACHE=false
 COPY docker/swoole/php-opcache.ini /tmp/php-opcache.ini
