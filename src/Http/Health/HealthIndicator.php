@@ -6,6 +6,7 @@ namespace Flytachi\Winter\K2\Http\Health;
 
 use Composer\InstalledVersions;
 use Flytachi\Winter\Base\Runtime;
+use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\DI\Scanner;
 use Flytachi\Winter\K2\Collector\ImplementorCollector;
 use Flytachi\Winter\K2\Http\Header;
@@ -24,8 +25,13 @@ class HealthIndicator implements HealthIndicatorInterface
             'cache'  => $this->cacheHealth($rootDir),
             'disk'   => $this->diskHealth(),
             'memory' => $this->memoryHealth(),
-            'custom' => $this->customHealth(),
         ];
+
+        // Merge every discovered HealthContributor, keyed by its name(). A contributor
+        // may override a built-in component by reusing its key.
+        foreach ($this->contributors() as $name => $status) {
+            $components[$name] = $status;
+        }
 
         $statuses = array_column($components, 'status');
         $overall  = 'up';
@@ -296,10 +302,24 @@ class HealthIndicator implements HealthIndicatorInterface
         return ['up', null];
     }
 
-    // ── Override to add custom health checks ──────────────────────────────────
+    // ── Custom health checks (discovered HealthContributor implementations) ────
 
-    protected function customHealth(): array
+    /**
+     * Resolves every registered {@see HealthContributor} from the container and runs
+     * it live. Keyed by {@see HealthContributor::name()}.
+     *
+     * @return array<string, array{status: string, details: array<string, mixed>}>
+     */
+    private function contributors(): array
     {
-        return ['status' => 'up', 'details' => []];
+        $container = Container::getInstance();
+        $out       = [];
+        foreach (Health::getContributors() as $class) {
+            /** @var HealthContributor $contributor */
+            $contributor = $container->make($class);
+            $out[$contributor->name()] = $contributor->check()->toArray();
+        }
+
+        return $out;
     }
 }

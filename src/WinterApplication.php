@@ -11,6 +11,7 @@ use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\DI\Scanner;
 use Flytachi\Winter\K2\App\ApplicationArguments;
 use Flytachi\Winter\K2\App\ApplicationConfigException;
+use Flytachi\Winter\K2\App\Attribute\EnableActuator;
 use Flytachi\Winter\K2\App\Attribute\EnableAsync;
 use Flytachi\Winter\K2\App\Attribute\EnableDaemon;
 use Flytachi\Winter\K2\App\Attribute\EnableProcess;
@@ -29,6 +30,9 @@ use Flytachi\Winter\K2\Collector\ConfigurationCollector;
 use Flytachi\Winter\K2\Collector\ImplementorCollector;
 use Flytachi\Winter\K2\Concurrent\Async\AsyncCollector;
 use Flytachi\Winter\K2\Concurrent\Async\Proxy\ProxyFactory;
+use Flytachi\Winter\K2\Http\Health\Health;
+use Flytachi\Winter\K2\Http\Health\HealthContributor;
+use Flytachi\Winter\K2\Http\Health\HealthIndicator;
 use Flytachi\Winter\DI\Collector\DICollector;
 use Flytachi\Winter\K2\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\K2\Http\Adapter\SwooleResponse;
@@ -171,6 +175,7 @@ abstract class WinterApplication
         $config = new ConfigurationCollector($c);
         $webCollector = new ImplementorCollector(WebConfigurer::class);
         $logCollector = new ImplementorCollector(LoggingConfigurer::class);
+        $actuatorCollector = new ImplementorCollector(HealthContributor::class);
 
         // #[Async] proxying is opt-in, like Spring's @EnableAsync: the collector is
         // created and wired only when #[EnableAsync] is present. Without it, classes
@@ -192,7 +197,8 @@ abstract class WinterApplication
             ->collect(new DICollector($c))
             ->collect($config)
             ->collect($webCollector)
-            ->collect($logCollector);
+            ->collect($logCollector)
+            ->collect($actuatorCollector);
 
         if ($async !== null) {
             $scan->collect($async);
@@ -210,6 +216,7 @@ abstract class WinterApplication
 
         static::applyLogging($c, $logCollector->getResult());
         static::applyCors($c, $webCollector->getResult());
+        static::applyActuator($actuatorCollector->getResult());
         static::applyImports();
     }
 
@@ -257,6 +264,30 @@ abstract class WinterApplication
             $import = $attribute->newInstance();
             Plugin::registry($import->package, $import->prefix, $import->required);
         }
+    }
+
+    /**
+     * Enables the actuator when the App class carries {@see EnableActuator}: registers
+     * the discovered {@see HealthContributor} classes and hands the indicator +
+     * optional guard middleware to {@see Health}, which {@see Router::fromScan()} then
+     * wires into the `/actuator/*` routes. No attribute → actuator stays off.
+     *
+     * @param list<\ReflectionClass> $contributors
+     */
+    private static function applyActuator(array $contributors): void
+    {
+        $attributes = new \ReflectionClass(static::class)->getAttributes(EnableActuator::class);
+        if ($attributes === []) {
+            return;
+        }
+
+        /** @var EnableActuator $actuator */
+        $actuator = $attributes[0]->newInstance();
+        Health::setContributors(array_map(
+            static fn(\ReflectionClass $ref): string => $ref->getName(),
+            $contributors,
+        ));
+        Health::configure($actuator->indicator ?? HealthIndicator::class, $actuator->middleware);
     }
 
     // ── Serve ─────────────────────────────────────────────────────────────────
