@@ -30,8 +30,7 @@ use ReflectionException;
  *   match expression to mask new sensitive exception types. redactMessage()
  *   MUTATES the Throwable's $message in place (clone is not used — some
  *   Throwables in PHP are not cloneable), so callers must log the original
- *   message BEFORE invoking wrap(). Router::sendError() and
- *   BaseBoot::handleBootError() already follow this order.
+ *   message BEFORE invoking wrap(). Router::sendError() already follows this order.
  *
  * Specific handlers (with exception class names) are tried first.
  * Catch-all handlers (without class names) are tried last.

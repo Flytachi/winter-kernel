@@ -306,7 +306,6 @@ LOG_FORMAT=line
 LOG_OUTPUT=auto
 #LOG_FILE=/var/log/app/winter.log
 LOG_FILE_MAX=30
-LOG_SYSLOG_IDENT=winter
 ```
 
 Variables:
@@ -318,10 +317,9 @@ Variables:
 | `DEBUG`            | `true` — disables route + DI caches (always live scan), surfaces stack traces in logs and exception responses |
 | `LOG_LEVEL`        | Minimum severity: `DEBUG / INFO / NOTICE / WARNING / ERROR / …`. **Empty → logging disabled** (NullLogger on all channels) |
 | `LOG_FORMAT`       | `line` or `json`                                                       |
-| `LOG_OUTPUT`       | `auto / stdout / stderr / syslog / file / null` — `auto` picks syslog in Docker/K8s, `stdout` under Swoole, `stderr` under FPM/CLI |
+| `LOG_OUTPUT`       | `auto / stdout / stderr / syslog / file / null` — `auto` → `stdout` everywhere (whatever runs the process captures it) |
 | `LOG_FILE`         | Absolute path when `LOG_OUTPUT=file`                                   |
 | `LOG_FILE_MAX`     | Number of daily-rotating files to keep                                 |
-| `LOG_SYSLOG_IDENT` | Program identity tag in syslog (`journalctl -t winter`)                |
 
 For per-channel overrides (`LOG_HTTP_*`, `LOG_SYS_*`, custom channels)
 see [`configuration/02-logging.md`](configuration/02-logging.md).

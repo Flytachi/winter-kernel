@@ -18,7 +18,7 @@ use Flytachi\Winter\K2\Plugin;
  * (vendor excluded automatically) plus each plugin's `src` directory.
  *
  * Usage:
- *   $collector = new ImplementorCollector(Dispatchable::class);
+ *   $collector = new ImplementorCollector(HealthContributor::class);
  *   ClassScanner::scan($collector);
  *   $refs = $collector->getResult(); // ReflectionClass[]
  */

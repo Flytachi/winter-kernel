@@ -73,7 +73,7 @@ class Di extends Cmd
      * Whether #[Async] proxies should be built, mirroring the WinterApplication boot
      * decision: enabled when the running app class carries #[EnableAsync]. bootstrap()
      * has already run by the time this command dispatches, so the app class is known
-     * without a scan. A legacy Application/BaseBoot project sets no app class — there
+     * without a scan. A non-WinterApplication entry sets no app class — there
      * #[Async] proxying is always on.
      */
     private static function asyncEnabled(): bool

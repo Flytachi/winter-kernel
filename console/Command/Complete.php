@@ -7,13 +7,10 @@ namespace Flytachi\Winter\Console\Command;
 use Flytachi\Winter\Console\Core;
 use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\Console\Inc\CmdCustom;
-use Flytachi\Winter\K2\Collector\ImplementorCollector;
 use Flytachi\Winter\K2\Collector\SubclassCollector;
 use Flytachi\Winter\K2\Core\ClassScanner;
 use Flytachi\Winter\K2\Process\Daemon\Daemon as DaemonUnit;
 use Flytachi\Winter\K2\Process\Process as ProcessUnit;
-use Flytachi\Winter\K2\Old\Process\Core\Dispatchable;
-use Flytachi\Winter\K2\Old\Process\ThreadDaemon;
 
 class Complete extends Cmd
 {
@@ -34,10 +31,8 @@ class Complete extends Cmd
             '-d:Dto — Data Transfer Object',
             '-q:Request — validated request object',
             '-p:Response — custom HTTP response',
-            '-J:Job — async queue job',
             '-P:Process — long-running process',
             '-N:Daemon — background daemon',
-            '-W:WebSocket — WebSocket handler',
             '-D:DbConfig — database configuration',
             '-R:RedisConfig — Redis configuration',
             '-n:Cmd — custom console command',
@@ -98,12 +93,6 @@ class Complete extends Cmd
         ],
         'storage init'  => ['-s:storage', '-c:storage/cache', '-l:storage/logs'],
         'storage clean' => ['-s:storage', '-c:storage/cache', '-l:storage/logs'],
-
-        // --- thread / th ---
-        'thread' => [
-            'list:list all Dispatchable classes',
-            'daemons:list daemons with live status',
-        ],
 
         // --- process / proc ---
         'process' => [
@@ -198,30 +187,6 @@ class Complete extends Cmd
             $base = array_merge($base, $this->getScriptClasses());
         }
 
-        // thread: list + classes at top level; once a class is selected,
-        // suggestions depend on the action level:
-        //   no action yet  → lifecycle commands + -d (no-command/toggle flag)
-        //   after `status` → -v (detailed status flag)
-        if ($resolved === 'thread' && $sub !== null && !in_array($sub, ['list', 'daemons'], true)) {
-            $isDaemon = in_array($sub, array_map('strtolower', $this->getDaemonClasses()));
-            if ($act === null) {
-                $base = $isDaemon
-                    ? [
-                        'start:start daemon in background',
-                        'stop:stop running daemon',
-                        'status:show daemon status (-v for detail)',
-                        '-d:toggle start in background',
-                    ]
-                    : ['-d:dispatch as background process'];
-            } elseif ($isDaemon && $act === 'status') {
-                $base = ['-v:detailed status (resources + forks)'];
-            } else {
-                $base = [];
-            }
-        } elseif ($resolved === 'thread' && $sub === null) {
-            $base = array_merge($this->getDispatchableClasses(), $base);
-        }
-
         // process: list + classes at top level; once a class is selected,
         // suggest lifecycle actions, then flags per action.
         if ($resolved === 'process' && $sub !== null && $sub !== 'list') {
@@ -305,28 +270,6 @@ class Complete extends Cmd
     private function getScriptClasses(): array
     {
         $collector = new SubclassCollector(Cmd::class, CmdCustom::class);
-        ClassScanner::scan($collector);
-
-        return array_map(
-            fn(\ReflectionClass $ref) => str_replace('\\', '.', $ref->getName()),
-            $collector->getResult()
-        );
-    }
-
-    private function getDispatchableClasses(): array
-    {
-        $collector = new ImplementorCollector(Dispatchable::class);
-        ClassScanner::scan($collector);
-
-        return array_map(
-            fn(\ReflectionClass $ref) => str_replace('\\', '.', $ref->getName()),
-            $collector->getResult()
-        );
-    }
-
-    private function getDaemonClasses(): array
-    {
-        $collector = new SubclassCollector(ThreadDaemon::class);
         ClassScanner::scan($collector);
 
         return array_map(

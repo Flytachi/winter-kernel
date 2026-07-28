@@ -73,17 +73,11 @@ class Make extends Cmd
             if (in_array('p', $this->args['flags'])) {
                 $this->createResponse($templateName);
             }
-            if (in_array('J', $this->args['flags'])) {
-                $this->createJob($templateName);
-            }
             if (in_array('P', $this->args['flags'])) {
                 $this->createProcess($templateName);
             }
             if (in_array('N', $this->args['flags'])) {
                 $this->createDaemon($templateName);
-            }
-            if (in_array('W', $this->args['flags'])) {
-                $this->createWebSocket($templateName);
             }
             if (in_array('D', $this->args['flags'])) {
                 $this->createConfig($templateName);
@@ -225,39 +219,13 @@ class Make extends Cmd
         $this->createFile($info['className'], $info['path'], $code, 'response');
     }
 
-    private function createJob(string $name): void
-    {
-        $info = $this->getInfo($name, 'Job', 'JobTemplate');
-        $this->smartInfo(
-            $info,
-            'Threads/Jobs',
-            'Threads/Job',
-            'Thread/Jobs',
-            'Thread/Job',
-            'Jobs',
-            'Job',
-            'Threads',
-            'Thread'
-        );
-        $code = file_get_contents($info['template']);
-        $code = str_replace("__namespace__", $info['namespace'], $code);
-        $code = str_replace("__className__", $info['className'], $code);
-        $this->createFile($info['className'], $info['path'], $code, 'job');
-    }
-
     private function createProcess(string $name): void
     {
         $info = $this->getInfo($name, 'Process', 'ProcessTemplate');
         $this->smartInfo(
             $info,
-            'Threads/Processes',
-            'Threads/Process',
-            'Thread/Processes',
-            'Thread/Process',
             'Processes',
-            'Process',
-            'Threads',
-            'Thread'
+            'Process'
         );
         $code = file_get_contents($info['template']);
         $code = str_replace("__namespace__", $info['namespace'], $code);
@@ -270,39 +238,13 @@ class Make extends Cmd
         $info = $this->getInfo($name, 'Daemon', 'DaemonTemplate');
         $this->smartInfo(
             $info,
-            'Threads/Daemons',
-            'Threads/Daemon',
-            'Thread/Daemons',
-            'Thread/Daemon',
             'Daemons',
-            'Daemon',
-            'Threads',
-            'Thread'
+            'Daemon'
         );
         $code = file_get_contents($info['template']);
         $code = str_replace("__namespace__", $info['namespace'], $code);
         $code = str_replace("__className__", $info['className'], $code);
         $this->createFile($info['className'], $info['path'], $code, 'daemon');
-    }
-
-    private function createWebSocket(string $name): void
-    {
-        $info = $this->getInfo($name, 'WebSocket', 'WebSocketTemplate');
-        $this->smartInfo(
-            $info,
-            'Threads/WebSockets',
-            'Threads/WebSocket',
-            'Thread/WebSockets',
-            'Thread/WebSocket',
-            'WebSockets',
-            'WebSocket',
-            'Threads',
-            'Thread'
-        );
-        $code = file_get_contents($info['template']);
-        $code = str_replace("__namespace__", $info['namespace'], $code);
-        $code = str_replace("__className__", $info['className'], $code);
-        $this->createFile($info['className'], $info['path'], $code, 'websocket');
     }
 
     private function createConfig(string $name): void
@@ -400,9 +342,7 @@ class Make extends Cmd
                 'Entity'              => 'Entities',
                 'Dto'                 => 'Dto',
                 'Request'             => 'Requests',
-                'Job'                 => 'Jobs',
                 'Daemon', 'Process'   => 'Processes',
-                'WebSocket'           => 'Sockets',
                 'Cmd'                 => 'Commands',
                 default               => 'Utils',
             };
@@ -531,12 +471,10 @@ class Make extends Cmd
         self::printBadge('-t', 'Store            (suffix: Store)', $cl, 36);
         self::printLabel("Flags — Business", $cl);
 
-        self::printLabel("Flags — Async / Process", $cl);
-        self::printBadge('-J', 'Job              (suffix: Job)', $cl, 36);
+        self::printLabel("Flags — Process", $cl);
         self::printBadge('-P', 'Process          (suffix: Process)', $cl, 36);
         self::printBadge('-N', 'Daemon           (suffix: Daemon)', $cl, 36);
-        self::printBadge('-W', 'WebSocket        (suffix: WebSocket)', $cl, 36);
-        self::printLabel("Flags — Async / Process", $cl);
+        self::printLabel("Flags — Process", $cl);
 
         self::printLabel("Flags — Config / Console", $cl);
         self::printBadge('-D', 'DbConfig         (suffix: DbConfig)', $cl, 36);

@@ -10,9 +10,8 @@ use Flytachi\Winter\K2\Kernel;
 /**
  * Locates the runnable store for a process class.
  *
- * One record per class, keyed by the dotted class name — the same convention
- * as {@see \Flytachi\Winter\K2\Old\Process\Core\DaemonStore}, so CLI and web read
- * from a single place.
+ * One record per class, keyed by the dotted class name, so CLI and web read from
+ * a single place.
  */
 final class ProcessStore
 {

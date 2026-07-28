@@ -72,10 +72,9 @@ class Boot extends Application
      *                           Empty → logging disabled (NullLogger for all channels)
      *   LOG_FORMAT=line         Output format: line | json
      *   LOG_OUTPUT=auto         Destination: auto | stdout | stderr | syslog | file | null
-     *                             auto — Docker/K8s → syslog, Swoole → stdout, FPM/CLI → stderr
+     *                             auto — always stdout (orchestrator/supervisor captures it)
      *   LOG_FILE=               Absolute path when LOG_OUTPUT=file
      *   LOG_FILE_MAX=30         Number of daily rotating files to keep
-     *   LOG_SYSLOG_IDENT=winter Program identity tag in syslog (journalctl -t winter)
      *
      * Per-channel overrides (LOG_{CHANNEL}_* takes priority over global):
      *   LOG_HTTP_LEVEL=warning

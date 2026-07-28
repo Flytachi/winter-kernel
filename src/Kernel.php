@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2;
 
-use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\K2\Core\KernelStore;
 use Flytachi\Winter\K2\Process\ForkReset;
 use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
@@ -139,19 +138,16 @@ final class Kernel extends KernelStore
             'output'       => $output,
             'file_path'    => $filePath ? (string) $filePath : null,
             'file_max'     => (int) (env($prefix . 'FILE_MAX') ?? env('LOG_FILE_MAX', 30)),
-            'syslog_ident' => (string) (env($prefix . 'SYSLOG_IDENT') ?? env('LOG_SYSLOG_IDENT', 'winter')),
+            // Fixed syslog program tag — winter-logger requires the key; not a knob.
+            'syslog_ident' => 'winter',
         ];
     }
 
     private static function resolveOutput(string $raw): string
     {
-        if ($raw !== 'auto') {
-            return $raw;
-        }
-        if (getenv('KUBERNETES_SERVICE_HOST') !== false || file_exists('/.dockerenv')) {
-            return 'syslog';
-        }
-        return Runtime::isSwoole() ? 'stdout' : 'stderr';
+        // `auto` → stdout everywhere; whatever runs the process (orchestrator,
+        // supervisor, terminal) captures stdout. Explicit values pass through.
+        return $raw === 'auto' ? 'stdout' : $raw;
     }
 
     private static function threadRunnerPath(): string

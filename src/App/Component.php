@@ -7,7 +7,7 @@ namespace Flytachi\Winter\K2\App;
 use Flytachi\Winter\K2\Schedule\Scheduler;
 
 /**
- * A declared unit of an {@see \Flytachi\Winter\K2\Application} — the "what my app
+ * A declared unit of a {@see \Flytachi\Winter\K2\WinterApplication} — the "what my app
  * contains" manifest, in the spirit of a Spring bean / @Enable* switch.
  *
  * Build entries with the named factories, never the constructor:

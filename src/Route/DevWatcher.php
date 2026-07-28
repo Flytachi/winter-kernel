@@ -22,7 +22,7 @@ use Swoole\Timer;
  * old controller/service classes cached in the master. Re-exec'ing the process image
  * is the only reliable way to reflect changes to master-loaded code.
  *
- * Usage (from Application::serveHttp, dev path):
+ * Usage (from WinterApplication::serveHttp, dev path):
  *   $dev = new DevWatcher([Kernel::$pathRoot]);
  *   $dev->attach($server, $onWorkerStart);
  *   $server->on('request', $dev->wrap($handler));

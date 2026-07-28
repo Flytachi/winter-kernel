@@ -73,7 +73,6 @@ These apply to every channel unless a per-channel override is set.
 | `LOG_OUTPUT` | `auto` | Destination (see table below). |
 | `LOG_FILE` | *(auto)* | Absolute file path when `LOG_OUTPUT=file`. |
 | `LOG_FILE_MAX` | `30` | Number of daily rotating files to keep. |
-| `LOG_SYSLOG_IDENT` | `winter` | Program identity tag in syslog. |
 
 #### `LOG_LEVEL` values
 
@@ -85,7 +84,7 @@ Case-insensitive. Records below the configured level are discarded before reachi
 
 | Value | Handler | When to use |
 |-------|---------|-------------|
-| `auto` | *detected* | Docker/K8s → `syslog`; Swoole → `stdout`; FPM/CLI → `stderr` |
+| `auto` | `php://stdout` | Default — always `stdout`; the orchestrator / supervisor / terminal captures it |
 | `stdout` | `php://stdout` | Swoole workers, CLI tools with piped output |
 | `stderr` | `php://stderr` | FPM — immune to broken-pipe on client disconnect |
 | `syslog` | system syslog | Docker, Kubernetes (journald, `/var/log/syslog`) |
@@ -123,9 +122,8 @@ LOG_HTTP_OUTPUT=file
 LOG_HTTP_FILE=/var/log/app/http.log
 LOG_HTTP_FILE_MAX=14
 
-# sys channel — always goes to syslog with a custom ident
+# sys channel — always goes to syslog
 LOG_SYS_OUTPUT=syslog
-LOG_SYS_SYSLOG_IDENT=myapp-sys
 
 # custom 'job' channel (registered via Kernel::channel('job'))
 LOG_JOB_LEVEL=debug
@@ -407,7 +405,6 @@ LOG_LEVEL=info           # DEBUG | INFO | NOTICE | WARNING | ERROR | CRITICAL | 
 LOG_FORMAT=line          # line | json
 LOG_OUTPUT=auto          # auto | stdout | stderr | syslog | file | null
 LOG_FILE_MAX=30          # rotating daily files to keep (output=file only)
-LOG_SYSLOG_IDENT=winter  # syslog program tag
 
 # Per-channel overrides (LOG_{CHANNEL}_* — channel uppercased)
 # LOG_HTTP_LEVEL=warning
@@ -415,7 +412,6 @@ LOG_SYSLOG_IDENT=winter  # syslog program tag
 # LOG_HTTP_FILE=/var/log/app/http.log
 
 # LOG_SYS_OUTPUT=syslog
-# LOG_SYS_SYSLOG_IDENT=myapp
 
 # Custom channels (registered via Kernel::channel('job') in bootstrap.php)
 # LOG_JOB_LEVEL=debug

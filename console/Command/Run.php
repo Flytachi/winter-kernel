@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\K2\Application;
-use Flytachi\Winter\K2\BaseBoot;
 
 class Run extends Cmd
 {
@@ -16,27 +14,15 @@ class Run extends Cmd
     {
         self::printTitle("Run", 34);
 
-        $sub   = $this->args['arguments'][1] ?? null;
-        $watch = $sub === 'dev'
-            || in_array('w', $this->args['flags'] ?? [], true)
-            || isset($this->args['options']['watcher']);
+        // `run` is owned by the application entry: WinterApplication::run() serves the
+        // app from its own process before the console dispatcher is ever reached.
+        // Reaching this command means the entry did not intercept `run`.
+        self::printWarning("`call run` is served by your WinterApplication entry, not this command.");
+        self::printInfo("Ensure your `call` launcher calls App::main(\$argv), where App extends WinterApplication.");
+        self::printInfo("Declare components with #[EnableWeb] / #[EnableProcess] / #[EnableDaemon] / #[EnableScheduler].");
+        self::printInfo("Docs: doc-new/winter-application.md");
 
-        // WinterApplication owns `run`: it serves from its own run() before the
-        // console dispatcher is ever reached, so this command handles only the legacy
-        // Application path and will be removed together with it.
-        $bootClass = BaseBoot::getBootClass();
-        if ($bootClass === '' || !is_subclass_of($bootClass, Application::class)) {
-            self::printWarning("`call run` needs a WinterApplication entry class.");
-            self::printInfo("Extend WinterApplication and declare components with #[Enable*] attributes.");
-            self::printInfo("Docs: doc-new/winter-application.md");
-            return;
-        }
-
-        self::printWarning("Legacy Application path (deprecated) — prefer WinterApplication + #[Enable*].");
-        self::printSuccess($watch ? "Starting application (dev / watch)" : "Starting application");
-
-        // serve() blocks until shutdown and exits the process itself.
-        $bootClass::serve($watch);
+        self::printTitle("Run", 34);
     }
 
     public static function help(): void
