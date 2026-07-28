@@ -169,16 +169,18 @@ class Di extends Cmd
 
         // #[Async] proxying is opt-in (WinterApplication reads #[EnableAsync] at boot);
         // build the proxies only when the app enables it, so `di build` mirrors boot.
-        $asyncEnabled = self::asyncEnabled();
-        $container    = Container::init();
-        $factory      = ProxyFactory::forKernel(refresh: true);
-        $async        = $asyncEnabled
-            ? new AsyncCollector($container, $factory, self::asyncCachePath())
-            : null;
+        // When async is off nothing about the proxy factory is touched.
+        $container = Container::init();
+        $factory   = null;
+        $async     = null;
+        if (self::asyncEnabled()) {
+            $factory = ProxyFactory::forKernel(refresh: true);
+            $async   = new AsyncCollector($container, $factory, self::asyncCachePath());
+        }
 
         try {
             // Drop proxies of services that no longer exist or lost the attribute.
-            if ($async !== null) {
+            if ($factory !== null) {
                 $factory->clear();
             }
 
@@ -229,7 +231,9 @@ class Di extends Cmd
             34,
             32
         );
-        self::printInfo($factory->directory());
+        if ($factory !== null) {
+            self::printInfo($factory->directory());
+        }
 
         $this->reportBypasses(array_keys($proxied));
 
