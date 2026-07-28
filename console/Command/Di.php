@@ -9,11 +9,13 @@ use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\DI\Collector\DICollector;
 use Flytachi\Winter\DI\Contract\CollectorInterface;
 use Flytachi\Winter\DI\Scanner;
+use Flytachi\Winter\K2\App\Attribute\EnableAsync;
 use Flytachi\Winter\K2\Concurrent\Async\AsyncCollector;
 use Flytachi\Winter\K2\Concurrent\Async\Proxy\BypassScanner;
 use Flytachi\Winter\K2\Concurrent\Async\Proxy\ProxyFactory;
 use Flytachi\Winter\K2\Concurrent\Async\Proxy\ProxyGenerator;
 use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\K2\WinterApplication;
 use ReflectionClass;
 use ReflectionMethod;
 
@@ -50,7 +52,9 @@ class Di extends Cmd
     }
 
     /**
-     * Cache file location — kept in sync with BaseBoot::boot().
+     * Cache file location — kept in sync with WinterApplication::bootstrap(). The
+     * cache is the FQCN class list, written by the Scanner independently of any
+     * collector, so it is the same whichever collectors boot wires.
      */
     private static function cachePath(): string
     {
@@ -58,11 +62,25 @@ class Di extends Cmd
     }
 
     /**
-     * List of classes carrying #[Async] — kept in sync with BaseBoot::boot().
+     * List of classes carrying #[Async] — kept in sync with WinterApplication::bootstrap().
      */
     private static function asyncCachePath(): string
     {
         return Kernel::$pathStorageVolatile . '/async.php';
+    }
+
+    /**
+     * Whether #[Async] proxies should be built, mirroring the WinterApplication boot
+     * decision: enabled when the running app class carries #[EnableAsync]. bootstrap()
+     * has already run by the time this command dispatches, so the app class is known
+     * without a scan. A legacy Application/BaseBoot project sets no app class — there
+     * #[Async] proxying is always on.
+     */
+    private static function asyncEnabled(): bool
+    {
+        $app = WinterApplication::getAppClass();
+
+        return $app === '' || new ReflectionClass($app)->getAttributes(EnableAsync::class) !== [];
     }
 
     /**
@@ -144,26 +162,38 @@ class Di extends Cmd
     private function buildArg(): bool
     {
         $cachePath = self::cachePath();
-        $factory   = ProxyFactory::forKernel(refresh: true);
 
         // Force a rebuild: both caches short-circuit when their file exists.
         self::forget($cachePath);
         self::forget(self::asyncCachePath());
 
-        $async = new AsyncCollector(Container::init(), $factory, self::asyncCachePath());
+        // #[Async] proxying is opt-in (WinterApplication reads #[EnableAsync] at boot);
+        // build the proxies only when the app enables it, so `di build` mirrors boot.
+        $asyncEnabled = self::asyncEnabled();
+        $container    = Container::init();
+        $factory      = ProxyFactory::forKernel(refresh: true);
+        $async        = $asyncEnabled
+            ? new AsyncCollector($container, $factory, self::asyncCachePath())
+            : null;
 
         try {
             // Drop proxies of services that no longer exist or lost the attribute.
-            $factory->clear();
+            if ($async !== null) {
+                $factory->clear();
+            }
 
-            // Same call BaseBoot::boot() makes — populates a fresh Container and
-            // writes the FQCN list to $cachePath as a side effect.
-            Scanner::run(rootDir: Kernel::$pathRoot, cache: $cachePath)
-                ->collect(new DICollector(Container::getInstance()))
-                ->collect($async)
-                ->execute();
+            // Same scan WinterApplication::bootstrap() makes — populates a fresh
+            // Container and writes the FQCN list to $cachePath as a side effect. The
+            // class list and the #[Async] proxies come from the same scan on purpose:
+            // two commands would leave a window where one is stale.
+            $scan = Scanner::run(rootDir: Kernel::$pathRoot, cache: $cachePath)
+                ->collect(new DICollector($container));
+            if ($async !== null) {
+                $scan->collect($async);
+            }
+            $scan->execute();
 
-            $async->flush();
+            $async?->flush();
         } catch (\Throwable $e) {
             // The class list is written before collectors run, so report what did survive.
             $this->reportCache($cachePath);
@@ -178,6 +208,12 @@ class Di extends Cmd
 
         if (!$this->reportCache($cachePath)) {
             return false;
+        }
+
+        if ($async === null) {
+            self::printBadge("async proxies", 'DISABLED (no #[EnableAsync])', 34, 33);
+
+            return true;
         }
 
         $proxied = $async->proxied();

@@ -21,14 +21,18 @@ class Run extends Cmd
             || in_array('w', $this->args['flags'] ?? [], true)
             || isset($this->args['options']['watcher']);
 
+        // WinterApplication owns `run`: it serves from its own run() before the
+        // console dispatcher is ever reached, so this command handles only the legacy
+        // Application path and will be removed together with it.
         $bootClass = BaseBoot::getBootClass();
         if ($bootClass === '' || !is_subclass_of($bootClass, Application::class)) {
-            self::printWarning("`call run` requires your Boot class to extend Application.");
-            self::printInfo("Change `extends BaseBoot` to `extends Application` and declare components().");
-            self::printInfo("Docs: docs/starter/00-quickstart.md");
+            self::printWarning("`call run` needs a WinterApplication entry class.");
+            self::printInfo("Extend WinterApplication and declare components with #[Enable*] attributes.");
+            self::printInfo("Docs: doc-new/winter-application.md");
             return;
         }
 
+        self::printWarning("Legacy Application path (deprecated) — prefer WinterApplication + #[Enable*].");
         self::printSuccess($watch ? "Starting application (dev / watch)" : "Starting application");
 
         // serve() blocks until shutdown and exits the process itself.
@@ -48,12 +52,12 @@ class Run extends Cmd
         self::printDivider($cl);
 
         self::printLabel("What runs", $cl);
-        self::print("Everything declared in your App::components():", $cl);
-        self::print("  Component::http()      -> the Swoole HTTP server (main)", $cl);
-        self::print("  Component::process()   -> a managed Process, attached via addProcess", $cl);
-        self::print("  Component::daemon()    -> a supervised Daemon fleet", $cl);
-        self::print("  Component::scheduler() -> the #[Scheduled] scheduler", $cl);
-        self::print("With no Component::http() the app runs headless (background only).", $cl);
+        self::print("Everything declared on your WinterApplication via #[Enable*]:", $cl);
+        self::print("  #[EnableWeb]        -> the Swoole HTTP server (main)", $cl);
+        self::print("  #[EnableProcess()]  -> a managed Process, attached via addProcess", $cl);
+        self::print("  #[EnableDaemon()]   -> a supervised Daemon fleet", $cl);
+        self::print("  #[EnableScheduler]  -> the #[Scheduled] scheduler", $cl);
+        self::print("With no #[EnableWeb] the app runs headless (background only).", $cl);
         self::printLabel("What runs", $cl);
 
         self::printDivider($cl);

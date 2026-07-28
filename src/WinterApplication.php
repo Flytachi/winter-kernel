@@ -17,6 +17,7 @@ use Flytachi\Winter\K2\App\Attribute\EnableProcess;
 use Flytachi\Winter\K2\App\Attribute\EnableScheduler;
 use Flytachi\Winter\K2\App\Attribute\EnableWeb;
 use Flytachi\Winter\K2\App\Attribute\Import;
+use Flytachi\Winter\K2\App\Banner;
 use Flytachi\Winter\K2\App\Component;
 use Flytachi\Winter\K2\App\ComponentKind;
 use Flytachi\Winter\K2\App\Config\ChannelRegistry;
@@ -85,6 +86,8 @@ abstract class WinterApplication
 {
     private static string $appClass = '';
     private static ?Container $container = null;
+    /** Monotonic boot start (hrtime ns), for the startup banner's "up in N ms". */
+    private static int $bootStartedAt = 0;
     /** @var list<class-string<WebConfigurer>> */
     private static array $webConfigurers = [];
 
@@ -133,6 +136,7 @@ abstract class WinterApplication
      */
     final public static function run(array $argv = []): never
     {
+        self::$bootStartedAt = hrtime(true);
         $args = ApplicationArguments::parse($argv);
         static::bootstrap($args);
 
@@ -301,7 +305,7 @@ abstract class WinterApplication
             static::serveHttp($companions, $watch, $args, $logger);
         }
 
-        static::serveHeadless($companions, $logger);
+        static::serveHeadless($companions, $args, $logger);
     }
 
     /**
@@ -373,6 +377,10 @@ abstract class WinterApplication
             $server->on('request', $handler);
         }
 
+        if (Banner::isEnabled($args)) {
+            Banner::print(static::bannerRows($companions, $host, $port), self::elapsedMs());
+        }
+
         $logger->info(sprintf(
             'Application up: http://%s:%d%s%s',
             $host,
@@ -396,13 +404,20 @@ abstract class WinterApplication
      *
      * @param list<Component> $companions
      */
-    private static function serveHeadless(array $companions, LoggerInterface $logger): never
-    {
+    private static function serveHeadless(
+        array $companions,
+        ApplicationArguments $args,
+        LoggerInterface $logger,
+    ): never {
         if ($companions === []) {
             throw new ApplicationConfigException(
-                'Nothing to run: components() is empty. Declare at least one '
-                . 'Component::http()/process()/daemon()/scheduler().'
+                'Nothing to run: no components declared. Add at least one '
+                . '#[EnableWeb]/#[EnableProcess]/#[EnableDaemon]/#[EnableScheduler].'
             );
+        }
+
+        if (Banner::isEnabled($args)) {
+            Banner::print(static::bannerRows($companions, null, null), self::elapsedMs());
         }
 
         if (count($companions) === 1) {
@@ -521,6 +536,48 @@ abstract class WinterApplication
     private static function hasAttribute(string $attribute): bool
     {
         return new \ReflectionClass(static::class)->getAttributes($attribute) !== [];
+    }
+
+    /**
+     * Builds the startup-banner rows from the live manifest: the web endpoint (when
+     * hosting one), each companion, and the async toggle. Only what is actually
+     * running appears.
+     *
+     * @param list<Component> $companions
+     * @return list<array{string, string}>
+     */
+    private static function bannerRows(array $companions, ?string $host, ?int $port): array
+    {
+        $rows = [];
+        if ($host !== null) {
+            $rows[] = ['web', sprintf('http://%s:%d', $host, $port)];
+        }
+        foreach ($companions as $companion) {
+            $rows[] = $companion->kind === ComponentKind::Scheduler
+                ? ['scheduler', 'enabled']
+                : [self::componentLabel($companion->kind), self::shortName((string) $companion->class)];
+        }
+        if (static::hasAttribute(EnableAsync::class)) {
+            $rows[] = ['async', 'enabled'];
+        }
+
+        return $rows;
+    }
+
+    private static function componentLabel(ComponentKind $kind): string
+    {
+        return match ($kind) {
+            ComponentKind::Daemon => 'daemon',
+            default               => 'process',
+        };
+    }
+
+    /** Milliseconds from boot start to now (0.0 before {@see run()} sets the mark). */
+    private static function elapsedMs(): float
+    {
+        return self::$bootStartedAt > 0
+            ? (hrtime(true) - self::$bootStartedAt) / 1e6
+            : 0.0;
     }
 
     protected static function rootPath(): string
