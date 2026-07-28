@@ -22,6 +22,10 @@ use Psr\Log\LoggerInterface;
 /**
  * Single application entry point — the framework's answer to a Java `main()`.
  *
+ * @deprecated Use {@see WinterApplication} (declarative #[Enable*] manifest) instead.
+ *   This legacy base — `Boot extends Application extends BaseBoot` with protected
+ *   config hooks — stays only for the transition and will be removed.
+ *
  * Extend it once, declare what the application contains via {@see components()},
  * then route the CLI through {@see run()} from a single file:
  * ```

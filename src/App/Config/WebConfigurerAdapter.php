@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\App\Config;
 
+use Flytachi\Winter\K2\App\ApplicationArguments;
+
 /**
  * Empty-default base for {@see WebConfigurer} — the winter analogue of Spring's
  * `WebMvcConfigurerAdapter`. Extend it and override only the concern you care
@@ -12,9 +14,9 @@ namespace Flytachi\Winter\K2\App\Config;
  * ```
  * final class WebConfig extends WebConfigurerAdapter
  * {
- *     public function configureCors(CorsRegistry $cors): void
+ *     public function configureServer(ServerSettings $server, ApplicationArguments $args): void
  *     {
- *         $cors->allowedOrigins('https://app.example.com')->allowCredentials();
+ *         $server->port($args->int('port', 8000))->workers(swoole_cpu_num() * 2);
  *     }
  * }
  * ```
@@ -25,7 +27,7 @@ abstract class WebConfigurerAdapter implements WebConfigurer
     {
     }
 
-    public function configureServer(ServerSettings $server): void
+    public function configureServer(ServerSettings $server, ApplicationArguments $args): void
     {
     }
 }

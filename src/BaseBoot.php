@@ -22,6 +22,10 @@ use Psr\Log\LoggerInterface;
 /**
  * Application bootstrap base — Java Boot-style entry point.
  *
+ * @deprecated Use {@see WinterApplication} instead. This legacy base and its
+ *   protected config hooks (providers/channels/httpCors/health/plugins/swooleConfig)
+ *   stay only for the transition and will be removed.
+ *
  * Extend in bootstrap.php, override only the hooks you need,
  * then call one entry point from each runtime file.
  *

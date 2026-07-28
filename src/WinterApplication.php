@@ -11,6 +11,11 @@ use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\DI\Scanner;
 use Flytachi\Winter\K2\App\ApplicationArguments;
 use Flytachi\Winter\K2\App\ApplicationConfigException;
+use Flytachi\Winter\K2\App\Attribute\EnableAsync;
+use Flytachi\Winter\K2\App\Attribute\EnableDaemon;
+use Flytachi\Winter\K2\App\Attribute\EnableProcess;
+use Flytachi\Winter\K2\App\Attribute\EnableScheduler;
+use Flytachi\Winter\K2\App\Attribute\EnableWeb;
 use Flytachi\Winter\K2\App\Attribute\Import;
 use Flytachi\Winter\K2\App\Component;
 use Flytachi\Winter\K2\App\ComponentKind;
@@ -39,24 +44,20 @@ use Psr\Log\LoggerInterface;
  * built around scanner-discovered configuration (Spring-style), with no
  * "god bootstrap class".
  *
- * Extend it once, declare what the application contains via {@see components()},
+ * Extend it once, declare what the application contains with #[Enable*] attributes,
  * then route the CLI through {@see main()} from a single file:
  * ```
+ * #[EnableWeb]
+ * #[EnableAsync]
+ * #[EnableScheduler]
+ * #[EnableProcess(SnmpProc::class)]
+ * #[EnableDaemon(Emails::class)]
  * #[Import('acme/auth-plugin', '/auth')]
  * final class App extends WinterApplication
  * {
- *     protected static function configure(ApplicationArguments $args): void
+ *     public static function main(array $args): never
  *     {
- *         Kernel::init(pathRoot: __DIR__);
- *     }
- *
- *     protected static function components(): array
- *     {
- *         return [
- *             Component::http(port: 8000),   // web server (optional)
- *             Component::daemon(Emails::class),
- *             Component::scheduler(),
- *         ];
+ *         return self::run($args);
  *     }
  * }
  *
@@ -64,10 +65,15 @@ use Psr\Log\LoggerInterface;
  * App::main($argv);
  * ```
  *
+ * The manifest is declarative: each #[Enable*] on the App class maps to one
+ * {@see Component} ({@see EnableWeb} → http, {@see EnableProcess}/{@see EnableDaemon}
+ * → workers, {@see EnableScheduler} → scheduler), except {@see EnableAsync}, which
+ * only toggles #[Async] proxying during boot.
+ *
  * Configuration is not a set of hook methods on this class; it lives in ordinary
  * classes the scanner finds:
  *   - {@see App\Attribute\Configuration}/{@see App\Attribute\Bean} — DI factories;
- *   - {@see WebConfigurer} — CORS + Swoole server tuning;
+ *   - {@see WebConfigurer} — CORS + Swoole server tuning (host/port);
  *   - {@see LoggingConfigurer} — extra log channels;
  *   - {@see Import} attributes — plugin packages.
  *
@@ -89,15 +95,6 @@ abstract class WinterApplication
     }
 
     // ── Hooks (override in your App class) ────────────────────────────────────
-
-    /**
-     * Declares the long-lived components this application is made of.
-     *
-     * Build each entry with a {@see Component} factory — never the constructor.
-     *
-     * @return list<Component>
-     */
-    abstract protected static function components(): array;
 
     /**
      * Initialise the kernel — paths, .env, logging, timezone. Runs before the
@@ -122,7 +119,7 @@ abstract class WinterApplication
      *
      * @param array $argv Raw $argv (script name in [0]).
      */
-    public static function main(array $argv = []): never
+    public static function main(array $argv): never
     {
         static::run($argv);
     }
@@ -167,27 +164,38 @@ abstract class WinterApplication
         self::$container = $c;
         $debug = (bool) env('DEBUG', false);
 
-        $async = new AsyncCollector(
-            $c,
-            ProxyFactory::forKernel($debug),
-            $debug ? null : Kernel::$pathStorageVolatile . '/async.php',
-        );
         $config = new ConfigurationCollector($c);
         $webCollector = new ImplementorCollector(WebConfigurer::class);
         $logCollector = new ImplementorCollector(LoggingConfigurer::class);
 
-        Scanner::run(
+        // #[Async] proxying is opt-in, like Spring's @EnableAsync: the collector is
+        // created and wired only when #[EnableAsync] is present. Without it, classes
+        // carrying #[Async] are not proxied and their methods run synchronously. It
+        // must run after DICollector (which rebinds a class to itself), so it is
+        // collected last.
+        $async = static::hasAttribute(EnableAsync::class)
+            ? new AsyncCollector(
+                $c,
+                ProxyFactory::forKernel($debug),
+                $debug ? null : Kernel::$pathStorageVolatile . '/async.php',
+            )
+            : null;
+
+        $scan = Scanner::run(
             rootDir: Kernel::$pathRoot,
             cache: $debug ? null : Kernel::$pathStorageVolatile . '/di.php',
         )
             ->collect(new DICollector($c))
             ->collect($config)
-            ->collect($async)
             ->collect($webCollector)
-            ->collect($logCollector)
-            ->execute();
+            ->collect($logCollector);
 
-        $async->flush();
+        if ($async !== null) {
+            $scan->collect($async);
+        }
+        $scan->execute();
+
+        $async?->flush();
 
         // Default contextual logger: an injected LoggerInterface is named after the
         // class it is injected into.
@@ -258,6 +266,14 @@ abstract class WinterApplication
      */
     final public static function serve(bool $watch, ApplicationArguments $args): never
     {
+        $components = static::resolveComponents();
+        if ($components === []) {
+            throw new ApplicationConfigException(
+                'No components declared on ' . static::class . ': add at least one '
+                . '#[EnableWeb], #[EnableProcess], #[EnableDaemon] or #[EnableScheduler].'
+            );
+        }
+
         /** @var ?Component $http */
         $http = null;
         /** @var list<Component> $sockets */
@@ -265,13 +281,7 @@ abstract class WinterApplication
         /** @var list<Component> $companions */
         $companions = [];
 
-        foreach (static::components() as $component) {
-            if (!$component instanceof Component) {
-                throw new ApplicationConfigException(
-                    'components() must return ' . Component::class
-                    . ' instances; got ' . get_debug_type($component) . '.'
-                );
-            }
+        foreach ($components as $component) {
             match ($component->kind) {
                 ComponentKind::Http      => $http = $component,
                 ComponentKind::WebSocket => $sockets[] = $component,
@@ -281,15 +291,14 @@ abstract class WinterApplication
 
         if ($sockets !== []) {
             throw new ApplicationConfigException(
-                'WebSocket components are not hosted by the bundled runtime yet — '
-                . 'the port from the legacy engine is pending.'
+                'WebSocket components are not hosted by the bundled runtime yet.'
             );
         }
 
         $logger = LoggerFactory::getLogger(static::class);
 
         if ($http !== null) {
-            static::serveHttp($http, $companions, $watch, $args, $logger);
+            static::serveHttp($companions, $watch, $args, $logger);
         }
 
         static::serveHeadless($companions, $logger);
@@ -302,7 +311,6 @@ abstract class WinterApplication
      * @param list<Component> $companions
      */
     private static function serveHttp(
-        Component $http,
         array $companions,
         bool $watch,
         ApplicationArguments $args,
@@ -314,8 +322,9 @@ abstract class WinterApplication
             );
         }
 
-        $host = $args->option('host', $http->host) ?? $http->host;
-        $port = $args->int('port', $http->port);
+        $settings = static::buildServerSettings($args);
+        $host = $settings->getHost();
+        $port = $settings->getPort();
 
         $router = Router::fromScan(Kernel::$pathRoot);
         $router->static(Kernel::$pathPublic);
@@ -324,7 +333,7 @@ abstract class WinterApplication
         Runtime::boot(RuntimeMode::Swoole);
 
         $server = new \Swoole\Http\Server($host, $port);
-        $server->set(static::buildServerSettings());
+        $server->set($settings->toArray());
 
         $names = [];
         foreach ($companions as $companion) {
@@ -453,22 +462,65 @@ abstract class WinterApplication
     // ── Internal ──────────────────────────────────────────────────────────────
 
     /**
-     * Base Swoole options from .env, tuned by every discovered {@see WebConfigurer}.
-     *
-     * @return array<string, mixed>
+     * Builds the server settings: bind address + Swoole options. The default bind
+     * policy is `--host`/`--port` (fallback `0.0.0.0:8000`); base Swoole options come
+     * from .env; every discovered {@see WebConfigurer} may then tune both, re-deriving
+     * host/port from any source (env, a custom flag, a literal) via the handle.
      */
-    private static function buildServerSettings(): array
+    private static function buildServerSettings(ApplicationArguments $args): ServerSettings
     {
-        $settings = ServerSettings::fromEnv();
+        $settings = ServerSettings::fromEnv(
+            $args->option('host', '0.0.0.0') ?? '0.0.0.0',
+            $args->int('port', 8000),
+        );
         $c = self::$container;
         if ($c !== null) {
             foreach (self::$webConfigurers as $class) {
                 /** @var WebConfigurer $configurer */
                 $configurer = $c->make($class);
-                $configurer->configureServer($settings);
+                $configurer->configureServer($settings, $args);
             }
         }
-        return $settings->toArray();
+        return $settings;
+    }
+
+    /**
+     * Builds the component manifest from the App class's #[Enable*] attributes.
+     * Each attribute maps to one {@see Component}; {@see EnableAsync} is not here —
+     * it is a boot toggle read in {@see bootstrap()}, not a component.
+     *
+     * @return list<Component>
+     */
+    private static function resolveComponents(): array
+    {
+        $ref = new \ReflectionClass(static::class);
+        $components = [];
+
+        if ($ref->getAttributes(EnableWeb::class) !== []) {
+            $components[] = Component::http();
+        }
+        $scheduler = $ref->getAttributes(EnableScheduler::class);
+        if ($scheduler !== []) {
+            $components[] = Component::scheduler($scheduler[0]->newInstance()->class);
+        }
+        foreach ($ref->getAttributes(EnableProcess::class) as $attribute) {
+            $components[] = Component::process($attribute->newInstance()->class);
+        }
+        foreach ($ref->getAttributes(EnableDaemon::class) as $attribute) {
+            $components[] = Component::daemon($attribute->newInstance()->class);
+        }
+
+        return $components;
+    }
+
+    /**
+     * True if the App class carries the given attribute.
+     *
+     * @param class-string $attribute
+     */
+    private static function hasAttribute(string $attribute): bool
+    {
+        return new \ReflectionClass(static::class)->getAttributes($attribute) !== [];
     }
 
     protected static function rootPath(): string

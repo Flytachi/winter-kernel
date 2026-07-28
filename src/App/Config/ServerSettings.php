@@ -19,15 +19,20 @@ namespace Flytachi\Winter\K2\App\Config;
 final class ServerSettings
 {
     /** @param array<string, mixed> $options */
-    private function __construct(private array $options = [])
-    {
+    private function __construct(
+        private string $host,
+        private int $port,
+        private array $options = [],
+    ) {
     }
 
     /**
-     * Seeds base options from the environment. Only variables that are actually
-     * set contribute a key (so Swoole defaults apply otherwise).
+     * Seeds the bind address and base Swoole options. Host/port are passed in (the
+     * framework's default policy is `--host`/`--port`); tuning options come from the
+     * environment — only variables that are actually set contribute a key (so Swoole
+     * defaults apply otherwise).
      */
-    public static function fromEnv(): self
+    public static function fromEnv(string $host = '0.0.0.0', int $port = 8000): self
     {
         $options = [];
         $map = [
@@ -42,7 +47,31 @@ final class ServerSettings
                 $options[$swooleKey] = (int) $raw;
             }
         }
-        return new self($options);
+        return new self($host, $port, $options);
+    }
+
+    /** Bind host (e.g. '0.0.0.0', '127.0.0.1'). */
+    public function host(string $host): self
+    {
+        $this->host = $host;
+        return $this;
+    }
+
+    /** Bind port. */
+    public function port(int $port): self
+    {
+        $this->port = $port;
+        return $this;
+    }
+
+    public function getHost(): string
+    {
+        return $this->host;
+    }
+
+    public function getPort(): int
+    {
+        return $this->port;
     }
 
     public function workers(int $count): self
