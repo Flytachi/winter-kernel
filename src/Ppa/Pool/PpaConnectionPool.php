@@ -8,6 +8,10 @@ use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\Cdo\Config\Common\DbConfigInterface;
 use Flytachi\Winter\Cdo\Connection\CDO;
 use Flytachi\Winter\Base\Runtime;
+use Flytachi\Winter\K2\ConnectionPool\ConnectionPool;
+use Flytachi\Winter\K2\ConnectionPool\PoolEntry;
+use Flytachi\Winter\K2\ConnectionPool\PoolException;
+use Flytachi\Winter\K2\ConnectionPool\PoolPolicy;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -18,14 +22,20 @@ use Psr\Log\LoggerInterface;
  * one `CDO` instance per config class per process, reused for the entire request.
  *
  * ## Swoole (coroutines)
- * Uses {@see \Swoole\ConnectionPool} (which wraps `Swoole\Coroutine\Channel`)
- * per config class.  Connections are created **lazily** — only when first requested,
- * up to `poolMaxConnections`.  On the **first** `db()` call inside a coroutine one
- * CDO is borrowed and cached in the coroutine context; a `defer` returns it
- * automatically when the coroutine ends — no manual release anywhere in the codebase.
+ * Uses the framework's {@see ConnectionPool} (a HikariCP-inspired pool over a
+ * `Swoole\Coroutine\Channel`) per config class. Connections are created **lazily** —
+ * only when first requested, up to `poolMaxConnections`. On the **first** `db()` call
+ * inside a coroutine one connection is borrowed and cached in the coroutine context;
+ * a `defer` returns it automatically when the coroutine ends — no manual release
+ * anywhere in the codebase.
  *
- * Broken connections: pass `null` to `Swoole\ConnectionPool::put()` and the pool
- * will discard and recreate the slot automatically.
+ * Unlike a plain `Swoole\ConnectionPool` (a dumb channel), {@see ConnectionPool}
+ * actively keeps connections usable across a database outage: a connection idle beyond
+ * `aliveBypassWindow` is probed on borrow ({@see CdoConnectionFactory::validate()} →
+ * `ping()`) and a dead one is retired for a fresh socket, and a connection older than
+ * `maxLifetime` is rotated before it can go stale — restoring the FPM-era resilience
+ * (fresh connection ⇒ self-heal after recovery) without a per-borrow probe on hot
+ * connections.
  *
  * ## Pool size
  * Configs that implement {@see PpaPoolConfigInterface} (via {@see PpaPoolTrait})
@@ -53,7 +63,7 @@ final class PpaConnectionPool
 
     /**
      * Swoole: one ConnectionPool per config class.
-     * @var array<string, \Swoole\ConnectionPool>
+     * @var array<string, ConnectionPool>
      */
     private static array $pools = [];
 
@@ -169,8 +179,10 @@ final class PpaConnectionPool
     }
 
     /**
-     * Swoole path: borrow from Swoole\ConnectionPool on first call in this coroutine,
-     * cache in coroutine context, auto-release via defer on coroutine end.
+     * Swoole path: borrow one connection from the {@see ConnectionPool} on the first
+     * call in this coroutine, cache the {@see PoolEntry} in coroutine context, and
+     * auto-release via defer when the coroutine ends. The pool validates idle
+     * connections and rotates aged ones on borrow (see the class docblock).
      */
     private static function coroutineDb(string $configClass): CDO
     {
@@ -178,61 +190,54 @@ final class PpaConnectionPool
         $ctx    = \Swoole\Coroutine::getContext();
 
         if (!isset($ctx[$ctxKey])) {
-            $swPool  = self::swPool($configClass);
-            $config  = self::getConfigDb($configClass);
-            $timeout = $config instanceof PpaPoolConfigInterface
-                ? $config->getPoolWaitTimeout()
-                : 3.0;
-
-            $cid = \Swoole\Coroutine::getCid();
+            $pool = self::pool($configClass);
+            $cid  = \Swoole\Coroutine::getCid();
             self::logger()->debug("cid={$cid} borrow: {$configClass}");
 
             try {
-                /** @var CDO|false $cdo */
-                $cdo = $swPool->get($timeout);
-            } catch (\Throwable $e) {
-                self::logger()->error("cid={$cid} connect failed: {$configClass} — {$e->getMessage()}");
+                $entry = $pool->borrow();
+            } catch (PoolException $e) {
+                self::logger()->error("cid={$cid} borrow failed: {$configClass} — {$e->getMessage()}");
                 throw new PpaPoolException(
                     "PpaConnectionPool: connection failed for [{$configClass}] — {$e->getMessage()}",
                     previous: $e
                 );
             }
 
-            if ($cdo === false) {
-                self::logger()->error("cid={$cid} exhausted: {$configClass} (timeout={$timeout}s)");
-                throw new PpaPoolException(
-                    "PpaConnectionPool: no free connection for [{$configClass}] "
-                    . "within {$timeout}s — increase poolMaxConnections or poolWaitTimeout"
-                );
-            }
-
-            $ctx[$ctxKey] = $cdo;
+            $ctx[$ctxKey] = $entry;
 
             // Auto-return when the coroutine finishes (normal exit OR exception).
-            // $cdo is captured directly — safer than reading from $ctx during teardown.
-            \Swoole\Coroutine::defer(static function () use ($swPool, $cdo, $cid, $configClass): void {
+            // $entry is captured directly — safer than reading from $ctx during teardown.
+            \Swoole\Coroutine::defer(static function () use ($pool, $entry, $cid, $configClass): void {
                 self::logger()->debug("cid={$cid} release: {$configClass}");
-                $swPool->put($cdo);
+                $pool->release($entry);
             });
         }
 
-        $driver = $ctx[$ctxKey]->getAttribute(\PDO::ATTR_DRIVER_NAME);
+        /** @var PoolEntry $entry */
+        $entry = $ctx[$ctxKey];
+        /** @var DbConfigInterface $config */
+        $config = $entry->resource;
+        $cdo    = $config->connection();
+
+        $driver = $cdo->getAttribute(\PDO::ATTR_DRIVER_NAME);
         if (!empty($driver)) {
-            $ctx[$ctxKey]->applyDatabaseTimezone($driver, date_default_timezone_get());
+            $cdo->applyDatabaseTimezone($driver, date_default_timezone_get());
         }
 
-        return $ctx[$ctxKey];
+        return $cdo;
     }
 
     /**
-     * Returns (and lazily creates) the Swoole\ConnectionPool for the given config class.
+     * Returns (and lazily creates) the {@see ConnectionPool} for the given config class.
      *
-     * The factory callable passed to Swoole\ConnectionPool creates a fresh CDO
-     * from a dedicated config instance per slot — guaranteeing independent sockets.
-     * Swoole\ConnectionPool itself is lazy: it calls the factory only when a slot
-     * is needed (up to `poolMaxConnections`).
+     * The {@see CdoConnectionFactory} opens one independent CDO per slot (own socket).
+     * The pool is lazy: it opens a connection only when a slot is needed (up to
+     * `maximumPoolSize`). Sizing/timeout come from {@see PpaPoolConfigInterface} when
+     * the config implements it; `maxLifetime`/`aliveBypassWindow` use the
+     * {@see PoolPolicy} defaults.
      */
-    private static function swPool(string $configClass): \Swoole\ConnectionPool
+    private static function pool(string $configClass): ConnectionPool
     {
         $key = base64_encode($configClass);
         if (!isset(self::$pools[$key])) {
@@ -240,21 +245,16 @@ final class PpaConnectionPool
             $maxConn = $config instanceof PpaPoolConfigInterface
                 ? $config->getPoolMaxConnections()
                 : self::DEFAULT_POOL_SIZE;
+            $timeout = $config instanceof PpaPoolConfigInterface
+                ? $config->getPoolWaitTimeout()
+                : 3.0;
 
             self::logger()->debug("pool created: {$configClass} maxConnections={$maxConn}");
 
-            // Factory: each call creates one independent CDO (own socket).
-            $factory = static function () use ($configClass): CDO {
-                /** @var DbConfigInterface $slotConfig */
-                $slotConfig = new $configClass();
-                $slotConfig->setUp();
-                $slotConfig->setLogger(self::logger());
-                $cdo = $slotConfig->connection();
-                self::logger()->debug("slot opened: {$configClass} dsn={$slotConfig->getDns()}");
-                return $cdo;
-            };
-
-            self::$pools[$key] = new \Swoole\ConnectionPool($factory, $maxConn);
+            self::$pools[$key] = new ConnectionPool(
+                new CdoConnectionFactory($configClass, self::logger()),
+                new PoolPolicy(maximumPoolSize: $maxConn, connectionTimeout: $timeout),
+            );
         }
         return self::$pools[$key];
     }
