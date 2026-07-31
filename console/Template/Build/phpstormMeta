@@ -14,21 +14,25 @@ namespace PHPSTORM_META {
         'LOG_OUTPUT',
         'LOG_FILE',
         'LOG_FILE_MAX',
+        'LOG_COLOR',
         'LOG_SYS_LEVEL',
         'LOG_SYS_FORMAT',
         'LOG_SYS_OUTPUT',
         'LOG_SYS_FILE',
         'LOG_SYS_FILE_MAX',
+        'LOG_SYS_COLOR',
         'LOG_HTTP_LEVEL',
         'LOG_HTTP_FORMAT',
         'LOG_HTTP_OUTPUT',
         'LOG_HTTP_FILE',
         'LOG_HTTP_FILE_MAX',
+        'LOG_HTTP_COLOR',
         'LOG_CLI_LEVEL',
         'LOG_CLI_FORMAT',
         'LOG_CLI_OUTPUT',
         'LOG_CLI_FILE',
-        'LOG_CLI_FILE_MAX'
+        'LOG_CLI_FILE_MAX',
+        'LOG_CLI_COLOR'
     );
 
     // 2. Говорим, что 0-й аргумент функции env() должен быть из этого набора
@@ -39,6 +43,7 @@ namespace PHPSTORM_META {
     registerArgumentsSet('log_levels', 'info', 'debug', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency');
     registerArgumentsSet('log_formats', 'line', 'json');
     registerArgumentsSet('log_outputs', 'auto', 'stdout', 'stderr', 'syslog', 'file', 'null');
+    registerArgumentsSet('log_colors', 'auto', 'always', 'never');
     registerArgumentsSet('time_zones', 'UTC', 'Europe/Moscow', 'America/New_York', 'Asia/Tokyo');
 
     // 4. Связываем: если 0-й аргумент равен X, то для 1-го аргумента предлагаем набор Y
@@ -50,20 +55,24 @@ namespace PHPSTORM_META {
         'LOG_LEVEL' => argumentsSet('log_levels'),
         'LOG_FORMAT' => argumentsSet('log_formats'),
         'LOG_OUTPUT' => argumentsSet('log_outputs'),
+        'LOG_COLOR' => argumentsSet('log_colors'),
 
         // Системные логи
         'LOG_SYS_LEVEL' => argumentsSet('log_levels'),
         'LOG_SYS_FORMAT' => argumentsSet('log_formats'),
         'LOG_SYS_OUTPUT' => argumentsSet('log_outputs'),
+        'LOG_SYS_COLOR' => argumentsSet('log_colors'),
 
         // HTTP
         'LOG_HTTP_LEVEL' => argumentsSet('log_levels'),
         'LOG_HTTP_FORMAT' => argumentsSet('log_formats'),
         'LOG_HTTP_OUTPUT' => argumentsSet('log_outputs'),
+        'LOG_HTTP_COLOR' => argumentsSet('log_colors'),
 
         // CLI
         'LOG_CLI_LEVEL' => argumentsSet('log_levels'),
         'LOG_CLI_FORMAT' => argumentsSet('log_formats'),
         'LOG_CLI_OUTPUT' => argumentsSet('log_outputs'),
+        'LOG_CLI_COLOR' => argumentsSet('log_colors'),
     });
 }

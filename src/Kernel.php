@@ -126,16 +126,28 @@ final class Kernel extends KernelStore
 
         $rawOutput = (string) (env($prefix . 'OUTPUT') ?? env('LOG_OUTPUT', 'auto'));
         $output    = self::resolveOutput($rawOutput);
+        $format    = (string) (env($prefix . 'FORMAT') ?? env('LOG_FORMAT', 'line'));
 
         $filePath = env($prefix . 'FILE') ?? env('LOG_FILE');
         if ($output === 'file' && empty($filePath)) {
             $filePath = self::$pathStorageLog . '/' . $channel . '.log';
         }
 
+        // ANSI colour — line format only, never JSON. LOG_COLOR = auto|always|never
+        // (auto = colour only when the output is an interactive terminal, mirroring
+        // Spring's `detect` / Postgres' PG_COLOR).
+        $colorMode = strtolower((string) (env($prefix . 'COLOR') ?? env('LOG_COLOR', 'auto')));
+        $color = $format === 'line' && match ($colorMode) {
+            'always' => true,
+            'never'  => false,
+            default  => self::outputIsTty($output),
+        };
+
         return [
             'level'        => $levelStr,
-            'format'       => (string) (env($prefix . 'FORMAT') ?? env('LOG_FORMAT', 'line')),
+            'format'       => $format,
             'output'       => $output,
+            'color'        => $color,
             'file_path'    => $filePath ? (string) $filePath : null,
             'file_max'     => (int) (env($prefix . 'FILE_MAX') ?? env('LOG_FILE_MAX', 30)),
             // Fixed syslog program tag — winter-logger requires the key; not a knob.
@@ -148,6 +160,16 @@ final class Kernel extends KernelStore
         // `auto` → stdout everywhere; whatever runs the process (orchestrator,
         // supervisor, terminal) captures stdout. Explicit values pass through.
         return $raw === 'auto' ? 'stdout' : $raw;
+    }
+
+    /** True when the resolved log output is an interactive terminal (for LOG_COLOR=auto). */
+    private static function outputIsTty(string $output): bool
+    {
+        return match ($output) {
+            'stdout' => defined('STDOUT') && stream_isatty(STDOUT),
+            'stderr' => defined('STDERR') && stream_isatty(STDERR),
+            default  => false,
+        };
     }
 
     private static function threadRunnerPath(): string
