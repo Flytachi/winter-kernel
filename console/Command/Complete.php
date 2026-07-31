@@ -49,7 +49,7 @@ class Complete extends Cmd
         ],
         'cfg key'        => ['-g:generate WINTER_KEY', '-s:show current key'],
         'cfg env'        => ['-i:create .env from template', '-s:show loaded env vars', '--file:show raw .env file'],
-        'cfg docker'     => ['--fpm:PHP-FPM + Nginx mode (default)', '--swoole:Swoole HTTP server mode'],
+        'cfg docker'     => [],
         'cfg completion' => ['-i:install globally (once per machine)', '-if:force reinstall', '-f:force flag'],
 
         // --- run ---

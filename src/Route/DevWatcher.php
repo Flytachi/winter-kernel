@@ -38,6 +38,7 @@ final class DevWatcher
     private array $snapshot = [];
     private bool $reloadRequested = false;
     private ?int $timerId = null;
+    private bool $stopping = false;
 
     /**
      * @param list<string> $watchPaths Directories scanned for `.php` changes.
@@ -77,6 +78,9 @@ final class DevWatcher
         $server->on('start', function (Server $server): void {
             $this->snapshot = $this->scan();
             $this->timerId = Timer::tick((int) ($this->interval * 1000), function () use ($server): void {
+                if ($this->stopping) {
+                    return;
+                }
                 $current = $this->scan();
                 if ($current === $this->snapshot) {
                     return;
@@ -93,6 +97,18 @@ final class DevWatcher
                 }
                 $server->shutdown();
             });
+        });
+
+        // Stop the watch cleanly on shutdown: flag the stop and clear the poll
+        // timer so no filesystem scan runs during reactor teardown. Otherwise the
+        // (hooked) scan is left as a sleeping coroutine and Swoole force-kills the
+        // worker after its exit timeout ("all coroutines are asleep - deadlock").
+        $server->on('beforeShutdown', function (Server $server): void {
+            $this->stopping = true;
+            if ($this->timerId !== null) {
+                Timer::clear($this->timerId);
+                $this->timerId = null;
+            }
         });
     }
 
