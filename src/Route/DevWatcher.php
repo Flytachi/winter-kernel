@@ -39,6 +39,7 @@ final class DevWatcher
     private bool $reloadRequested = false;
     private ?int $timerId = null;
     private bool $stopping = false;
+    private readonly bool $color;
 
     /**
      * @param list<string> $watchPaths Directories scanned for `.php` changes.
@@ -50,6 +51,23 @@ final class DevWatcher
         private readonly float $interval = 1.0,
         private readonly array $exclude = ['vendor', 'storage', '.git', 'node_modules'],
     ) {
+        $this->color = self::wantsColor();
+    }
+
+    /** Colour the dev output using the same LOG_COLOR contract as the logger. */
+    private static function wantsColor(): bool
+    {
+        return match (strtolower((string) (env('LOG_COLOR', 'auto')))) {
+            'always' => true,
+            'never'  => false,
+            default  => defined('STDOUT') && stream_isatty(STDOUT),
+        };
+    }
+
+    /** Wraps text in an ANSI colour when colour is on; plain text otherwise. */
+    private function paint(string $code, string $text): string
+    {
+        return $this->color ? "\033[{$code}m{$text}\033[0m" : $text;
     }
 
     /**
@@ -63,11 +81,9 @@ final class DevWatcher
         $server->on('workerStart', function (Server $server, int $workerId) use ($onWorkerStart): void {
             $this->workerId = $workerId;
             $this->baseline = memory_get_usage(false);
-            echo sprintf(
-                "[Worker %d] START | Baseline: %s\n",
-                $this->workerId,
-                $this->format($this->baseline)
-            );
+            echo $this->paint('32', '●') . ' ' . $this->paint('36', '[dev]')
+                . ' worker ' . $this->workerId
+                . $this->paint('90', ' · baseline ') . $this->format($this->baseline) . "\n";
             if ($onWorkerStart !== null) {
                 $onWorkerStart($server, $workerId);
             }
@@ -86,10 +102,9 @@ final class DevWatcher
                     return;
                 }
                 $changed = $this->firstChange($this->snapshot, $current);
-                echo sprintf(
-                    "\n[dev] change detected%s — restarting server...\n",
-                    $changed !== null ? " ({$changed})" : ''
-                );
+                echo "\n" . $this->paint('33', '↻ [dev]') . ' change'
+                    . ($changed !== null ? $this->paint('90', ' · ') . $this->paint('1;33', $changed) : '')
+                    . $this->paint('90', ' — restarting…') . "\n";
                 $this->reloadRequested = true;
                 if ($this->timerId !== null) {
                     Timer::clear($this->timerId);
@@ -121,15 +136,12 @@ final class DevWatcher
 
             $after = memory_get_usage(false);
 
-            echo sprintf(
-                "[Worker %d] REQUEST => (before: %s, after: %s, delta: %s, growth: %s, peak: %s)\n",
-                $this->workerId,
-                $this->format($before),
-                $this->format($after),
-                $this->formatDelta($after - $before),
-                $this->formatDelta($after - $this->baseline),
-                $this->format(memory_get_peak_usage(false))
-            );
+            echo $this->paint('36', '[dev]') . ' worker ' . $this->workerId
+                . $this->paint('90', ' · before ') . $this->format($before)
+                . $this->paint('90', ' · after ') . $this->format($after)
+                . $this->paint('90', ' · Δ ') . $this->formatDelta($after - $before)
+                . $this->paint('90', ' · growth ') . $this->formatDelta($after - $this->baseline)
+                . $this->paint('90', ' · peak ') . $this->format(memory_get_peak_usage(false)) . "\n";
         };
     }
 
