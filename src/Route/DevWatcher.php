@@ -101,6 +101,23 @@ final class DevWatcher
                 if ($current === $this->snapshot) {
                     return;
                 }
+
+                // Validate changed files before restarting: a mid-edit syntax error
+                // would kill the re-exec'd boot with no recovery. Keep the current
+                // (working) server up and report the error; the fix triggers the reload.
+                $invalid = $this->firstSyntaxError($this->changedPhpFiles($this->snapshot, $current));
+                if ($invalid !== null) {
+                    [$file, $error] = $invalid;
+                    echo "\n" . $this->paint('31', '✗ [dev]') . ' syntax error in '
+                        . $this->paint('1;31', basename($file))
+                        . $this->paint('90', ' — keeping current server') . "\n"
+                        . '    ' . $this->paint('90', $this->errorLine($error)) . "\n";
+                    // Acknowledge this change so the same break isn't re-linted every
+                    // tick; the next edit (the fix) is a fresh change → re-checked.
+                    $this->snapshot = $current;
+                    return;
+                }
+
                 $changed = $this->firstChange($this->snapshot, $current);
                 echo "\n" . $this->paint('33', '↻ [dev]') . ' change'
                     . ($changed !== null ? $this->paint('90', ' · ') . $this->paint('1;33', $changed) : '')
@@ -208,6 +225,58 @@ final class DevWatcher
             }
         }
         return null;
+    }
+
+    /**
+     * Added or modified files still on disk (removals can't be linted and are a
+     * valid reason to reload).
+     *
+     * @return list<string>
+     */
+    private function changedPhpFiles(array $old, array $new): array
+    {
+        $files = [];
+        foreach ($new as $path => $mtime) {
+            if ((!isset($old[$path]) || $old[$path] !== $mtime) && is_file($path)) {
+                $files[] = $path;
+            }
+        }
+        return $files;
+    }
+
+    /**
+     * `php -l` each file; returns [path, output] of the first that fails to parse,
+     * or null when all are valid (or validation is unavailable, so the reload just
+     * proceeds as before).
+     *
+     * @param list<string> $files
+     * @return array{0: string, 1: string}|null
+     */
+    private function firstSyntaxError(array $files): ?array
+    {
+        if (!function_exists('exec')) {
+            return null;
+        }
+        foreach ($files as $file) {
+            $out  = [];
+            $code = 0;
+            exec(escapeshellarg(PHP_BINARY) . ' -l ' . escapeshellarg($file) . ' 2>&1', $out, $code);
+            if ($code !== 0) {
+                return [$file, implode("\n", $out)];
+            }
+        }
+        return null;
+    }
+
+    /** The "Parse error: ..." line from `php -l` output, for a compact notice. */
+    private function errorLine(string $output): string
+    {
+        foreach (explode("\n", $output) as $line) {
+            if (stripos($line, 'error') !== false) {
+                return trim($line);
+            }
+        }
+        return trim(strtok($output, "\n") ?: $output);
     }
 
     private function format(int $bytes): string
