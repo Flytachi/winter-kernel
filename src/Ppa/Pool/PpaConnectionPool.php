@@ -12,6 +12,7 @@ use Flytachi\Winter\K2\ConnectionPool\ConnectionPool;
 use Flytachi\Winter\K2\ConnectionPool\PoolEntry;
 use Flytachi\Winter\K2\ConnectionPool\PoolException;
 use Flytachi\Winter\K2\ConnectionPool\PoolPolicy;
+use Flytachi\Winter\K2\ConnectionPool\SingleConnection;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -74,8 +75,9 @@ final class PpaConnectionPool
     private static array $configs = [];
 
     /**
-     * FPM: one CDO per config class for the lifetime of the process/request.
-     * @var array<string, CDO>
+     * FPM / non-coroutine: one self-maintaining {@see SingleConnection} per config
+     * class for the lifetime of the process.
+     * @var array<string, SingleConnection>
      */
     private static array $static = [];
 
@@ -166,16 +168,28 @@ final class PpaConnectionPool
     // -------------------------------------------------------------------------
 
     /**
-     * FPM path: singleton CDO per config class for the process lifetime.
+     * FPM / non-coroutine path: one {@see SingleConnection} per config class for the
+     * process lifetime. For a short FPM request the connection is freshly opened, so
+     * the liveness checks are near no-ops; for a long-running non-coroutine process
+     * (e.g. a Sync daemon querying the DB) the same idle-gate + maxLifetime that the
+     * coroutine pool applies keep the connection healthy across a DB outage.
      */
     private static function staticDb(string $configClass): CDO
     {
         $key = base64_encode($configClass);
         if (!isset(self::$static[$key])) {
-            self::$static[$key] = self::getConfigDb($configClass)->connection();
+            // Register the config for diagnostics (showDbConfigs) and future static knobs.
+            self::getConfigDb($configClass);
+            self::$static[$key] = new SingleConnection(
+                new CdoConnectionFactory($configClass, self::logger()),
+                new PoolPolicy(),
+            );
             self::logger()->debug("FPM connection opened: {$configClass}");
         }
-        return self::$static[$key];
+
+        /** @var DbConfigInterface $config */
+        $config = self::$static[$key]->get();
+        return $config->connection();
     }
 
     /**

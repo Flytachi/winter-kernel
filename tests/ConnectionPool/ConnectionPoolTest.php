@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\Tests\ConnectionPool;
 
-use Flytachi\Winter\K2\ConnectionPool\ConnectionFactory;
 use Flytachi\Winter\K2\ConnectionPool\ConnectionPool;
 use Flytachi\Winter\K2\ConnectionPool\PoolEntry;
 use Flytachi\Winter\K2\ConnectionPool\PoolException;
@@ -197,36 +196,5 @@ final class ConnectionPoolTest extends TestCase
 
         self::assertSame(['total' => 2, 'idle' => 0, 'active' => 2, 'maximum' => 5], $out['held']);
         self::assertSame(['total' => 2, 'idle' => 1, 'active' => 1, 'maximum' => 5], $out['oneBack']);
-    }
-}
-
-// ── Fixtures ────────────────────────────────────────────────────────────────────
-
-final class MockFactory implements ConnectionFactory
-{
-    public int $created = 0;
-    public int $closed = 0;
-    public int $validated = 0;
-    public bool $alive = true;
-    public bool $failCreate = false;
-
-    public function create(): object
-    {
-        if ($this->failCreate) {
-            throw new \RuntimeException('connect refused');
-        }
-        ++$this->created;
-        return (object) ['id' => $this->created];
-    }
-
-    public function validate(object $connection): bool
-    {
-        ++$this->validated;
-        return $this->alive;
-    }
-
-    public function close(object $connection): void
-    {
-        ++$this->closed;
     }
 }
