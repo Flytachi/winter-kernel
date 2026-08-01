@@ -25,7 +25,6 @@ final class Kernel extends KernelStore
     public static function init(
         ?string $pathRoot = null,
         ?string $pathEnv = null,
-        ?string $pathPublic = null,
         ?string $pathResource = null,
         ?string $pathStorage = null,
         ?string $pathStorageLog = null,
@@ -37,7 +36,6 @@ final class Kernel extends KernelStore
         parent::init(
             $pathRoot,
             $pathEnv,
-            $pathPublic,
             $pathResource,
             $pathStorage,
             $pathStorageLog,

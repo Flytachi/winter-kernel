@@ -58,8 +58,10 @@ COPY --from=builder /var/www/html/vendor ./vendor
 # Application code
 COPY . /var/www/html
 
+# chown covers the whole tree; storage additionally needs to be group-writable.
+# No separate mode for web assets: Swoole serves them from the worker itself, so
+# there is no second process that has to be able to read them.
 RUN chown -R winter:winter /var/www/html \
-    && chmod -R 755 /var/www/html/public \
     && chmod -R 775 /var/www/html/storage
 
 # Warm shell completion (best-effort; never fails the build)

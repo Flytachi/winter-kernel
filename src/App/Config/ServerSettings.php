@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\K2\App\Config;
 
+use Flytachi\Winter\K2\App\ApplicationConfigException;
+use Flytachi\Winter\K2\Kernel;
+
 /**
  * Fluent builder for the Swoole HTTP server options — the replacement for the old
  * `swooleConfig()` hook. Base values come from .env (`SERVER_*`), then each
@@ -92,6 +95,46 @@ final class ServerSettings
     public function maxRequestGrace(int $count): self
     {
         return $this->set('max_request_grace', $count);
+    }
+
+    /**
+     * Serves static files from `$path` using Swoole's own handler.
+     *
+     * Static content is opt-in: say nothing here and no file is ever served, which is
+     * what an API-only service wants. Swoole answers these requests in C, before PHP
+     * is involved — it streams the file instead of reading it into the worker, honours
+     * `Range`, and cannot be walked out of the directory with `..`.
+     *
+     * ```
+     * $server->staticPath('resources/static', ['/assets', '/favicon.ico']);
+     * ```
+     *
+     * Because those requests never reach PHP, middleware, CORS and request logging do
+     * not apply to them.
+     *
+     * @param string $path Directory to serve from; relative paths resolve against the
+     *   project root.
+     * @param list<string> $locations URI prefixes that are even considered static.
+     *   Leaving it empty exposes **every** file under `$path` and makes Swoole check
+     *   the filesystem for each incoming request, so naming the prefixes is worth it.
+     * @throws ApplicationConfigException When the directory does not exist — a typo
+     *   here would otherwise surface as silent 404s at runtime.
+     */
+    public function staticPath(string $path, array $locations = []): self
+    {
+        $dir = str_starts_with($path, '/')
+            ? $path
+            : rtrim(Kernel::$pathRoot, '/\\') . '/' . ltrim($path, '/\\');
+        $dir = rtrim($dir, '/\\');
+
+        if (!is_dir($dir)) {
+            throw new ApplicationConfigException("Static directory does not exist: {$dir}");
+        }
+
+        $this->set('document_root', $dir);
+        $this->set('enable_static_handler', true);
+
+        return $locations === [] ? $this : $this->set('static_handler_locations', array_values($locations));
     }
 
     /** Set any raw Swoole option. */

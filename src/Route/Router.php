@@ -51,7 +51,8 @@ use Flytachi\Winter\Base\HttpCode;
  *   // Per-route override: #[CrossOrigin] attribute on controller class or method
  *
  * ── Static files ─────────────────────────────────────────────────────────────
- *   $router->static(Kernel::$pathPublic);
+ *   Not the router's job. Swoole serves them itself, in C, before PHP is reached —
+ *   declare the directory with {@see \Flytachi\Winter\K2\App\Config\ServerSettings::staticPath()}.
  *
  * ── Dispatch ─────────────────────────────────────────────────────────────────
  *   $router->handle(new SwooleRequest($req), new SwooleResponse($res));
@@ -66,23 +67,6 @@ class Router
     private array $dynamicRoutes = [];
 
     private ?Dispatcher $dispatcher = null;
-
-    private ?string $publicDir = null;
-
-    // ── Static file serving ───────────────────────────────────────────────────
-
-    /**
-     * Serve static files from $publicDir for GET requests that match an existing file.
-     * Required for Swoole — unlike FPM+nginx, Swoole does not serve files natively.
-     *
-     * Example:
-     *   $router->static(__DIR__ . '/public');
-     */
-    public function static(string $publicDir): static
-    {
-        $this->publicDir = rtrim($publicDir, '/\\');
-        return $this;
-    }
 
     // ── Route registration ────────────────────────────────────────────────────
 
@@ -401,16 +385,15 @@ class Router
      *   1. Header::init()            — snapshot request headers into the static bag
      *   2. Locale::initFromRequest() — detect Accept-Language / locale cookie
      *   3. Swoole context            — stamp start time, method, uri in coroutine ctx
-     *   4. Static file check         — short-circuit for existing files (GET only)
-     *   5. Global CORS headers       — applied before dispatch (covers 404 / 500 too)
-     *   6. OPTIONS preflight         — returns 204 before handler invocation
-     *   7. Route dispatch            — O(1) static map → chunked regex dynamic scan
-     *   8. Per-route #[CrossOrigin]  — overrides global CORS if present
-     *   9. Middleware before()       — run in declaration order
-     *  10. Controller method         — resolved via ReflectionCache + ParameterResolver
-     *  11. Middleware after()        — run in reverse order
-     *  12. Response serialise        — Sendable::send() or ResponseEntity::ok()->send()
-     *  13. Error handling            — ExceptionWrapper maps Throwable → HTTP response
+     *   4. Global CORS headers       — applied before dispatch (covers 404 / 500 too)
+     *   5. OPTIONS preflight         — returns 204 before handler invocation
+     *   6. Route dispatch            — O(1) static map → chunked regex dynamic scan
+     *   7. Per-route #[CrossOrigin]  — overrides global CORS if present
+     *   8. Middleware before()       — run in declaration order
+     *   9. Controller method         — resolved via ReflectionCache + ParameterResolver
+     *  10. Middleware after()        — run in reverse order
+     *  11. Response serialise        — Sendable::send() or ResponseEntity::ok()->send()
+     *  12. Error handling            — ExceptionWrapper maps Throwable → HTTP response
      */
     public function handle(HttpRequest $request, HttpResponse $response): void
     {
@@ -422,17 +405,6 @@ class Router
             $ctx['__request_start']  = microtime(true);
             $ctx['__request_method'] = $request->getMethod();
             $ctx['__request_uri']    = $request->getUri();
-        }
-
-        // static - files (js,css,media)
-        if (Runtime::isSwoole() && $this->publicDir !== null && strtoupper($request->getMethod()) === 'GET') {
-            $uri  = $request->getUri();
-            $path = ($pos = strpos($uri, '?')) !== false ? substr($uri, 0, $pos) : $uri;
-            $file = $this->publicDir . $path;
-            if (is_file($file)) {
-                $this->serveStaticFile($file, $response);
-                return;
-            }
         }
 
         try {
@@ -702,24 +674,6 @@ class Router
         }
         return null;
     }
-
-    // ── Static file helper ────────────────────────────────────────────────────
-
-    private function serveStaticFile(string $filePath, HttpResponse $response): void
-    {
-        $content = file_get_contents($filePath);
-        if ($content === false) {
-            $response->status(500);
-            $response->end('');
-            return;
-        }
-        $mime = mime_content_type($filePath) ?: 'application/octet-stream';
-        $response->status(200);
-        $response->header('Content-Type', $mime);
-        $response->header('Cache-Control', 'public, max-age=86400');
-        $response->end($content);
-    }
-
     // ── Debug helpers ─────────────────────────────────────────────────────────
 
     /** @return list<array{method:string, path:string, handler:string}> */

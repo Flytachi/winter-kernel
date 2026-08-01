@@ -421,7 +421,6 @@ abstract class WinterApplication
         $port = $settings->getPort();
 
         $router = Router::fromScan(Kernel::$pathRoot);
-        $router->static(Kernel::$pathPublic);
 
         \Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL);
         Runtime::boot(RuntimeMode::Swoole);

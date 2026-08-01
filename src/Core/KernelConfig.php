@@ -8,7 +8,6 @@ abstract class KernelConfig
 {
     public static string $pathRoot;
     public static string $pathEnv;
-    public static string $pathPublic;
     public static string $pathResource;
     public static string $pathStorage;
     public static string $pathStorageLog;
@@ -19,7 +18,6 @@ abstract class KernelConfig
     /**
      * @param string|null $pathRoot
      * @param string|null $pathEnv
-     * @param string|null $pathPublic
      * @param string|null $pathResource
      * @param string|null $pathStorage
      * @param string|null $pathStorageLog
@@ -31,7 +29,6 @@ abstract class KernelConfig
     public static function init(
         ?string $pathRoot = null,
         ?string $pathEnv = null,
-        ?string $pathPublic = null,
         ?string $pathResource = null,
         ?string $pathStorage = null,
         ?string $pathStorageLog = null,
@@ -49,13 +46,8 @@ abstract class KernelConfig
             $pathEnv = $pathRoot . '/.env';
         }
 
-        // public
-        if ($pathPublic === null) {
-            $pathPublic = $pathRoot . '/public';
-        }
-
         // resource
-        if ($pathStorageLog === null) {
+        if ($pathResource === null) {
             $pathResource = $pathRoot . '/resources';
         }
 
@@ -81,7 +73,6 @@ abstract class KernelConfig
 
         self::$pathRoot = $pathRoot;
         self::$pathEnv = $pathEnv;
-        self::$pathPublic = $pathPublic;
         self::$pathResource = $pathResource;
         self::$pathStorage = $pathStorage;
         self::$pathStorageLog = $pathStorageLog;
