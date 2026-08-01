@@ -74,12 +74,16 @@ final class PoolTelemetry
     /** Stops publishing and drops this worker's record. */
     public static function stop(int $workerId): void
     {
-        if (self::$timerId !== null) {
-            if (extension_loaded('swoole')) {
-                \Swoole\Timer::clear(self::$timerId);
-            }
-            self::$timerId = null;
+        if (self::$timerId === null) {
+            // Never published, so there is no record to drop — and asking for the store
+            // would create its directory in an application that has no pool at all.
+            return;
         }
+
+        if (extension_loaded('swoole')) {
+            \Swoole\Timer::clear(self::$timerId);
+        }
+        self::$timerId = null;
 
         try {
             self::store()->del(self::recordKey($workerId));
