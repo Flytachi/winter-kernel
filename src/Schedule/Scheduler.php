@@ -30,7 +30,7 @@ use Flytachi\Winter\K2\Process\Process;
  * {@see dispatch()}, and stopped with {@see stop()} — or through `call schedule`.
  * SIGHUP re-scans the annotated methods without a restart.
  */
-final class Scheduler extends Process
+class Scheduler extends Process
 {
     /** Shortest idle pause between loop passes, in seconds (avoids a busy spin). */
     private const float MIN_SLEEP = 0.01;
