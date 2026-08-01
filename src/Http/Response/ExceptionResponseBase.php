@@ -87,23 +87,47 @@ class ExceptionResponseBase implements ResponseExceptionInterface
         $httpMessage = $this->httpCode->message();
         $message     = htmlspecialchars($this->throwable->getMessage(), ENT_QUOTES);
 
+        $logo = self::logo();
+
         return <<<HTML
             <!DOCTYPE html><html lang="en">
             <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <link rel="icon" type="image/svg+xml" href="/static/winter/logo.svg">
                 <title>{$code} {$httpMessage}</title>
             </head>
             <body style="background-color:#0a0f1f;color:#ffffff;font-family:sans-serif">
                 <center>
-                    <div><img src="/static/winter/logo.svg" alt="logotype" width="80" height="80"></div>
+                    <div>{$logo}</div>
                     <strong style="font-size:21px;"><em>Winter {$code} — {$httpMessage}</em></strong>
                     <hr width="50%">
                     <h2 style="color:#676980FF">{$message}</h2>
                 </center>
             </body></html>
             HTML;
+    }
+
+    /**
+     * The mark, inlined rather than linked.
+     *
+     * This page is what a visitor sees when the application is already failing, so it
+     * must not depend on the application being configured correctly: static serving is
+     * opt-in, and a linked asset would simply 404. Inlining the element (rather than a
+     * `data:` URI) also keeps it working under a strict `img-src` policy.
+     */
+    private static function logo(): string
+    {
+        return <<<'SVG'
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 336 264" width="80" height="80" role="img" aria-label="Winter">
+              <g transform="translate(20, 20)">
+                <polygon points="20,7 48,7 109,190 68,204 27,27" fill="#E6F1FB" stroke="#185FA5" stroke-width="6" stroke-linejoin="round"/>
+                <polygon points="68,204 109,190 150,68 177,68 129,211 95,211" fill="#B5D4F4" stroke="#185FA5" stroke-width="6" stroke-linejoin="round"/>
+                <polygon points="129,211 177,68 204,68 177,211 150,211" fill="#E6F1FB" stroke="#185FA5" stroke-width="6" stroke-linejoin="round"/>
+                <polygon points="150,211 177,211 231,68 258,68 204,190 163,211" fill="#B5D4F4" stroke="#185FA5" stroke-width="6" stroke-linejoin="round"/>
+                <polygon points="204,190 245,14 286,14 286,27 245,204 204,204" fill="#E6F1FB" stroke="#185FA5" stroke-width="6" stroke-linejoin="round"/>
+              </g>
+            </svg>
+            SVG;
     }
 
     final protected function validationRequests(): array

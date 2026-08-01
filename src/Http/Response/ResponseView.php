@@ -134,7 +134,7 @@ class ResponseView implements Sendable
                 ? $this->capture($this->templatePath(), $this->data)
                 : $resource;
 
-            return $html . RenderContext::current()?->debugger();
+            return $html;
         } finally {
             RenderContext::pop();
         }

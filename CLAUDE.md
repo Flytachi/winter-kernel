@@ -1,8 +1,9 @@
-# CLAUDE.md — winter-kernel: Process/Daemon layer handoff
+# CLAUDE.md — winter-kernel: Process/Daemon + ConnectionPool handoff
 
-This file orients you (Claude) to the work done on the **Process/Daemon** layer of
-`winter-kernel`. Read it fully before touching that layer. It describes what was
-built, how it works, why, and the rules to keep.
+This file orients you (Claude) to the work done on `winter-kernel`: the
+**Process/Daemon** layer (§1–§12), the **ConnectionPool** layer (§13), and the
+**project layout / static files** (§14). Read the relevant part fully before
+touching it. It describes what was built, how it works, why, and the rules to keep.
 
 > **winter-kernel** is a PHP 8.4+ framework kernel (a library, not an app). It runs
 > under two runtimes: **Swoole** (coroutines) and **FPM/CLI** (plain processes).
@@ -398,3 +399,228 @@ past-grace force path).
 - The maxRestarts→FAILED slot-free ordering and the NEVER→RETIRED terminal state in §4.
 - Daemon status must heartbeat-persist (~1s) in the loop, not only on fleet-size changes,
   or activity/STARTING→RUNNING never reach the store.
+- **`wKernelRunner` is load-bearing — do not delete it.** It looks like a leftover (it is
+  a bare file in the repo root, shipped as composer `"bin"`), but it is the child side of
+  `dispatch()`: `Process::dispatch()` → `Thread` launcher → `php vendor/bin/wKernelRunner
+  --detach` → composer bin proxy → the project's `bootstrap.php` →
+  `WinterApplication::discoverAppClass()` → `::executor($argv)` → `bootstrap()` →
+  `AdaptiveRunner`. Detaching cannot be a fork (the parent may be a Swoole worker whose
+  reactor must not be duplicated), so a **fresh PHP process** must boot the app again.
+  Two traps: the runner resolves the project root as `dirname(__DIR__, 3)`, so it must be
+  **copied, never symlinked** (PHP resolves `__DIR__` through symlinks); and `WINTER_KEY`
+  must reach `$_ENV` (`env()` reads `$_ENV` only, never `getenv()`) or the child rejects
+  the signed payload. Covered by `tests/Process/Integration/DispatchRunnerTest.php` —
+  every other Process test forks directly and never executes the runner, which is why a
+  broken runner once went unnoticed.
+- Both thread launchers spawn the same `php <runnerPath>` child; only the shell call
+  differs (`Coroutine\System::exec` inside a coroutine, `proc_open` elsewhere). There is
+  no `Swoole\Process` path — Swoole refuses one while its async-io threads are up.
+
+---
+
+## 13. `ConnectionPool` — the "HikariCP-lite" layer
+
+### The problem it solves
+
+Under FPM every request got a **fresh** connection, so a database outage healed itself:
+the process died, the next one reconnected. A long-lived Swoole worker keeps connections
+in memory, and a plain `Swoole\ConnectionPool` is a **dumb channel** (`get`/`put`, zero
+maintenance): after the DB comes back, the dead sockets are still in the pool and
+`put($cdo)` returns each corpse for the next borrower. This layer restores FPM-level
+self-healing without paying per-borrow.
+
+> **Do NOT "fix" this with a `SELECT 1` on every borrow.** That was tried and reverted —
+> it adds a round-trip to every query and churns healthy connections. HikariCP does not
+> do it either. The mechanism below is the idle-gate; keep it.
+
+### Location & shape
+
+| Path | What |
+|---|---|
+| `src/ConnectionPool/` | the generic, **self-contained** module (no PPA/CDO inside — it can be `git mv`d into its own package) |
+| `src/Ppa/Pool/` | the PPA adapter that wires CDO into it |
+
+Module: `ConnectionPool` (coroutine, `Swoole\Coroutine\Channel`) · `SingleConnection`
+(FPM/non-coroutine, **no** Channel) · `ConnectionFactory` (create/validate/close) ·
+`PoolEntry` · `PoolPolicy` · `PoolException`. Both take an injectable `Closure $clock`
+— that is the seam that makes idle/lifetime logic unit-testable without a live DB.
+
+`Runtime::isSwooleCoroutine()` picks the path: coroutine → `ConnectionPool`,
+everything else → `SingleConnection`. **`SingleConnection` is not coroutine-safe**; it
+is only ever reached off the coroutine path, and that invariant is what keeps it simple.
+
+### `PoolPolicy` knobs
+
+| Knob | Default | Meaning |
+|---|---|---|
+| `maximumPoolSize` | 10 | upper bound |
+| `connectionTimeout` | 15.0 | wait for a free connection, then fail fast |
+| `maxLifetime` | 1800.0 | rotate by age (`0` = never); jittered by `maxLifetimeJitter` (0.1) |
+| `aliveBypassWindow` | 0.5 | **idle-gate**: idle less than this ⇒ skip the probe |
+| `housekeepingInterval` | 30.0 | background pass period (clamped to ≥1s) |
+| `keepaliveTime` | 0.0 (off) | probe long-idle connections in the background |
+| `idleTimeout` | 0.0 (off) | close idle connections down to `minimumIdle` |
+| `minimumIdle` | 0 (lazy) | warm floor |
+
+The last three are **off by default**, and `housekeepingEnabled()` gates the timer — an
+unconfigured pool never arms one. Housekeeping is **Swoole-only** (it needs a timer);
+`SingleConnection` gets idle-gate + `maxLifetime` on `get()` and nothing else.
+
+### `aliveBypassWindow` — the point of the whole design
+
+Bigger window = *fewer* probes = **weaker** healing (the intuition runs backwards, so
+read it twice). At 0.5s a hot connection reused within the window pays nothing, while a
+connection that sat through an outage is always probed before it is handed out. Do not
+raise the default to "reduce overhead" — hot connections already pay zero.
+
+### PPA wiring (`src/Ppa/Pool/`)
+
+- `CdoConnectionFactory` — pools the **config instance**, not the raw CDO (winter-cdo's
+  config owns the connection): `create` = `new $configClass` + `connect()`,
+  `validate` = `ping()`, `close` = `disconnect()`.
+- `PpaConnectionPool` keeps the public API it always had (`db`/`getConfigDb`/
+  `showDbConfigs`/`reset`) — repositories were not touched.
+- Knobs are per config via `PpaPoolConfigInterface` + defaults in `PpaPoolTrait`, so a
+  config using the trait never breaks when knobs are added. **Add new knobs the same
+  way** (interface method + trait default), never as a bare interface method.
+
+### Evict on connection loss (no retry — deliberate)
+
+`ConnectionLoss` separates a **dead socket** (SQLSTATE class `08`, PG `57P01/02/03`,
+MySQL driver codes 2006/2013/2055) from a **rejected query** (`23xxx`, `42xxx`,
+deadlock) by walking the `previous` chain — CDO wraps the original `PDOException`.
+Only the first evicts; churning the pool on every constraint violation would be a bug.
+
+`PpaConnectionPool::reportFailure($configClass, $e)` is called from the 12 catch blocks
+that already existed in `RepositoryCrudTrait`/`RepositoryViewTrait`. On a loss it flips
+`BorrowedConnection::$dead` (so the coroutine's `defer` evicts instead of releasing) and
+drops the entry from the coroutine context, so the next query — including the next one
+in the same request — borrows a fresh connection.
+
+**Never add a retry here.** The pool cannot know what ran: the break may have happened
+*after* the server applied the write (replay ⇒ duplicate), and replaying one statement
+of an interrupted transaction is meaningless. One request fails; the connection dies.
+
+### Observability
+
+`PpaConnectionPool::stats()` → per-config `{total, idle, active, maximum}`. Two consumers:
+
+1. **Actuator** — folded into the `db` component of `/actuator/health` (one entry per
+   datasource carrying both reachability and `pool`), not a separate component.
+2. **`call db pool`** — reads per-worker records published by `PoolTelemetry` to
+   `Kernel::runnable('ppa.pool', false)`, the same store indirection `call process
+   status` uses (the CLI is a different process and can never see a worker's memory).
+   Interval via `PPA_POOL_TELEMETRY` (default 5s, `0` = off); records carry a TTL of
+   three intervals so a dead worker's record expires by itself; a worker holding no pool
+   writes nothing.
+
+Numbers are **per worker** (each has its own pool, like HikariCP per-JVM). Saturation is
+therefore counted per worker, never derived from fleet sums — a summed pool can look
+roomy while one worker is fully blocked.
+
+### Gotchas — already solved, don't reintroduce
+
+- **`reset()` must `abandon()` each pool.** A `Timer::tick` callback holds a reference to
+  its pool, so a merely dereferenced pool stays alive and keeps maintaining connections
+  the process no longer owns. `abandon()` clears the timer and drops references
+  **without closing sockets** — a forked child must never close an inherited fd.
+- **Keepalive must not touch `lastUsedAt`.** It measures application idleness; resetting
+  it would make `idleTimeout` never fire.
+- **`make()` reserves the slot before connecting** (`++$total` then `create()`, rollback
+  in `catch`) so concurrent borrows cannot over-provision past `maximumPoolSize`.
+- **`PoolTelemetry` uses `Kernel::runnable($name, false)`** — non-hashed keys, because
+  the CLI enumerates records with `keys()` and feeds them back to `read()`; with hashing
+  those are HMACs and would be hashed a second time.
+- SQLite: the pool runs but an embedded DB has no connection to lose; use
+  `poolMaxConnections: 1` (and `maxLifetime: 0` for `:memory:`, where every connection is
+  a *separate* database and rotation would destroy the data).
+
+### Tests
+
+`tests/ConnectionPool/` (module: pool, `SingleConnection`, housekeeper decisions via
+reflection under a controllable clock) and `tests/Ppa/Pool/` (classifier, `reportFailure`
+in a real coroutine, telemetry store round-trip, actuator merge). All deterministic, no
+live DB. Live drivers: `tests/Integration/Pool/` under `#[Group('pool')]`, enabled by
+`PG_TEST_DSN` / `MYSQL_TEST_DSN` / `MARIADB_TEST_DSN`.
+
+Design history and rationale: `doc-new/ppa-hikaricp-lite.md`.
+
+---
+
+## 14. Project layout & static files
+
+### Layout
+
+```
+resources/
+  static/      web assets — served by Swoole, see below
+  views/       view files — ResponseView's default root
+storage/       logs, cache, runnable records
+```
+
+`views`, not `templates`, on purpose: inside {@see ResponseView} a *template* is the
+**layout** (it receives `$content`) and a *resource* is the **page**. Both live under
+the same root, so naming that root after either role would be wrong — `views` covers
+both, with layouts conventionally under `views/layouts`. (Spring uses `templates/`,
+but it has no such split, so the name does not collide there.)
+
+**There is no `public/`, and the kernel has no notion of one.** It existed for the FPM
+document-root model — nginx needs a directory to aim at, and `index.php` must live
+inside it so sources are not web-reachable. Swoole has no document root: the server
+process decides what it serves. FPM is moving to a separate `winter-fpm` project, which
+will own its own document root.
+
+`Kernel::init()` therefore takes `pathResource`, `pathStorage*` and no `pathPublic`.
+
+### Static files — Swoole serves them, the framework does not
+
+Opt-in, declared where the rest of the web config lives:
+
+```php
+public function configureServer(ServerSettings $server, ApplicationArguments $args): void
+{
+    $server->port(8000)
+           ->staticPath('resources/static', ['/assets', '/favicon.ico']);
+}
+```
+
+`staticPath()` resolves a relative path against `Kernel::$pathRoot`, **throws
+`ApplicationConfigException` if the directory is missing** (a typo would otherwise be
+silent 404s at runtime), and sets Swoole's `document_root` / `enable_static_handler` /
+`static_handler_locations`. Say nothing and no file is ever served — which is what an
+API-only service wants.
+
+The second argument is a whitelist of URI prefixes that are *considered* static.
+Without it every file under the directory is downloadable and Swoole checks the
+filesystem for every incoming request; with it, only those prefixes pay.
+
+Two consequences worth knowing:
+
+- **Static responses never reach PHP**, so middleware, CORS and request logging do not
+  apply to them. (No regression: the old PHP implementation also served before the
+  CORS block.)
+- **One directory only.** `document_root` is a single value — a second `staticPath()`
+  call cannot mount a plugin's assets from another directory. If that is ever needed,
+  the answer is collecting them into the one root (a `call assets link`-style step),
+  not a second root.
+
+### Do not reimplement static serving in PHP — it was removed for cause
+
+`Router` used to do it (`static()`, `$publicDir`, a branch in `handle()`,
+`serveStaticFile()`). All of it is gone. Verified against a live Swoole server before
+removing:
+
+- **Path traversal.** `$file = $this->publicDir . $path` joined the *raw* `request_uri`;
+  Swoole does not canonicalise it. `GET /../../../etc/passwd` returned the file —
+  arbitrary read, bounded only by the worker's permissions.
+- **Memory.** `serveStaticFile()` used `file_get_contents()`, so a 50 MB download meant
+  +50 MB RSS per concurrent request. Swoole streams instead.
+- **Cost on every request.** `pathPublic` was always derived and always wired, so every
+  project paid an `is_file()` syscall on every GET — including those with no static
+  files at all.
+- No `Range` (no seeking/resume), no `ETag`/`304`, `mime_content_type()` per request.
+
+Swoole's handler covers all of it in C, including refusing to escape `document_root`
+(verified: the traversal requests above return 404 there).
+
+Design history and rationale: `doc-new/public-resources-layout.md`.

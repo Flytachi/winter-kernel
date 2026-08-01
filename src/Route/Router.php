@@ -20,7 +20,6 @@ use Flytachi\Winter\K2\Http\ParameterResolver;
 use Flytachi\Winter\K2\Http\Response\Collector\ExceptionCollector;
 use Flytachi\Winter\K2\Localization\Locale;
 use Flytachi\Winter\K2\Http\Response\ExceptionWrapper;
-use Flytachi\Winter\K2\Http\Response\RenderContext;
 use Flytachi\Winter\K2\Http\Response\ResponseEntity;
 use Flytachi\Winter\K2\Http\Response\ResponseException;
 use Flytachi\Winter\K2\Http\Response\Sendable;
@@ -414,7 +413,6 @@ class Router
                 LoggerFactory::getLogger(self::class)->debug(
                     $request->getClientIp() . " -- $method " . $request->getUri()
                 );
-                RenderContext::setRoutes($this->getRoutesSummary());
             }
 
             // ── Global CORS applied eagerly (covers 404, 405, and errors too) ─
@@ -481,9 +479,6 @@ class Router
                 $object    = Container::getInstance()->make($class);
                 $refMethod = ReflectionCache::method($class, $methodName);
                 $args      = ParameterResolver::resolve($refMethod, $req, $res, $params);
-                if (env('DEBUG', false)) {
-                    RenderContext::setMeta($class, $methodName);
-                }
                 $result    = $refMethod->invokeArgs($object, $args);
             } else {
                 $result = ($handler)($req, $res, $params);

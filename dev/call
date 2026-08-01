@@ -8,7 +8,7 @@
     If the requirement is not met the script exits with a human-readable message
     instead of a cryptic parse error.
 */
-if (PHP_VERSION_ID >= 80300) {
+if (PHP_VERSION_ID >= 80400) {
 
     /*
         Working directory
@@ -22,14 +22,15 @@ if (PHP_VERSION_ID >= 80300) {
     /*
         Bootstrap
         ---------
-        Initialises the framework (autoload, Kernel::init, optional CORS / Health /
-        Plugin config).  See bootstrap.php for full parameter reference.
+        Loads the autoloader and declares the application class. Everything the app
+        contains is declared there with #[Enable*] attributes; the rest of the
+        configuration lives in scanned classes. See bootstrap.php.
     */
     require './bootstrap.php';
 
-    Boot::run($argv);
+    Application::main($argv);
 
 } else {
-    echo "\033[33m"." Please use PHP version 8.3 or higher.\n";
+    echo "\033[33m"." Please use PHP version 8.4 or higher.\n";
     echo "\033[34m"." Current PHP version => " . PHP_VERSION . "\n";
 }
