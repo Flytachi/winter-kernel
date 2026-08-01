@@ -181,6 +181,25 @@ final class ConnectionPoolTest extends TestCase
         self::assertLessThanOrEqual(1000.0 + 110.0, $expiry, 'within +10% jitter');
     }
 
+    public function test_evict_retires_the_connection_and_frees_its_slot(): void
+    {
+        $f = new MockFactory();
+        $out = [];
+        \Swoole\Coroutine\run(function () use ($f, &$out): void {
+            $pool = new ConnectionPool($f, new PoolPolicy(maximumPoolSize: 1));
+            $a = $pool->borrow();
+
+            $pool->evict($a);           // died in use — retire instead of returning it
+
+            $b = $pool->borrow();       // the freed slot allows a fresh connection
+            $out = ['same' => $a === $b, 'created' => $f->created, 'closed' => $f->closed];
+        });
+
+        self::assertFalse($out['same'], 'an evicted connection is never handed out again');
+        self::assertSame(2, $out['created']);
+        self::assertSame(1, $out['closed']);
+    }
+
     public function test_stats_track_total_idle_active(): void
     {
         $f = new MockFactory();

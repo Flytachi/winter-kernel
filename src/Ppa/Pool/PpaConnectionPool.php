@@ -14,6 +14,7 @@ use Flytachi\Winter\K2\ConnectionPool\PoolException;
 use Flytachi\Winter\K2\ConnectionPool\PoolPolicy;
 use Flytachi\Winter\K2\ConnectionPool\SingleConnection;
 use Psr\Log\LoggerInterface;
+use Throwable;
 
 /**
  * PpaConnectionPool — driver-agnostic connection pool for FPM and Swoole.
@@ -142,6 +143,58 @@ final class PpaConnectionPool
     }
 
     /**
+     * Reports a failure that happened **while using** a borrowed connection, so a dead
+     * one is retired instead of being handed to the next caller.
+     *
+     * Only a genuine connection loss evicts ({@see ConnectionLoss}) — a constraint
+     * violation or a syntax error means the connection is healthy and is left alone.
+     *
+     * The pool deliberately does **not** retry the failed statement. It cannot know
+     * what was executed: the break may have happened after the server applied the
+     * write, so replaying it could duplicate the effect, and replaying one statement
+     * of an interrupted transaction is meaningless. The request fails once; the
+     * connection is thrown away, so the next one — including the next query in this
+     * same request — gets a healthy connection.
+     *
+     * @param class-string $configClass Config whose connection failed.
+     * @param Throwable $error The failure as thrown by CDO/PDO.
+     * @return bool Whether the connection was classified as lost and evicted.
+     */
+    public static function reportFailure(string $configClass, Throwable $error): bool
+    {
+        if (!ConnectionLoss::isLost($error)) {
+            return false;
+        }
+
+        $key = base64_encode($configClass);
+
+        if (Runtime::isSwooleCoroutine()) {
+            $ctxKey = 'ppa_cdo_' . $key;
+            $ctx    = \Swoole\Coroutine::getContext();
+            $held   = $ctx[$ctxKey] ?? null;
+            if (!$held instanceof BorrowedConnection) {
+                return false;
+            }
+            // Mark for the defer to evict, and drop it from the context so the next
+            // query in this same coroutine borrows a fresh connection.
+            $held->dead = true;
+            unset($ctx[$ctxKey]);
+
+            return true;
+        }
+
+        // Static (FPM / non-coroutine) path: close now, reopen lazily on next use.
+        if (isset(self::$static[$key])) {
+            self::$static[$key]->evict();
+            self::logger()->warning("evict: {$configClass} (connection lost in use)");
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Live utilisation of every Swoole coroutine pool, keyed by config FQCN — the
      * HikariCP-style view (active / idle / total vs maximum) for `/actuator/health`.
      *
@@ -244,20 +297,27 @@ final class PpaConnectionPool
                 );
             }
 
-            $ctx[$ctxKey] = $entry;
+            $held = new BorrowedConnection($entry);
+            $ctx[$ctxKey] = $held;
 
             // Auto-return when the coroutine finishes (normal exit OR exception).
-            // $entry is captured directly — safer than reading from $ctx during teardown.
-            \Swoole\Coroutine::defer(static function () use ($pool, $entry, $cid, $configClass): void {
+            // $held is captured directly — safer than reading from $ctx during teardown —
+            // and carries the verdict {@see reportFailure()} may have left on it.
+            \Swoole\Coroutine::defer(static function () use ($pool, $held, $cid, $configClass): void {
+                if ($held->dead) {
+                    self::logger()->warning("cid={$cid} evict: {$configClass} (connection lost in use)");
+                    $pool->evict($held->entry);
+                    return;
+                }
                 self::logger()->debug("cid={$cid} release: {$configClass}");
-                $pool->release($entry);
+                $pool->release($held->entry);
             });
         }
 
-        /** @var PoolEntry $entry */
-        $entry = $ctx[$ctxKey];
+        /** @var BorrowedConnection $held */
+        $held = $ctx[$ctxKey];
         /** @var DbConfigInterface $config */
-        $config = $entry->resource;
+        $config = $held->entry->resource;
         $cdo    = $config->connection();
 
         $driver = $cdo->getAttribute(\PDO::ATTR_DRIVER_NAME);

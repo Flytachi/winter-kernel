@@ -8,6 +8,7 @@ use Flytachi\Winter\Cdo\Connection\CDO;
 use Flytachi\Winter\Cdo\Connection\CDOException;
 use Flytachi\Winter\Cdo\Qb;
 use Flytachi\Winter\K2\Ppa\Entity\RepositoryCrudInterface;
+use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
 
 /**
  * Provides concrete write-operation implementations for repository classes.
@@ -40,6 +41,7 @@ trait RepositoryCrudTrait
         try {
             return $this->db()->insert($this->originTable(), $entity);
         } catch (CDOException $exception) {
+            PpaConnectionPool::reportFailure($this->dbConfigClassName, $exception);
             throw new RepositoryException($exception->getMessage(), $exception->getCode(), $exception);
         }
     }
@@ -57,6 +59,7 @@ trait RepositoryCrudTrait
         try {
             $this->db()->insertGroup($this->originTable(), $entities);
         } catch (CDOException $exception) {
+            PpaConnectionPool::reportFailure($this->dbConfigClassName, $exception);
             throw new RepositoryException($exception->getMessage(), $exception->getCode(), $exception);
         }
     }
@@ -75,6 +78,7 @@ trait RepositoryCrudTrait
         try {
             return $this->db()->update($this->originTable(), $entity, $qb);
         } catch (CDOException $exception) {
+            PpaConnectionPool::reportFailure($this->dbConfigClassName, $exception);
             throw new RepositoryException($exception->getMessage(), $exception->getCode(), $exception);
         }
     }
@@ -92,6 +96,7 @@ trait RepositoryCrudTrait
         try {
             return $this->db()->delete($this->originTable(), $qb);
         } catch (CDOException $exception) {
+            PpaConnectionPool::reportFailure($this->dbConfigClassName, $exception);
             throw new RepositoryException($exception->getMessage(), $exception->getCode(), $exception);
         }
     }
@@ -114,6 +119,7 @@ trait RepositoryCrudTrait
         try {
             return $this->db()->upsert($this->originTable(), $entity, $conflictColumns, $updateColumns);
         } catch (CDOException $exception) {
+            PpaConnectionPool::reportFailure($this->dbConfigClassName, $exception);
             throw new RepositoryException($exception->getMessage(), $exception->getCode(), $exception);
         }
     }
@@ -136,6 +142,7 @@ trait RepositoryCrudTrait
         try {
             $this->db()->upsertGroup($this->originTable(), $entities, $conflictColumns, $updateColumns);
         } catch (CDOException $exception) {
+            PpaConnectionPool::reportFailure($this->dbConfigClassName, $exception);
             throw new RepositoryException($exception->getMessage(), $exception->getCode(), $exception);
         }
     }

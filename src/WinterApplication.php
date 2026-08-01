@@ -43,6 +43,7 @@ use Flytachi\Winter\K2\Route\Router;
 use Flytachi\Winter\Logger\Context\CoroutineContext;
 use Flytachi\Winter\Logger\Context\ProcessContext;
 use Flytachi\Winter\Logger\LoggerFactory;
+use Flytachi\Winter\Thread\Runner\AdaptiveRunner;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -130,6 +131,63 @@ abstract class WinterApplication
     public static function main(array $argv): never
     {
         static::run($argv);
+    }
+
+    /**
+     * The background-launch entry — the child side of {@see Process::dispatch()}.
+     *
+     * Detaching a process cannot be a fork: the parent may be a Swoole worker whose
+     * reactor must not be duplicated, so the launcher spawns a **fresh PHP process**
+     * running `vendor/bin/wKernelRunner`, which lands here. The application has to be
+     * booted again from scratch — a new process shares nothing — before the staged
+     * payload can run, otherwise the dispatched class has no container, no logging
+     * and no configuration.
+     *
+     * So this is {@see run()} without the dispatch: the same {@see bootstrap()},
+     * then the thread payload instead of the console. The launcher's own options
+     * (`--namespace`, `--name`, `--tag`, `--debug`, `--detach`, `--shmkey`) are read
+     * straight from the command line by `getopt()`; `--detach` makes the runner
+     * daemonise itself.
+     *
+     * @param array $argv Raw $argv (script name in [0]).
+     */
+    final public static function executor(array $argv): never
+    {
+        static::bootstrap(ApplicationArguments::parse($argv));
+
+        exit(AdaptiveRunner::adaptive()->execute(
+            getopt('', ['namespace::', 'name::', 'tag::', 'debug', 'detach', 'shmkey::'])
+        ));
+    }
+
+    /**
+     * Locates the application class the project's bootstrap file declared, so a
+     * generic entry point (the thread runner) can reach {@see executor()} without
+     * knowing the project's naming.
+     *
+     * Call it only after the bootstrap file has been required: it looks at what is
+     * actually declared, and a project declares exactly one application class.
+     *
+     * @return class-string<WinterApplication>
+     */
+    public static function discoverAppClass(): string
+    {
+        $found = array_values(array_filter(
+            get_declared_classes(),
+            static fn(string $class): bool => is_subclass_of($class, self::class),
+        ));
+
+        return match (count($found)) {
+            1       => $found[0],
+            0       => throw new ApplicationConfigException(
+                'No application class found. The bootstrap file must declare a class '
+                . 'extending ' . self::class . '.'
+            ),
+            default => throw new ApplicationConfigException(
+                'Several application classes are declared (' . implode(', ', $found)
+                . '); the bootstrap file must declare exactly one.'
+            ),
+        };
     }
 
     /**

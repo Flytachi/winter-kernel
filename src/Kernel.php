@@ -63,8 +63,11 @@ final class Kernel extends KernelStore
 
         self::bootLogger();
 
-        // thread — route each launch by runtime: Swoole\Process inside a coroutine
-        // (proc_open corrupts the reactor's fds there), proc_open everywhere else.
+        // thread — both backends spawn the same `php <runnerPath>` child; only the way
+        // the shell is invoked differs. Inside a coroutine proc_open corrupts the
+        // reactor's descriptors and Swoole\Process is refused while its async-io
+        // threads are up, so the launcher shells out via Coroutine\System::exec();
+        // everywhere else proc_open is used unchanged.
         Thread::bindLauncher(AdaptiveLauncher::adaptive(
             secret: env('WINTER_KEY', ''),
             runnerPath: self::threadRunnerPath(),
