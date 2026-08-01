@@ -142,6 +142,25 @@ final class PpaConnectionPool
     }
 
     /**
+     * Live utilisation of every Swoole coroutine pool, keyed by config FQCN — the
+     * HikariCP-style view (active / idle / total vs maximum) for `/actuator/health`.
+     *
+     * These numbers are **per worker**: each Swoole worker holds its own in-memory
+     * pool (as HikariCP is per-JVM), so a health request reflects the worker that
+     * served it. The static FPM/non-coroutine path has no pool and is not reported.
+     *
+     * @return array<string, array{total: int, idle: int, active: int, maximum: int}>
+     */
+    public static function stats(): array
+    {
+        $out = [];
+        foreach (self::$pools as $key => $pool) {
+            $out[base64_decode($key)] = $pool->stats();
+        }
+        return $out;
+    }
+
+    /**
      * Drops every cached connection, pool and config so the next `db()` opens
      * fresh sockets — the fork-safety reset.
      *
@@ -158,6 +177,13 @@ final class PpaConnectionPool
      */
     public static function reset(): void
     {
+        // Abandon (never close) each pool first: a housekeeping Timer::tick callback
+        // holds a reference to its pool, so a pool that is merely dereferenced would
+        // stay alive and keep maintaining connections this process no longer owns.
+        // abandon() clears that timer without touching the inherited sockets.
+        foreach (self::$pools as $pool) {
+            $pool->abandon();
+        }
         self::$pools = [];
         self::$static = [];
         self::$configs = [];
@@ -255,19 +281,22 @@ final class PpaConnectionPool
     {
         $key = base64_encode($configClass);
         if (!isset(self::$pools[$key])) {
-            $config  = self::getConfigDb($configClass);
-            $maxConn = $config instanceof PpaPoolConfigInterface
-                ? $config->getPoolMaxConnections()
-                : self::DEFAULT_POOL_SIZE;
-            $timeout = $config instanceof PpaPoolConfigInterface
-                ? $config->getPoolWaitTimeout()
-                : 3.0;
+            $config = self::getConfigDb($configClass);
+            $policy = $config instanceof PpaPoolConfigInterface
+                ? new PoolPolicy(
+                    maximumPoolSize: $config->getPoolMaxConnections(),
+                    connectionTimeout: $config->getPoolWaitTimeout(),
+                    keepaliveTime: $config->getKeepaliveTime(),
+                    idleTimeout: $config->getIdleTimeout(),
+                    minimumIdle: $config->getMinimumIdle(),
+                )
+                : new PoolPolicy(maximumPoolSize: self::DEFAULT_POOL_SIZE, connectionTimeout: 3.0);
 
-            self::logger()->debug("pool created: {$configClass} maxConnections={$maxConn}");
+            self::logger()->debug("pool created: {$configClass} maxConnections={$policy->maximumPoolSize}");
 
             self::$pools[$key] = new ConnectionPool(
                 new CdoConnectionFactory($configClass, self::logger()),
-                new PoolPolicy(maximumPoolSize: $maxConn, connectionTimeout: $timeout),
+                $policy,
             );
         }
         return self::$pools[$key];

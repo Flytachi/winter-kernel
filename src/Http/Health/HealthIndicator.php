@@ -10,6 +10,7 @@ use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\DI\Scanner;
 use Flytachi\Winter\K2\Collector\ImplementorCollector;
 use Flytachi\Winter\K2\Http\Header;
+use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
 
 class HealthIndicator implements HealthIndicatorInterface
 {
@@ -22,6 +23,7 @@ class HealthIndicator implements HealthIndicatorInterface
         $rootDir    = Health::getRootDir();
         $components = [
             'db'     => $this->dbHealth($rootDir),
+            'pool'   => $this->poolHealth(),
             'cache'  => $this->cacheHealth($rootDir),
             'disk'   => $this->diskHealth(),
             'memory' => $this->memoryHealth(),
@@ -204,6 +206,42 @@ class HealthIndicator implements HealthIndicatorInterface
                 ];
                 $worstStatus = 'down';
             }
+        }
+
+        return ['status' => $worstStatus, 'details' => $details];
+    }
+
+    // ── Connection-pool utilisation (PpaConnectionPool) ───────────────────────
+
+    /**
+     * Live utilisation of every Swoole coroutine pool ({@see PpaConnectionPool::stats()}),
+     * one detail entry per config. Reports `degraded` for any pool that is saturated
+     * (all connections handed out — `active >= maximum`, none idle), which is the
+     * signal that borrows are starting to queue. Numbers are per worker (see
+     * {@see PpaConnectionPool::stats()}); an empty report (FPM, or no pool used yet)
+     * is `up`.
+     *
+     * @return array{status: string, details: array<string, mixed>}
+     */
+    private function poolHealth(): array
+    {
+        $details     = [];
+        $worstStatus = 'up';
+
+        foreach (PpaConnectionPool::stats() as $config => $stat) {
+            $saturated = $stat['maximum'] > 0 && $stat['active'] >= $stat['maximum'];
+            $status    = $saturated ? 'degraded' : 'up';
+            if ($status === 'degraded' && $worstStatus === 'up') {
+                $worstStatus = 'degraded';
+            }
+
+            $details[$config] = [
+                'status'  => $status,
+                'active'  => $stat['active'],
+                'idle'    => $stat['idle'],
+                'total'   => $stat['total'],
+                'maximum' => $stat['maximum'],
+            ];
         }
 
         return ['status' => $worstStatus, 'details' => $details];

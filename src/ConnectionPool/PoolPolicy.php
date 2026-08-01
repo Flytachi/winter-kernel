@@ -28,6 +28,18 @@ final readonly class PoolPolicy
      *   `aliveBypassWindow`, default 500ms).
      * @param float $maxLifetimeJitter Fraction `0..1` of random spread applied to
      *   `maxLifetime` so connections don't all expire at the same instant.
+     * @param float $housekeepingInterval Seconds between background {@see ConnectionPool}
+     *   maintenance passes. Only relevant when a maintenance knob below is enabled.
+     * @param float $keepaliveTime Seconds: the housekeeper proactively probes idle
+     *   connections idle at least this long, retiring dead ones **before** a borrow
+     *   sees them (and keeping idle-killing proxies/firewalls from dropping them).
+     *   `0` = disabled (HikariCP `keepaliveTime`). Swoole only.
+     * @param float $idleTimeout Seconds: the housekeeper closes connections idle at
+     *   least this long, shrinking the pool down to `minimumIdle`. `0` = never shrink
+     *   (HikariCP `idleTimeout`). Swoole only.
+     * @param int $minimumIdle Warm floor the housekeeper maintains — it reopens
+     *   connections up to this count and never shrinks below it. `0` = fully lazy
+     *   (HikariCP `minimumIdle`). Swoole only.
      */
     public function __construct(
         public int $maximumPoolSize = 10,
@@ -35,11 +47,24 @@ final readonly class PoolPolicy
         public float $maxLifetime = 1800.0,
         public float $aliveBypassWindow = 0.5,
         public float $maxLifetimeJitter = 0.1,
+        public float $housekeepingInterval = 30.0,
+        public float $keepaliveTime = 0.0,
+        public float $idleTimeout = 0.0,
+        public int $minimumIdle = 0,
     ) {
     }
 
     public static function default(): self
     {
         return new self();
+    }
+
+    /**
+     * Whether any background maintenance is enabled — the pool arms its housekeeping
+     * timer only when this is true, so an unconfigured pool pays nothing.
+     */
+    public function housekeepingEnabled(): bool
+    {
+        return $this->keepaliveTime > 0.0 || $this->idleTimeout > 0.0 || $this->minimumIdle > 0;
     }
 }
