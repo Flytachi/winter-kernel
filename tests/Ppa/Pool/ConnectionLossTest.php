@@ -74,6 +74,38 @@ final class ConnectionLossTest extends TestCase
         self::assertFalse(ConnectionLoss::isLost(self::wrapped(self::pdo('23505'))));
     }
 
+    public function test_postgres_reports_a_killed_connection_as_undecided(): void
+    {
+        // Verified against a live PostgreSQL: killing the backend yields exactly this,
+        // NOT SQLSTATE 08006 — with the socket gone there is no result object to take a
+        // SQLSTATE from, so PDO falls back to HY000 with libpq's generic code 7.
+        $error = self::pdo('HY000', 7, 'FATAL:  terminating connection due to administrator command');
+
+        self::assertFalse(ConnectionLoss::isLost($error), 'the code alone cannot decide it');
+        self::assertTrue(ConnectionLoss::isUndecided($error), 'so a live probe has to');
+    }
+
+    public function test_a_decided_sqlstate_is_never_probed(): void
+    {
+        // Driver code 7 again — identical to the killed connection above; only the
+        // SQLSTATE tells them apart, which is why the class must be trusted over it.
+        self::assertFalse(ConnectionLoss::isUndecided(self::pdo('42P01', 7, 'syntax error')));
+        self::assertFalse(ConnectionLoss::isUndecided(self::pdo('23505', 7, 'duplicate key')));
+        self::assertFalse(ConnectionLoss::isUndecided(self::pdo('25P02', 7, 'transaction is aborted')));
+    }
+
+    public function test_a_connection_already_decided_lost_is_not_undecided(): void
+    {
+        // MariaDB: HY000 too, but the driver code settles it — no probe needed.
+        self::assertTrue(ConnectionLoss::isLost(self::pdo('HY000', 2006, 'gone away')));
+        self::assertFalse(ConnectionLoss::isUndecided(self::pdo('HY000', 2006, 'gone away')));
+    }
+
+    public function test_undecided_survives_the_cdo_wrapper(): void
+    {
+        self::assertTrue(ConnectionLoss::isUndecided(self::wrapped(self::pdo('HY000', 7, 'terminating'))));
+    }
+
     public function test_non_database_failures_are_not_a_lost_connection(): void
     {
         self::assertFalse(ConnectionLoss::isLost(new RuntimeException('something else')));

@@ -43,11 +43,34 @@ final readonly class CdoConnectionFactory implements ConnectionFactory
         return $config;
     }
 
-    /** Liveness probe — delegates to the driver's own `SELECT 1` (`false` = dead). */
+    /** Liveness probe — `false` when the connection is dead. */
     public function validate(object $connection): bool
     {
         /** @var DbConfigInterface $connection */
-        return $connection->ping();
+        return self::probe($connection);
+    }
+
+    /**
+     * Round-trips `SELECT 1` and reports whether the connection answered.
+     *
+     * It deliberately does **not** use `DbConfigInterface::ping()`: that method
+     * catches `CDOException` only, while `PDO::query()` raises a `PDOException`
+     * (unrelated to it), and its `return` inside `finally` swallows the exception —
+     * so it answers `true` for a connection that is already dead. Verified against
+     * live PostgreSQL and MariaDB: a killed connection still pinged `true`. Relying
+     * on it would silently disable the idle-gate and keepalive, which exist
+     * precisely to retire dead connections.
+     *
+     * Catching `Throwable` is the point: any failure to complete the round trip
+     * means the connection cannot be handed out.
+     */
+    public static function probe(DbConfigInterface $config): bool
+    {
+        try {
+            return $config->connection()->query('SELECT 1') !== false;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /** Drops the CDO reference so its socket is closed. */

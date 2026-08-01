@@ -74,6 +74,16 @@ final class SingleConnection
     }
 
     /**
+     * The connection currently held, without any lifecycle checks — for a caller that
+     * needs to inspect it (a liveness probe after a failure) rather than use it.
+     * `null` when nothing is open.
+     */
+    public function peek(): ?object
+    {
+        return $this->entry?->resource;
+    }
+
+    /**
      * Retires the current connection (close + forget) — for a connection-level failure
      * detected during use, so the next {@see get()} opens a fresh one.
      */

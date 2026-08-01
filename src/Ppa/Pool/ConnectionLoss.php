@@ -33,6 +33,9 @@ final class ConnectionLoss
     /** MySQL driver codes: server gone away / connection lost mid-query. */
     private const array MYSQL_LOST = [2006, 2013, 2055];
 
+    /** SQLSTATE PDO reports when the driver gave it nothing to map. */
+    private const string UNMAPPED = 'HY000';
+
     /**
      * Whether this failure means the connection itself died (as opposed to the query
      * being rejected by a healthy server).
@@ -43,6 +46,40 @@ final class ConnectionLoss
             if ($cause instanceof PDOException && self::matches($cause)) {
                 return true;
             }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether the driver's verdict is inconclusive, so only a live probe can tell a
+     * dead connection from a rejected query.
+     *
+     * PDO_pgsql is the reason this exists. A killed PostgreSQL connection does **not**
+     * arrive as SQLSTATE `08006`: with the socket gone there is no result object to
+     * take a SQLSTATE from, so PDO falls back to `HY000` with driver code `7` — the
+     * very same code it reports for an ordinary syntax error. Verified live: a
+     * terminated backend yields `["HY000", 7, "terminating connection…"]`. Matching on
+     * the message instead is not an option either, since PostgreSQL translates it
+     * (`lc_messages`).
+     *
+     * A well-formed SQLSTATE from any other class means the server answered and is
+     * alive, so those are decided here and never probed.
+     */
+    public static function isUndecided(Throwable $error): bool
+    {
+        if (self::isLost($error)) {
+            return false;
+        }
+
+        for ($cause = $error; $cause !== null; $cause = $cause->getPrevious()) {
+            if (!$cause instanceof PDOException) {
+                continue;
+            }
+            $info     = $cause->errorInfo;
+            $sqlState = is_array($info) && isset($info[0]) ? (string) $info[0] : (string) $cause->getCode();
+
+            return $sqlState === self::UNMAPPED || $sqlState === '' || $sqlState === '0';
         }
 
         return false;

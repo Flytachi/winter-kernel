@@ -162,7 +162,9 @@ final class PpaConnectionPool
      */
     public static function reportFailure(string $configClass, Throwable $error): bool
     {
-        if (!ConnectionLoss::isLost($error)) {
+        $lost      = ConnectionLoss::isLost($error);
+        $undecided = !$lost && ConnectionLoss::isUndecided($error);
+        if (!$lost && !$undecided) {
             return false;
         }
 
@@ -175,23 +177,31 @@ final class PpaConnectionPool
             if (!$held instanceof BorrowedConnection) {
                 return false;
             }
+            $config = $held->entry->resource;
+            if ($undecided && $config instanceof DbConfigInterface && CdoConnectionFactory::probe($config)) {
+                return false; // the driver was vague but the connection answered
+            }
             // Mark for the defer to evict, and drop it from the context so the next
             // query in this same coroutine borrows a fresh connection.
             $held->dead = true;
             unset($ctx[$ctxKey]);
-
-            return true;
-        }
-
-        // Static (FPM / non-coroutine) path: close now, reopen lazily on next use.
-        if (isset(self::$static[$key])) {
-            self::$static[$key]->evict();
             self::logger()->warning("evict: {$configClass} (connection lost in use)");
 
             return true;
         }
 
-        return false;
+        // Static (FPM / non-coroutine) path: close now, reopen lazily on next use.
+        if (!isset(self::$static[$key])) {
+            return false;
+        }
+        $config = self::$static[$key]->peek();
+        if ($undecided && $config instanceof DbConfigInterface && CdoConnectionFactory::probe($config)) {
+            return false;
+        }
+        self::$static[$key]->evict();
+        self::logger()->warning("evict: {$configClass} (connection lost in use)");
+
+        return true;
     }
 
     /**
