@@ -78,24 +78,26 @@ final class StaticPathTest extends TestCase
         self::assertSame($this->root . '/resources/static', $options['document_root']);
     }
 
-    public function test_locations_restrict_which_prefixes_are_treated_as_static(): void
-    {
-        $options = $this->settings()
-            ->staticPath('resources/static', ['/assets', '/favicon.ico'])
-            ->toArray();
-
-        self::assertSame(['/assets', '/favicon.ico'], $options['static_handler_locations']);
-    }
-
-    public function test_no_locations_means_no_restriction(): void
+    public function test_it_does_not_impose_a_prefix_filter(): void
     {
         $options = $this->settings()->staticPath('resources/static')->toArray();
 
         self::assertArrayNotHasKey(
             'static_handler_locations',
             $options,
-            'omitting the list exposes the whole directory — Swoole checks every request',
+            'the directory is the URL root; narrowing it is a tuning knob, set() covers it',
         );
+    }
+
+    public function test_the_prefix_filter_remains_reachable_through_set(): void
+    {
+        $options = $this->settings()
+            ->staticPath('resources/static')
+            ->set('static_handler_locations', ['/assets'])
+            ->toArray();
+
+        self::assertSame(['/assets'], $options['static_handler_locations']);
+        self::assertSame($this->root . '/resources/static', $options['document_root']);
     }
 
     public function test_a_missing_directory_fails_the_boot(): void

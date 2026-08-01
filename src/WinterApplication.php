@@ -37,6 +37,7 @@ use Flytachi\Winter\DI\Collector\DICollector;
 use Flytachi\Winter\K2\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\K2\Http\Adapter\SwooleResponse;
 use Flytachi\Winter\K2\Ppa\Pool\PoolTelemetry;
+use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
 use Flytachi\Winter\K2\Process\ForkReset;
 use Flytachi\Winter\K2\Route\DevWatcher;
 use Flytachi\Winter\K2\Route\Router;
@@ -459,6 +460,15 @@ abstract class WinterApplication
             PoolTelemetry::start($workerId);
         };
 
+        // A worker cannot leave while its reactor still holds a repeating timer, so a
+        // shutdown would hang until Swoole force-kills it ("worker exit timeout").
+        // `workerExit` fires exactly while the reactor is trying to drain, which is
+        // where those timers have to be released.
+        $workerExit = static function (\Swoole\Http\Server $server, int $workerId): void {
+            PoolTelemetry::stop($workerId);
+            PpaConnectionPool::shutdown();
+        };
+
         $dev = $watch ? new DevWatcher([Kernel::$pathRoot]) : null;
         if ($dev !== null) {
             $dev->attach($server, $workerStart);
@@ -467,6 +477,7 @@ abstract class WinterApplication
             $server->on('workerStart', $workerStart);
             $server->on('request', $handler);
         }
+        $server->on('workerExit', $workerExit);
 
         if (Banner::isEnabled($args)) {
             Banner::print(static::bannerRows($companions, $host, $port), self::elapsedMs());

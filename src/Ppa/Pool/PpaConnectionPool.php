@@ -238,6 +238,29 @@ final class PpaConnectionPool
      * Keep connections lazy (do not query from a supervisor before it forks
      * workers) so this stays a cheap no-op in the common case.
      */
+    /**
+     * Closes every pool and connection this process owns — the worker-shutdown
+     * counterpart of {@see reset()}.
+     *
+     * The difference matters. {@see reset()} is for a **forked child**, which must
+     * forget inherited sockets without closing them. Here the process genuinely owns
+     * them, so they are closed properly; just as importantly, closing a pool releases
+     * its housekeeping timer, and a live timer would keep the worker's reactor from
+     * draining until Swoole force-kills it.
+     */
+    public static function shutdown(): void
+    {
+        foreach (self::$pools as $pool) {
+            $pool->close();
+        }
+        foreach (self::$static as $connection) {
+            $connection->close();
+        }
+        self::$pools = [];
+        self::$static = [];
+        self::$configs = [];
+    }
+
     public static function reset(): void
     {
         // Abandon (never close) each pool first: a housekeeping Timer::tick callback

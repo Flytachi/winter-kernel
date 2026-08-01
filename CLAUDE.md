@@ -580,22 +580,21 @@ Opt-in, declared where the rest of the web config lives:
 public function configureServer(ServerSettings $server, ApplicationArguments $args): void
 {
     $server->port(8000)
-           ->staticPath('resources/static', ['/assets', '/favicon.ico']);
+           ->staticPath('resources/static');   // resources/static/app.css → /app.css
 }
 ```
 
 `staticPath()` resolves a relative path against `Kernel::$pathRoot`, **throws
 `ApplicationConfigException` if the directory is missing** (a typo would otherwise be
-silent 404s at runtime), and sets Swoole's `document_root` / `enable_static_handler` /
-`static_handler_locations`. Say nothing and no file is ever served — which is what an
-API-only service wants.
+silent 404s at runtime), and sets Swoole's `document_root` + `enable_static_handler`.
+Say nothing and no file is ever served — which is what an API-only service wants.
 
-The second argument is a whitelist of URI prefixes that are *considered* static.
-Without it every file under the directory is downloadable and Swoole checks the
-filesystem for every incoming request; with it, only those prefixes pay.
+Three consequences worth knowing:
 
-Two consequences worth knowing:
-
+- **The directory is the URL root.** Swoole appends the whole request path to it, so
+  the layout on disk mirrors the layout in URLs. Point it at a directory holding assets
+  and nothing else: everything under it becomes downloadable. (Pointing it at
+  `resources` would expose `resources/views` — executable PHP.)
 - **Static responses never reach PHP**, so middleware, CORS and request logging do not
   apply to them. (No regression: the old PHP implementation also served before the
   CORS block.)
@@ -603,6 +602,19 @@ Two consequences worth knowing:
   call cannot mount a plugin's assets from another directory. If that is ever needed,
   the answer is collecting them into the one root (a `call assets link`-style step),
   not a second root.
+
+Swoole checks the filesystem on each request to decide whether it is a static one.
+Narrowing that to certain prefixes is a tuning knob rather than part of the API —
+`->set('static_handler_locations', ['/assets'])` when a profile says it matters.
+
+### The framework ships no assets
+
+Its pages are self-contained: the error page inlines its `<svg>` mark rather than
+linking one. That is deliberate — the error page is what a visitor sees when the
+application is already failing, so it must not depend on the application being
+configured correctly. **Do not reintroduce a `/static/...` URL into kernel output**:
+static serving is opt-in, so a linked asset simply 404s in a project that never
+enabled it.
 
 ### Do not reimplement static serving in PHP — it was removed for cause
 
