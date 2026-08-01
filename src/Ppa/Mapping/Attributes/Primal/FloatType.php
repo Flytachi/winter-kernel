@@ -29,8 +29,9 @@ readonly class FloatType implements AttributeDbType
     public function toSql(string $dialect = 'mysql'): string
     {
         return match ($dialect) {
-            'mysql' => "FLOAT",
             'pgsql' => "REAL",
+            'sqlite' => "REAL",
+            default => "FLOAT",
         };
     }
 }

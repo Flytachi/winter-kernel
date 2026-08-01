@@ -12,8 +12,10 @@ readonly class Double extends FloatType implements AttributeDbType
     public function toSql(string $dialect = 'mysql'): string
     {
         return match ($dialect) {
-            'mysql' => "DOUBLE",
             'pgsql' => "DOUBLE PRECISION",
+            // Every SQLite float is an 8-byte IEEE double; REAL is the only spelling.
+            'sqlite' => "REAL",
+            default => "DOUBLE",
         };
     }
 }

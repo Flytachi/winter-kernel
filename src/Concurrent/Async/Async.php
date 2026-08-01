@@ -18,7 +18,9 @@ namespace Flytachi\Winter\K2\Concurrent\Async;
  * ---
  * ### Contract
  *
- * - the method is `public`, not `static` and not `final`;
+ * - the method is `public` or `protected` (never `private` — a private method is
+ *   resolved statically inside its own class, so no subclass can intercept it),
+ *   not `static` and not `final`;
  * - the declaring class is not `final`;
  * - the return type is `Future` or `void`;
  * - a `Future`-returning body returns {@see \Flytachi\Winter\K2\Concurrent\CompletableFuture::completedFuture()};

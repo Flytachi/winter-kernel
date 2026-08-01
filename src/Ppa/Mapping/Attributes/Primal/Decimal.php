@@ -44,8 +44,12 @@ readonly class Decimal extends FloatType implements AttributeDbType
     public function toSql(string $dialect = 'mysql'): string
     {
         return match ($dialect) {
-            'mysql' => "DECIMAL({$this->precision}, {$this->scale})",
             'pgsql' => "NUMERIC({$this->precision}, {$this->scale})",
+            // SQLite has no fixed-point type; NUMERIC affinity keeps the value exact
+            // for integers and falls back to REAL otherwise, which is the closest it
+            // offers. Precision is accepted and ignored.
+            'sqlite' => "NUMERIC({$this->precision}, {$this->scale})",
+            default => "DECIMAL({$this->precision}, {$this->scale})",
         };
     }
 }

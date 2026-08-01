@@ -40,6 +40,9 @@
         <testsuite name="App">
             <directory>tests/App</directory>
         </testsuite>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
         <testsuite name="ConnectionPool">
             <directory>tests/ConnectionPool</directory>
         </testsuite>

@@ -80,6 +80,18 @@ class Index implements StructureInterface
             };
         }
 
+        if ($dialect === 'sqlite') {
+            // SQLite has one index implementation, so there is no USING clause; partial
+            // indexes (WHERE) are supported, covering indexes (INCLUDE) are not.
+            $whereSql = $this->where ? " WHERE {$this->where}" : '';
+
+            return match ($this->type) {
+                IndexType::PRIMARY => "PRIMARY KEY" . $columnsSql,
+                IndexType::UNIQUE => "CREATE UNIQUE INDEX {$nameSql} ON {$tableName}{$columnsSql}{$whereSql}",
+                IndexType::INDEX => "CREATE INDEX {$nameSql} ON {$tableName}{$columnsSql}{$whereSql}",
+            };
+        }
+
         throw new \InvalidArgumentException("Unsupported dialect: {$dialect}");
     }
 }
