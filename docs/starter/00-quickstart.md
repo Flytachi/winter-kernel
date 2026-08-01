@@ -1,437 +1,284 @@
 # Winter — Quickstart (from zero to running)
 
-This is the shortest honest path from an empty folder to a running Winter
-application. You just did:
+A Winter project is not scaffolded. There is no skeleton to clone and no directory tree
+to create: you require the kernel, write one class that says what the application
+contains, and run it. Everything else — the DI graph, the route table, the storage
+directories — is discovered or created on demand.
+
+This page walks that from an empty directory to a served request, then to a background
+worker. For the shortest possible path, the [README](../../README.md) has it in two files.
+
+---
+
+## The mental model
+
+```
+call  ──►  bootstrap.php  ──►  Application::main($argv)
+                                     │
+                                     ├─ boot: Kernel::init → scan → DI, configurers, plugins
+                                     │
+                                     ├─ `run`  → serve the components in the manifest
+                                     └─ else   → hand the verb to the console
+```
+
+Two ideas carry the design:
+
+- **The manifest is declarative.** `#[Enable*]` attributes on the application class say
+  *what the application is made of*. Nothing is registered by hand.
+- **Configuration is discovered, not injected.** There are no hooks to override on the
+  application class. A `WebConfigurer`, a `#[Configuration]` class, a `LoggingConfigurer`
+  — the scan finds them wherever they live.
+
+---
+
+## Step 1 — composer
 
 ```bash
-mkdir my-app && cd my-app
 composer require flytachi/winter-kernel
 ```
 
-Now you have `vendor/` and nothing else. This page adds the handful of files a
-project needs, explains the **one entry point** (`App::run()`), and shows how to
-run the app.
-
-If you would rather not type these files by hand, skip to
-[Using the starter template](#using-the-starter-template) — `composer
-create-project flytachi/winter` writes all of them for you.
-
----
-
-## The mental model in one picture
-
-You write **one** application class that declares **what your app contains** —
-its *components*. A component is any long-lived thing: the web server, a
-background `Process`, a supervised `Daemon`, the `Scheduler`. One command brings
-them all up in a single process.
-
-```
-   App::components() = [ http, process, daemon, scheduler ]
-                                   │
-                             php call run          ← run the whole app (prod)
-                             php call run dev       ← same + MemoryWatcher (dev)
-                                   │
-                        ONE Swoole process
-                 ┌─────────────┬──────────┬───────────┐
-              HTTP :8000     Process     Daemon     Scheduler
-                            (addProcess, supervised, co-terminating)
-```
-
-- The web tier is **just a component** (`Component::http()`), not a hard
-  requirement. Declare it and `call run` serves HTTP; omit it and the app runs
-  **headless** (background components only).
-- **Swoole** hosts everything in one process, like a JVM.
-- **FPM** hosts *only the web tier*, one request at a time — because php-fpm is
-  not your process. Anything long-lived runs as its own `call` process next to
-  it. (See [Deployment shapes](#deployment-shapes).)
-
-You do not choose a "runtime" per app. You list components; the substrate decides
-how many share a process.
-
----
-
-## Step 1 — `composer.json` autoload
-
-`composer require` created a `composer.json`. Add one PSR-4 root so the kernel's
-scanner and router can discover your classes:
+Give your own code a namespace in `composer.json`:
 
 ```json
 {
-    "type": "project",
     "autoload": {
         "psr-4": { "Main\\": "main/" }
-    },
-    "require": {
-        "php": ">=8.3",
-        "flytachi/winter-kernel": "^3.0"
     }
 }
 ```
-
-Then:
 
 ```bash
 composer dump-autoload
 ```
 
-Every class under `main/` is now namespace `Main\`. Add more PSR-4 roots as the
-project grows — the scanner follows all of them.
+Nothing forces the name `Main\` or the directory `main/` — the scan walks the project
+root, so any autoloadable layout works.
 
----
+## Step 2 — the application class
 
-## Step 2 — `bootstrap.php` (your application class)
-
-This is the heart of the project — the equivalent of a Spring
-`@SpringBootApplication`. It configures the kernel **and declares your
-components**.
+`bootstrap.php` is the only file the entry points share. It loads the autoloader and
+declares the application:
 
 ```php
 <?php
-
 declare(strict_types=1);
 
-use Flytachi\Winter\K2\Application;
-use Flytachi\Winter\K2\App\Component;
-use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\K2\App\Attribute\EnableActuator;
+use Flytachi\Winter\K2\App\Attribute\EnableWeb;
+use Flytachi\Winter\K2\WinterApplication;
 
 require __DIR__ . '/vendor/autoload.php';
 
-final class App extends Application
+#[EnableWeb]
+#[EnableActuator]
+final class Application extends WinterApplication
 {
-    protected static function configure(): void
+    public static function main(array $argv): never
     {
-        Kernel::init(pathRoot: __DIR__);
-    }
-
-    /**
-     * What this application is made of.
-     * Add or remove a line — the app gains or loses that capability.
-     */
-    protected static function components(): array
-    {
-        return [
-            Component::http(port: 8000),   // web server (optional)
-            // Component::process(\Main\KernelSys::class),
-            // Component::daemon(\Main\Emails::class),
-            // Component::scheduler(),
-        ];
+        parent::run($argv);
     }
 }
 ```
 
-`App extends Application` (not `BaseBoot`) — `Application` adds `components()` and
-the `run()` / `serve()` entry on top of every `BaseBoot` hook you already know
-(`providers()`, `channels()`, `httpCors()`, `health()`, `plugins()`). See
-[`../configuration/01-kernel.md`](../configuration/01-kernel.md) for those.
+Declare no component at all and the boot refuses to start rather than running an
+application that does nothing.
 
----
+| Attribute | Adds |
+|---|---|
+| `#[EnableWeb]` | the Swoole HTTP server |
+| `#[EnableActuator]` | `/actuator` diagnostics |
+| `#[EnableScheduler]` | runs `#[Scheduled]` methods on their triggers |
+| `#[EnableProcess(Foo::class)]` | a managed worker beside the server |
+| `#[EnableDaemon(Bar::class)]` | a supervised fleet beside the server |
+| `#[EnableAsync]` | proxies `#[Async]` methods so they run off the request |
+| `#[Import('vendor/pkg', '/prefix')]` | mounts a plugin package under a URL prefix |
 
-## Step 3 — the entry files
+## Step 3 — the entry point
 
-### `call` — the one launcher
-
-This is your `java -jar`. Every runtime flows through it.
+`call` — one launcher for everything (`chmod +x call`):
 
 ```php
 #!/usr/bin/env php
 <?php
-
-if (PHP_VERSION_ID >= 80300) {
-    chdir(__DIR__);
-    require './bootstrap.php';
-    App::run($argv);            // ← the single entry point (the app's main())
-} else {
-    echo "Please use PHP 8.3 or higher.\n";
-}
+chdir(__DIR__);
+require './bootstrap.php';
+Application::main($argv);
 ```
 
-`App::run($argv)` boots once and dispatches the console command — `run`,
-`run dev`, `make`, `daemon`, `schedule`, or your own. Make it executable:
+There is no `public/index.php`. That file belongs to the FPM document-root model, where
+nginx needs a directory to aim at; the Swoole server decides for itself what it serves.
+
+The project is now three files, and it runs:
 
 ```bash
-chmod +x call
+php call            # the command list
+php call run        # serve
+php call run dev    # serve, restarting on file changes
 ```
 
-### `public/index.php` — the FPM web adapter
+## Step 4 — your first controller
 
-FPM is not a persistent process, so it cannot go through `call run`. It gets its
-own two-line front controller that runs the web tier per request:
+Anywhere under the project root:
 
 ```php
 <?php
-require '../bootstrap.php';
-App::web();
-```
-
-You only need this file if you deploy under PHP-FPM. Under Swoole it is unused —
-`Component::http()` is the server.
-
----
-
-## Step 4 — `.env` and `storage/`
-
-```bash
-mkdir -p storage/{cache,logs}
-chmod -R 777 storage
-```
-
-Minimal `.env`:
-
-```dotenv
-WINTER_KEY=change-me
-TIME_ZONE=UTC
-DEBUG=true
-
-LOG_LEVEL=info
-LOG_FORMAT=line
-LOG_OUTPUT=auto
-```
-
-Generate a real project key:
-
-```bash
-php call cfg key -g
-```
-
-Full `LOG_*` reference: [`../configuration/02-logging.md`](../configuration/02-logging.md).
-
----
-
-## Step 5 — your first controller
-
-```php
-<?php
-
 declare(strict_types=1);
 
 namespace Main;
 
-use Flytachi\Winter\K2\Http\Response\ResponseEntity;
+use Flytachi\Winter\K2\Http\Request\Annotation\PathVariable;
+use Flytachi\Winter\K2\Route\Annotation\GetMapping;
 use Flytachi\Winter\K2\Route\Annotation\RequestMapping;
 use Flytachi\Winter\K2\Stereotype\Controller;
 
-class MainController extends Controller
+#[RequestMapping('/users')]
+final class UserController extends Controller
 {
-    #[RequestMapping]                       // no path → GET /
-    public function hello(): ResponseEntity
+    #[GetMapping('/{id:\d+}')]
+    public function show(#[PathVariable] int $id): array
     {
-        return ResponseEntity::ok('Hello from Winter');
+        return ['id' => $id];
     }
 }
 ```
 
-No registration needed — it is discovered on scan. Confirm with:
+Two requirements, both easy to miss:
+
+- the class **extends `Controller`** — the scan collects controllers by that, not by an
+  attribute, so a class carrying only mapping attributes contributes no routes;
+- the class-level `#[RequestMapping]` prefix combines with each method path, making the
+  route above `/users/{id}`.
 
 ```bash
-php call mapping show
+php call run
+curl localhost:8000/users/42        # {"id":42}
 ```
 
----
+Method arguments are filled by annotation — `#[PathVariable]`, `#[RequestParam]`,
+`#[RequestBody]`, `#[RequestHeader]` — or by type, where an `HttpRequest` or
+`HttpResponse` parameter receives the raw object. See
+[`../architecture/04-request/00-overview.md`](../architecture/04-request/00-overview.md).
 
-## Step 6 — run it
+## Step 5 — configuration, when you need it
 
-Your folder now looks like this:
+`.env` is optional and every variable has a working default. Development usually wants:
 
-```
-my-app/
-├── bootstrap.php        App extends Application (config + components)
-├── call                 App::run($argv)   ← the one entry
-├── composer.json        Main\ → main/
-├── public/index.php     App::web()        ← FPM adapter only
-├── main/
-│   └── MainController.php
-├── storage/{cache,logs}/
-├── .env
-└── vendor/
+```dotenv
+DEBUG=true
+LOG_LEVEL=debug
 ```
 
-Run it:
-
-| Command | What runs |
-|---|---|
-| `php call run` | **Production** — every component in one Swoole process, MemoryWatcher off |
-| `php call run dev` | **Development** — same, MemoryWatcher on |
-| `php call <command>` | Console — `make`, `mapping`, `di`, your commands |
-| nginx → `public/index.php` | Web only, under PHP-FPM |
-
-With only `Component::http()` declared, `php call run` is a web server. Open
-`http://0.0.0.0:8000` → `Hello from Winter`. On the console you will see:
-
-```
-Application up: http://0.0.0.0:8000
-```
-
-> `call run` with a web tier needs ext-swoole (`pecl install swoole`). Without a
-> web tier the app runs headless and works without swoole (each component picks
-> its own engine).
-
----
-
-## Step 7 — add a background component
-
-Say you want a worker that runs forever alongside the web server. Write it as a
-`Process`:
+Web settings live in a class the scan finds — not in the application class:
 
 ```php
 <?php
-
 declare(strict_types=1);
 
 namespace Main;
 
+use Flytachi\Winter\K2\App\ApplicationArguments;
+use Flytachi\Winter\K2\App\Config\ServerSettings;
+use Flytachi\Winter\K2\App\Config\WebConfigurerAdapter;
+
+final class WebConfig extends WebConfigurerAdapter
+{
+    public function configureServer(ServerSettings $server, ApplicationArguments $args): void
+    {
+        $server->port(8000)
+               ->workers(swoole_cpu_num() * 2)
+               ->staticPath('resources/static');   // resources/static/app.css → /app.css
+    }
+}
+```
+
+Static serving is opt-in: omit `staticPath()` and no file is ever served, which is what
+an API-only service wants. CORS is configured in the same class — see
+[`../configuration/03-cors.md`](../configuration/03-cors.md), and
+[`../configuration/02-logging.md`](../configuration/02-logging.md) for log channels.
+
+## Step 6 — a background component
+
+Long-lived work is a **Process** (one worker) or a **Daemon** (a supervised fleet):
+
+```php
+<?php
+declare(strict_types=1);
+
+namespace Main\Process;
+
 use Flytachi\Winter\K2\Process\Process;
 
-final class KernelSys extends Process
+final class EmailWorker extends Process
 {
     public function run(): void
     {
         while ($this->isRunning()) {
-            $this->sleep(3);
-            // ... periodic work ...
+            $this->sleep(1.0);
+            // ... work ...
         }
     }
 }
 ```
 
-Add one line to `components()`:
+Run it on its own:
+
+```bash
+php call process main.process.EmailWorker start      # foreground
+php call process main.process.EmailWorker start -d   # detached
+php call process main.process.EmailWorker status
+php call process main.process.EmailWorker stop
+```
+
+…or beside the server, by adding it to the manifest:
 
 ```php
-protected static function components(): array
-{
-    return [
-        Component::http(port: 8000),
-        Component::process(\Main\KernelSys::class),   // ← new
-    ];
-}
+#[EnableWeb]
+#[EnableProcess(\Main\Process\EmailWorker::class)]
+final class Application extends WinterApplication { /* ... */ }
 ```
 
-Now `php call run` runs **both** in one Swoole process:
-
-```
-Application up: http://0.0.0.0:8000 + [KernelSys]
-```
-
-`Ctrl-C` (SIGTERM) stops the server *and* `KernelSys` together — the Swoole
-master supervises the companion and terminates it with the server.
-
-The same works for a `Daemon` (`Component::daemon(...)`) and the scheduler
-(`Component::scheduler()`). Each companion behaves exactly as if you had launched
-it standalone (`call daemon|process|schedule`).
-
-### Headless (no web)
-
-Drop `Component::http()` and `call run` runs only the background components — one
-in the foreground, several under a small supervisor. Useful for a worker-only or
-scheduler-only deployment:
-
-```php
-protected static function components(): array
-{
-    return [
-        Component::daemon(\Main\Emails::class),
-        Component::scheduler(),
-    ];
-}
-```
-
-```
-Application up (headless): [Emails, Scheduler]
-```
+Scheduled methods work the same way — annotate with `#[Scheduled]`, add
+`#[EnableScheduler]`. See [`../process/00-overview.md`](../process/00-overview.md) and
+[`../schedule/00-overview.md`](../schedule/00-overview.md).
 
 ---
+
+## Project layout
+
+Only two directories are conventional, and both appear on demand:
+
+```
+composer.json
+bootstrap.php          the application class
+call                   the entry point
+main/                  your code (any autoloadable namespace)
+resources/
+  static/              web assets — served only when staticPath() says so
+  views/               ResponseView's default root
+storage/
+  logs/ cache/ runnable/     created when first used, never committed
+```
+
+`storage/` is deliberately separate from `resources/`: one is written by the runtime,
+the other is read by it. Views are `include`d PHP, so the directory the framework
+executes from is never the directory it writes to.
 
 ## Deployment shapes
 
-The same code runs two ways; only the process layout differs.
+| Shape | Command | Notes |
+|---|---|---|
+| Server | `php call run` | one long-lived Swoole process; log to stdout and let the orchestrator collect |
+| Server + workers | `php call run` with `#[EnableProcess]` / `#[EnableDaemon]` | workers supervised beside the server |
+| Headless | `php call run` with no `#[EnableWeb]` | workers and scheduler only, no HTTP |
+| One-off | `php call <verb>` | console commands, migrations, diagnostics |
 
-### Swoole — all in one (the JVM shape)
+In containers keep `LOG_OUTPUT` at its default (stdout) and let the orchestrator collect
+it; give `storage/` a volume only if the runtime records must survive a restart.
 
-```
-php call run ── ONE process
-   ├─ HTTP :8000
-   ├─ KernelSys       (addProcess, supervised)
-   ├─ Emails daemon   (addProcess, supervised)
-   └─ Scheduler       (addProcess, supervised)
-```
+## Where to go next
 
-One command, one process, co-terminating. This is the recommended shape when the
-app has any long-lived component.
-
-### FPM — web on fpm, everything else standalone
-
-FPM only serves the web tier. Long-lived components run as their own processes
-(systemd units, separate containers, `-d` detached):
-
-```
-nginx → php-fpm → public/index.php → App::web()      # HTTP, per request
-+ php call process  main.KernelSys  start -d          # separate process
-+ php call daemon   main.Emails     start -d          # separate process
-+ php call schedule start -d                           # separate process
-```
-
-`components()` does not change — under FPM the non-web entries are simply not
-hosted by the request process; you start them yourself. One Docker image, and the
-container's `command:` picks the role:
-
-```yaml
-web:        command: php call run          # or php-fpm for the FPM shape
-worker:     command: php call daemon main.Emails start
-scheduler:  command: php call schedule start
-```
-
-> **Why FPM is the odd one out:** php-fpm master is not your process — it invokes
-> your code per request and recycles the worker. There is no persistent loop for a
-> daemon or scheduler to live in, so those always need their own process. If your
-> app has a daemon or scheduler, you already need a persistent process — at that
-> point Swoole (`call run`) is usually the simpler choice.
-
----
-
-## Cheat sheet
-
-```bash
-# scaffold checklist (fresh clone)
-composer install
-mkdir -p storage/{cache,logs} && chmod -R 777 storage
-chmod +x call
-php call cfg key -g
-
-# run
-php call run              # production: all components, one process
-php call run dev          # development: + MemoryWatcher
-php call mapping show     # list routes
-
-# run a single component standalone (split / FPM deploy)
-php call process  main.KernelSys start [-d]
-php call daemon   main.Emails    start [-d]
-php call schedule start [-d]
-
-# production caches
-php call mapping build
-php call di build
-```
-
----
-
-## Using the starter template
-
-Everything above is generated for you by the starter repository:
-
-```bash
-composer create-project flytachi/winter my-app
-cd my-app
-php call run
-```
-
-See [`../starter.md`](../starter.md) for the file-by-file breakdown of the
-generated project.
-
----
-
-## See also
-
-- [`../configuration/01-kernel.md`](../configuration/01-kernel.md) — every `configure()` / hook option
-- [`../process/00-overview.md`](../process/00-overview.md) — writing a `Process`
-- [`../process/daemon/00-overview.md`](../process/daemon/00-overview.md) — writing a `Daemon`
-- [`../schedule/00-overview.md`](../schedule/00-overview.md) — `#[Scheduled]` tasks
-- [`../console/00-overview.md`](../console/00-overview.md) — the `call` CLI
+- [`../architecture/01-routing.md`](../architecture/01-routing.md) — routing and the request pipeline
+- [`../configuration/07-di.md`](../configuration/07-di.md) — dependency injection
+- [`../ppa/00-overview.md`](../ppa/00-overview.md) — the database layer
+- [`../process/00-overview.md`](../process/00-overview.md) — processes and daemons
+- [`../console/00-overview.md`](../console/00-overview.md) — the console

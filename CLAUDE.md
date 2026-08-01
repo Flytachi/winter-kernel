@@ -1,9 +1,10 @@
 # CLAUDE.md — winter-kernel: Process/Daemon + ConnectionPool handoff
 
 This file orients you (Claude) to the work done on `winter-kernel`: the
-**Process/Daemon** layer (§1–§12), the **ConnectionPool** layer (§13), and the
-**project layout / static files** (§14). Read the relevant part fully before
-touching it. It describes what was built, how it works, why, and the rules to keep.
+**Process/Daemon** layer (§1–§12), the **ConnectionPool** layer (§13), the
+**project layout / static files** (§14), and the **`WinterApplication` starter** (§15).
+Read the relevant part fully before touching it. It describes what was built, how it
+works, why, and the rules to keep.
 
 > **winter-kernel** is a PHP 8.4+ framework kernel (a library, not an app). It runs
 > under two runtimes: **Swoole** (coroutines) and **FPM/CLI** (plain processes).
@@ -358,10 +359,18 @@ Dev demos (runnable): `dev/main/Process/*.php` (StableDaemon, CrashDaemon, Fleet
 
 ## 10. Docs
 
-`docs/process/` (`00-overview`, `01-lifecycle`, `02-concurrency`, `03-control`) and
-`docs/process/daemon/` (`00-overview`, `01-workers`, `02-autoscaling`, `03-control`).
-Mature, behaviour-focused, English, verified against the code. Keep them accurate if you
-change the API.
+`docs/` is the in-repo reference, English, behaviour-focused, verified against the code —
+routing and request binding, responses, PPA, processes and daemons, scheduling, console,
+configuration, plus `starter/00-quickstart.md`. `README.md` is the install-and-run entry
+point. **Keep both accurate when you change an API**: they were audited class-by-class
+via reflection, and every framework symbol they name resolves.
+
+The user's public documentation site lives in a separate repository and is his own
+concern — do not try to keep it in sync from here.
+
+`doc-new/` no longer exists. It held working design notes while the ConnectionPool,
+layout and starter work was in flight; those are now §13, §14 and §15 of this file.
+Do not recreate it — design rationale belongs here, user-facing prose in `docs/`.
 
 ---
 
@@ -543,7 +552,7 @@ in a real coroutine, telemetry store round-trip, actuator merge). All determinis
 live DB. Live drivers: `tests/Integration/Pool/` under `#[Group('pool')]`, enabled by
 `PG_TEST_DSN` / `MYSQL_TEST_DSN` / `MARIADB_TEST_DSN`.
 
-Design history and rationale: `doc-new/ppa-hikaricp-lite.md`.
+Design history: this section is the record; the working notes it came from are gone.
 
 ---
 
@@ -635,4 +644,78 @@ removing:
 Swoole's handler covers all of it in C, including refusing to escape `document_root`
 (verified: the traversal requests above return 404 there).
 
-Design history and rationale: `doc-new/public-resources-layout.md`.
+Design history: this section is the record; the working notes it came from are gone.
+
+
+---
+
+## 15. `WinterApplication` — the starter
+
+### What replaced what
+
+There is no god bootstrap class any more. The old `BaseBoot`/`Application` exposed seven
+hooks (`configure`, `providers`, `channels`, `httpCors`, `health`, `plugins`,
+`swooleConfig`) that every project had to override; all of them are gone except
+`configure()`.
+
+```php
+#[EnableWeb]
+#[EnableActuator]
+final class Application extends WinterApplication
+{
+    public static function main(array $argv): never { parent::run($argv); }
+}
+```
+
+Two rules carry the design:
+
+- **The manifest is declarative.** `#[Enable*]` on the application class says what the
+  application *is made of*. Each attribute maps to one `Component`
+  (`EnableWeb` → http, `EnableProcess`/`EnableDaemon` → workers, `EnableScheduler` →
+  scheduler), except `EnableAsync`, which only toggles `#[Async]` proxying during boot.
+- **Configuration is discovered, not hooked.** `#[Configuration]`/`#[Bean]`,
+  `WebConfigurer`, `LoggingConfigurer`, `HealthContributor`, `#[Import]` — all found by
+  the single scan pass. Adding configuration is adding a class.
+
+An empty manifest is an error (`ApplicationConfigException`), not a silently idle
+application.
+
+### Entries
+
+| Entry | Who calls it |
+|---|---|
+| `main($argv)` → `run($argv)` | the project's `call` |
+| `serve()` | `run` when the verb is `run` |
+| `executor($argv)` | **only** `vendor/bin/wKernelRunner` — the child side of `dispatch()` (see §12) |
+| `discoverAppClass()` | that runner, to find the app class after requiring `bootstrap.php` |
+
+`configure()` is the one hook that survived, and it must stay a method: it runs
+`Kernel::init()`, which decides *where the scan looks*, so it cannot itself be a
+discovered class. Its default derives the project root from the application class's own
+file.
+
+### Boot order (`bootstrap()`)
+
+```
+1. $appClass = static::class
+2. configure()            ← Kernel::init: paths, .env, logging
+3. Container::init()
+4. ONE Scanner pass       ← DICollector + ConfigurationCollector + WebConfigurer
+                            + LoggingConfigurer + HealthContributor (+ AsyncCollector
+                            only when #[EnableAsync] is present)
+5. contextual LoggerInterface binding
+6. applyLogging → applyCors → applyActuator → applyImports
+```
+
+One pass, not one per concern — adding a collector means adding it to that pass, never a
+second `Scanner::run()`.
+
+### Gotchas
+
+- **`main()` must not declare a default for `$argv`.** It once did (`array $argv = []`)
+  and broke every subclass that overrode `main(array $args)`; PHP rejects the narrower
+  signature. Caught only by a smoke run.
+- **`#[EnableAsync]` gates the collector itself**, not just a flag: without it the
+  `AsyncCollector` is never created, so `#[Async]` methods run synchronously. It is
+  collected last, after `DICollector` rebinds a class to itself.
+- The banner is suppressed by `--no-banner`, `WINTER_BANNER=off`, or a non-TTY stdout.

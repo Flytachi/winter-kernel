@@ -236,7 +236,7 @@ budget across several methods — register an executor under that id as a single
 and name it:
 
 ```php
-// Boot::providers()
+// a #[Configuration] class the scan finds
 $c->singleton('reports', fn() => Executors::newFixedExecutor(3));   // at most 3 at once
 
 // the method

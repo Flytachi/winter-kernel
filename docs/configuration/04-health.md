@@ -1,6 +1,6 @@
 # Health / Actuator
 
-Read-only diagnostic endpoints under `/actuator/*` — modelled after Spring Boot Actuator. Disabled by default; opt in from your `Boot::health()` hook.
+Read-only diagnostic endpoints under `/actuator/*` — modelled after Spring Boot Actuator. Disabled by default; opt in with `#[EnableActuator]` on the application class.
 
 The endpoints are useful for:
 
@@ -15,15 +15,21 @@ The endpoints are useful for:
 Override `health()` in your `Boot` class and call `Health::configure()`:
 
 ```php
-use Flytachi\Winter\K2\Http\Health\Health;
+use Flytachi\Winter\K2\App\Attribute\EnableActuator;
+use Flytachi\Winter\K2\WinterApplication;
 
-class Boot extends BaseBoot
-{
-    protected static function health(): void
-    {
-        Health::configure();   // default built-in indicator, open access
-    }
-}
+#[EnableWeb]
+#[EnableActuator]                  // default built-in indicator, open access
+final class Application extends WinterApplication { /* ... */ }
+```
+
+The attribute accepts a custom indicator and a guard middleware:
+
+```php
+#[EnableActuator(
+    indicator:  App\Health\AppHealthIndicator::class,
+    middleware: App\Http\Middleware\InternalOnlyMiddleware::class,
+)]
 ```
 
 To restrict access or replace the indicator, pass arguments:
@@ -87,7 +93,7 @@ Source: `src/Route/Router.php` (`registerHealth()`).
 {
   "status": "degraded",
   "components": {
-    "db":     {"status": "up",       "details": {...}},
+    "db":     {"status": "up",       "details": {...}},   // per datasource, pool nested inside
     "cache":  {"status": "up",       "details": {...}},
     "disk":   {"status": "degraded", "details": {"usage_percent": 85.4, "warning": "Disk usage above 80%"}},
     "memory": {"status": "up",       "details": {...}},
@@ -120,6 +126,28 @@ Optional — only reports `up` and an empty `details` map unless one of these pa
 | `flytachi/winter-cache` | `Flytachi\Winter\Cache\Config\Common\RedisConfigInterface` | Per-config `status`, ping latency, error message |
 
 `HealthIndicator` scans `Kernel::$pathRoot` for implementations and calls `pingDetail()` on each. A latency ≥ **500 ms** flips the component to `degraded`. Connection failure → `down`.
+
+The `db` component carries **one entry per datasource**, holding both its reachability
+and how loaded its connection pool is:
+
+```json
+"db": {
+  "status": "up",
+  "details": {
+    "App\\Config\\AppDb": {
+      "status": "up", "driver": "pgsql", "latency": 1.2, "error": null,
+      "pool": {"total": 5, "idle": 3, "active": 2, "maximum": 10}
+    }
+  }
+}
+```
+
+The two answer different questions — the ping says whether the database is reachable, the
+pool says whether this worker has connections left — so they live together rather than in
+separate components. A saturated pool (`active >= maximum`) degrades its datasource.
+`pool` is `null` when the worker holds no pool for that config, and the numbers are **per
+worker**: a health request reports the worker that served it. For the fleet-wide view use
+[`call db pool`](../console/06-db.md).
 
 ---
 

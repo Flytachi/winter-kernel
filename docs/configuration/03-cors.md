@@ -2,7 +2,7 @@
 
 Winter K2 has two layers of CORS configuration, both modelled after Spring's `@CrossOrigin`:
 
-1. **Global** — `Cors::configure(...)` in your `Boot::httpCors()` hook. Applied to every response, including 404, 405, and error responses.
+1. **Global** — a `WebConfigurer` the scan finds. Applied to every response, including 404, 405, and error responses.
 2. **Per-route** — `#[CrossOrigin(...)]` attribute on a controller class or method. **Overrides** the global config (does not merge with it) for that specific route.
 
 The OPTIONS preflight is handled automatically by the Router before middleware or the controller runs.
@@ -11,38 +11,42 @@ The OPTIONS preflight is handled automatically by the Router before middleware o
 
 ## Global CORS
 
-Configure once during boot. The simplest example:
+Global CORS is declared by any class extending `WebConfigurerAdapter` — there is no hook
+to override on the application class, the scan finds the configurer wherever it lives:
 
 ```php
-use Flytachi\Winter\K2\Http\Cors;
+use Flytachi\Winter\K2\App\Config\CorsRegistry;
+use Flytachi\Winter\K2\App\Config\WebConfigurerAdapter;
 
-class Boot extends BaseBoot
+final class WebConfig extends WebConfigurerAdapter
 {
-    protected static function httpCors(): void
+    public function configureCors(CorsRegistry $cors): void
     {
-        Cors::configure(
-            origins:       ['https://app.example.com'],
-            allowHeaders:  ['Content-Type', 'Authorization', 'X-Request-Id'],
-            exposeHeaders: ['X-Request-Id'],
-            credentials:   true,
-            maxAge:        3600,
-        );
+        $cors->allowedOrigins('https://app.example.com')
+             ->allowedHeaders('Content-Type', 'Authorization', 'X-Request-Id')
+             ->exposeHeaders('X-Request-Id')
+             ->allowCredentials()
+             ->maxAge(3600);
     }
 }
 ```
 
-### `Cors::configure()` parameters
+Each method takes a variadic list rather than an array, and returns the registry so the
+calls chain. Touch nothing and no global CORS is applied.
 
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `origins` | `string[]` | `[]` | Allowed origins. Empty → `Access-Control-Allow-Origin: *`. Multiple origins → reflects the matching request `Origin` and adds `Vary: Origin`. |
-| `allowHeaders` | `string[]` | `[]` | Request headers the browser may send. Empty → reflects `Access-Control-Request-Headers`. |
-| `exposeHeaders` | `string[]` | `[]` | Response headers exposed to JavaScript. |
-| `credentials` | `bool` | `false` | Sends `Access-Control-Allow-Credentials: true`. **Requires explicit `origins`** — incompatible with the wildcard `*`. |
-| `maxAge` | `int` | `0` | Preflight cache TTL (`Access-Control-Max-Age`). `0` = header not sent. |
-| `vary` | `string[]` | `[]` | Extra `Vary` header values appended to the response. |
+### The settings
 
-When this hook is not overridden, no global CORS is sent — every response is same-origin only.
+| Method | Default | Description |
+|---|---|---|
+| `allowedOrigins(...)` | none | Allowed origins. None → `Access-Control-Allow-Origin: *`. Several → reflects the matching request `Origin` and adds `Vary: Origin`. |
+| `allowedHeaders(...)` | none | Request headers the browser may send. None → reflects `Access-Control-Request-Headers`. |
+| `exposeHeaders(...)` | none | Response headers exposed to JavaScript. |
+| `allowCredentials(bool)` | `false` | Sends `Access-Control-Allow-Credentials: true`. **Requires explicit origins** — incompatible with the wildcard `*`. |
+| `maxAge(int)` | `0` | Preflight cache TTL (`Access-Control-Max-Age`). `0` = header not sent. |
+| `vary(...)` | none | Extra `Vary` header values appended to the response. |
+
+When no configurer touches the registry, no global CORS is sent — every response is
+same-origin only.
 
 Source: `src/Http/Cors.php`.
 

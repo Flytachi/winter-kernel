@@ -30,7 +30,7 @@ per-worker fleet table shows the underlying zero-based `SLOT`.
 The supervisor is a plain `pcntl` loop with **no event loop running**, so it forks
 each worker with `pcntl_fork()`. Forking before any reactor starts is safe — the
 child then boots its own clean Swoole coroutine runtime (or a plain fork runtime
-without Swoole). Fork is the right tool here, not the [Thread](../../../vendor/flytachi/winter-thread/docs/README.md)
+without Swoole). Fork is the right tool here, not the Thread
 launcher, because supervision needs the direct parent↔child relationship: exact
 `waitpid` exit codes, reaping, and per-slot signalling. (Thread's detached launch
 re-parents to init and *loses* that relationship; it is used one level up, to send

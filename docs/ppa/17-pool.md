@@ -1,25 +1,44 @@
 # Pool — Connection Pool
 
-`PpaConnectionPool` is the unified connection manager for both **FPM** and **Swoole** runtimes.
-It replaces CDO's `ConnectionPool` with a driver-agnostic, pool-aware alternative.
+`PpaConnectionPool` is the connection manager for both runtimes. Under Swoole it is a
+pool of live connections shared by coroutines; on a plain process it is a single
+connection kept healthy for the life of the process.
+
+The reason it exists is not reuse but **resilience**. Under FPM a database outage healed
+itself for free: the process died and the next one reconnected. A long-lived worker keeps
+its connections in memory, and a plain channel-based pool hands the same dead sockets out
+forever once the database has gone away and come back. This pool is modelled on HikariCP
+and actively keeps its connections usable.
 
 ---
 
 ## How it works
 
 | Runtime | Behaviour |
-|---------|-----------|
-| **FPM** | One `CDO` per config class per process. Reused for the entire request. |
-| **Swoole** | One `Swoole\ConnectionPool` (backed by `Swoole\Coroutine\Channel`) per config class. Connections are borrowed on first `db()` call inside a coroutine and automatically returned via `defer` when the coroutine ends. |
+|---|---|
+| **Swoole** | One pool per config class over a `Coroutine\Channel`. A connection is borrowed on the first `db()` call inside a coroutine, cached for that coroutine, and returned automatically by a `defer` when it ends. |
+| **Plain process** (console, `call process`, FPM) | One self-maintaining connection per config class, kept for the life of the process. |
 
-Broken connections in Swoole mode: pass `null` to `Swoole\ConnectionPool::put()` — the pool discards and recreates the slot automatically.
+Both apply the same lifecycle rules on every borrow:
+
+- **Idle-gated validation.** A connection idle longer than `aliveBypassWindow` (500 ms)
+  is probed before it is handed out; a dead one is retired and replaced. A connection in
+  active use skips the probe entirely, so healthy traffic pays nothing.
+- **maxLifetime rotation.** A connection older than `maxLifetime` (30 min, jittered) is
+  replaced before the server can drop it.
+- **connectionTimeout.** A borrow waits at most `poolWaitTimeout` for a free connection,
+  then fails fast with `PpaPoolException`.
+
+> A `SELECT 1` on *every* borrow is deliberately **not** what happens — that costs a
+> round trip per query and churns healthy connections. Only connections that actually sat
+> idle are probed.
 
 ---
 
 ## Making a config pool-aware
 
-By default every config class gets **1 connection** (safe, consistent with FPM).
-To increase the pool size implement `PpaPoolConfigInterface` via `PpaPoolTrait`:
+By default a config gets a small pool with the lifecycle rules above. To tune it,
+implement `PpaPoolConfigInterface` via `PpaPoolTrait`:
 
 ```php
 use Flytachi\Winter\Cdo\Config\PgDbConfig;
@@ -30,8 +49,8 @@ class AppDb extends PgDbConfig implements PpaPoolConfigInterface
 {
     use PpaPoolTrait;
 
-    public int   $poolMaxConnections = 10;  // max simultaneous CDO connections
-    public float $poolWaitTimeout    = 5.0; // seconds to wait before PpaPoolException
+    public int   $poolMaxConnections = 10;   // upper bound
+    public float $poolWaitTimeout    = 5.0;  // seconds before PpaPoolException
 
     public function setUp(): void
     {
@@ -44,69 +63,137 @@ class AppDb extends PgDbConfig implements PpaPoolConfigInterface
 }
 ```
 
+The trait supplies defaults for every knob, so a config declares only what it changes and
+never breaks when a new one is added.
+
+| Property | Default | Meaning |
+|---|---|---|
+| `$poolMaxConnections` | `5` | upper bound on connections per config |
+| `$poolWaitTimeout` | `3.0` | seconds to wait for a free connection |
+| `$keepaliveTime` | `0` (off) | background probe of connections idle at least this long |
+| `$idleTimeout` | `0` (never) | close connections idle at least this long, down to `$minimumIdle` |
+| `$minimumIdle` | `0` (lazy) | warm connections to keep open |
+
+The last three drive a background housekeeper and are **Swoole-only** — a plain process
+has no timer to run them on. Leave them at zero and no timer is ever armed.
+
+Sizing matters against the server: `worker_num × poolMaxConnections × instances` must
+stay under the database's `max_connections`.
+
+---
+
+## Failure handling
+
+A query can fail for two very different reasons, and the pool separates them:
+
+- **The connection died** — SQLSTATE class `08`, PostgreSQL `57P01/02/03`, MySQL driver
+  codes 2006/2013/2055. The connection is evicted instead of returned, so the next
+  borrow — including the next query in the same request — gets a fresh one.
+- **The query was rejected** — a constraint violation (`23xxx`), a syntax error
+  (`42xxx`), a deadlock. The server is healthy; the connection is left alone.
+
+PostgreSQL needs care here: PDO does not report a lost connection as `08006`. With the
+socket gone there is no result to take a SQLSTATE from, so it arrives as `HY000` with
+libpq's generic code `7` — the same code an ordinary syntax error carries. When the
+driver's verdict is that inconclusive, the pool probes the connection and decides from
+the answer.
+
+**The failed statement is never retried.** The pool cannot know what ran: the break may
+have happened after the server applied the write, so a replay could duplicate it, and
+replaying one statement of an interrupted transaction is meaningless. One request fails;
+the connection is thrown away.
+
+Repositories report failures automatically. Code that uses `db()` directly can do the
+same:
+
+```php
+try {
+    $cdo->query($sql);
+} catch (Throwable $e) {
+    PpaConnectionPool::reportFailure(AppDb::class, $e);   // evicts only on a real loss
+    throw $e;
+}
+```
+
+---
+
+## Observability
+
+Each worker holds its own pool, so numbers are **per worker** — a saturated worker is a
+real stall even when the fleet total looks roomy.
+
+```bash
+php call db pool
+```
+
+reads what the workers publish and prints the fleet:
+
+```
+App\Config\AppDb
+  active 12 · idle 3 · total 15 · maximum 20 · workers 2
+  saturated  1 of 2 workers                    [SATURATED]
+per worker
+  worker#0  App\Config\AppDb  active=2  idle=3 total=5  max=10  age=0s
+  worker#1  App\Config\AppDb  active=10 idle=0 total=10 max=10  age=3s
+```
+
+The CLI is a separate process and cannot read a running server's memory, so each worker
+publishes its stats to the shared store on a timer — `PPA_POOL_TELEMETRY` (seconds,
+default `5`, `0` disables). Records carry a TTL of three intervals, so a worker that
+stops simply expires; a worker holding no pool writes nothing at all.
+
+The same numbers appear in the `db` component of `/actuator/health`, nested under the
+datasource they belong to, where a saturated pool marks it `degraded`.
+
 ---
 
 ## API
 
 ### `PpaConnectionPool::db(string $configClass): CDO`
 
-Returns an active `CDO` for the given config class.
-- FPM: process-level singleton.
-- Swoole: borrows from the pool on first call per coroutine, auto-releases on coroutine end.
-
-```php
-use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
-
-$cdo = PpaConnectionPool::db(AppDb::class);
-$rows = $cdo->query("SELECT * FROM users")->fetchAll();
-```
+Returns a live connection. Inside a coroutine it borrows one and registers the automatic
+return; elsewhere it hands back the process-wide connection. Throws `PpaPoolException`
+when no connection can be obtained in time.
 
 ### `PpaConnectionPool::getConfigDb(string $configClass): DbConfigInterface`
 
-Returns the initialised (after `setUp()`) config instance.
-Cached after first access — `setUp()` is called only once per config class.
+The initialised config instance (`setUp()` already called), cached per class.
 
 ### `PpaConnectionPool::showDbConfigs(): DbConfigInterface[]`
 
-Returns all registered config instances. Used internally by Health checks.
+Every registered config — for diagnostics.
 
----
+### `PpaConnectionPool::stats(): array`
 
-## `PpaPoolConfigInterface`
+Live utilisation of each pool in **this** process: `total`, `idle`, `active`, `maximum`
+keyed by config class.
 
-```php
-interface PpaPoolConfigInterface
-{
-    public function getPoolMaxConnections(): int;   // default via trait: 5
-    public function getPoolWaitTimeout(): float;    // default via trait: 3.0
-}
-```
+### `PpaConnectionPool::reportFailure(string $configClass, Throwable $e): bool`
 
-### `PpaPoolTrait`
+Classifies a failure and evicts the connection when it is genuinely lost. Returns whether
+it evicted.
 
-Drop-in implementation of `PpaPoolConfigInterface`.
-Does **not** declare properties — define `$poolMaxConnections` and `$poolWaitTimeout`
-directly on your class to override the defaults.
+### `PpaConnectionPool::reset()` / `::shutdown()`
 
-| Property | Type | Default |
-|----------|------|---------|
-| `$poolMaxConnections` | `int` | `5` |
-| `$poolWaitTimeout` | `float` | `3.0` |
+Two opposite things, and the difference matters:
+
+- **`reset()`** — for a **forked child**: forget inherited connections **without closing
+  them**, since the sockets still belong to the parent. Registered as the fork-safety
+  reset, so a daemon worker reconnects on its own.
+- **`shutdown()`** — for a process that genuinely owns its connections: close them
+  properly and release the housekeeping timers. The kernel calls it on worker exit.
 
 ---
 
 ## Exceptions
 
-`PpaPoolException` is thrown when:
-- Pool is exhausted and `$poolWaitTimeout` is exceeded.
-- Connection factory throws during slot creation.
+`PpaPoolException` — no connection could be obtained: the pool was exhausted within
+`poolWaitTimeout`, or opening one failed.
 
-```php
-use Flytachi\Winter\K2\Ppa\Pool\PpaPoolException;
+---
 
-try {
-    $cdo = PpaConnectionPool::db(AppDb::class);
-} catch (PpaPoolException $e) {
-    // log and return 503
-}
-```
+## See also
+
+- [`02-configuration.md`](02-configuration.md) — declaring a database config
+- [`../configuration/04-health.md`](../configuration/04-health.md) — the actuator report
+- [`../console/06-db.md`](../console/06-db.md) — `call db`

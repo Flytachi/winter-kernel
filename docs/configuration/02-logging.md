@@ -31,7 +31,7 @@ the default. Only the HTTP request path switches to `http`; everything else stay
 | `call run` — request workers | `http` | `CoroutineContext` (per coroutine) |
 | `call run` — master + components (Process/Daemon/Scheduler) | `sys` | `ProcessContext` (per process) |
 | `call` (CLI commands) | `sys` | `ProcessContext` (per process) |
-| `wKernelExecutor` (threads/jobs) | `sys` | `ProcessContext` |
+| `wKernelRunner` (detached processes) | `sys` | `ProcessContext` |
 
 ---
 
@@ -223,13 +223,13 @@ class OrderController extends Controller
 }
 ```
 
-**How it works.** `BaseBoot` registers a [contextual binding](https://github.com/flytachi/winter-di)
+**How it works.** The boot registers a [contextual binding](https://github.com/flytachi/winter-di)
 for `Psr\Log\LoggerInterface` by default — the container resolves the injected
 logger to `LoggerFactory::getLogger(<the consuming class>)`. So the logger is
 automatically named after the class it lives in, with the same per-class
 `(ClassName)` output you'd get from the factory — but injected by type.
 
-**Override** the default in `Boot::providers()` — e.g. pin a channel or swap the
+**Override** the default in a `#[Configuration]` class — e.g. pin a channel or swap the
 factory entirely (re-registering wins, since `contextual()` is last-write for the key):
 
 ```php

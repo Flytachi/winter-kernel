@@ -146,13 +146,18 @@ All errors — including middleware abort and validation failures — are caught
 
 ## Static file serving
 
-Required for Swoole (unlike FPM+nginx, Swoole does not serve static files natively):
+Not the router's job. Swoole serves files itself, in C, before PHP is reached — it
+streams them, honours `Range`, and cannot be walked out of the directory with `..`.
+Declare the directory and it never touches the dispatch pipeline:
 
 ```php
-$router->static(Kernel::$pathPublic);
+$server->staticPath('resources/static');   // resources/static/app.css → /app.css
 ```
 
-On a `GET` request, the router checks whether the URI maps to an existing file under `$publicDir`. If found, the file is served directly with auto-detected MIME type and a 24-hour `Cache-Control: public, max-age=86400`. No route matching occurs.
+Static serving is opt-in: say nothing and no file is ever served, which is what an
+API-only service wants. Because those responses never reach PHP, middleware, CORS and
+request logging do not apply to them. See
+[`../configuration/08-runtime.md`](../configuration/08-runtime.md).
 
 ---
 

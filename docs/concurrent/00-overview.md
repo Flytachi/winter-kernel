@@ -150,4 +150,4 @@ result:
 
 - [`configuration/07-di.md`](../configuration/07-di.md) — the container the proxies are registered in
 - [`console/10-di.md`](../console/10-di.md) — the `call di` command
-- [`threads/00-overview.md`](../threads/00-overview.md) — jobs and daemons that own their own process
+- [`process/00-overview.md`](../process/00-overview.md) — managed workers and supervised fleets that own their own process
