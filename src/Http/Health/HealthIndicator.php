@@ -23,7 +23,6 @@ class HealthIndicator implements HealthIndicatorInterface
         $rootDir    = Health::getRootDir();
         $components = [
             'db'     => $this->dbHealth($rootDir),
-            'pool'   => $this->poolHealth(),
             'cache'  => $this->cacheHealth($rootDir),
             'disk'   => $this->diskHealth(),
             'memory' => $this->memoryHealth(),
@@ -159,92 +158,98 @@ class HealthIndicator implements HealthIndicatorInterface
     final protected function dbHealth(string $rootDir): array
     {
         $interface = 'Flytachi\Winter\Cdo\Config\Common\DbConfigInterface';
-        if ($rootDir === '' || !interface_exists($interface)) {
-            return ['status' => 'up', 'details' => []];
-        }
+        $details   = [];
 
-        $collector = new ImplementorCollector($interface);
-        Scanner::run($rootDir)->collect($collector)->execute();
-        $details     = [];
-        $worstStatus = 'up';
+        if ($rootDir !== '' && interface_exists($interface)) {
+            $collector = new ImplementorCollector($interface);
+            Scanner::run($rootDir)->collect($collector)->execute();
 
-        foreach ($collector->getResult() as $ref) {
-            /** @var \Flytachi\Winter\Cdo\Config\Common\DbConfigInterface $config */
-            $config = $ref->newInstance();
-            $config->setUp();
+            foreach ($collector->getResult() as $ref) {
+                /** @var \Flytachi\Winter\Cdo\Config\Common\DbConfigInterface $config */
+                $config = $ref->newInstance();
+                $config->setUp();
 
-            try {
-                $result  = $config->pingDetail();
-                $latency = $result['latency'] ?? null;
+                try {
+                    $result  = $config->pingDetail();
+                    $latency = $result['latency'] ?? null;
 
-                if (!$result['status']) {
-                    $status = 'down';
-                } elseif ($latency !== null && $latency >= self::DEGRADED_LATENCY_MS) {
-                    $status = 'degraded';
-                } else {
-                    $status = 'up';
+                    if (!$result['status']) {
+                        $status = 'down';
+                    } elseif ($latency !== null && $latency >= self::DEGRADED_LATENCY_MS) {
+                        $status = 'degraded';
+                    } else {
+                        $status = 'up';
+                    }
+
+                    $details[$ref->getName()] = [
+                        'status'  => $status,
+                        'driver'  => $config->getDriver(),
+                        'latency' => $latency,
+                        'error'   => $result['error'] ?? null,
+                    ];
+                } catch (\Throwable $e) {
+                    $details[$ref->getName()] = [
+                        'status'  => 'down',
+                        'driver'  => $config->getDriver(),
+                        'latency' => null,
+                        'error'   => $e->getMessage(),
+                    ];
                 }
-
-                if ($status === 'down') {
-                    $worstStatus = 'down';
-                } elseif ($status === 'degraded' && $worstStatus !== 'down') {
-                    $worstStatus = 'degraded';
-                }
-
-                $details[$ref->getName()] = [
-                    'status'  => $status,
-                    'driver'  => $config->getDriver(),
-                    'latency' => $latency,
-                    'error'   => $result['error'] ?? null,
-                ];
-            } catch (\Throwable $e) {
-                $details[$ref->getName()] = [
-                    'status'  => 'down',
-                    'driver'  => $config->getDriver(),
-                    'latency' => null,
-                    'error'   => $e->getMessage(),
-                ];
-                $worstStatus = 'down';
             }
         }
 
-        return ['status' => $worstStatus, 'details' => $details];
+        $details  = $this->mergePoolUtilisation($details);
+        $statuses = array_column($details, 'status');
+
+        return [
+            'status'  => match (true) {
+                in_array('down', $statuses, true)     => 'down',
+                in_array('degraded', $statuses, true) => 'degraded',
+                default                                => 'up',
+            },
+            'details' => $details,
+        ];
     }
 
-    // ── Connection-pool utilisation (PpaConnectionPool) ───────────────────────
-
     /**
-     * Live utilisation of every Swoole coroutine pool ({@see PpaConnectionPool::stats()}),
-     * one detail entry per config. Reports `degraded` for any pool that is saturated
-     * (all connections handed out — `active >= maximum`, none idle), which is the
-     * signal that borrows are starting to queue. Numbers are per worker (see
-     * {@see PpaConnectionPool::stats()}); an empty report (FPM, or no pool used yet)
-     * is `up`.
+     * Folds live pool utilisation ({@see PpaConnectionPool::stats()}) into the per
+     * datasource entries, so one entry carries both reachability (fresh ping) and
+     * how loaded its pool is — they are keyed by the same config FQCN.
      *
-     * @return array{status: string, details: array<string, mixed>}
+     * A saturated pool (every connection handed out — `active >= maximum`, none idle)
+     * degrades that datasource: it is the signal that borrows are starting to queue.
+     * A datasource with no pool in this worker reports `pool: null` — the FPM path,
+     * or simply a config not used yet. Numbers are per worker (see
+     * {@see PpaConnectionPool::stats()}); a pool whose config the scan did not reach
+     * still gets an entry, so a live pool is never invisible.
+     *
+     * @param array<string, array<string, mixed>> $details
+     * @return array<string, array<string, mixed>>
      */
-    private function poolHealth(): array
+    private function mergePoolUtilisation(array $details): array
     {
-        $details     = [];
-        $worstStatus = 'up';
-
         foreach (PpaConnectionPool::stats() as $config => $stat) {
-            $saturated = $stat['maximum'] > 0 && $stat['active'] >= $stat['maximum'];
-            $status    = $saturated ? 'degraded' : 'up';
-            if ($status === 'degraded' && $worstStatus === 'up') {
-                $worstStatus = 'degraded';
+            $details[$config] ??= [
+                'status'  => 'up',
+                'driver'  => null,
+                'latency' => null,
+                'error'   => null,
+            ];
+
+            if ($stat['maximum'] > 0 && $stat['active'] >= $stat['maximum']
+                && $details[$config]['status'] === 'up'
+            ) {
+                $details[$config]['status'] = 'degraded';
             }
 
-            $details[$config] = [
-                'status'  => $status,
-                'active'  => $stat['active'],
-                'idle'    => $stat['idle'],
-                'total'   => $stat['total'],
-                'maximum' => $stat['maximum'],
-            ];
+            $details[$config]['pool'] = $stat;
         }
 
-        return ['status' => $worstStatus, 'details' => $details];
+        foreach ($details as $config => $entry) {
+            $details[$config]['pool'] = $entry['pool'] ?? null;
+        }
+
+        return $details;
     }
 
     // ── Cache health (requires flytachi/winter-cache) ─────────────────────────

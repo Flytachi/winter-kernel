@@ -118,8 +118,10 @@ class Complete extends Cmd
             'ping:check DB connection and latency',
             'migrate:run migrations against connected databases',
             'sql:preview generated SQL without executing',
+            'pool:show connection-pool utilisation of the running server',
         ],
         'db ping'    => [],   // auto-scans project + all plugins
+        'db pool'    => [],   // reads what the running workers publish
         'db migrate' => [
             '-s:schemes only', '-t:tables only', '-i:indexes only', '-c:constraints only',
             '--plugin=:target a single plugin', '--plugins:target all plugins',

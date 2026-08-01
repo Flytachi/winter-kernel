@@ -36,6 +36,7 @@ use Flytachi\Winter\K2\Http\Health\HealthIndicator;
 use Flytachi\Winter\DI\Collector\DICollector;
 use Flytachi\Winter\K2\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\K2\Http\Adapter\SwooleResponse;
+use Flytachi\Winter\K2\Ppa\Pool\PoolTelemetry;
 use Flytachi\Winter\K2\Process\ForkReset;
 use Flytachi\Winter\K2\Route\DevWatcher;
 use Flytachi\Winter\K2\Route\Router;
@@ -393,10 +394,12 @@ abstract class WinterApplication
             $router->handle($request, new SwooleResponse($res, $isHead));
         };
 
-        // Request workers log on 'http' with per-request coroutine isolation.
+        // Request workers log on 'http' with per-request coroutine isolation, and
+        // publish their connection-pool utilisation so `call db pool` can read it.
         $workerStart = static function (\Swoole\Http\Server $server, int $workerId): void {
             LoggerFactory::setContextStorage(new CoroutineContext());
             LoggerFactory::setDefaultChannel('http');
+            PoolTelemetry::start($workerId);
         };
 
         $dev = $watch ? new DevWatcher([Kernel::$pathRoot]) : null;

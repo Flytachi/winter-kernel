@@ -8,6 +8,7 @@ use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\K2\Ppa\DeclarationItem;
 use Flytachi\Winter\K2\Ppa\PPAMapping;
 use Flytachi\Winter\K2\Ppa\Mapping\Structure\Table;
+use Flytachi\Winter\K2\Ppa\Pool\PoolTelemetry;
 use Flytachi\Winter\K2\Plugin;
 
 class Db extends Cmd
@@ -41,6 +42,9 @@ class Db extends Cmd
                 break;
             case 'sql':
                 $this->showSql();
+                break;
+            case 'pool':
+                $this->pool();
                 break;
             default:
                 self::printWarning("Unknown argument '{$this->args['arguments'][1]}'");
@@ -110,6 +114,69 @@ class Db extends Cmd
                         self::printInfo($detail['error']);
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * Shows connection-pool utilisation of the running server.
+     *
+     * A pool lives in one worker's memory and the CLI is a separate process, so this
+     * reads what each worker publishes to the shared store ({@see PoolTelemetry}) —
+     * the same indirection `call process status` uses. Numbers are therefore as fresh
+     * as the last publish (see the `age` column), and a stopped worker's record simply
+     * expires.
+     */
+    private function pool(): void
+    {
+        $records = PoolTelemetry::snapshot();
+
+        if ($records === []) {
+            self::printWarning('No pool telemetry found.');
+            self::printInfo('A pool lives inside the running server, so the CLI reads what workers publish.');
+            self::printInfo('Check that the server is running, that it queries the database, and that'
+                . ' PPA_POOL_TELEMETRY is not 0 (current interval: ' . PoolTelemetry::interval() . 's).');
+            return;
+        }
+
+        self::printTitle('Connection pools');
+        foreach (PoolTelemetry::aggregate() as $configClass => $stat) {
+            self::printLabel($configClass, 34);
+            self::printKeyValue('active', (string) $stat['active'], 12, 34, 36);
+            self::printKeyValue('idle', (string) $stat['idle'], 12, 34, 36);
+            self::printKeyValue('total', (string) $stat['total'], 12, 34, 36);
+            self::printKeyValue('maximum', (string) $stat['maximum'], 12, 34, 36);
+            self::printKeyValue('workers', (string) $stat['workers'], 12, 34, 36);
+
+            // Saturation is per worker: a borrow queues on its own worker's pool, so
+            // one saturated worker matters even when the fleet total shows slack.
+            if ($stat['saturated'] > 0) {
+                self::printKeyValue('saturated', "{$stat['saturated']} of {$stat['workers']} workers", 12, 34, 33);
+                self::printBadge($configClass, 'SATURATED', 34, 33);
+            } else {
+                self::printBadge($configClass, 'OK', 34, 32);
+            }
+        }
+
+        self::printSplit('per worker');
+        $now = time();
+        foreach ($records as $record) {
+            foreach ($record['pools'] as $configClass => $stat) {
+                self::printKeyValue(
+                    'worker#' . $record['worker'],
+                    sprintf(
+                        '%-40s active=%d idle=%d total=%d max=%d  age=%ds',
+                        $configClass,
+                        $stat['active'],
+                        $stat['idle'],
+                        $stat['total'],
+                        $stat['maximum'],
+                        max(0, $now - (int) ($record['at'] ?? $now)),
+                    ),
+                    12,
+                    34,
+                    36,
+                );
             }
         }
     }
@@ -416,6 +483,7 @@ class Db extends Cmd
         self::printBadge('ping', 'check DB connection and latency', $cl, 36);
         self::printBadge('migrate', 'run migrations against connected databases', $cl, 36);
         self::printBadge('sql', 'preview generated SQL without executing', $cl, 36);
+        self::printBadge('pool', 'show connection-pool utilisation of the running server', $cl, 36);
         self::printLabel("Commands", $cl);
 
         self::printLabel("Flags", $cl);

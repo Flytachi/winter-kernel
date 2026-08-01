@@ -62,20 +62,31 @@ final class PpaConnectionPoolStatsTest extends TestCase
         });
     }
 
-    public function test_pool_health_reports_up_when_slack_available(): void
+    /** Runs the `db` component with the scan skipped, so only the pool merge is exercised. */
+    private static function dbComponent(): array
+    {
+        return (new ReflectionMethod(HealthIndicator::class, 'dbHealth'))
+            ->invoke(new HealthIndicator(), '');
+    }
+
+    public function test_db_component_nests_pool_utilisation(): void
     {
         $pool = new ConnectionPool(new MockFactory(), new PoolPolicy(maximumPoolSize: 5));
         $this->withPools([base64_encode('App\\Config\\MainDb') => $pool], function (): void {
-            $component = (new ReflectionMethod(HealthIndicator::class, 'poolHealth'))
-                ->invoke(new HealthIndicator());
+            $component = self::dbComponent();
 
             self::assertSame('up', $component['status']);
-            self::assertSame('up', $component['details']['App\\Config\\MainDb']['status']);
-            self::assertSame(5, $component['details']['App\\Config\\MainDb']['maximum']);
+            $entry = $component['details']['App\\Config\\MainDb'];
+            self::assertSame('up', $entry['status']);
+            self::assertSame(
+                ['total' => 0, 'idle' => 0, 'active' => 0, 'maximum' => 5],
+                $entry['pool'],
+                'utilisation lives under the datasource it belongs to',
+            );
         });
     }
 
-    public function test_pool_health_flags_saturated_pool_as_degraded(): void
+    public function test_saturated_pool_degrades_its_datasource(): void
     {
         $this->withPools(
             [
@@ -83,22 +94,20 @@ final class PpaConnectionPoolStatsTest extends TestCase
                 base64_encode('App\\Config\\OtherDb') => new ConnectionPool(new MockFactory(), new PoolPolicy(maximumPoolSize: 5)),
             ],
             function (): void {
-                $component = (new ReflectionMethod(HealthIndicator::class, 'poolHealth'))
-                    ->invoke(new HealthIndicator());
+                $component = self::dbComponent();
 
-                self::assertSame('degraded', $component['status'], 'a saturated pool degrades the whole component');
+                self::assertSame('degraded', $component['status'], 'a saturated pool degrades the db component');
                 self::assertSame('degraded', $component['details']['App\\Config\\MainDb']['status']);
-                self::assertSame(2, $component['details']['App\\Config\\MainDb']['active']);
+                self::assertSame(2, $component['details']['App\\Config\\MainDb']['pool']['active']);
                 self::assertSame('up', $component['details']['App\\Config\\OtherDb']['status']);
             },
         );
     }
 
-    public function test_pool_health_is_up_when_no_pools(): void
+    public function test_db_component_is_up_when_no_pools(): void
     {
         $this->withPools([], function (): void {
-            $component = (new ReflectionMethod(HealthIndicator::class, 'poolHealth'))
-                ->invoke(new HealthIndicator());
+            $component = self::dbComponent();
 
             self::assertSame('up', $component['status']);
             self::assertSame([], $component['details']);
