@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2;
+namespace Flytachi\Winter\Kernel;
 
-use Flytachi\Winter\K2\Core\KernelStore;
-use Flytachi\Winter\K2\Process\ForkReset;
-use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Kernel\Core\KernelStore;
+use Flytachi\Winter\Kernel\Process\ForkReset;
+use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
 use Flytachi\Winter\Thread\Launch\AdaptiveLauncher;
 use Flytachi\Winter\Thread\Thread;
 use Flytachi\Winter\Logger\Context\ProcessContext;

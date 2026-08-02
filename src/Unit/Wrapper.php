@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Unit;
+namespace Flytachi\Winter\Kernel\Unit;
 
-use Flytachi\Winter\K2\Ppa\Entity\RepositoryViewInterface;
-use Flytachi\Winter\K2\Unit\Pagination\Paginator;
-use Flytachi\Winter\K2\Unit\Pagination\WrapMeta;
-use Flytachi\Winter\K2\Unit\Pagination\WrapResult;
+use Flytachi\Winter\Kernel\Ppa\Entity\RepositoryViewInterface;
+use Flytachi\Winter\Kernel\Unit\Pagination\Paginator;
+use Flytachi\Winter\Kernel\Unit\Pagination\WrapMeta;
+use Flytachi\Winter\Kernel\Unit\Pagination\WrapResult;
 use ValueError;
 
 /**

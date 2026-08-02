@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Concurrent\Executor;
+namespace Flytachi\Winter\Kernel\Concurrent\Executor;
 
 use Flytachi\Winter\Base\Runtime;
-use Flytachi\Winter\K2\Concurrent\BoundedExecutorService;
-use Flytachi\Winter\K2\Concurrent\CompletableFuture;
-use Flytachi\Winter\K2\Concurrent\Future;
-use Flytachi\Winter\K2\Concurrent\RejectedExecutionException;
-use Flytachi\Winter\K2\Concurrent\RejectPolicy;
+use Flytachi\Winter\Kernel\Concurrent\BoundedExecutorService;
+use Flytachi\Winter\Kernel\Concurrent\CompletableFuture;
+use Flytachi\Winter\Kernel\Concurrent\Future;
+use Flytachi\Winter\Kernel\Concurrent\RejectedExecutionException;
+use Flytachi\Winter\Kernel\Concurrent\RejectPolicy;
 
 /**
  * A fixed-size pool: at most N tasks run concurrently, the rest wait for a slot.
@@ -25,7 +25,7 @@ use Flytachi\Winter\K2\Concurrent\RejectPolicy;
  * When a bounded wait queue (`queue > 0`) is full, {@see RejectPolicy} decides the
  * outcome. An unbounded pool (`queue = 0`, the default) never rejects.
  *
- * Obtain one through {@see \Flytachi\Winter\K2\Concurrent\Executors::newFixedExecutor()};
+ * Obtain one through {@see \Flytachi\Winter\Kernel\Concurrent\Executors::newFixedExecutor()};
  * register it in the container to give an `#[Async('id')]` method a dedicated pool.
  */
 final class FixedExecutorService implements BoundedExecutorService

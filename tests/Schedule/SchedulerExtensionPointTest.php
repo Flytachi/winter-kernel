@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Schedule;
+namespace Flytachi\Winter\Kernel\Tests\Schedule;
 
-use Flytachi\Winter\K2\App\Attribute\EnableScheduler;
-use Flytachi\Winter\K2\Schedule\Scheduler;
+use Flytachi\Winter\Kernel\App\Attribute\EnableScheduler;
+use Flytachi\Winter\Kernel\Schedule\Stereotype\Scheduler;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;

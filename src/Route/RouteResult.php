@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Route;
+namespace Flytachi\Winter\Kernel\Route;
 
-class RouteResult
+final class RouteResult
 {
     public const NOT_FOUND          = 0;
     public const FOUND              = 1;

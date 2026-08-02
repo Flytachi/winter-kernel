@@ -6,9 +6,9 @@ namespace Flytachi\Winter\Console\Command;
 
 use Composer\InstalledVersions;
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\Kernel\Kernel;
 
-class Help extends Cmd
+final class Help extends Cmd
 {
     public static string $title = "list commands and show usage information";
 

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\ConnectionPool;
+namespace Flytachi\Winter\Kernel\Tests\ConnectionPool;
 
-use Flytachi\Winter\K2\ConnectionPool\PoolException;
-use Flytachi\Winter\K2\ConnectionPool\PoolPolicy;
-use Flytachi\Winter\K2\ConnectionPool\SingleConnection;
+use Flytachi\Winter\Kernel\ConnectionPool\PoolException;
+use Flytachi\Winter\Kernel\ConnectionPool\PoolPolicy;
+use Flytachi\Winter\Kernel\ConnectionPool\SingleConnection;
 use PHPUnit\Framework\TestCase;
 
 /**

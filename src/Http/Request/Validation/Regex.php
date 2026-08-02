@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Request\Validation;
+namespace Flytachi\Winter\Kernel\Http\Request\Validation;
 
 use Attribute;
 
@@ -20,7 +20,7 @@ use Attribute;
  * ```
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-readonly class Regex implements Constraint
+final readonly class Regex implements Constraint
 {
     /**
      * @param string      $pattern Full PHP regex with delimiters, e.g. '/^\d{4}$/'.

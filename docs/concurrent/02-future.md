@@ -26,7 +26,7 @@ under FPM — without the future knowing which happened.
 ## `Future`
 
 ```php
-use Flytachi\Winter\K2\Concurrent\Future;
+use Flytachi\Winter\Kernel\Concurrent\Future;
 ```
 
 ### `get(?float $timeout = null): mixed`
@@ -79,7 +79,7 @@ progress — under Swoole that means cancelling the coroutine.
 ## `CompletableFuture`
 
 ```php
-use Flytachi\Winter\K2\Concurrent\CompletableFuture;
+use Flytachi\Winter\Kernel\Concurrent\CompletableFuture;
 ```
 
 Everything `Future` has, plus the ability to settle it yourself.

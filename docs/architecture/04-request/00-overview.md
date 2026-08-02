@@ -1,6 +1,6 @@
 # Request Parameter Binding — Overview
 
-Winter K2 resolves controller method parameters automatically at request time.
+Winter resolves controller method parameters automatically at request time.
 You declare what you need via PHP type hints and attributes — the framework reads
 the request, validates the value, casts it to the declared type, and injects it
 into your method. No manual `$_GET`, `$_POST`, or `json_decode` in controller code.

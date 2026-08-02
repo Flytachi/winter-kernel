@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App\Attribute;
+namespace Flytachi\Winter\Kernel\App\Attribute;
 
 /**
  * Marks a class as a bean container — the analogue of Spring's @Configuration.

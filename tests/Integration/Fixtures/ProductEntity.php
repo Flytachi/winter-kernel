@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Integration\Fixtures;
+namespace Flytachi\Winter\Kernel\Tests\Integration\Fixtures;
 
 /**
  * Test entity used by all CRUD integration tests. Three primitive types

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\ConnectionPool;
+namespace Flytachi\Winter\Kernel\ConnectionPool;
 
 use Closure;
 use Throwable;

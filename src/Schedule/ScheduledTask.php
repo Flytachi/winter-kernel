@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Schedule;
+namespace Flytachi\Winter\Kernel\Schedule;
 
-use Flytachi\Winter\K2\Schedule\Trigger\Trigger;
+use Flytachi\Winter\Kernel\Schedule\Trigger\Trigger;
 
 /**
  * One discovered {@see Scheduled} method and its live scheduling state.

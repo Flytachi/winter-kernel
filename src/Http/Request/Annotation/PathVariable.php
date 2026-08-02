@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Request\Annotation;
+namespace Flytachi\Winter\Kernel\Http\Request\Annotation;
 
 use Attribute;
 
@@ -18,7 +18,7 @@ use Attribute;
  * If $name is omitted the PHP parameter name is used.
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-readonly class PathVariable
+final readonly class PathVariable
 {
     /**
      * @param string|null $name Path segment name as declared in the route pattern (e.g. {id:\d+} → 'id').

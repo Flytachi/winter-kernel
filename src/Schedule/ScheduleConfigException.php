@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Schedule;
+namespace Flytachi\Winter\Kernel\Schedule;
 
 /**
  * Thrown when a {@see Scheduled} method is misconfigured — no trigger set, more

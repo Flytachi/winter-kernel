@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Schedule\Trigger;
+namespace Flytachi\Winter\Kernel\Schedule\Trigger;
 
 /**
  * Fires a fixed delay after the previous run finished — the next start is measured

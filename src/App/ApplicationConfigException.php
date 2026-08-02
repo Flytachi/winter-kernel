@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App;
+namespace Flytachi\Winter\Kernel\App;
 
 /**
- * Thrown when {@see \Flytachi\Winter\K2\Application::components()} is malformed —
+ * Thrown when {@see \Flytachi\Winter\Kernel\Application::components()} is malformed —
  * a non-{@see Component} entry, a missing Http host for a bundle, or a component
  * kind the current runtime cannot host.
  */

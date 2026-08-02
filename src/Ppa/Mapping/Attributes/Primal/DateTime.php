@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal;
 
 use Attribute;
 

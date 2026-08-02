@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Route\Annotation;
+namespace Flytachi\Winter\Kernel\Route\Annotation;
 
 use Attribute;
 
@@ -23,7 +23,7 @@ use Attribute;
  *   public function stats(): ResponseEntity { ... }
  */
 #[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_METHOD)]
-readonly class CrossOrigin
+final readonly class CrossOrigin
 {
     /**
      * @param string[] $origins        Allowed origins. Empty = '*'.

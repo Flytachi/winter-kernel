@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process\Engine;
+namespace Flytachi\Winter\Kernel\Process\Engine;
 
-use Flytachi\Winter\K2\Concurrent\Future;
+use Flytachi\Winter\Kernel\Concurrent\Future;
 
 /**
- * Runtime backend that carries a {@see \Flytachi\Winter\K2\Process\Process}
+ * Runtime backend that carries a {@see \Flytachi\Winter\Kernel\Process\Stereotype\Process}
  * body.
  *
  * The engine hides the difference between runtimes so the process body is
  * written once: under Swoole tasks become coroutines and pauses are
  * non-blocking; without Swoole tasks become forked children and pauses block
  * the single process. The contract stays identical either way — mirroring how
- * {@see \Flytachi\Winter\K2\Concurrent\ExecutorService} keeps one surface over
+ * {@see \Flytachi\Winter\Kernel\Concurrent\ExecutorService} keeps one surface over
  * several backends.
  */
 interface ProcessEngine
@@ -47,7 +47,7 @@ interface ProcessEngine
 
     /**
      * Pauses the body without blocking sibling tasks under Swoole. Throws
-     * {@see \Flytachi\Winter\K2\Process\InterruptedException} once if the body
+     * {@see \Flytachi\Winter\Kernel\Process\InterruptedException} once if the body
      * was interrupted (an IDLE wait woken by a stop request).
      *
      * @param float $seconds Seconds to pause.

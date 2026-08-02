@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Mapping\Attributes\Hybrid;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Mapping\Attributes\Hybrid;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Additive\DefaultVal;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Additive\NullableIs;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Hybrid\BigId;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Hybrid\Id;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Hybrid\SmallId;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Hybrid\UuidPk;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Idx\Primary;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\BigInteger;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Integer;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\SmallInteger;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Uuid;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Sub\AutoIncrement;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Additive\DefaultVal;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Additive\NullableIs;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Hybrid\BigId;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Hybrid\Id;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Hybrid\SmallId;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Hybrid\UuidPk;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Idx\Primary;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\BigInteger;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Integer;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\SmallInteger;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Uuid;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Sub\AutoIncrement;
 use PHPUnit\Framework\TestCase;
 
 final class HybridTypesTest extends TestCase

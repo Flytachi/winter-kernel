@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Repository;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Repository;
 
-use Flytachi\Winter\K2\Ppa\Repository\RepositoryException;
-use Flytachi\Winter\K2\Tests\Ppa\Repository\Fixtures\OrdersRepo;
-use Flytachi\Winter\K2\Tests\Ppa\Repository\Fixtures\TypedUsersRepo;
-use Flytachi\Winter\K2\Tests\Ppa\Repository\Fixtures\UsersRepo;
+use Flytachi\Winter\Kernel\Ppa\Repository\RepositoryException;
+use Flytachi\Winter\Kernel\Tests\Ppa\Repository\Fixtures\OrdersRepo;
+use Flytachi\Winter\Kernel\Tests\Ppa\Repository\Fixtures\TypedUsersRepo;
+use Flytachi\Winter\Kernel\Tests\Ppa\Repository\Fixtures\UsersRepo;
 use PHPUnit\Framework\TestCase;
 
 final class SelectFromAsTest extends TestCase

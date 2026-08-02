@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Concurrent\Executor;
+namespace Flytachi\Winter\Kernel\Tests\Concurrent\Executor;
 
-use Flytachi\Winter\K2\Concurrent\Executor\FixedExecutorService;
-use Flytachi\Winter\K2\Concurrent\RejectedExecutionException;
-use Flytachi\Winter\K2\Concurrent\RejectPolicy;
+use Flytachi\Winter\Kernel\Concurrent\Executor\FixedExecutorService;
+use Flytachi\Winter\Kernel\Concurrent\RejectedExecutionException;
+use Flytachi\Winter\Kernel\Concurrent\RejectPolicy;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App\Config;
+namespace Flytachi\Winter\Kernel\App\Config;
 
-use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\Kernel\Kernel;
 
 /**
  * Fluent handle passed to {@see LoggingConfigurer::configureChannels()}. Declares

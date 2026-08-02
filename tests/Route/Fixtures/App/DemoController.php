@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Route\Fixtures\App;
+namespace Flytachi\Winter\Kernel\Tests\Route\Fixtures\App;
 
 use Flytachi\Winter\DI\Attribute\Autowired;
-use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
-use Flytachi\Winter\K2\Http\Request\Annotation\PathVariable;
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestParam;
-use Flytachi\Winter\K2\Route\Annotation\GetMapping;
-use Flytachi\Winter\K2\Route\Annotation\PostMapping;
-use Flytachi\Winter\K2\Route\Annotation\RequestMapping;
-use Flytachi\Winter\K2\Stereotype\Controller;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\PathVariable;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestParam;
+use Flytachi\Winter\Kernel\Route\Annotation\GetMapping;
+use Flytachi\Winter\Kernel\Route\Annotation\PostMapping;
+use Flytachi\Winter\Kernel\Route\Annotation\RequestMapping;
+use Flytachi\Winter\Kernel\Http\Stereotype\Controller;
 
 /**
  * The application under test: an ordinary controller, declared the way a coder would.

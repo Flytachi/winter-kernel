@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal;
 
 use Attribute;
 
 #[Attribute(Attribute::TARGET_PROPERTY)]
-readonly class Decimal extends FloatType implements AttributeDbType
+final readonly class Decimal extends FloatType implements AttributeDbType
 {
     /**
      * @param int $precision The total number of digits that can be stored

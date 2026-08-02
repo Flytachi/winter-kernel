@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\File;
+namespace Flytachi\Winter\Kernel\File;
 
 abstract class JSON
 {

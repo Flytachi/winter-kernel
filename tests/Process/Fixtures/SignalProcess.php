@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process\Fixtures;
+namespace Flytachi\Winter\Kernel\Tests\Process\Fixtures;
 
-use Flytachi\Winter\K2\Process\Process;
+use Flytachi\Winter\Kernel\Process\Stereotype\Process;
 
 /**
  * Integration fixture: a bare process that records every signal hook to the file

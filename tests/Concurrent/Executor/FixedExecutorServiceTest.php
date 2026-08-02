@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Concurrent\Executor;
+namespace Flytachi\Winter\Kernel\Tests\Concurrent\Executor;
 
 use ArrayObject;
-use Flytachi\Winter\K2\Concurrent\BoundedExecutorService;
-use Flytachi\Winter\K2\Concurrent\Executor\FixedExecutorService;
-use Flytachi\Winter\K2\Concurrent\Executors;
-use Flytachi\Winter\K2\Concurrent\RejectedExecutionException;
-use Flytachi\Winter\K2\Concurrent\RejectPolicy;
+use Flytachi\Winter\Kernel\Concurrent\BoundedExecutorService;
+use Flytachi\Winter\Kernel\Concurrent\Executor\FixedExecutorService;
+use Flytachi\Winter\Kernel\Concurrent\Executors;
+use Flytachi\Winter\Kernel\Concurrent\RejectedExecutionException;
+use Flytachi\Winter\Kernel\Concurrent\RejectPolicy;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 

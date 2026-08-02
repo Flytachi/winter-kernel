@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa;
+namespace Flytachi\Winter\Kernel\Ppa;
 
 use Flytachi\Winter\Cdo\Connection\CDO;
-use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
-use Flytachi\Winter\K2\Ppa\Stereotype\CteRepo;
+use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Kernel\Ppa\Stereotype\CteRepo;
 
 /**
  * PpaCallTrait — PPA-aware static shortcuts for config classes.
@@ -34,7 +34,7 @@ use Flytachi\Winter\K2\Ppa\Stereotype\CteRepo;
  * DbConfig::cte()->from('orders o')->where(Qb::eq('status', 'new'))->findAll();
  * ```
  *
- * @package Flytachi\Winter\K2\Ppa
+ * @package Flytachi\Winter\Kernel\Ppa
  */
 trait PpaCallTrait
 {

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Repository\Fixtures;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Repository\Fixtures;
 
 /**
  * Typed entity — buildSql() with this entity class will emit column list

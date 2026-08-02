@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Schedule\Trigger;
+namespace Flytachi\Winter\Kernel\Schedule\Trigger;
 
 /**
  * Fires at a fixed rate — the next start is measured from the previous START, so

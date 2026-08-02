@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Localization;
+namespace Flytachi\Winter\Kernel\Tests\Localization;
 
-use Flytachi\Winter\K2\Localization\LocaleService;
+use Flytachi\Winter\Kernel\Localization\LocaleService;
 use PHPUnit\Framework\TestCase;
 
 final class LocaleServiceTest extends TestCase

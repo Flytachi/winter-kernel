@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Response;
+namespace Flytachi\Winter\Kernel\Http\Response;
 
 use Attribute;
 use Throwable;
@@ -17,6 +17,8 @@ use Throwable;
  * ExceptionWrapper scans the project for these at startup and routes
  * Throwables to the most specific matching handler.
  *
+ * The base class to extend is {@see \Flytachi\Winter\Kernel\Http\Stereotype\ExceptionResponseBase}.
+ *
  * Example — catch specific exception:
  *   #[AdviceException(NotFoundException::class)]
  *   class NotFoundResponse extends ExceptionResponseBase { ... }
@@ -26,7 +28,7 @@ use Throwable;
  *   class GlobalErrorResponse extends ExceptionResponseBase { ... }
  */
 #[Attribute(Attribute::TARGET_CLASS)]
-readonly class AdviceException
+final readonly class AdviceException
 {
     /** @var class-string<Throwable>[] */
     public array $exceptionClassNames;

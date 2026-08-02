@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Pool;
+namespace Flytachi\Winter\Kernel\Ppa\Pool;
 
 use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\Cdo\Config\Common\DbConfigInterface;
 use Flytachi\Winter\Cdo\Connection\CDO;
 use Flytachi\Winter\Base\Runtime;
-use Flytachi\Winter\K2\ConnectionPool\ConnectionPool;
-use Flytachi\Winter\K2\ConnectionPool\PoolEntry;
-use Flytachi\Winter\K2\ConnectionPool\PoolException;
-use Flytachi\Winter\K2\ConnectionPool\PoolPolicy;
-use Flytachi\Winter\K2\ConnectionPool\SingleConnection;
+use Flytachi\Winter\Kernel\ConnectionPool\ConnectionPool;
+use Flytachi\Winter\Kernel\ConnectionPool\PoolEntry;
+use Flytachi\Winter\Kernel\ConnectionPool\PoolException;
+use Flytachi\Winter\Kernel\ConnectionPool\PoolPolicy;
+use Flytachi\Winter\Kernel\ConnectionPool\SingleConnection;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
@@ -229,8 +229,8 @@ final class PpaConnectionPool
      *
      * A fork copies file descriptors, so any connection cached before the fork
      * would be shared with the parent and corrupt the wire protocol. A forked
-     * daemon worker runs this via {@see \Flytachi\Winter\K2\Process\ForkReset}
-     * (registered in {@see \Flytachi\Winter\K2\Kernel::init()}), then re-opens
+     * daemon worker runs this via {@see \Flytachi\Winter\Kernel\Process\ForkReset}
+     * (registered in {@see \Flytachi\Winter\Kernel\Kernel::init()}), then re-opens
      * lazily in the child. Because access is static — repositories call
      * `PpaConnectionPool::db()`, never an injected instance — clearing the caches
      * is a complete "reconnect": nothing holds a stale reference.

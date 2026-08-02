@@ -63,9 +63,9 @@ declares the application:
 <?php
 declare(strict_types=1);
 
-use Flytachi\Winter\K2\App\Attribute\EnableActuator;
-use Flytachi\Winter\K2\App\Attribute\EnableWeb;
-use Flytachi\Winter\K2\WinterApplication;
+use Flytachi\Winter\Kernel\App\Attribute\EnableActuator;
+use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
+use Flytachi\Winter\Kernel\WinterApplication;
 
 require __DIR__ . '/vendor/autoload.php';
 
@@ -126,10 +126,10 @@ declare(strict_types=1);
 
 namespace Main;
 
-use Flytachi\Winter\K2\Http\Request\Annotation\PathVariable;
-use Flytachi\Winter\K2\Route\Annotation\GetMapping;
-use Flytachi\Winter\K2\Route\Annotation\RequestMapping;
-use Flytachi\Winter\K2\Stereotype\Controller;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\PathVariable;
+use Flytachi\Winter\Kernel\Route\Annotation\GetMapping;
+use Flytachi\Winter\Kernel\Route\Annotation\RequestMapping;
+use Flytachi\Winter\Kernel\Http\Stereotype\Controller;
 
 #[RequestMapping('/users')]
 final class UserController extends Controller
@@ -176,9 +176,9 @@ declare(strict_types=1);
 
 namespace Main;
 
-use Flytachi\Winter\K2\App\ApplicationArguments;
-use Flytachi\Winter\K2\App\Config\ServerSettings;
-use Flytachi\Winter\K2\App\Config\WebConfigurerAdapter;
+use Flytachi\Winter\Kernel\App\ApplicationArguments;
+use Flytachi\Winter\Kernel\App\Config\ServerSettings;
+use Flytachi\Winter\Kernel\App\Config\WebConfigurerAdapter;
 
 final class WebConfig extends WebConfigurerAdapter
 {
@@ -206,7 +206,7 @@ declare(strict_types=1);
 
 namespace Main\Process;
 
-use Flytachi\Winter\K2\Process\Process;
+use Flytachi\Winter\Kernel\Process\Stereotype\Process;
 
 final class EmailWorker extends Process
 {

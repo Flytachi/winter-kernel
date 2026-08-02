@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Schedule;
+namespace Flytachi\Winter\Kernel\Schedule;
 
 use Attribute;
 
@@ -17,8 +17,8 @@ use Attribute;
  *
  * Exactly one trigger must be set: {@see $fixedDelay}, {@see $fixedRate} or
  * {@see $cron}. The period timings are in seconds (float), matching the rest of
- * the kernel ({@see \Flytachi\Winter\K2\Process\Process::sleep()} / grace); the
- * cron expression is clock-aligned (see {@see \Flytachi\Winter\K2\Schedule\Trigger\CronTrigger}).
+ * the kernel ({@see \Flytachi\Winter\Kernel\Process\Stereotype\Process::sleep()} / grace); the
+ * cron expression is clock-aligned (see {@see \Flytachi\Winter\Kernel\Schedule\Trigger\CronTrigger}).
  * A misconfigured attribute is rejected at discovery with a {@see ScheduleConfigException}.
  *
  * ```

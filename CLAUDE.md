@@ -8,7 +8,7 @@ works, why, and the rules to keep.
 
 > **winter-kernel** is a PHP 8.4+ framework kernel (a library, not an app). It runs
 > under two runtimes: **Swoole** (coroutines) and **FPM/CLI** (plain processes).
-> Namespace root: `Flytachi\Winter\K2\` → `src/`. Tests: `Flytachi\Winter\K2\Tests\` → `tests/`.
+> Namespace root: `Flytachi\Winter\Kernel\` → `src/`. Tests: `Flytachi\Winter\Kernel\Tests\` → `tests/`.
 
 ---
 
@@ -49,15 +49,20 @@ back-off, graceful drain, autoscaling with damping, and a liveness watchdog.
 
 | Path | Namespace | What |
 |---|---|---|
-| `src/Process/` | `Flytachi\Winter\K2\Process` | **the canonical layer (this work)** |
-| `src/Process/Daemon/` | `…\Process\Daemon` | Daemon + supervision + policies + slot model |
+| `src/Process/Stereotype/` | `…\Process\Stereotype` | **`Process` and `Daemon` — the two classes an application extends** |
+| `src/Process/` | `Flytachi\Winter\Kernel\Process` | shared model: `Activity`, `ProcessStatus`, `ProcessState`, `ProcessStore`, `ForkReset` |
+| `src/Process/Daemon/` | `…\Process\Daemon` | supervision + policies + slot model (`SupervisesFleet`, `Slot`, `ScalingPolicy`, …) |
 | `src/Process/Engine/` | `…\Process\Engine` | runtime backends (Swoole/Sync) |
 | `src/Process/Internal/` | `…\Process\Internal` | private-method traits (encapsulation) |
-| `src/Old/Process/` | `…\Old\Process` | **OLD ThreadDaemon system, archived; the user will delete it.** Do not build on it. |
 
-> History: this layer was developed in `src/Dev/Process/` (`…\Dev\Process`), then
-> promoted to canonical `src/Process/`; the old `src/Process/` moved to `src/Old/Process/`.
-> If you see `Dev\Process` anywhere it is stale — it should be `Process`.
+> The split is the point: `Process/Stereotype/` holds what you extend, everything beside
+> it is machinery. Before the 2026-08-02 restructure `Daemon` sat inside
+> `Process/Daemon/` next to `SupervisesFleet`, and telling the extension point from the
+> internals meant reading the source. See `doc/2026-08-02-restructure-design.md`.
+>
+> History: this layer was developed in `src/Dev/Process/`, then promoted to
+> `src/Process/`; the archived `src/Old/Process/` has since been deleted. If you see
+> `Dev\Process` or `Old\Process` anywhere it is stale.
 
 ---
 
@@ -307,6 +312,60 @@ no package-private, so:
 If you add anything the supervision trait needs from Daemon, make it **private** and
 call it via `$this->` from the trait.
 
+### The extension surface (added 2026-08-02)
+
+Encapsulation above governs *members*; this governs *classes*. Two rules, both enforced
+by tests — `tests/Architecture/{StereotypeLayoutTest,ExtensionSurfaceTest}.php` and
+`tests/Console/CommandSurfaceTest.php`.
+
+**1. What an application extends lives in `<Layer>/Stereotype/`.**
+
+| | |
+|---|---|
+| `src/Http/Stereotype/` | `Controller`, `ControllerInterface`, `Middleware`, `ExceptionResponseBase` |
+| `src/Ppa/Stereotype/` | `Repository`, `RepositoryCrud`, `RepositoryView` |
+| `src/Process/Stereotype/` | `Process`, `Daemon` |
+| `src/Schedule/Stereotype/` | `Scheduler` |
+| `console/Stereotype/` | `CmdCustom`, `CmdCustomInterface` |
+
+Every `Stereotype/` belongs to a layer — there is no orphan one at the root. The layer
+keeps its machinery beside, not inside, that directory, so a layer can be extracted into
+its own package **together with its extension point**.
+
+The test for `implements`-only contracts is that they stay put: `MiddlewareInterface`
+lives in `Http/Middleware/` and `HealthContributor` in `Http/Health/`, because
+**`Stereotype/` is for `extends`, not for `implements`.**
+
+> **There is no `Service` base class, and do not reintroduce one.** It was an empty
+> `abstract class` — Spring's `@Service` **annotation** transliterated into inheritance.
+> Java made it an annotation precisely because Java, like PHP, allows a single parent:
+> spending that slot on a semantic marker is a bad trade. Nothing in the kernel ever read
+> it (the container resolves by class name, lifetime comes from `#[Singleton]` and
+> friends), and in practice it forced `class X extends Service implements XInterface` —
+> the real contract pushed into an interface because the parent slot was already gone.
+> A service is a plain class. If a role marker is ever wanted, it must arrive as an
+> attribute **with a mechanism behind it** (implying `#[Singleton]`, or serving as an AOP
+> pointcut target) — a marker nothing reads is policy, not mechanism.
+
+**2. A class is `final` unless someone wrote down why not.**
+
+`final` is the only thing that removes a class from an IDE's `extends` completion, so an
+open class is public API whether or not that was intended. `ExtensionSurfaceTest::OPEN`
+is the single place openness is declared, and each entry carries its reason. Adding a
+non-final class without an entry fails the suite.
+
+Exceptions are open **as a category** (extending `ClientError` in an application is
+normal) and are skipped by the test via `Throwable`.
+
+> **Do not decide this by grep.** `ExceptionResponseBase` has no subclass in this
+> repository and still must stay open — `#[AdviceException]` handlers extend it, and they
+> live in applications. Check documented contracts (`#[Enable*]`, `#[Advice*]`, PHPDoc
+> examples), not usage counts.
+
+Also: built-in `console/Command/*` are `final` because two of them (`Process`, `Daemon`)
+share a short name with a real stereotype, and an open command made both appear in
+completion. That was the original complaint; `final` fixed it without renaming anything.
+
 ---
 
 ## 8. CLI
@@ -327,15 +386,19 @@ in `console/Command/Complete.php`. Commands: `console/Command/{Process,Daemon}.p
   config resolution/clamping, `ForkReset`, titles, and the supervision **decision
   algorithms** (`SupervisesFleetTest` — backoff, damping/`windowExtreme`, `pickVictims`
   IDLE-first, slot counts) via reflection, deterministic, no forks.
-- **Integration** (`tests/Process/Integration/`, 17 tests, `#[Group('integration')]` →
+- **Integration** (`tests/Process/Integration/`, 18 tests, `#[Group('integration')]` →
   excluded from the default run): real fork/swoole/signals. `IntegrationCase` boots a
   temp-storage kernel, forks a real Process/Daemon child, observes via the shared store
   + a `WK_MARKER` file, sends real signals. Covers: fork N replicas, graceful stop (no
   orphans), restart-in-slot, maxRestarts→FAILED, NEVER→retired, watchdog, autoscale
   up→down, singleton, 2nd-signal force, per-worker activity, SIGHUP=reload, external
   `$workerClass` path, and all Process signal hooks.
+- **Architecture** (`tests/Architecture/`, `tests/Console/`): guards that hold the
+  structure in place rather than testing behaviour — stereotype addresses, the absent
+  generation suffix in the namespace, the `final` surface, and that every generator
+  template imports a class that exists. They fail on drift, which is their whole job.
 
-**Run:** `vendor/bin/phpunit` (full suite, **1346 tests** — integration excluded).
+**Run:** `vendor/bin/phpunit` (full suite, **1605 tests** — integration excluded).
 Integration: `vendor/bin/phpunit --group integration tests/Process/Integration` (needs
 `pcntl`+`posix`; runs under Swoole here; ~20s).
 
@@ -386,7 +449,7 @@ coroutine (fixed in the `winter-thread` package: `AdaptiveLauncher`/`SwooleLaunc
 
 **Not done (future phases):** phase 3 — templates (worker-pool, SMPP, WebSocket);
 phase 4 — web status (a controller reading the same store; `DaemonStatus` is already
-JSON-serializable). `src/Old/Process` is to be **deleted by the user**.
+JSON-serializable).
 
 **Known minor limitations:** `maxRestarts` is cumulative (not "consecutive"); a
 STARTING worker that hangs before its first heartbeat relies on the watchdog with a

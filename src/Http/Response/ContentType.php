@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Response;
+namespace Flytachi\Winter\Kernel\Http\Response;
 
-use Flytachi\Winter\K2\File\XML;
+use Flytachi\Winter\Kernel\File\XML;
 
 enum ContentType: string
 {

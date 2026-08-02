@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2;
+namespace Flytachi\Winter\Kernel;
 
 use Composer\InstalledVersions;
-use Flytachi\Winter\K2\Exception\Error;
+use Flytachi\Winter\Kernel\Exception\Error;
 
 final class Plugin
 {

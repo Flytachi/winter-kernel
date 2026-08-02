@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Repository;
+namespace Flytachi\Winter\Kernel\Ppa\Repository;
 
 use Flytachi\Winter\Cdo\Connection\CDO;
 use Flytachi\Winter\Cdo\Connection\CDOException;
 use Flytachi\Winter\Cdo\Qb;
-use Flytachi\Winter\K2\Ppa\Entity\RepositoryCrudInterface;
-use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Kernel\Ppa\Entity\RepositoryCrudInterface;
+use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
 
 /**
  * Provides concrete write-operation implementations for repository classes.

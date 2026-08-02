@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Route\Fixtures\App;
+namespace Flytachi\Winter\Kernel\Tests\Route\Fixtures\App;
 
 use Flytachi\Winter\DI\Attribute\Singleton;
 

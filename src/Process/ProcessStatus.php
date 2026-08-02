@@ -2,17 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process;
+namespace Flytachi\Winter\Kernel\Process;
 
 /**
- * Persisted status record of a {@see Process}.
+ * Persisted status record of a {@see \Flytachi\Winter\Kernel\Process\Stereotype\Process}.
  *
  * Written to the runnable store while the process lives, read back by the CLI
  * and the web layer. {@see ResourceUsage} is live and never persisted — it is
- * attached on read via {@see Process::status()}.
+ * attached on read via {@see \Flytachi\Winter\Kernel\Process\Stereotype\Process::status()}.
  *
  * Serialises to a stable JSON shape so a controller can return it directly. A
- * supervised {@see Daemon} records the richer {@see DaemonStatus} subclass.
+ * supervised {@see \Flytachi\Winter\Kernel\Process\Stereotype\Daemon} records the
+ * richer {@see \Flytachi\Winter\Kernel\Process\Daemon\DaemonStatus} subclass.
  */
 class ProcessStatus implements \JsonSerializable
 {

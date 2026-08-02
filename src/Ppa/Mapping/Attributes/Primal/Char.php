@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal;
 
 use Attribute;
 use InvalidArgumentException;
 
 #[Attribute(Attribute::TARGET_PROPERTY)]
-readonly class Char implements AttributeDbType
+final readonly class Char implements AttributeDbType
 {
     /**
      * Defines a fixed-length character string column.

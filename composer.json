@@ -15,7 +15,7 @@
     "autoload": {
         "psr-4": {
             "Flytachi\\Winter\\Console\\": "console/",
-            "Flytachi\\Winter\\K2\\": "src/"
+            "Flytachi\\Winter\\Kernel\\": "src/"
         },
         "files": [
             "function/dependencies.php"
@@ -23,7 +23,7 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Flytachi\\Winter\\K2\\Tests\\": "tests"
+            "Flytachi\\Winter\\Kernel\\Tests\\": "tests"
         }
     },
     "bin": ["wKernelRunner"],

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Unit\Pagination;
+namespace Flytachi\Winter\Kernel\Tests\Unit\Pagination;
 
-use Flytachi\Winter\K2\Unit\Pagination\CursorDirection;
-use Flytachi\Winter\K2\Unit\Pagination\CursorToken;
-use Flytachi\Winter\K2\Unit\Pagination\InvalidCursorException;
+use Flytachi\Winter\Kernel\Unit\Pagination\CursorDirection;
+use Flytachi\Winter\Kernel\Unit\Pagination\CursorToken;
+use Flytachi\Winter\Kernel\Unit\Pagination\InvalidCursorException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

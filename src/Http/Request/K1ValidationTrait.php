@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Request;
+namespace Flytachi\Winter\Kernel\Http\Request;
 
 use DateTime;
-use Flytachi\Winter\K2\Localization\Locale;
+use Flytachi\Winter\Kernel\Localization\Locale;
 
 /**
  * Legacy string-rule validation helpers, usable on any request DTO.
  *
  * Kept for backwards compatibility — new code should prefer the attribute-based
- * system (#[Valid] + #[Constraint] under Flytachi\Winter\K2\Http\Request\Validation\*),
+ * system (#[Valid] + #[Constraint] under Flytachi\Winter\Kernel\Http\Request\Validation\*),
  * which collects all errors at once and integrates with i18n natively.
  *
  * This trait still supports the same {key} translation-key syntax in the optional

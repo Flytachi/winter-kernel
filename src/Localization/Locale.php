@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Localization;
+namespace Flytachi\Winter\Kernel\Localization;
 
-use Flytachi\Winter\K2\Http\Header;
+use Flytachi\Winter\Kernel\Http\Header;
 use Flytachi\Winter\Base\Runtime;
 
 /**

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Main;
 
-use Flytachi\Winter\K2\App\ApplicationArguments;
-use Flytachi\Winter\K2\App\Config\ServerSettings;
-use Flytachi\Winter\K2\App\Config\WebConfigurerAdapter;
+use Flytachi\Winter\Kernel\App\ApplicationArguments;
+use Flytachi\Winter\Kernel\App\Config\ServerSettings;
+use Flytachi\Winter\Kernel\App\Config\WebConfigurerAdapter;
 
 /**
  * Web configuration, found by the scan — no registration needed.

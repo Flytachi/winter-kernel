@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process;
+namespace Flytachi\Winter\Kernel\Process;
 
 /**
  * A resource snapshot of a running process, taken from `ps`.

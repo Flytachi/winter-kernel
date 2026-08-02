@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Mapping\Structure;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Mapping\Structure;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\FKAction;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\ForeignKey;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\StructureInterface;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\FKAction;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\ForeignKey;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\StructureInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

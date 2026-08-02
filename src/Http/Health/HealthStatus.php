@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Health;
+namespace Flytachi\Winter\Kernel\Http\Health;
 
 /**
  * The result a {@see HealthContributor} returns — a {@see Status} plus optional

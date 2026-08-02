@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use Flytachi\Winter\K2\App\Attribute\EnableActuator;
-use Flytachi\Winter\K2\App\Attribute\EnableWeb;
-use Flytachi\Winter\K2\WinterApplication;
+use Flytachi\Winter\Kernel\App\Attribute\EnableActuator;
+use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
+use Flytachi\Winter\Kernel\WinterApplication;
 
 require __DIR__ . '/vendor/autoload.php';
 

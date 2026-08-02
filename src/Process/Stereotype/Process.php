@@ -2,14 +2,22 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process;
+namespace Flytachi\Winter\Kernel\Process\Stereotype;
 
 use Flytachi\FileStore\FileStorage;
 use Flytachi\Winter\DI\Container;
-use Flytachi\Winter\K2\Concurrent\Future;
-use Flytachi\Winter\K2\Process\Engine\Engines;
-use Flytachi\Winter\K2\Process\Engine\ProcessEngine;
-use Flytachi\Winter\K2\Process\Internal\SingletonLock;
+use Flytachi\Winter\Kernel\Concurrent\Future;
+use Flytachi\Winter\Kernel\Process\Activity;
+use Flytachi\Winter\Kernel\Process\Engine\Engines;
+use Flytachi\Winter\Kernel\Process\Engine\ProcessEngine;
+use Flytachi\Winter\Kernel\Process\ForkReset;
+use Flytachi\Winter\Kernel\Process\Internal\SingletonLock;
+use Flytachi\Winter\Kernel\Process\ProcessAlreadyRunningException;
+use Flytachi\Winter\Kernel\Process\ProcessRunnable;
+use Flytachi\Winter\Kernel\Process\ProcessState;
+use Flytachi\Winter\Kernel\Process\ProcessStatus;
+use Flytachi\Winter\Kernel\Process\ProcessStore;
+use Flytachi\Winter\Kernel\Process\ResourceUsage;
 use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\Thread\Thread;
 use Psr\Log\LoggerInterface;
@@ -20,7 +28,7 @@ use Psr\Log\LoggerInterface;
  *
  * You write {@see run()}; the framework supplies the runtime (coroutines under
  * Swoole, forks otherwise), concurrency ({@see spawn()}), cooperative
- * cancellation ({@see isRunning()} / {@see sleep()} + {@see InterruptedException}),
+ * cancellation ({@see isRunning()} / {@see sleep()} + {@see \Flytachi\Winter\Kernel\Process\InterruptedException}),
  * a signal contract (5 hooks), an activity state ({@see Activity}), guaranteed
  * teardown ({@see onShutdown()}) and lifecycle control from CLI/web.
  *
@@ -117,7 +125,7 @@ abstract class Process
 
     /**
      * Interruptible pause — non-blocking under Swoole. Throws
-     * {@see InterruptedException} if an IDLE wait is woken by a stop.
+     * {@see \Flytachi\Winter\Kernel\Process\InterruptedException} if an IDLE wait is woken by a stop.
      */
     final protected function sleep(float $seconds): void
     {
@@ -376,7 +384,7 @@ abstract class Process
      * @param string|null $ownerClass Owning daemon class whose store holds the per-slot record.
      * @internal Not for application code — calling it re-enters the engine.
      *           Protected (not public) so a daemon can boot an external
-     *           {@see \Flytachi\Winter\K2\Process\Daemon\Daemon::$workerClass}
+     *           {@see \Flytachi\Winter\Kernel\Process\Stereotype\Daemon::$workerClass}
      *           worker (a sibling Process) without exposing it to the outside.
      */
     protected function runWorker(?int $slot = null, ?string $title = null, ?string $ownerClass = null): void
@@ -563,7 +571,7 @@ abstract class Process
     /**
      * Writes the per-slot heartbeat a daemon worker reports to the supervisor.
      * Keyed by the owner daemon's class + slot, so the supervisor aggregates all
-     * workers into its {@see \Flytachi\Winter\K2\Process\Daemon\DaemonStatus}.
+     * workers into its {@see \Flytachi\Winter\Kernel\Process\Daemon\DaemonStatus}.
      */
     private function writeWorkerRecord(): void
     {

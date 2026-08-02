@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Concurrent\Async\Proxy;
+namespace Flytachi\Winter\Kernel\Concurrent\Async\Proxy;
 
-use Flytachi\Winter\K2\Concurrent\Async\Async;
-use Flytachi\Winter\K2\Concurrent\Async\AsyncException;
-use Flytachi\Winter\K2\Concurrent\Future;
+use Flytachi\Winter\Kernel\Concurrent\Async\Async;
+use Flytachi\Winter\Kernel\Concurrent\Async\AsyncException;
+use Flytachi\Winter\Kernel\Concurrent\Future;
 
 /**
  * Turns a class carrying {@see Async} methods into the source of a subclass
@@ -32,11 +32,11 @@ use Flytachi\Winter\K2\Concurrent\Future;
 final class ProxyGenerator
 {
     /** Namespace generated classes are placed in. */
-    public const string PROXY_NAMESPACE = 'Flytachi\\Winter\\K2\\Concurrent\\Async\\Proxy\\Generated';
+    public const string PROXY_NAMESPACE = 'Flytachi\\Winter\\Kernel\\Concurrent\\Async\\Proxy\\Generated';
 
     private const string PROXY_SUFFIX = '__Async';
-    private const string SUPPORT = '\\Flytachi\\Winter\\K2\\Concurrent\\Async\\AsyncSupport';
-    private const string EXECUTORS = '\\Flytachi\\Winter\\K2\\Concurrent\\Executors';
+    private const string SUPPORT = '\\Flytachi\\Winter\\Kernel\\Concurrent\\Async\\AsyncSupport';
+    private const string EXECUTORS = '\\Flytachi\\Winter\\Kernel\\Concurrent\\Executors';
     private const string CONTAINER = '\\Flytachi\\Winter\\DI\\Container';
     private const string PROXY_CONTRACT = '\\Flytachi\\Winter\\DI\\Contract\\ProxyInterface';
 

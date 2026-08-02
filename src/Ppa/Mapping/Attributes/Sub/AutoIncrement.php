@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Sub;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Sub;
 
 use Attribute;
 
 #[Attribute(Attribute::TARGET_PROPERTY)]
-readonly class AutoIncrement implements AttributeDbSubType
+final readonly class AutoIncrement implements AttributeDbSubType
 {
     /**
      * AutoIncrement attribute for marking a property as an auto-incrementing column.

@@ -2,9 +2,9 @@
 
 namespace Main;
 
-use Flytachi\Winter\K2\Http\Request\K1ValidationTrait;
-use Flytachi\Winter\K2\Http\Request\Validation\Size;
-use Flytachi\Winter\K2\Localization\Locale;
+use Flytachi\Winter\Kernel\Http\Request\K1ValidationTrait;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Size;
+use Flytachi\Winter\Kernel\Localization\Locale;
 
 readonly class Order
 {

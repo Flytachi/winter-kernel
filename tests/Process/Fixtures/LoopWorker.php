@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process\Fixtures;
+namespace Flytachi\Winter\Kernel\Tests\Process\Fixtures;
 
-use Flytachi\Winter\K2\Process\Process;
+use Flytachi\Winter\Kernel\Process\Stereotype\Process;
 
 /**
  * Integration fixture: a standalone worker Process that loops until stopped —

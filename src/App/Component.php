@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App;
+namespace Flytachi\Winter\Kernel\App;
 
-use Flytachi\Winter\K2\Schedule\Scheduler;
+use Flytachi\Winter\Kernel\Schedule\Stereotype\Scheduler;
 
 /**
- * A declared unit of a {@see \Flytachi\Winter\K2\WinterApplication} — the "what my app
+ * A declared unit of a {@see \Flytachi\Winter\Kernel\WinterApplication} — the "what my app
  * contains" manifest, in the spirit of a Spring bean / @Enable* switch.
  *
  * Build entries with the named factories, never the constructor:
@@ -61,9 +61,9 @@ final readonly class Component
     }
 
     /**
-     * A single managed {@see \Flytachi\Winter\K2\Process\Process} worker.
+     * A single managed {@see \Flytachi\Winter\Kernel\Process\Stereotype\Process} worker.
      *
-     * @param class-string<\Flytachi\Winter\K2\Process\Process> $class
+     * @param class-string<\Flytachi\Winter\Kernel\Process\Stereotype\Process> $class
      */
     public static function process(string $class): self
     {
@@ -71,9 +71,9 @@ final readonly class Component
     }
 
     /**
-     * A supervised {@see \Flytachi\Winter\K2\Process\Daemon\Daemon} fleet.
+     * A supervised {@see \Flytachi\Winter\Kernel\Process\Stereotype\Daemon} fleet.
      *
-     * @param class-string<\Flytachi\Winter\K2\Process\Daemon\Daemon> $class
+     * @param class-string<\Flytachi\Winter\Kernel\Process\Stereotype\Daemon> $class
      */
     public static function daemon(string $class): self
     {

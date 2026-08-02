@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Integration\Cli\Fixtures\Pg;
+namespace Flytachi\Winter\Kernel\Tests\Integration\Cli\Fixtures\Pg;
 
-use Flytachi\Winter\K2\Ppa\Stereotype\RepositoryView;
-use Flytachi\Winter\K2\Tests\Integration\Cli\Fixtures\MigrEntity;
-use Flytachi\Winter\K2\Tests\Integration\Fixtures\PgTestDbConfig;
+use Flytachi\Winter\Kernel\Ppa\Stereotype\RepositoryView;
+use Flytachi\Winter\Kernel\Tests\Integration\Cli\Fixtures\MigrEntity;
+use Flytachi\Winter\Kernel\Tests\Integration\Fixtures\PgTestDbConfig;
 
 final class MigrPgRepo extends RepositoryView
 {

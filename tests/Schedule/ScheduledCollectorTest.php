@@ -2,23 +2,23 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Schedule;
+namespace Flytachi\Winter\Kernel\Tests\Schedule;
 
-use Flytachi\Winter\K2\Schedule\ScheduledCollector;
-use Flytachi\Winter\K2\Schedule\ScheduleConfigException;
-use Flytachi\Winter\K2\Schedule\Trigger\CronTrigger;
-use Flytachi\Winter\K2\Schedule\Trigger\FixedDelayTrigger;
-use Flytachi\Winter\K2\Schedule\Trigger\FixedRateTrigger;
-use Flytachi\Winter\K2\Tests\Schedule\Fixtures\AbstractScheduled;
-use Flytachi\Winter\K2\Tests\Schedule\Fixtures\ArgScheduled;
-use Flytachi\Winter\K2\Tests\Schedule\Fixtures\BadCronScheduled;
-use Flytachi\Winter\K2\Tests\Schedule\Fixtures\CronInitialDelayScheduled;
-use Flytachi\Winter\K2\Tests\Schedule\Fixtures\CronScheduled;
-use Flytachi\Winter\K2\Tests\Schedule\Fixtures\NonPositiveScheduled;
-use Flytachi\Winter\K2\Tests\Schedule\Fixtures\NoTriggerScheduled;
-use Flytachi\Winter\K2\Tests\Schedule\Fixtures\SampleScheduled;
-use Flytachi\Winter\K2\Tests\Schedule\Fixtures\StaticScheduled;
-use Flytachi\Winter\K2\Tests\Schedule\Fixtures\TwoTriggerScheduled;
+use Flytachi\Winter\Kernel\Schedule\ScheduledCollector;
+use Flytachi\Winter\Kernel\Schedule\ScheduleConfigException;
+use Flytachi\Winter\Kernel\Schedule\Trigger\CronTrigger;
+use Flytachi\Winter\Kernel\Schedule\Trigger\FixedDelayTrigger;
+use Flytachi\Winter\Kernel\Schedule\Trigger\FixedRateTrigger;
+use Flytachi\Winter\Kernel\Tests\Schedule\Fixtures\AbstractScheduled;
+use Flytachi\Winter\Kernel\Tests\Schedule\Fixtures\ArgScheduled;
+use Flytachi\Winter\Kernel\Tests\Schedule\Fixtures\BadCronScheduled;
+use Flytachi\Winter\Kernel\Tests\Schedule\Fixtures\CronInitialDelayScheduled;
+use Flytachi\Winter\Kernel\Tests\Schedule\Fixtures\CronScheduled;
+use Flytachi\Winter\Kernel\Tests\Schedule\Fixtures\NonPositiveScheduled;
+use Flytachi\Winter\Kernel\Tests\Schedule\Fixtures\NoTriggerScheduled;
+use Flytachi\Winter\Kernel\Tests\Schedule\Fixtures\SampleScheduled;
+use Flytachi\Winter\Kernel\Tests\Schedule\Fixtures\StaticScheduled;
+use Flytachi\Winter\Kernel\Tests\Schedule\Fixtures\TwoTriggerScheduled;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 

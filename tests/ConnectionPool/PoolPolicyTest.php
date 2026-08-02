@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\ConnectionPool;
+namespace Flytachi\Winter\Kernel\Tests\ConnectionPool;
 
-use Flytachi\Winter\K2\ConnectionPool\PoolPolicy;
+use Flytachi\Winter\Kernel\ConnectionPool\PoolPolicy;
 use PHPUnit\Framework\TestCase;
 
 final class PoolPolicyTest extends TestCase

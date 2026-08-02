@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App;
+namespace Flytachi\Winter\Kernel\App;
 
 /**
- * The kind of a long-lived {@see Component} a {@see \Flytachi\Winter\K2\WinterApplication}
+ * The kind of a long-lived {@see Component} a {@see \Flytachi\Winter\Kernel\WinterApplication}
  * hosts. Http is the main server; the rest are supervised companions.
  */
 enum ComponentKind

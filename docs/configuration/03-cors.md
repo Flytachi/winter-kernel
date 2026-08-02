@@ -1,6 +1,6 @@
 # CORS
 
-Winter K2 has two layers of CORS configuration, both modelled after Spring's `@CrossOrigin`:
+Winter has two layers of CORS configuration, both modelled after Spring's `@CrossOrigin`:
 
 1. **Global** — a `WebConfigurer` the scan finds. Applied to every response, including 404, 405, and error responses.
 2. **Per-route** — `#[CrossOrigin(...)]` attribute on a controller class or method. **Overrides** the global config (does not merge with it) for that specific route.
@@ -15,8 +15,8 @@ Global CORS is declared by any class extending `WebConfigurerAdapter` — there 
 to override on the application class, the scan finds the configurer wherever it lives:
 
 ```php
-use Flytachi\Winter\K2\App\Config\CorsRegistry;
-use Flytachi\Winter\K2\App\Config\WebConfigurerAdapter;
+use Flytachi\Winter\Kernel\App\Config\CorsRegistry;
+use Flytachi\Winter\Kernel\App\Config\WebConfigurerAdapter;
 
 final class WebConfig extends WebConfigurerAdapter
 {
@@ -84,9 +84,9 @@ Application code never sees an `OPTIONS` request that has a registered handler �
 `#[CrossOrigin]` overrides the global config for the routes it covers. Method-level wins over class-level; class-level wins over global.
 
 ```php
-use Flytachi\Winter\K2\Route\Annotation\CrossOrigin;
-use Flytachi\Winter\K2\Route\Annotation\{RequestMapping, GetMapping};
-use Flytachi\Winter\K2\Stereotype\Controller;
+use Flytachi\Winter\Kernel\Route\Annotation\CrossOrigin;
+use Flytachi\Winter\Kernel\Route\Annotation\{RequestMapping, GetMapping};
+use Flytachi\Winter\Kernel\Http\Stereotype\Controller;
 
 #[RequestMapping('admin')]
 #[CrossOrigin(

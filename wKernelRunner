@@ -21,7 +21,7 @@ declare(strict_types=1);
     same convention and then hands off to WinterApplication::executor().
 */
 
-use Flytachi\Winter\K2\WinterApplication;
+use Flytachi\Winter\Kernel\WinterApplication;
 
 if (PHP_VERSION_ID < 80400) {
     fwrite(STDERR, "Please use PHP version 8.4 or higher.\n");

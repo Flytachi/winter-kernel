@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App;
+namespace Flytachi\Winter\Kernel\App;
 
 /**
- * Parsed CLI arguments passed to {@see \Flytachi\Winter\K2\WinterApplication::run()}.
+ * Parsed CLI arguments passed to {@see \Flytachi\Winter\Kernel\WinterApplication::run()}.
  *
  * Splits a raw `$argv` into three buckets:
  *   - positionals — bare words: `command` (argv[1]) and `sub` (argv[2]);

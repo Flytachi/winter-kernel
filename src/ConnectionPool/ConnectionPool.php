@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\ConnectionPool;
+namespace Flytachi\Winter\Kernel\ConnectionPool;
 
 use Closure;
 use Swoole\Coroutine\Channel;
@@ -129,7 +129,7 @@ final class ConnectionPool
      * forget it and open its own. Clearing the timer is the part {@see close()} and
      * this share: a `Timer::tick` callback holds a reference to the pool, so a pool
      * merely dereferenced would stay alive and keep maintaining connections nobody
-     * uses. See {@see \Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool::reset()}.
+     * uses. See {@see \Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool::reset()}.
      */
     public function abandon(): void
     {

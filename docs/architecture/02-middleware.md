@@ -6,13 +6,13 @@ Middleware intercepts requests before and after the controller method runs.
 
 ## Creating a middleware
 
-Extend `Flytachi\Winter\K2\Stereotype\Middleware` and override `before()`, `after()`, or both.
+Extend `Flytachi\Winter\Kernel\Http\Stereotype\Middleware` and override `before()`, `after()`, or both.
 Both methods have default no-op implementations — override only what you need.
 
 ```php
-use Flytachi\Winter\K2\Stereotype\Middleware;
-use Flytachi\Winter\K2\Http\Contracts\{HttpRequest, HttpResponse};
-use Flytachi\Winter\K2\Http\Middleware\MiddlewareException;
+use Flytachi\Winter\Kernel\Http\Stereotype\Middleware;
+use Flytachi\Winter\Kernel\Http\Contracts\{HttpRequest, HttpResponse};
+use Flytachi\Winter\Kernel\Http\Middleware\MiddlewareException;
 
 class AuthMiddleware extends Middleware
 {
@@ -123,7 +123,7 @@ class TimingMiddleware extends Middleware
 Shorthand for aborting a request with a specific HTTP status from inside middleware:
 
 ```php
-use Flytachi\Winter\K2\Http\Middleware\MiddlewareException;
+use Flytachi\Winter\Kernel\Http\Middleware\MiddlewareException;
 use Flytachi\Winter\Base\HttpCode;
 
 throw new MiddlewareException('Token expired');                           // 401 Unauthorized
@@ -146,7 +146,7 @@ throw (new MiddlewareException('Rate limited', HttpCode::TOO_MANY_REQUESTS))
 Applies the client's IANA timezone to `date_default_timezone_set()` for the duration of the request. The value is read from `HttpRequest::getClientTimezone()`, which parses the `Timezone` or `X-Timezone` header and validates it against `timezone_identifiers_list()`. When no valid timezone is supplied, `before()` falls back to `env('TIME_ZONE', 'UTC')`; `after()` restores the same canonical default.
 
 ```php
-use Flytachi\Winter\K2\Http\Middleware\ClientTimezoneMiddleware;
+use Flytachi\Winter\Kernel\Http\Middleware\ClientTimezoneMiddleware;
 
 #[ClientTimezoneMiddleware]
 class ReportController extends Controller { ... }

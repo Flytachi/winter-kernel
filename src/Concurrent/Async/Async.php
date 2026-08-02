@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Concurrent\Async;
+namespace Flytachi\Winter\Kernel\Concurrent\Async;
 
 /**
  * Marks a method to be executed asynchronously.
  *
  * Mirrors Spring's `Async`. The call returns immediately; the body runs on an
- * {@see \Flytachi\Winter\K2\Concurrent\ExecutorService} — a coroutine under
+ * {@see \Flytachi\Winter\Kernel\Concurrent\ExecutorService} — a coroutine under
  * Swoole, a deferred task under FPM.
  *
  * The framework replaces the container binding of the declaring class with a
@@ -23,7 +23,7 @@ namespace Flytachi\Winter\K2\Concurrent\Async;
  *   not `static` and not `final`;
  * - the declaring class is not `final`;
  * - the return type is `Future` or `void`;
- * - a `Future`-returning body returns {@see \Flytachi\Winter\K2\Concurrent\CompletableFuture::completedFuture()};
+ * - a `Future`-returning body returns {@see \Flytachi\Winter\Kernel\Concurrent\CompletableFuture::completedFuture()};
  * - parameters are not passed by reference — a background task cannot write back.
  *
  * Violations are reported when proxies are generated, not at runtime.
@@ -61,7 +61,7 @@ namespace Flytachi\Winter\K2\Concurrent\Async;
  * result is still correct; only the "runs later" intuition does not hold for
  * purely computational bodies.
  *
- * @see \Flytachi\Winter\K2\Concurrent\Future
+ * @see \Flytachi\Winter\Kernel\Concurrent\Future
  */
 #[\Attribute(\Attribute::TARGET_METHOD)]
 final class Async

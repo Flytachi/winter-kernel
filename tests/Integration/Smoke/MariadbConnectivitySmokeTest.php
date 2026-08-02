@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Integration\Smoke;
+namespace Flytachi\Winter\Kernel\Tests\Integration\Smoke;
 
-use Flytachi\Winter\K2\Tests\Integration\Fixtures\IntegrationTestCase;
+use Flytachi\Winter\Kernel\Tests\Integration\Fixtures\IntegrationTestCase;
 use PHPUnit\Framework\Attributes\Group;
 
 /**

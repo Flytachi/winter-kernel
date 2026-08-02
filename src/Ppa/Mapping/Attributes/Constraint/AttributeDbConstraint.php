@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Constraint;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Constraint;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\AttributeDb;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\StructureInterface;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\AttributeDb;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\StructureInterface;
 
 interface AttributeDbConstraint extends AttributeDb
 {

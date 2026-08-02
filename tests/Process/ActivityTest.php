@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process;
+namespace Flytachi\Winter\Kernel\Tests\Process;
 
-use Flytachi\Winter\K2\Process\Activity;
+use Flytachi\Winter\Kernel\Process\Activity;
 use PHPUnit\Framework\TestCase;
 
 final class ActivityTest extends TestCase

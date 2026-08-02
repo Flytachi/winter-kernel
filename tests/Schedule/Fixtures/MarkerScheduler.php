@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Schedule\Fixtures;
+namespace Flytachi\Winter\Kernel\Tests\Schedule\Fixtures;
 
-use Flytachi\Winter\K2\Schedule\ScheduledTask;
-use Flytachi\Winter\K2\Schedule\Scheduler;
-use Flytachi\Winter\K2\Schedule\Trigger\FixedRateTrigger;
+use Flytachi\Winter\Kernel\Schedule\ScheduledTask;
+use Flytachi\Winter\Kernel\Schedule\Stereotype\Scheduler;
+use Flytachi\Winter\Kernel\Schedule\Trigger\FixedRateTrigger;
 
 /**
  * Integration fixture: a real scheduler whose task registry is injected (via the

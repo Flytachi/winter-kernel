@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\App;
+namespace Flytachi\Winter\Kernel\Tests\App;
 
-use Flytachi\Winter\K2\App\Attribute\EnableAsync;
-use Flytachi\Winter\K2\App\Attribute\EnableDaemon;
-use Flytachi\Winter\K2\App\Attribute\EnableProcess;
-use Flytachi\Winter\K2\App\Attribute\EnableScheduler;
-use Flytachi\Winter\K2\App\Attribute\EnableWeb;
-use Flytachi\Winter\K2\App\Component;
-use Flytachi\Winter\K2\App\ComponentKind;
-use Flytachi\Winter\K2\Schedule\Scheduler;
-use Flytachi\Winter\K2\WinterApplication;
+use Flytachi\Winter\Kernel\App\Attribute\EnableAsync;
+use Flytachi\Winter\Kernel\App\Attribute\EnableDaemon;
+use Flytachi\Winter\Kernel\App\Attribute\EnableProcess;
+use Flytachi\Winter\Kernel\App\Attribute\EnableScheduler;
+use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
+use Flytachi\Winter\Kernel\App\Component;
+use Flytachi\Winter\Kernel\App\ComponentKind;
+use Flytachi\Winter\Kernel\Schedule\Stereotype\Scheduler;
+use Flytachi\Winter\Kernel\WinterApplication;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 

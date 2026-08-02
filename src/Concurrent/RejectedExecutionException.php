@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Concurrent;
+namespace Flytachi\Winter\Kernel\Concurrent;
 
 /**
  * Thrown when a task cannot be accepted for execution.

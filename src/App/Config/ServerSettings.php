@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App\Config;
+namespace Flytachi\Winter\Kernel\App\Config;
 
-use Flytachi\Winter\K2\App\ApplicationConfigException;
-use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\Kernel\App\ApplicationConfigException;
+use Flytachi\Winter\Kernel\Kernel;
 
 /**
  * Fluent builder for the Swoole HTTP server options — the replacement for the old

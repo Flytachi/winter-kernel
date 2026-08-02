@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Pool;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Pool;
 
 use Flytachi\Winter\Cdo\Connection\CDOException;
-use Flytachi\Winter\K2\ConnectionPool\PoolEntry;
-use Flytachi\Winter\K2\Ppa\Pool\BorrowedConnection;
-use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Kernel\ConnectionPool\PoolEntry;
+use Flytachi\Winter\Kernel\Ppa\Pool\BorrowedConnection;
+use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
 use PDOException;
 use PHPUnit\Framework\TestCase;
 

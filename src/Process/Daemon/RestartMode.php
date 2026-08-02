@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process\Daemon;
+namespace Flytachi\Winter\Kernel\Process\Daemon;
 
 /**
  * When a supervised worker should be restarted after it exits.

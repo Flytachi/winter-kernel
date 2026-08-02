@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process\Engine;
+namespace Flytachi\Winter\Kernel\Process\Engine;
 
 /**
  * Picks the {@see ProcessEngine} matching the current runtime.
@@ -12,7 +12,7 @@ namespace Flytachi\Winter\K2\Process\Engine;
  * launched from the CLI creates its own coroutine scheduler via
  * {@see \Swoole\Coroutine\run()} and is not a Swoole server worker.
  *
- * @see \Flytachi\Winter\K2\Concurrent\Executors
+ * @see \Flytachi\Winter\Kernel\Concurrent\Executors
  */
 final class Engines
 {

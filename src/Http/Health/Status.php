@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Health;
+namespace Flytachi\Winter\Kernel\Http\Health;
 
 /**
  * Health status of a single {@see HealthContributor}, aggregated into the overall

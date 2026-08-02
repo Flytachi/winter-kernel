@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process\Daemon;
+namespace Flytachi\Winter\Kernel\Process\Daemon;
 
 /**
- * How a {@see Daemon} recovers a worker that died unexpectedly.
+ * How a {@see \Flytachi\Winter\Kernel\Process\Stereotype\Daemon} recovers a worker that died unexpectedly.
  *
  * Groups the three restart knobs into one overridable policy object (paired with
  * {@see ScalingPolicy}). Immutable, and non-final so an application can define a

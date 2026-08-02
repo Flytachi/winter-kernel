@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Concurrent\Async\Proxy;
+namespace Flytachi\Winter\Kernel\Concurrent\Async\Proxy;
 
-use Flytachi\Winter\K2\Concurrent\Async\AsyncException;
-use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\Kernel\Concurrent\Async\AsyncException;
+use Flytachi\Winter\Kernel\Kernel;
 
 /**
  * Materialises generated proxies as files and loads them.

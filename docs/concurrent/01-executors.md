@@ -10,7 +10,7 @@ behave correctly under Swoole and under PHP-FPM, and there is no
 `if (Runtime::isSwoole())` anywhere in your project.
 
 ```php
-use Flytachi\Winter\K2\Concurrent\Executors;
+use Flytachi\Winter\Kernel\Concurrent\Executors;
 
 Executors::common()->execute(fn() => $mixpanel->track($userId, 'signup'));
 ```
@@ -20,7 +20,7 @@ Executors::common()->execute(fn() => $mixpanel->track($userId, 'signup'));
 ## `Executors`
 
 ```php
-use Flytachi\Winter\K2\Concurrent\Executors;
+use Flytachi\Winter\Kernel\Concurrent\Executors;
 ```
 
 ### `common(): ExecutorService`

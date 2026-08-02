@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Schedule\Integration;
+namespace Flytachi\Winter\Kernel\Tests\Schedule\Integration;
 
-use Flytachi\Winter\K2\Tests\Process\Integration\IntegrationCase;
-use Flytachi\Winter\K2\Tests\Schedule\Fixtures\MarkerScheduler;
+use Flytachi\Winter\Kernel\Tests\Process\Integration\IntegrationCase;
+use Flytachi\Winter\Kernel\Tests\Schedule\Fixtures\MarkerScheduler;
 use PHPUnit\Framework\Attributes\Group;
 
 /**
  * Live scheduler run: forks a real {@see MarkerScheduler}, which fires its task
- * through the actual engine ({@see \Flytachi\Winter\K2\Process\Process::spawn()}),
+ * through the actual engine ({@see \Flytachi\Winter\Kernel\Process\Stereotype\Process::spawn()}),
  * and observes the firing through the WK_MARKER file — then a real SIGTERM stops
  * it. Exercises the true boot, coroutine/fork, and graceful-stop machinery.
  */

@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Flytachi\Winter\K2\Localization\Locale;
-use Flytachi\Winter\K2\Http\Response\RenderContext;
+use Flytachi\Winter\Kernel\Localization\Locale;
+use Flytachi\Winter\Kernel\Http\Response\RenderContext;
 
 if (!function_exists('trans')) {
     /**

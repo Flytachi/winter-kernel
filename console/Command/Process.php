@@ -5,16 +5,16 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\K2\Collector\SubclassCollector;
-use Flytachi\Winter\K2\Core\ClassScanner;
-use Flytachi\Winter\K2\Process\Activity;
-use Flytachi\Winter\K2\Process\Daemon\Daemon as DaemonUnit;
-use Flytachi\Winter\K2\Process\Process as ProcessUnit;
+use Flytachi\Winter\Kernel\Collector\SubclassCollector;
+use Flytachi\Winter\Kernel\Core\ClassScanner;
+use Flytachi\Winter\Kernel\Process\Activity;
+use Flytachi\Winter\Kernel\Process\Stereotype\Daemon as DaemonUnit;
+use Flytachi\Winter\Kernel\Process\Stereotype\Process as ProcessUnit;
 
 /**
  * Manages bare {@see ProcessUnit} units. Daemons are managed by `call daemon`.
  */
-class Process extends Cmd
+final class Process extends Cmd
 {
     public static string $title = "manage Process units (start/stop/status)";
 

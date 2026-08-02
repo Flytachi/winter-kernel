@@ -5,7 +5,7 @@ placeholder embedded inside the route URL pattern — it captures a dynamic port
 the request path and delivers it, cast to the declared PHP type, as a method argument.
 
 ```php
-use Flytachi\Winter\K2\Http\Request\Annotation\PathVariable;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\PathVariable;
 ```
 
 ---

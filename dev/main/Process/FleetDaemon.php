@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Main\Process;
 
-use Flytachi\Winter\K2\Process\Daemon\Daemon;
+use Flytachi\Winter\Kernel\Process\Stereotype\Daemon;
 
 /**
  * Supervises an external worker class ({@see SendProc}) rather than an inline

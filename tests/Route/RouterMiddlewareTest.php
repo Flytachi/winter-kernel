@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Route;
+namespace Flytachi\Winter\Kernel\Tests\Route;
 
 use Flytachi\Winter\DI\Container;
-use Flytachi\Winter\K2\Route\Router;
-use Flytachi\Winter\K2\Tests\Route\Fixtures\FakeRequest;
-use Flytachi\Winter\K2\Tests\Route\Fixtures\FakeResponse;
-use Flytachi\Winter\K2\Tests\Route\Fixtures\FirstMiddleware;
-use Flytachi\Winter\K2\Tests\Route\Fixtures\RecordingMiddleware;
-use Flytachi\Winter\K2\Tests\Route\Fixtures\SecondMiddleware;
+use Flytachi\Winter\Kernel\Route\Router;
+use Flytachi\Winter\Kernel\Tests\Route\Fixtures\FakeRequest;
+use Flytachi\Winter\Kernel\Tests\Route\Fixtures\FakeResponse;
+use Flytachi\Winter\Kernel\Tests\Route\Fixtures\FirstMiddleware;
+use Flytachi\Winter\Kernel\Tests\Route\Fixtures\RecordingMiddleware;
+use Flytachi\Winter\Kernel\Tests\Route\Fixtures\SecondMiddleware;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 

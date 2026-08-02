@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process;
+namespace Flytachi\Winter\Kernel\Tests\Process;
 
-use Flytachi\Winter\K2\Process\Daemon\DaemonConfigException;
-use Flytachi\Winter\K2\Process\InterruptedException;
-use Flytachi\Winter\K2\Process\ProcessAlreadyRunningException;
+use Flytachi\Winter\Kernel\Process\Daemon\DaemonConfigException;
+use Flytachi\Winter\Kernel\Process\InterruptedException;
+use Flytachi\Winter\Kernel\Process\ProcessAlreadyRunningException;
 use PHPUnit\Framework\TestCase;
 
 final class ExceptionsTest extends TestCase

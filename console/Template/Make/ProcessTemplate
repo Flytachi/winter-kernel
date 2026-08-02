@@ -2,7 +2,7 @@
 
 namespace __namespace__;
 
-use Flytachi\Winter\K2\Process\Process;
+use Flytachi\Winter\Kernel\Process\Stereotype\Process;
 
 final class __className__ extends Process
 {

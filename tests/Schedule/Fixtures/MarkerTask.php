@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Schedule\Fixtures;
+namespace Flytachi\Winter\Kernel\Tests\Schedule\Fixtures;
 
 /**
  * Integration bean: its scheduled method appends a line to the file named by the

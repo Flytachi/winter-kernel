@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Pool;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Pool;
 
-use Flytachi\Winter\K2\ConnectionPool\ConnectionPool;
-use Flytachi\Winter\K2\ConnectionPool\PoolPolicy;
-use Flytachi\Winter\K2\Http\Health\HealthIndicator;
-use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
-use Flytachi\Winter\K2\Tests\ConnectionPool\MockFactory;
+use Flytachi\Winter\Kernel\ConnectionPool\ConnectionPool;
+use Flytachi\Winter\Kernel\ConnectionPool\PoolPolicy;
+use Flytachi\Winter\Kernel\Http\Health\HealthIndicator;
+use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Kernel\Tests\ConnectionPool\MockFactory;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use ReflectionProperty;

@@ -29,7 +29,7 @@ Without any custom handler, every exception is handled by `ExceptionResponseBase
 Throw from anywhere — controllers, services, middleware. The Router catches it and sends an HTTP response.
 
 ```php
-use Flytachi\Winter\K2\Http\Response\ResponseException;
+use Flytachi\Winter\Kernel\Http\Response\ResponseException;
 use Flytachi\Winter\Base\HttpCode;
 
 throw new ResponseException('User not found', HttpCode::NOT_FOUND);
@@ -45,7 +45,7 @@ Default code: **400 Bad Request**. Logged at `warning` level.
 ### `ClientError` — business / domain errors caused by the caller
 
 ```php
-use Flytachi\Winter\K2\Exception\ClientError;
+use Flytachi\Winter\Kernel\Exception\ClientError;
 
 throw new ClientError('Email already taken');
 ClientError::throw('Email already taken', HttpCode::UNPROCESSABLE_ENTITY);
@@ -56,7 +56,7 @@ Default code: **409 Conflict**. Logged at `warning` level.
 ### `ServerError` — unexpected infrastructure or application failures
 
 ```php
-use Flytachi\Winter\K2\Exception\ServerError;
+use Flytachi\Winter\Kernel\Exception\ServerError;
 
 throw new ServerError('Payment gateway timeout');
 ServerError::throw('Database connection failed');
@@ -76,7 +76,7 @@ Maps the HTTP code to a log level automatically:
 | Other      | `notice`   |
 
 ```php
-use Flytachi\Winter\K2\Exception\Error;
+use Flytachi\Winter\Kernel\Exception\Error;
 
 throw new Error('Not implemented', HttpCode::NOT_IMPLEMENTED);
 Error::throw('Method not allowed', HttpCode::METHOD_NOT_ALLOWED);
@@ -89,7 +89,7 @@ Default code: **520** (Unknown Error). Useful when callers do not know whether a
 Reserved for bugs in the kernel itself (misconfiguration, impossible state):
 
 ```php
-use Flytachi\Winter\K2\Exception\KernelError;
+use Flytachi\Winter\Kernel\Exception\KernelError;
 
 throw new KernelError('Router not initialized before handle()');
 ```
@@ -109,7 +109,7 @@ See the [Middleware docs](02-middleware.md) for details. Default code: **401**.
 - Implements `ExceptionLogLevel` → calls `$e->getLogLevel()` — the exception declares its own level
 - Anything else → `error` (including plain `\RuntimeException`, `\LogicException`, etc.)
 
-All K2 exceptions (`ResponseException`, `ClientError`, `ServerError`, `Error`, `KernelError`, `MiddlewareException`) implement `ExceptionLogLevel`.
+All kernel exceptions (`ResponseException`, `ClientError`, `ServerError`, `Error`, `KernelError`, `MiddlewareException`) implement `ExceptionLogLevel`.
 
 ---
 
@@ -121,7 +121,7 @@ Create a class that:
 3. Carries the `#[AdviceException]` attribute
 
 ```php
-use Flytachi\Winter\K2\Http\Response\{AdviceException, ExceptionResponseBase};
+use Flytachi\Winter\Kernel\Http\Response\{AdviceException, ExceptionResponseBase};
 
 #[AdviceException(MyDomainException::class)]
 class MyDomainExceptionHandler extends ExceptionResponseBase

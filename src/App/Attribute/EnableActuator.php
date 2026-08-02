@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App\Attribute;
+namespace Flytachi\Winter\Kernel\App\Attribute;
 
-use Flytachi\Winter\K2\Http\Health\HealthIndicatorInterface;
-use Flytachi\Winter\K2\Stereotype\Middleware;
+use Flytachi\Winter\Kernel\Http\Health\HealthIndicatorInterface;
+use Flytachi\Winter\Kernel\Http\Stereotype\Middleware;
 
 /**
  * Enables the `/actuator/*` diagnostic endpoints — the winter analogue of Spring
- * Boot Actuator. Declared on the {@see \Flytachi\Winter\K2\WinterApplication} class.
+ * Boot Actuator. Declared on the {@see \Flytachi\Winter\Kernel\WinterApplication} class.
  *
  * Without it the actuator is off. With it, the endpoints are registered and every
- * discovered {@see \Flytachi\Winter\K2\Http\Health\HealthContributor} is merged into
+ * discovered {@see \Flytachi\Winter\Kernel\Http\Health\HealthContributor} is merged into
  * `/actuator/health`.
  *
  * ```

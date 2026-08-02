@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Http;
+namespace Flytachi\Winter\Kernel\Tests\Http;
 
 use Flytachi\Winter\DI\Container;
-use Flytachi\Winter\K2\App\Attribute\EnableActuator;
-use Flytachi\Winter\K2\Http\Health\Health;
-use Flytachi\Winter\K2\Http\Health\HealthContributor;
-use Flytachi\Winter\K2\Http\Health\HealthIndicator;
-use Flytachi\Winter\K2\Http\Health\HealthStatus;
-use Flytachi\Winter\K2\Http\Health\Status;
-use Flytachi\Winter\K2\WinterApplication;
+use Flytachi\Winter\Kernel\App\Attribute\EnableActuator;
+use Flytachi\Winter\Kernel\Http\Health\Health;
+use Flytachi\Winter\Kernel\Http\Health\HealthContributor;
+use Flytachi\Winter\Kernel\Http\Health\HealthIndicator;
+use Flytachi\Winter\Kernel\Http\Health\HealthStatus;
+use Flytachi\Winter\Kernel\Http\Health\Status;
+use Flytachi\Winter\Kernel\WinterApplication;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;

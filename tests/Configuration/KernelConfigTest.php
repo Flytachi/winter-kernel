@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Configuration;
+namespace Flytachi\Winter\Kernel\Tests\Configuration;
 
-use Flytachi\Winter\K2\Core\KernelConfig;
+use Flytachi\Winter\Kernel\Core\KernelConfig;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
@@ -52,7 +52,7 @@ final class KernelConfigTest extends TestCase
         KernelConfig::init(
             pathRoot:    $this->tmpDir,
             pathStorage: $this->tmpDir . '/storage',
-            // isTmpVolatile defaults to true on KernelConfig, but the K2\Kernel
+            // isTmpVolatile defaults to true on KernelConfig, but the Kernel
             // wrapper passes false. We explicitly pass false here to mimic the
             // production-FPM scenario where the bug bit hardest.
             isTmpVolatile: false,

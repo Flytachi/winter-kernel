@@ -37,6 +37,19 @@ housekeeper (keepalive / idleTimeout / minimumIdle, opt-in), evict при пот
 **Документация** — `docs/` вычищен от мёртвого API, `README.md` переписан, `doc-new/`
 удалён.
 
+**Редизайн: namespace, стереотипы, поверхность расширения** (2026-08-02) — корень
+`Flytachi\Winter\K2\` → `Flytachi\Winter\Kernel\` (версия ушла из адреса; `Console`
+остался отдельным корнем); точки расширения собраны в `<Слой>/Stereotype/`; закрыты
+`final` 96 классов в `src/` плюс 13 консольных команд и `Console\Core`, открытыми
+осознанно остались 25 (17 исключений категорией + 8 поимённо с причинами). Держится
+четырьмя архитектурными тестами. Спека — `doc/2026-08-02-restructure-design.md`,
+план — `-plan.md`.
+
+> Для проектов: после обновления нужен **`composer update flytachi/winter-kernel`**, а не
+> только `dump-autoload` — карта автозагрузки берётся из `vendor/composer/installed.json`,
+> и без `update` там останется старый корень. Симптом — «Class not found» при формально
+> свежем ядре.
+
 **Аудит непроверенных слоёв** — `Concurrent/Async`, `Unit/Pagination`, `Stereotype`,
 миграции `Ppa` открыты и покрыты тестами (`AsyncContractTest`, `CursorTokenTest`,
 `SqliteDdlTest`). В `CursorToken::decode()` добавлен отказ на нескалярное значение

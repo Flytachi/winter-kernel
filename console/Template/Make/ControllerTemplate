@@ -2,9 +2,9 @@
 
 namespace __namespace__;
 
-use Flytachi\Winter\K2\Http\Response\ResponseEntity;
-use Flytachi\Winter\K2\Route\Annotation\RequestMapping;
-use Flytachi\Winter\K2\Stereotype\Controller;
+use Flytachi\Winter\Kernel\Http\Response\ResponseEntity;
+use Flytachi\Winter\Kernel\Route\Annotation\RequestMapping;
+use Flytachi\Winter\Kernel\Http\Stereotype\Controller;
 
 class __className__ extends Controller
 {

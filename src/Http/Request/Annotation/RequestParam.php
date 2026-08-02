@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Request\Annotation;
+namespace Flytachi\Winter\Kernel\Http\Request\Annotation;
 
 use Attribute;
 
@@ -21,7 +21,7 @@ use Attribute;
  * ```
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-readonly class RequestParam
+final readonly class RequestParam
 {
     /**
      * @param string|null $name Exact query string key (e.g. 'page_size' for ?page_size=25).

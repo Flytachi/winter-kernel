@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Unit\Pagination;
+namespace Flytachi\Winter\Kernel\Unit\Pagination;
 
 use Flytachi\Winter\Cdo\Connection\CDOStatement;
 use Flytachi\Winter\Cdo\Qb;
-use Flytachi\Winter\K2\Ppa\Entity\RepositoryInterface;
-use Flytachi\Winter\K2\Ppa\Entity\RepositoryViewInterface;
+use Flytachi\Winter\Kernel\Ppa\Entity\RepositoryInterface;
+use Flytachi\Winter\Kernel\Ppa\Entity\RepositoryViewInterface;
 use LogicException;
 use ValueError;
 

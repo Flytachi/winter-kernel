@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Concurrent\Async\Proxy;
+namespace Flytachi\Winter\Kernel\Concurrent\Async\Proxy;
 
-use Flytachi\Winter\K2\Concurrent\Async\AsyncException;
+use Flytachi\Winter\Kernel\Concurrent\Async\AsyncException;
 
 /**
  * Renders reflected method signatures back into PHP source.

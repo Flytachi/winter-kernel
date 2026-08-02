@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Route\Fixtures;
+namespace Flytachi\Winter\Kernel\Tests\Route\Fixtures;
 
-use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
 
 /**
  * Captures what the router wrote instead of sending it, so a test can assert on the

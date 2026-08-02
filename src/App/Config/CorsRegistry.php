@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App\Config;
+namespace Flytachi\Winter\Kernel\App\Config;
 
-use Flytachi\Winter\K2\Http\Cors;
+use Flytachi\Winter\Kernel\Http\Cors;
 
 /**
  * Fluent builder handed to {@see WebConfigurer::configureCors()}. Collects the

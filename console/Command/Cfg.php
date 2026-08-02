@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\Kernel\Kernel;
 
-class Cfg extends Cmd
+final class Cfg extends Cmd
 {
     public static string $title = "manage project configuration, environment and keys";
     private string $templatePath;

@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Mapping;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Mapping;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Additive\DefaultVal;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Additive\NullableIs;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Hybrid\Id;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Idx\Index;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Idx\Unique;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal as P;
-use Flytachi\Winter\K2\Ppa\Mapping\ColumnMapping;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\Table;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Additive\DefaultVal;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Additive\NullableIs;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Hybrid\Id;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Idx\Index;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Idx\Unique;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal as P;
+use Flytachi\Winter\Kernel\Ppa\Mapping\ColumnMapping;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Table;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;

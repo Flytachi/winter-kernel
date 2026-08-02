@@ -9,7 +9,7 @@ Router serializes it to the underlying `HttpResponse` — controllers never call
 `$response->end()` themselves.
 
 ```php
-use Flytachi\Winter\K2\Http\Response\ResponseEntity;
+use Flytachi\Winter\Kernel\Http\Response\ResponseEntity;
 
 // Static factory shortcuts
 return ResponseEntity::ok($data);               // 200
@@ -68,9 +68,9 @@ Prefer `ResponseEntity::noContent()` for an explicit 204.
 `Sendable` is the common contract for all response objects. Implement it for fully custom responses:
 
 ```php
-use Flytachi\Winter\K2\Http\Response\Sendable;
-use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
-use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\Response\Sendable;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
 
 class CsvResponse implements Sendable
 {
@@ -101,7 +101,7 @@ File and download responses. All formats set `Content-Encoding: identity` and `C
 ### Factory methods
 
 ```php
-use Flytachi\Winter\K2\Http\Response\ResponseFile;
+use Flytachi\Winter\Kernel\Http\Response\ResponseFile;
 
 // Raw bytes — any MIME type
 ResponseFile::binary($data, 'report.bin');
@@ -152,7 +152,7 @@ memory-light `fpassthru` stream on FPM). Use it for large files (video, audio,
 archives, database dumps) where `ResponseFile::file()` would waste worker memory.
 
 ```php
-use Flytachi\Winter\K2\Http\Response\ResponseStreamFile;
+use Flytachi\Winter\Kernel\Http\Response\ResponseStreamFile;
 
 return ResponseStreamFile::open('/var/media/video.mp4');                  // inline
 return ResponseStreamFile::open('/var/export/report.pdf')->attachment();  // download
@@ -244,7 +244,7 @@ ResponseView::setBasePath(__DIR__ . '/resources/views');
 ### Factory methods
 
 ```php
-use Flytachi\Winter\K2\Http\Response\ResponseView;
+use Flytachi\Winter\Kernel\Http\Response\ResponseView;
 
 // Render a single template
 return ResponseView::view('user/profile', ['user' => $user]);

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App\Config;
+namespace Flytachi\Winter\Kernel\App\Config;
 
 /**
  * Logging configuration contract — declares extra log channels in code (the rare

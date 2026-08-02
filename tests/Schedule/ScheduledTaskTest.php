@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Schedule;
+namespace Flytachi\Winter\Kernel\Tests\Schedule;
 
-use Flytachi\Winter\K2\Schedule\ScheduledTask;
-use Flytachi\Winter\K2\Schedule\Trigger\FixedDelayTrigger;
+use Flytachi\Winter\Kernel\Schedule\ScheduledTask;
+use Flytachi\Winter\Kernel\Schedule\Trigger\FixedDelayTrigger;
 use PHPUnit\Framework\TestCase;
 
 final class ScheduledTaskTest extends TestCase

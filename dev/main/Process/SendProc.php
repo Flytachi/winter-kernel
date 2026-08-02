@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Main\Process;
 
-use Flytachi\Winter\K2\Process\Process;
+use Flytachi\Winter\Kernel\Process\Stereotype\Process;
 use Flytachi\Winter\Logger\LoggerFactory;
 
 /**

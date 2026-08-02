@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\K2\Core\ClassScanner;
-use Flytachi\Winter\K2\Process\Activity;
-use Flytachi\Winter\K2\Schedule\Scheduler;
-use Flytachi\Winter\K2\Schedule\ScheduledCollector;
-use Flytachi\Winter\K2\Schedule\ScheduledTask;
+use Flytachi\Winter\Kernel\Core\ClassScanner;
+use Flytachi\Winter\Kernel\Process\Activity;
+use Flytachi\Winter\Kernel\Schedule\Stereotype\Scheduler;
+use Flytachi\Winter\Kernel\Schedule\ScheduledCollector;
+use Flytachi\Winter\Kernel\Schedule\ScheduledTask;
 
 /**
  * Runs and inspects the {@see Scheduler} — the single process that fires every
@@ -17,7 +17,7 @@ use Flytachi\Winter\K2\Schedule\ScheduledTask;
  * to name: the scheduler is one fixed runtime, and the schedule is the set of
  * annotated methods it discovers.
  */
-class Schedule extends Cmd
+final class Schedule extends Cmd
 {
     private const int CL = 36;
 

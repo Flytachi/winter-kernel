@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Concurrent;
+namespace Flytachi\Winter\Kernel\Tests\Concurrent;
 
-use Flytachi\Winter\K2\Concurrent\RejectPolicy;
+use Flytachi\Winter\Kernel\Concurrent\RejectPolicy;
 use PHPUnit\Framework\TestCase;
 
 final class RejectPolicyTest extends TestCase

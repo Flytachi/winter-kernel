@@ -2,10 +2,9 @@
 
 namespace Main\Services;
 
-use Flytachi\Winter\K2\Stereotype\Service;
 use Flytachi\Winter\Logger\Log;
 
-class FakeSendService extends Service implements SendInterface
+class FakeSendService implements SendInterface
 {
     public function list(): array
     {

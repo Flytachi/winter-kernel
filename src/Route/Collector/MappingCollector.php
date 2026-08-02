@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Route\Collector;
+namespace Flytachi\Winter\Kernel\Route\Collector;
 
 use Flytachi\Winter\DI\Contract\CollectorInterface;
-use Flytachi\Winter\K2\Route\Annotation\AbstractMapping;
-use Flytachi\Winter\K2\Route\Annotation\CrossOrigin;
-use Flytachi\Winter\K2\Route\Annotation\RequestMapping;
-use Flytachi\Winter\K2\Route\Router;
-use Flytachi\Winter\K2\Stereotype\ControllerInterface;
-use Flytachi\Winter\K2\Stereotype\Middleware;
+use Flytachi\Winter\Kernel\Route\Annotation\AbstractMapping;
+use Flytachi\Winter\Kernel\Route\Annotation\CrossOrigin;
+use Flytachi\Winter\Kernel\Route\Annotation\RequestMapping;
+use Flytachi\Winter\Kernel\Route\Router;
+use Flytachi\Winter\Kernel\Http\Stereotype\ControllerInterface;
+use Flytachi\Winter\Kernel\Http\Stereotype\Middleware;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;

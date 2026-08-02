@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Request\Validation;
+namespace Flytachi\Winter\Kernel\Http\Request\Validation;
 
 use Attribute;
 
@@ -17,7 +17,7 @@ use Attribute;
  * ```
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-readonly class Date implements Constraint
+final readonly class Date implements Constraint
 {
     /**
      * @param string $format PHP date format string. Defaults to 'Y-m-d' (e.g. "2024-01-31").

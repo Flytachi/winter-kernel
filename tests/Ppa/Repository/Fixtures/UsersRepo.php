@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Repository\Fixtures;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Repository\Fixtures;
 
-use Flytachi\Winter\K2\Ppa\Stereotype\RepositoryView;
+use Flytachi\Winter\Kernel\Ppa\Stereotype\RepositoryView;
 
 /**
  * Plain repo with no typed entity — buildSql() will emit `SELECT *`.

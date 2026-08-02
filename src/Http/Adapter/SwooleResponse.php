@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Adapter;
+namespace Flytachi\Winter\Kernel\Http\Adapter;
 
-use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
 use Swoole\Http\Response;
 
 /**

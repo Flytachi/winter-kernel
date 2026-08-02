@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Route;
+namespace Flytachi\Winter\Kernel\Tests\Route;
 
 use Flytachi\Winter\DI\Collector\DICollector;
 use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\DI\Scanner;
-use Flytachi\Winter\K2\Core\KernelConfig;
-use Flytachi\Winter\K2\Kernel;
-use Flytachi\Winter\K2\Route\Router;
-use Flytachi\Winter\K2\Tests\Route\Fixtures\FakeRequest;
-use Flytachi\Winter\K2\Tests\Route\Fixtures\FakeResponse;
+use Flytachi\Winter\Kernel\Core\KernelConfig;
+use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Kernel\Route\Router;
+use Flytachi\Winter\Kernel\Tests\Route\Fixtures\FakeRequest;
+use Flytachi\Winter\Kernel\Tests\Route\Fixtures\FakeResponse;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 

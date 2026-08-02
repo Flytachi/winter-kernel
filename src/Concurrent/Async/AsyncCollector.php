@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Concurrent\Async;
+namespace Flytachi\Winter\Kernel\Concurrent\Async;
 
 use Flytachi\Winter\DI\Attribute\Request;
 use Flytachi\Winter\DI\Attribute\Singleton;
 use Flytachi\Winter\DI\Attribute\Transient;
 use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\DI\Contract\CollectorInterface;
-use Flytachi\Winter\K2\Concurrent\Async\Proxy\ProxyFactory;
-use Flytachi\Winter\K2\Concurrent\Async\Proxy\ProxyGenerator;
-use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\Kernel\Concurrent\Async\Proxy\ProxyFactory;
+use Flytachi\Winter\Kernel\Concurrent\Async\Proxy\ProxyGenerator;
+use Flytachi\Winter\Kernel\Kernel;
 
 /**
  * Scanner collector that swaps classes carrying {@see Async} methods for their

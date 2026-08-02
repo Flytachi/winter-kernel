@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\Console\Inc\CmdCustom;
-use Flytachi\Winter\K2\Collector\SubclassCollector;
-use Flytachi\Winter\K2\Core\ClassScanner;
+use Flytachi\Winter\Console\Stereotype\CmdCustom;
+use Flytachi\Winter\Kernel\Collector\SubclassCollector;
+use Flytachi\Winter\Kernel\Core\ClassScanner;
 
-class Script extends Cmd
+final class Script extends Cmd
 {
     public static string $title = "run or list custom Cmd scripts";
 

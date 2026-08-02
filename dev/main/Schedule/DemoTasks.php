@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Main\Schedule;
 
-use Flytachi\Winter\K2\Schedule\Scheduled;
+use Flytachi\Winter\Kernel\Schedule\Scheduled;
 use Flytachi\Winter\Logger\LoggerFactory;
 
 /**

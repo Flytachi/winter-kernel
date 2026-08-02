@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Mapping\Attributes\Sub;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Mapping\Attributes\Sub;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Sub\AutoIncrement;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Sub\AutoIncrement;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

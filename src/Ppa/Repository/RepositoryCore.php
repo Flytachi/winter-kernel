@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Repository;
+namespace Flytachi\Winter\Kernel\Ppa\Repository;
 
 use Flytachi\Winter\Cdo\CDOBind;
 use Flytachi\Winter\Cdo\Connection\CDO;
 use Flytachi\Winter\Cdo\Connection\CDOStatement;
 use Flytachi\Winter\Cdo\Qb;
-use Flytachi\Winter\K2\Ppa\Entity\EntityInterface;
-use Flytachi\Winter\K2\Ppa\Entity\RepositoryInterface;
-use Flytachi\Winter\K2\Ppa\Mapping\RepositoryMappingInterface;
-use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Kernel\Ppa\Entity\EntityInterface;
+use Flytachi\Winter\Kernel\Ppa\Entity\RepositoryInterface;
+use Flytachi\Winter\Kernel\Ppa\Mapping\RepositoryMappingInterface;
+use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
 use Flytachi\Winter\Base\Runtime;
 use PDOStatement;
 use stdClass;
@@ -49,7 +49,7 @@ use ValueError;
  *
  * `TEntity` is the entity class declared by a concrete repository via
  * {@see $entityClassName}. Subclasses bind it through an `@extends` PHPDoc tag
- * pinning the template parameter — see {@see \Flytachi\Winter\K2\Ppa\Stereotype\Repository}
+ * pinning the template parameter — see {@see \Flytachi\Winter\Kernel\Ppa\Stereotype\Repository}
  * for details. When unbound, `TEntity` defaults to {@see stdClass}.
  *
  * @template TEntity of object

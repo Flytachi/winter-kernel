@@ -27,8 +27,8 @@ Override `configure()` only for a non-standard layout — for instance to keep r
 files outside the project:
 
 ```php
-use Flytachi\Winter\K2\App\ApplicationArguments;
-use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\Kernel\App\ApplicationArguments;
+use Flytachi\Winter\Kernel\Kernel;
 
 #[EnableWeb]
 final class Application extends WinterApplication
@@ -101,7 +101,7 @@ Kernel::$pathStorageVolatile
 
 Use `true` for ephemeral containers (Docker, Kubernetes) where `/tmp` is fast and disposable. Use `false` for long-lived deployments where you want the route cache to persist with the rest of your storage.
 
-`K2\Kernel::init()` passes `isTmpVolatile: false` by default; `KernelConfig::init()` defaults to `true` (the `K2\Kernel` wrapper flips it). Pass it explicitly if you want the other behaviour.
+`Kernel::init()` passes `isTmpVolatile: false` by default; `KernelConfig::init()` defaults to `true` (the `Kernel` wrapper flips it). Pass it explicitly if you want the other behaviour.
 
 The directory is auto-created (`mkdir 0777 recursive`) on first call.
 
@@ -172,7 +172,7 @@ $now = new DateTime('now', $tz);
 For applications that want the timezone applied globally for the duration of the request, attach `ClientTimezoneMiddleware` to a controller or method:
 
 ```php
-use Flytachi\Winter\K2\Http\Middleware\ClientTimezoneMiddleware;
+use Flytachi\Winter\Kernel\Http\Middleware\ClientTimezoneMiddleware;
 
 #[ClientTimezoneMiddleware]
 class ReportController extends Controller { ... }
@@ -225,7 +225,7 @@ runs as the first step of the request pipeline and snapshots the origin alongsid
 headers, so these getters need no `HttpRequest` argument:
 
 ```php
-use Flytachi\Winter\K2\Http\Header;
+use Flytachi\Winter\Kernel\Http\Header;
 
 Header::getBaseUrl();  // "https://example.com:8443"
 Header::getScheme();   // "https"

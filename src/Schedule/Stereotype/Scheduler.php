@@ -2,15 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Schedule;
+namespace Flytachi\Winter\Kernel\Schedule\Stereotype;
 
 use Flytachi\Winter\DI\Container;
-use Flytachi\Winter\K2\Concurrent\Future;
-use Flytachi\Winter\K2\Core\ClassScanner;
-use Flytachi\Winter\K2\Process\Process;
+use Flytachi\Winter\Kernel\Concurrent\Future;
+use Flytachi\Winter\Kernel\Core\ClassScanner;
+use Flytachi\Winter\Kernel\Process\Stereotype\Process;
+use Flytachi\Winter\Kernel\Schedule\ScheduledCollector;
+use Flytachi\Winter\Kernel\Schedule\ScheduledTask;
 
 /**
- * The scheduling runtime — one system process that runs every {@see Scheduled}
+ * The scheduling runtime — one system process that runs every {@see \Flytachi\Winter\Kernel\Schedule\Scheduled}
  * method on its trigger.
  *
  * On boot it scans the project (and plugins) for annotated methods, then loops:
@@ -147,7 +149,7 @@ class Scheduler extends Process
     }
 
     /**
-     * Scans the project and plugins for {@see Scheduled} methods.
+     * Scans the project and plugins for {@see \Flytachi\Winter\Kernel\Schedule\Scheduled} methods.
      *
      * Override to source tasks another way — e.g. from a database of cron rows —
      * instead of (or in addition to) annotation scanning.

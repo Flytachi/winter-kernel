@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Structure;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Structure;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\FKAction;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\FKAction;
 
-class ForeignKey implements StructureInterface
+final class ForeignKey implements StructureInterface
 {
     public function __construct(
         public string $referencedTable,

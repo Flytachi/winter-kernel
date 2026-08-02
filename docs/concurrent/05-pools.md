@@ -12,7 +12,7 @@ rest wait for a slot. It is `Executors.newFixedThreadPool(n)` from Java, adapted
 to coroutines.
 
 ```php
-use Flytachi\Winter\K2\Concurrent\Executors;
+use Flytachi\Winter\Kernel\Concurrent\Executors;
 
 $pool = Executors::newFixedExecutor(5);   // at most 5 running at a time
 
@@ -59,7 +59,7 @@ without a line of executor code at the call site.
 **Register it as a singleton** in your Boot's `providers()`:
 
 ```php
-use Flytachi\Winter\K2\Concurrent\Executors;
+use Flytachi\Winter\Kernel\Concurrent\Executors;
 
 protected static function providers(Container $c): void
 {
@@ -121,7 +121,7 @@ need a hard limit, set `queue` and pick a `RejectPolicy` for the moment both the
 slots and the queue are full:
 
 ```php
-use Flytachi\Winter\K2\Concurrent\RejectPolicy;
+use Flytachi\Winter\Kernel\Concurrent\RejectPolicy;
 
 Executors::newFixedExecutor(
     concurrency: 5,

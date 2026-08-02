@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process\Integration;
+namespace Flytachi\Winter\Kernel\Tests\Process\Integration;
 
 use Flytachi\Winter\DI\Container;
-use Flytachi\Winter\K2\Core\KernelStore;
-use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\Kernel\Core\KernelStore;
+use Flytachi\Winter\Kernel\Kernel;
 use PHPUnit\Framework\TestCase;
 
 /**

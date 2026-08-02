@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process;
+namespace Flytachi\Winter\Kernel\Tests\Process;
 
-use Flytachi\Winter\K2\Process\ResourceUsage;
+use Flytachi\Winter\Kernel\Process\ResourceUsage;
 use PHPUnit\Framework\TestCase;
 
 final class ResourceUsageTest extends TestCase

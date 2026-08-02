@@ -2,12 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Response;
+namespace Flytachi\Winter\Kernel\Http\Stereotype;
 
 use Flytachi\Winter\Base\Exception\ExceptionHeader;
 use Flytachi\Winter\Base\HttpCode;
-use Flytachi\Winter\K2\Http\Header;
-use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
+use Flytachi\Winter\Kernel\Http\Header;
+use Flytachi\Winter\Kernel\Http\Request\Validation\ValidationException;
+use Flytachi\Winter\Kernel\Http\Response\AcceptHeaderParser;
+use Flytachi\Winter\Kernel\Http\Response\ContentType;
+use Flytachi\Winter\Kernel\Http\Response\ResponseExceptionInterface;
+use Flytachi\Winter\Kernel\Http\Response\ResponseTrait;
 
 /**
  * Default exception response — implements ResponseExceptionInterface.

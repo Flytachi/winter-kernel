@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process\Daemon;
+namespace Flytachi\Winter\Kernel\Process\Daemon;
 
 /**
- * How a {@see Daemon} smooths fleet-size changes — stability over speed.
+ * How a {@see \Flytachi\Winter\Kernel\Process\Stereotype\Daemon} smooths fleet-size changes — stability over speed.
  *
- * {@see Daemon::desiredReplicas()} is a signal, not a command: the supervisor
+ * {@see \Flytachi\Winter\Kernel\Process\Stereotype\Daemon::desiredReplicas()} is a signal, not a command: the supervisor
  * damps it so a noisy or naive value never thrashes the fleet. The model is
  * asymmetric (like Kubernetes HPA): scale up quickly, scale down only when low
  * demand is sustained.

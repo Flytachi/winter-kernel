@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App\Attribute;
+namespace Flytachi\Winter\Kernel\App\Attribute;
 
 /**
  * Injects a value read from the environment (.env) into a {@see Bean} method

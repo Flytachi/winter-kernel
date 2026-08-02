@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Health;
+namespace Flytachi\Winter\Kernel\Http\Health;
 
 use Composer\InstalledVersions;
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\DI\Scanner;
-use Flytachi\Winter\K2\Collector\ImplementorCollector;
-use Flytachi\Winter\K2\Http\Header;
-use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Kernel\Collector\ImplementorCollector;
+use Flytachi\Winter\Kernel\Http\Header;
+use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
 
 class HealthIndicator implements HealthIndicatorInterface
 {
@@ -132,8 +132,8 @@ class HealthIndicator implements HealthIndicatorInterface
             ];
 
             if ($output === 'file' || $file) {
-                $root   = \Flytachi\Winter\K2\Kernel::$pathRoot;
-                $logDir = \Flytachi\Winter\K2\Kernel::$pathStorageLog;
+                $root   = \Flytachi\Winter\Kernel\Kernel::$pathRoot;
+                $logDir = \Flytachi\Winter\Kernel\Kernel::$pathStorageLog;
                 $entry['file'] = [
                     'path'     => $file ?? (str_starts_with($logDir, $root)
                         ? ltrim(substr($logDir, strlen($root)), DIRECTORY_SEPARATOR)

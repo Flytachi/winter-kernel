@@ -4,7 +4,7 @@ Three static helper classes for moving plain arrays in and out of the most
 common flat-file formats. No instances, no state — call the static methods
 directly. On any I/O or parse problem they throw `FileException`.
 
-Namespace: `Flytachi\Winter\K2\File`.
+Namespace: `Flytachi\Winter\Kernel\File`.
 
 | Class  | Reads               | Writes              | Extra |
 |--------|---------------------|---------------------|-------|
@@ -35,7 +35,7 @@ public static function write(string $path, array $data, ?array $head = null): vo
 associative rows keyed by that header:
 
 ```php
-use Flytachi\Winter\K2\File\CSV;
+use Flytachi\Winter\Kernel\File\CSV;
 
 // users.csv:
 //   id,name
@@ -81,7 +81,7 @@ public static function write(string $path, array $data): void
 ```
 
 ```php
-use Flytachi\Winter\K2\File\JSON;
+use Flytachi\Winter\Kernel\File\JSON;
 
 $config = JSON::read('config.json');          // decoded as an associative array
 JSON::write('config.json', $config);          // written with JSON_PRETTY_PRINT
@@ -104,7 +104,7 @@ public static function isAvailable(): bool
 ```
 
 ```php
-use Flytachi\Winter\K2\File\XML;
+use Flytachi\Winter\Kernel\File\XML;
 
 $tree = XML::read('feed.xml');                 // element tree → nested array
 XML::write('feed.xml', $tree, 'feed');         // array → <feed>…</feed>
@@ -135,11 +135,11 @@ if (XML::isAvailable()) {
 
 ## Errors
 
-Every failure path raises `Flytachi\Winter\K2\File\FileException`:
+Every failure path raises `Flytachi\Winter\Kernel\File\FileException`:
 
 ```php
-use Flytachi\Winter\K2\File\CSV;
-use Flytachi\Winter\K2\File\FileException;
+use Flytachi\Winter\Kernel\File\CSV;
+use Flytachi\Winter\Kernel\File\FileException;
 
 try {
     $rows = CSV::read('missing.csv');

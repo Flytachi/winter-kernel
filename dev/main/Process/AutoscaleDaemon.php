@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Main\Process;
 
-use Flytachi\Winter\K2\Process\Daemon\Daemon;
-use Flytachi\Winter\K2\Process\Daemon\ScalingPolicy;
+use Flytachi\Winter\Kernel\Process\Stereotype\Daemon;
+use Flytachi\Winter\Kernel\Process\Daemon\ScalingPolicy;
 
 /**
  * Autoscaling demo: desiredReplicas() ramps 1 → 5 → 2 over time so the reconcile

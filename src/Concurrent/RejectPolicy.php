@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Concurrent;
+namespace Flytachi\Winter\Kernel\Concurrent;
 
 /**
  * What a bounded executor does with a task it cannot accept — when every worker

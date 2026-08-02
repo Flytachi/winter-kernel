@@ -6,13 +6,13 @@ namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Core;
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\Console\Inc\CmdCustom;
-use Flytachi\Winter\K2\Collector\SubclassCollector;
-use Flytachi\Winter\K2\Core\ClassScanner;
-use Flytachi\Winter\K2\Process\Daemon\Daemon as DaemonUnit;
-use Flytachi\Winter\K2\Process\Process as ProcessUnit;
+use Flytachi\Winter\Console\Stereotype\CmdCustom;
+use Flytachi\Winter\Kernel\Collector\SubclassCollector;
+use Flytachi\Winter\Kernel\Core\ClassScanner;
+use Flytachi\Winter\Kernel\Process\Stereotype\Daemon as DaemonUnit;
+use Flytachi\Winter\Kernel\Process\Stereotype\Process as ProcessUnit;
 
-class Complete extends Cmd
+final class Complete extends Cmd
 {
     public static string $title = "shell completion endpoint (internal)";
 
@@ -30,7 +30,6 @@ class Complete extends Cmd
             '-e:Entity — ORM entity / model',
             '-d:Dto — Data Transfer Object',
             '-q:Request — validated request object',
-            '-p:Response — custom HTTP response',
             '-P:Process — long-running process',
             '-N:Daemon — background daemon',
             '-D:DbConfig — database configuration',

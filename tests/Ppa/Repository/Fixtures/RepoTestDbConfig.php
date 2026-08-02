@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Repository\Fixtures;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Repository\Fixtures;
 
-use Flytachi\Winter\K2\Tests\Ppa\Fixtures\StubDbConfig;
+use Flytachi\Winter\Kernel\Tests\Ppa\Fixtures\StubDbConfig;
 
 /**
  * Shared no-op DbConfig used by every Repository test. PpaConnectionPool

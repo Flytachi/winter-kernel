@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Http\Request;
+namespace Flytachi\Winter\Kernel\Tests\Http\Request;
 
-use Flytachi\Winter\K2\Http\Request\K1ValidationTrait;
-use Flytachi\Winter\K2\Http\Request\RequestException;
-use Flytachi\Winter\K2\Localization\Locale;
+use Flytachi\Winter\Kernel\Http\Request\K1ValidationTrait;
+use Flytachi\Winter\Kernel\Http\Request\RequestException;
+use Flytachi\Winter\Kernel\Localization\Locale;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

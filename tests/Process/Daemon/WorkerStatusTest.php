@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process\Daemon;
+namespace Flytachi\Winter\Kernel\Tests\Process\Daemon;
 
-use Flytachi\Winter\K2\Process\Activity;
-use Flytachi\Winter\K2\Process\Daemon\SlotState;
-use Flytachi\Winter\K2\Process\Daemon\WorkerStatus;
+use Flytachi\Winter\Kernel\Process\Activity;
+use Flytachi\Winter\Kernel\Process\Daemon\SlotState;
+use Flytachi\Winter\Kernel\Process\Daemon\WorkerStatus;
 use PHPUnit\Framework\TestCase;
 
 final class WorkerStatusTest extends TestCase

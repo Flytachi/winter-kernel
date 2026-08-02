@@ -6,9 +6,9 @@ namespace Flytachi\Winter\Console\Command;
 
 use Composer\Autoload\ClassLoader;
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\Kernel\Kernel;
 
-class Make extends Cmd
+final class Make extends Cmd
 {
     public static string $title = "generate framework component templates";
     private string $createPath;
@@ -69,9 +69,6 @@ class Make extends Cmd
             }
             if (in_array('d', $this->args['flags'])) {
                 $this->createDto($templateName);
-            }
-            if (in_array('p', $this->args['flags'])) {
-                $this->createResponse($templateName);
             }
             if (in_array('P', $this->args['flags'])) {
                 $this->createProcess($templateName);
@@ -193,30 +190,6 @@ class Make extends Cmd
         $code = str_replace("__namespace__", $info['namespace'], $code);
         $code = str_replace("__className__", $info['className'], $code);
         $this->createFile($info['className'], $info['path'], $code, 'dto');
-    }
-
-    private function createResponse(string $name): void
-    {
-        $info = $this->getInfo($name, '', 'ResponseTemplate');
-        $this->smartInfo(
-            $info,
-            'Controllers',
-            'Controller',
-            'Utilities/Responses',
-            'Utilities/Response',
-            'Utility/Responses',
-            'Utility/Response',
-            'Utils/Responses',
-            'Utils/Response',
-            'Util/Responses',
-            'Util/Response',
-            'Responses',
-            'Response'
-        );
-        $code = file_get_contents($info['template']);
-        $code = str_replace("__namespace__", $info['namespace'], $code);
-        $code = str_replace("__className__", $info['className'], $code);
-        $this->createFile($info['className'], $info['path'], $code, 'response');
     }
 
     private function createProcess(string $name): void
@@ -462,7 +435,6 @@ class Make extends Cmd
         self::printLabel("Flags — Data", $cl);
         self::printBadge('-e', 'Entity           (no suffix)', $cl, 36);
         self::printBadge('-d', 'Dto              (suffix: Dto)', $cl, 36);
-        self::printBadge('-p', 'Response         (no suffix)', $cl, 36);
         self::printLabel("Flags — Data", $cl);
 
         self::printLabel("Flags — Business", $cl);

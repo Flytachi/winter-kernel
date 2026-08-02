@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\Console\Inc;
+namespace Flytachi\Winter\Console\Stereotype;
 
+use Flytachi\Winter\Console\Inc\Printer;
 use Flytachi\Winter\DI\Container;
 
 abstract class CmdCustom extends Printer implements CmdCustomInterface

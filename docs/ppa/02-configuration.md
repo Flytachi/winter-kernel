@@ -111,7 +111,7 @@ property. Return a `[propertyName => 'sql_expression']` array from `selection()`
 Properties absent from the map are selected by plain name (with alias prefix if set).
 
 ```php
-use Flytachi\Winter\K2\Ppa\Entity\EntityInterface;
+use Flytachi\Winter\Kernel\Ppa\Entity\EntityInterface;
 
 class UserEntity implements EntityInterface
 {
@@ -190,8 +190,8 @@ every repository pointing at it) is **silently skipped** by `db sql`
 and `db migrate` — even if entities have `#[Table]`.
 
 ```php
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Config\Migratable;
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\MigratablePriority;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Config\Migratable;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\MigratablePriority;
 
 #[Migratable]                                   // priority: Normal
 final class AppDbConfig extends PgDbConfig { /* … */ }
@@ -206,7 +206,7 @@ final class AuthDbConfig extends PgDbConfig { /* … */ }
 ignored on mysql/mariadb at the SQL-generation step.
 
 ```php
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Config\Extension;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Config\Extension;
 
 #[Migratable]
 #[Extension('uuid-ossp')]

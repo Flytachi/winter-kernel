@@ -9,17 +9,17 @@ use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\DI\Collector\DICollector;
 use Flytachi\Winter\DI\Contract\CollectorInterface;
 use Flytachi\Winter\DI\Scanner;
-use Flytachi\Winter\K2\App\Attribute\EnableAsync;
-use Flytachi\Winter\K2\Concurrent\Async\AsyncCollector;
-use Flytachi\Winter\K2\Concurrent\Async\Proxy\BypassScanner;
-use Flytachi\Winter\K2\Concurrent\Async\Proxy\ProxyFactory;
-use Flytachi\Winter\K2\Concurrent\Async\Proxy\ProxyGenerator;
-use Flytachi\Winter\K2\Kernel;
-use Flytachi\Winter\K2\WinterApplication;
+use Flytachi\Winter\Kernel\App\Attribute\EnableAsync;
+use Flytachi\Winter\Kernel\Concurrent\Async\AsyncCollector;
+use Flytachi\Winter\Kernel\Concurrent\Async\Proxy\BypassScanner;
+use Flytachi\Winter\Kernel\Concurrent\Async\Proxy\ProxyFactory;
+use Flytachi\Winter\Kernel\Concurrent\Async\Proxy\ProxyGenerator;
+use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Kernel\WinterApplication;
 use ReflectionClass;
 use ReflectionMethod;
 
-class Di extends Cmd
+final class Di extends Cmd
 {
     public static string $title = "manage and inspect DI scanner cache (build, clean, show, async)";
 

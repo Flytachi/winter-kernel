@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process\Fixtures;
+namespace Flytachi\Winter\Kernel\Tests\Process\Fixtures;
 
-use Flytachi\Winter\K2\Process\Daemon\Daemon;
-use Flytachi\Winter\K2\Process\Daemon\RestartMode;
-use Flytachi\Winter\K2\Process\Daemon\RestartPolicy;
+use Flytachi\Winter\Kernel\Process\Stereotype\Daemon;
+use Flytachi\Winter\Kernel\Process\Daemon\RestartMode;
+use Flytachi\Winter\Kernel\Process\Daemon\RestartPolicy;
 
 /**
  * Integration fixture: worker always crashes. Exercises restart-into-the-same-slot

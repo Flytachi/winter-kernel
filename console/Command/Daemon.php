@@ -5,19 +5,19 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\K2\Collector\SubclassCollector;
-use Flytachi\Winter\K2\Core\ClassScanner;
-use Flytachi\Winter\K2\Process\Activity;
-use Flytachi\Winter\K2\Process\Daemon\Daemon as DaemonUnit;
-use Flytachi\Winter\K2\Process\Daemon\DaemonStatus;
-use Flytachi\Winter\K2\Process\Daemon\SlotState;
-use Flytachi\Winter\K2\Process\Daemon\WorkerStatus;
+use Flytachi\Winter\Kernel\Collector\SubclassCollector;
+use Flytachi\Winter\Kernel\Core\ClassScanner;
+use Flytachi\Winter\Kernel\Process\Activity;
+use Flytachi\Winter\Kernel\Process\Stereotype\Daemon as DaemonUnit;
+use Flytachi\Winter\Kernel\Process\Daemon\DaemonStatus;
+use Flytachi\Winter\Kernel\Process\Daemon\SlotState;
+use Flytachi\Winter\Kernel\Process\Daemon\WorkerStatus;
 
 /**
  * Manages supervised {@see DaemonUnit} fleets (start/stop/status), including the
  * per-worker view. Bare processes are managed by `call process`.
  */
-class Daemon extends Cmd
+final class Daemon extends Cmd
 {
     public static string $title = "manage Daemon fleets (start/stop/status)";
 

@@ -2,14 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process\Daemon;
+namespace Flytachi\Winter\Kernel\Process\Stereotype;
 
 use Flytachi\Winter\DI\Container;
-use Flytachi\Winter\K2\Process\Activity;
-use Flytachi\Winter\K2\Process\Internal\SingletonLock;
-use Flytachi\Winter\K2\Process\Process;
-use Flytachi\Winter\K2\Process\ProcessState;
-use Flytachi\Winter\K2\Process\ProcessStatus;
+use Flytachi\Winter\Kernel\Process\Activity;
+use Flytachi\Winter\Kernel\Process\Daemon\DaemonConfigException;
+use Flytachi\Winter\Kernel\Process\Daemon\DaemonStatus;
+use Flytachi\Winter\Kernel\Process\Daemon\RestartPolicy;
+use Flytachi\Winter\Kernel\Process\Daemon\ScalingPolicy;
+use Flytachi\Winter\Kernel\Process\Daemon\SupervisesFleet;
+use Flytachi\Winter\Kernel\Process\Internal\SingletonLock;
+use Flytachi\Winter\Kernel\Process\ProcessState;
+use Flytachi\Winter\Kernel\Process\ProcessStatus;
 use Flytachi\Winter\Logger\LoggerFactory;
 
 /**

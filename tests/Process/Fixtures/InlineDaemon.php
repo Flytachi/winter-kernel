@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process\Fixtures;
+namespace Flytachi\Winter\Kernel\Tests\Process\Fixtures;
 
-use Flytachi\Winter\K2\Process\Daemon\Daemon;
-use Flytachi\Winter\K2\Process\Daemon\RestartMode;
-use Flytachi\Winter\K2\Process\Daemon\RestartPolicy;
-use Flytachi\Winter\K2\Process\Daemon\ScalingPolicy;
+use Flytachi\Winter\Kernel\Process\Stereotype\Daemon;
+use Flytachi\Winter\Kernel\Process\Daemon\RestartMode;
+use Flytachi\Winter\Kernel\Process\Daemon\RestartPolicy;
+use Flytachi\Winter\Kernel\Process\Daemon\ScalingPolicy;
 
 /**
  * Inline-body daemon (workerRun defined) with every policy overridden and the

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Concurrent\Async\Proxy;
+namespace Flytachi\Winter\Kernel\Concurrent\Async\Proxy;
 
 /**
- * Finds places where an {@see \Flytachi\Winter\K2\Concurrent\Async\Async} service is
+ * Finds places where an {@see \Flytachi\Winter\Kernel\Concurrent\Async\Async} service is
  * built with `new` instead of being taken from the container.
  *
  * Such a call gets the original class, not the proxy, so the annotated method

@@ -7,7 +7,7 @@ Three steps, no wiring.
 **1. Annotate a method** on any class the container can build:
 
 ```php
-use Flytachi\Winter\K2\Schedule\Scheduled;
+use Flytachi\Winter\Kernel\Schedule\Scheduled;
 use Psr\Log\LoggerInterface;
 
 class ReportService
@@ -47,7 +47,7 @@ model, and running it in production.
 method may carry several triggers.
 
 ```php
-use Flytachi\Winter\K2\Schedule\Scheduled;
+use Flytachi\Winter\Kernel\Schedule\Scheduled;
 
 #[Scheduled(fixedDelay: 5.0)]
 public function flush(): void { /* ... */ }
@@ -223,7 +223,7 @@ runs and API-triggered runs share one bounded set of workers.
 Register the pool once (a fixed-size executor) in your Boot's `providers()`:
 
 ```php
-use Flytachi\Winter\K2\Concurrent\Executors;
+use Flytachi\Winter\Kernel\Concurrent\Executors;
 
 protected static function providers(Container $c): void
 {
@@ -267,7 +267,7 @@ The pool enforces its cap only under Swoole (coroutines). Without coroutines
 the size is a no-op. For cost control set a bounded queue and a reject policy:
 
 ```php
-use Flytachi\Winter\K2\Concurrent\RejectPolicy;
+use Flytachi\Winter\Kernel\Concurrent\RejectPolicy;
 
 $c->singleton('mailPool', fn() => Executors::newFixedExecutor(
     concurrency: 5, queue: 50, onReject: RejectPolicy::DISCARD,

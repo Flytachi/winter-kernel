@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Pool;
+namespace Flytachi\Winter\Kernel\Ppa\Pool;
 
 use Flytachi\Winter\Cdo\Config\Common\DbConfigInterface;
-use Flytachi\Winter\K2\ConnectionPool\ConnectionFactory;
+use Flytachi\Winter\Kernel\ConnectionPool\ConnectionFactory;
 use Psr\Log\LoggerInterface;
 
 /**
  * Adapts a CDO {@see DbConfigInterface} to the driver-agnostic
- * {@see ConnectionFactory} the {@see \Flytachi\Winter\K2\ConnectionPool\ConnectionPool}
+ * {@see ConnectionFactory} the {@see \Flytachi\Winter\Kernel\ConnectionPool\ConnectionPool}
  * drives.
  *
  * The pooled resource is the **config instance**, not the raw CDO — winter-cdo's

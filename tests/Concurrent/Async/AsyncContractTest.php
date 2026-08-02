@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Concurrent\Async;
+namespace Flytachi\Winter\Kernel\Tests\Concurrent\Async;
 
-use Flytachi\Winter\K2\Concurrent\Async\Async;
-use Flytachi\Winter\K2\Concurrent\Async\AsyncException;
-use Flytachi\Winter\K2\Concurrent\Async\Proxy\ProxyFactory;
-use Flytachi\Winter\K2\Concurrent\CompletableFuture;
-use Flytachi\Winter\K2\Concurrent\Future;
-use Flytachi\Winter\K2\Core\KernelConfig;
+use Flytachi\Winter\Kernel\Concurrent\Async\Async;
+use Flytachi\Winter\Kernel\Concurrent\Async\AsyncException;
+use Flytachi\Winter\Kernel\Concurrent\Async\Proxy\ProxyFactory;
+use Flytachi\Winter\Kernel\Concurrent\CompletableFuture;
+use Flytachi\Winter\Kernel\Concurrent\Future;
+use Flytachi\Winter\Kernel\Core\KernelConfig;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;

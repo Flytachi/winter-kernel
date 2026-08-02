@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Integration\Types;
+namespace Flytachi\Winter\Kernel\Tests\Integration\Types;
 
-use Flytachi\Winter\K2\Ppa\Stereotype\Repository;
-use Flytachi\Winter\K2\Tests\Integration\Fixtures\IntegrationTestCase;
-use Flytachi\Winter\K2\Tests\Integration\Fixtures\SpecimenEntity;
+use Flytachi\Winter\Kernel\Ppa\Stereotype\Repository;
+use Flytachi\Winter\Kernel\Tests\Integration\Fixtures\IntegrationTestCase;
+use Flytachi\Winter\Kernel\Tests\Integration\Fixtures\SpecimenEntity;
 
 /**
  * Verifies the framework's Mapping layer end-to-end across pgsql / mysql / mariadb:

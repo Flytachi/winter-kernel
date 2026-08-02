@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Pool;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Pool;
 
-use Flytachi\Winter\K2\Core\KernelConfig;
-use Flytachi\Winter\K2\Core\KernelStore;
-use Flytachi\Winter\K2\Kernel;
-use Flytachi\Winter\K2\Ppa\Pool\PoolTelemetry;
+use Flytachi\Winter\Kernel\Core\KernelConfig;
+use Flytachi\Winter\Kernel\Core\KernelStore;
+use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Kernel\Ppa\Pool\PoolTelemetry;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use ReflectionProperty;

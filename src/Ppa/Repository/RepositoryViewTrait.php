@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Repository;
+namespace Flytachi\Winter\Kernel\Ppa\Repository;
 
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\Cdo\CDOBind;
 use Flytachi\Winter\Cdo\Connection\CDOStatement;
 use Flytachi\Winter\Cdo\Qb;
-use Flytachi\Winter\K2\Ppa\Entity\EntityException;
-use Flytachi\Winter\K2\Ppa\Entity\RepositoryViewInterface;
-use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Kernel\Ppa\Entity\EntityException;
+use Flytachi\Winter\Kernel\Ppa\Entity\RepositoryViewInterface;
+use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
 use PDO;
 use Throwable;
 

@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App;
+namespace Flytachi\Winter\Kernel\App;
 
 use Composer\InstalledVersions;
 
 /**
  * The Winter startup banner — a Spring-Boot-style splash printed to the terminal
- * when the application comes up ({@see \Flytachi\Winter\K2\WinterApplication::serve()}).
+ * when the application comes up ({@see \Flytachi\Winter\Kernel\WinterApplication::serve()}).
  *
  * It is human-facing: it writes ANSI to STDOUT and is shown only on an interactive
  * terminal. The structured "application up" line still goes to the log channel, so

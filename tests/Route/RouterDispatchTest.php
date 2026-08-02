@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Route;
+namespace Flytachi\Winter\Kernel\Tests\Route;
 
 use Flytachi\Winter\Base\HttpCode;
-use Flytachi\Winter\K2\Http\Response\ResponseException;
-use Flytachi\Winter\K2\Route\Router;
-use Flytachi\Winter\K2\Tests\Route\Fixtures\FakeRequest;
-use Flytachi\Winter\K2\Tests\Route\Fixtures\FakeResponse;
+use Flytachi\Winter\Kernel\Http\Response\ResponseException;
+use Flytachi\Winter\Kernel\Route\Router;
+use Flytachi\Winter\Kernel\Tests\Route\Fixtures\FakeRequest;
+use Flytachi\Winter\Kernel\Tests\Route\Fixtures\FakeResponse;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 

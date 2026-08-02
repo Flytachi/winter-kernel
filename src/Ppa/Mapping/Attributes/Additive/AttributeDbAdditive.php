@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Additive;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Additive;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\AttributeDb;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\AttributeDb;
 
 interface AttributeDbAdditive extends AttributeDb
 {

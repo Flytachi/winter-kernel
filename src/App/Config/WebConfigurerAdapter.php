@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App\Config;
+namespace Flytachi\Winter\Kernel\App\Config;
 
-use Flytachi\Winter\K2\App\ApplicationArguments;
+use Flytachi\Winter\Kernel\App\ApplicationArguments;
 
 /**
  * Empty-default base for {@see WebConfigurer} — the winter analogue of Spring's

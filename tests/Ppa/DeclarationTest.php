@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa;
+namespace Flytachi\Winter\Kernel\Tests\Ppa;
 
-use Flytachi\Winter\K2\Ppa\Declaration;
-use Flytachi\Winter\K2\Ppa\DeclarationItem;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\Column;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\Table;
-use Flytachi\Winter\K2\Tests\Ppa\Fixtures\StubDbConfig;
+use Flytachi\Winter\Kernel\Ppa\Declaration;
+use Flytachi\Winter\Kernel\Ppa\DeclarationItem;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Column;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Table;
+use Flytachi\Winter\Kernel\Tests\Ppa\Fixtures\StubDbConfig;
 use PHPUnit\Framework\TestCase;
 
 final class DeclConfigAlpha extends StubDbConfig

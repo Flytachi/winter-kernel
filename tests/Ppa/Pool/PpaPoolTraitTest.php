@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Pool;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Pool;
 
-use Flytachi\Winter\K2\Ppa\Pool\PpaPoolTrait;
+use Flytachi\Winter\Kernel\Ppa\Pool\PpaPoolTrait;
 use PHPUnit\Framework\TestCase;
 
 /**

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process\Daemon;
+namespace Flytachi\Winter\Kernel\Tests\Process\Daemon;
 
-use Flytachi\Winter\K2\Process\Daemon\RestartMode;
+use Flytachi\Winter\Kernel\Process\Daemon\RestartMode;
 use PHPUnit\Framework\TestCase;
 
 final class RestartModeTest extends TestCase

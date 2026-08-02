@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process\Integration\Fixtures;
+namespace Flytachi\Winter\Kernel\Tests\Process\Integration\Fixtures;
 
-use Flytachi\Winter\K2\Process\Process;
+use Flytachi\Winter\Kernel\Process\Stereotype\Process;
 
 /**
- * Dispatched by {@see \Flytachi\Winter\K2\Tests\Process\Integration\DispatchRunnerTest}
+ * Dispatched by {@see \Flytachi\Winter\Kernel\Tests\Process\Integration\DispatchRunnerTest}
  * into a detached process. It writes its PID to a marker file — the only evidence the
  * test process can observe, since the child is a separate PHP process with its own
  * kernel — and then idles until stopped.

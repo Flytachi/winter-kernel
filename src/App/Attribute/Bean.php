@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App\Attribute;
+namespace Flytachi\Winter\Kernel\App\Attribute;
 
-use Flytachi\Winter\K2\App\Scope;
+use Flytachi\Winter\Kernel\App\Scope;
 
 /**
  * Marks a method of a {@see Configuration} class as a container factory — the

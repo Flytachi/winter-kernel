@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Schedule\Trigger;
+namespace Flytachi\Winter\Kernel\Tests\Schedule\Trigger;
 
-use Flytachi\Winter\K2\Schedule\Trigger\FixedRateTrigger;
+use Flytachi\Winter\Kernel\Schedule\Trigger\FixedRateTrigger;
 use PHPUnit\Framework\TestCase;
 
 final class FixedRateTriggerTest extends TestCase

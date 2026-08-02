@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process\Fixtures;
+namespace Flytachi\Winter\Kernel\Tests\Process\Fixtures;
 
-use Flytachi\Winter\K2\Process\Daemon\Daemon;
-use Flytachi\Winter\K2\Process\Daemon\ScalingPolicy;
+use Flytachi\Winter\Kernel\Process\Stereotype\Daemon;
+use Flytachi\Winter\Kernel\Process\Daemon\ScalingPolicy;
 
 /**
  * Integration fixture: desiredReplicas() ramps 1 → 4 → 2 with a fast scaling

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Schedule\Trigger;
+namespace Flytachi\Winter\Kernel\Schedule\Trigger;
 
 use DateTimeImmutable;
 use InvalidArgumentException;

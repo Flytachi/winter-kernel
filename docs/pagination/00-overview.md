@@ -64,7 +64,7 @@ Wrapper (final, static)                            — page-centric, for numbere
 ## Quick start
 
 ```php
-use Flytachi\Winter\K2\Unit\Pagination\Paginator;
+use Flytachi\Winter\Kernel\Unit\Pagination\Paginator;
 
 // 1. Repository-backed offset pagination (most common)
 $result = Paginator::repo(

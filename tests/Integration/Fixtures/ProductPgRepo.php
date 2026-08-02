@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Integration\Fixtures;
+namespace Flytachi\Winter\Kernel\Tests\Integration\Fixtures;
 
-use Flytachi\Winter\K2\Ppa\Stereotype\Repository;
+use Flytachi\Winter\Kernel\Ppa\Stereotype\Repository;
 
 final class ProductPgRepo extends Repository
 {

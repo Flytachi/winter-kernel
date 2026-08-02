@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App\Config;
+namespace Flytachi\Winter\Kernel\App\Config;
 
-use Flytachi\Winter\K2\App\ApplicationArguments;
+use Flytachi\Winter\Kernel\App\ApplicationArguments;
 
 /**
  * Web-tier configuration contract — the winter analogue of Spring's

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process;
+namespace Flytachi\Winter\Kernel\Process;
 
 /**
  * Registry of resets run in a freshly forked worker, before its body.
@@ -11,7 +11,7 @@ namespace Flytachi\Winter\K2\Process;
  * descriptor — a DB connection, a pool, a socket — is shared across processes
  * and corrupts if used from more than one. Framework packages register a reset
  * here at bootstrap (e.g. a connection pool registers a reconnect); the process
- * runtime runs them in the child via {@see Process::afterFork()}.
+ * runtime runs them in the child via {@see \Flytachi\Winter\Kernel\Process\Stereotype\Process::afterFork()}.
  *
  * A reset MUST reconnect **in place** (close the old fd, open a new one on the
  * same object) rather than replace the object — otherwise already-injected

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process;
+namespace Flytachi\Winter\Kernel\Tests\Process;
 
-use Flytachi\Winter\K2\Process\ProcessState;
+use Flytachi\Winter\Kernel\Process\ProcessState;
 use PHPUnit\Framework\TestCase;
 
 final class ProcessStateTest extends TestCase

@@ -116,9 +116,9 @@ $ php call di async
  | [ Async methods (2 classes) ]
  |  App\Services\NotificationService ......... [BUILT]
  |      track() → void
- |      send() → Flytachi\Winter\K2\Concurrent\Future
+ |      send() → Flytachi\Winter\Kernel\Concurrent\Future
  |  App\Services\ReportService ............... [PENDING]
- |      build() → Flytachi\Winter\K2\Concurrent\Future
+ |      build() → Flytachi\Winter\Kernel\Concurrent\Future
 ```
 
 `PENDING` means the proxy has not been generated yet; it will be on first use.

@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process;
+namespace Flytachi\Winter\Kernel\Process;
 
 use Flytachi\Winter\Thread\Runnable;
 
 /**
- * Serializable entry point that runs a {@see Process} in a detached background
+ * Serializable entry point that runs a {@see \Flytachi\Winter\Kernel\Process\Stereotype\Process} in a detached background
  * process.
  *
  * The launcher (via {@see \Flytachi\Winter\Thread\Thread}) re-execs the runner

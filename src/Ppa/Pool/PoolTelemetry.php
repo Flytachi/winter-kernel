@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Pool;
+namespace Flytachi\Winter\Kernel\Ppa\Pool;
 
 use Flytachi\FileStore\FileStorage;
-use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\Kernel\Kernel;
 
 /**
  * Publishes each worker's pool utilisation to the shared runnable store so the CLI
- * can read it — the same pattern {@see \Flytachi\Winter\K2\Process\Process} uses for
+ * can read it — the same pattern {@see \Flytachi\Winter\Kernel\Process\Stereotype\Process} uses for
  * `call process status`.
  *
  * A connection pool lives in **one worker's memory**. The CLI is a separate process,

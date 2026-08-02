@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Configuration;
+namespace Flytachi\Winter\Kernel\Tests\Configuration;
 
-use Flytachi\Winter\K2\Http\Cors;
+use Flytachi\Winter\Kernel\Http\Cors;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 

@@ -21,7 +21,7 @@ Every internal — `Router`, `ParameterResolver`, middleware, controllers — de
 interfaces, never on a concrete transport:
 
 ```php
-namespace Flytachi\Winter\K2\Http\Contracts;
+namespace Flytachi\Winter\Kernel\Http\Contracts;
 
 interface HttpRequest  { /* getMethod(), getUri(), getHeader(), getRawBody(), … */ }
 interface HttpResponse { /* status(), header(), end(), sendfile() */ }

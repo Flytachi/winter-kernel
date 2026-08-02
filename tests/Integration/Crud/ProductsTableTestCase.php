@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Integration\Crud;
+namespace Flytachi\Winter\Kernel\Tests\Integration\Crud;
 
-use Flytachi\Winter\K2\Ppa\Stereotype\Repository;
-use Flytachi\Winter\K2\Tests\Integration\Fixtures\IntegrationTestCase;
+use Flytachi\Winter\Kernel\Ppa\Stereotype\Repository;
+use Flytachi\Winter\Kernel\Tests\Integration\Fixtures\IntegrationTestCase;
 
 /**
  * Shared infrastructure for any integration test that operates on the
@@ -14,7 +14,7 @@ use Flytachi\Winter\K2\Tests\Integration\Fixtures\IntegrationTestCase;
  *
  * Concrete behaviour test bodies live in subclasses:
  *   - {@see CrudIntegrationTestCase} — insert / update / delete / upsert
- *   - {@see \Flytachi\Winter\K2\Tests\Integration\View\ViewIntegrationTestCase}
+ *   - {@see \Flytachi\Winter\Kernel\Tests\Integration\View\ViewIntegrationTestCase}
  *     — find / findAll / count / exists / *OrThrow
  *
  * Schema uses an explicit (non-auto-increment) integer PK; tests insert

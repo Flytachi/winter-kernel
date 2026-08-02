@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Response;
+namespace Flytachi\Winter\Kernel\Http\Response;
 
 use Flytachi\Winter\Base\HttpCode;
-use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
-use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
-use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Kernel;
 
 /**
  * PHP template response — port of ViewBase + View.
@@ -26,7 +26,7 @@ use Flytachi\Winter\K2\Kernel;
  * the directory is named after neither — `views` covers both, with layouts
  * conventionally under `views/layouts`.
  */
-class ResponseView implements Sendable
+final class ResponseView implements Sendable
 {
     /** Directory under {@see Kernel::$pathResource} holding the views. */
     private const string DEFAULT_DIR = 'views';

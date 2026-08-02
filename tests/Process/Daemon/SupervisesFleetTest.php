@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process\Daemon;
+namespace Flytachi\Winter\Kernel\Tests\Process\Daemon;
 
-use Flytachi\Winter\K2\Process\Activity;
-use Flytachi\Winter\K2\Process\Daemon\Daemon;
-use Flytachi\Winter\K2\Process\Daemon\ScalingPolicy;
-use Flytachi\Winter\K2\Process\Daemon\Slot;
-use Flytachi\Winter\K2\Process\Daemon\SlotState;
-use Flytachi\Winter\K2\Tests\Process\Fixtures\StubDaemon;
+use Flytachi\Winter\Kernel\Process\Activity;
+use Flytachi\Winter\Kernel\Process\Stereotype\Daemon;
+use Flytachi\Winter\Kernel\Process\Daemon\ScalingPolicy;
+use Flytachi\Winter\Kernel\Process\Daemon\Slot;
+use Flytachi\Winter\Kernel\Process\Daemon\SlotState;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\StubDaemon;
 use PHPUnit\Framework\TestCase;
 
 /**

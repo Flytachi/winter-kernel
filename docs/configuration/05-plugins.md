@@ -15,8 +15,8 @@ After that, every `#[Controller]` discovered under `vendor/acme/billing-plugin/s
 Override `plugins()` in your `Boot` class:
 
 ```php
-use Flytachi\Winter\K2\App\Attribute\Import;
-use Flytachi\Winter\K2\WinterApplication;
+use Flytachi\Winter\Kernel\App\Attribute\Import;
+use Flytachi\Winter\Kernel\WinterApplication;
 
 #[EnableWeb]
 #[Import('acme/auth-plugin',    '/auth')]

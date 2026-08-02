@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process\Daemon;
+namespace Flytachi\Winter\Kernel\Process\Daemon;
 
-use Flytachi\Winter\K2\Process\Activity;
-use Flytachi\Winter\K2\Process\ProcessState;
-use Flytachi\Winter\K2\Process\ProcessStatus;
-use Flytachi\Winter\K2\Process\ResourceUsage;
+use Flytachi\Winter\Kernel\Process\Activity;
+use Flytachi\Winter\Kernel\Process\ProcessState;
+use Flytachi\Winter\Kernel\Process\ProcessStatus;
+use Flytachi\Winter\Kernel\Process\ResourceUsage;
 
 /**
- * Status record of a supervised {@see Daemon}.
+ * Status record of a supervised {@see \Flytachi\Winter\Kernel\Process\Stereotype\Daemon}.
  *
  * A daemon is a {@see ProcessStatus} that runs several worker processes under a
  * supervisor, so its record adds what only a supervisor has: the per-worker

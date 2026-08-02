@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Main\Process;
 
-use Flytachi\Winter\K2\Process\Daemon\Daemon;
+use Flytachi\Winter\Kernel\Process\Stereotype\Daemon;
 
 /**
  * Long-lived worker that loops until stopped. Exercises the graceful stop of a

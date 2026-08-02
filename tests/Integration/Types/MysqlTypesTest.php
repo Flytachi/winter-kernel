@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Integration\Types;
+namespace Flytachi\Winter\Kernel\Tests\Integration\Types;
 
-use Flytachi\Winter\K2\Tests\Integration\Fixtures\SpecimenMysqlRepo;
+use Flytachi\Winter\Kernel\Tests\Integration\Fixtures\SpecimenMysqlRepo;
 use PHPUnit\Framework\Attributes\Group;
 
 #[Group('integration')]

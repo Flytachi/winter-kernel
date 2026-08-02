@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process;
+namespace Flytachi\Winter\Kernel\Process;
 
 /**
- * Lifecycle state of a {@see Process}.
+ * Lifecycle state of a {@see \Flytachi\Winter\Kernel\Process\Stereotype\Process}.
  *
  * Mirrors the spirit of `java.lang.Thread.State`: a small, closed set of states
  * a managed unit moves through. {@see RESTARTING} is reserved for the supervised
- * {@see Daemon} layer (phase 2) and is never set by a bare process.
+ * {@see \Flytachi\Winter\Kernel\Process\Stereotype\Daemon} layer (phase 2) and is never set by a bare process.
  */
 enum ProcessState: int
 {

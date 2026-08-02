@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Idx;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Idx;
 
 use Attribute;
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\IndexMethod;
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\IndexType;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\IndexMethod;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\IndexType;
 
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::IS_REPEATABLE)]
-class Index implements AttributeDbIdx
+final class Index implements AttributeDbIdx
 {
     public function __construct(
         private array $columns = [],
@@ -27,9 +27,9 @@ class Index implements AttributeDbIdx
         }
     }
 
-    public function toObject(string $dialect = 'mysql'): \Flytachi\Winter\K2\Ppa\Mapping\Structure\Index
+    public function toObject(string $dialect = 'mysql'): \Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Index
     {
-        return new \Flytachi\Winter\K2\Ppa\Mapping\Structure\Index(
+        return new \Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Index(
             columns: $this->columns,
             name: $this->name,
             type: IndexType::INDEX,

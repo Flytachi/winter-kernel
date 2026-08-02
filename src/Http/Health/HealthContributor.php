@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Health;
+namespace Flytachi\Winter\Kernel\Http\Health;
 
 /**
  * A single health check contributed to `/actuator/health` — the winter analogue of
  * Spring's `HealthContributor`. Any class implementing it is discovered on the boot
- * scan (like {@see \Flytachi\Winter\K2\App\Config\WebConfigurer}) and, when the
- * actuator is enabled via {@see \Flytachi\Winter\K2\App\Attribute\EnableActuator},
+ * scan (like {@see \Flytachi\Winter\Kernel\App\Config\WebConfigurer}) and, when the
+ * actuator is enabled via {@see \Flytachi\Winter\Kernel\App\Attribute\EnableActuator},
  * merged into the aggregated report under {@see name()}.
  *
  * Contributors are resolved from the container (constructor autowiring works) and

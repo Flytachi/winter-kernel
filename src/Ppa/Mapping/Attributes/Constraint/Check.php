@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Constraint;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Constraint;
 
 use Attribute;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\CheckConstraint;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\CheckConstraint;
 
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_CLASS)]
-readonly class Check implements AttributeDbConstraintCheck
+final readonly class Check implements AttributeDbConstraintCheck
 {
     public function __construct(
         public string $expression,

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Route\Fixtures;
+namespace Flytachi\Winter\Kernel\Tests\Route\Fixtures;
 
 /**
  * Runs the fixture application as a real server in its own process.
@@ -46,7 +46,7 @@ final class ServerProcess
         // The entry a project would write by hand: load the autoloader, run the app.
         $autoload = dirname(__DIR__, 3) . '/vendor/autoload.php';
         file_put_contents($this->runner, sprintf(
-            "<?php\nrequire %s;\n\\Flytachi\\Winter\\K2\\Tests\\Route\\Fixtures\\App\\ServeApp::main("
+            "<?php\nrequire %s;\n\\Flytachi\\Winter\\Kernel\\Tests\\Route\\Fixtures\\App\\ServeApp::main("
             . "['call', 'run', '--host=127.0.0.1', '--port=%d']);\n",
             var_export($autoload, true),
             $this->port,

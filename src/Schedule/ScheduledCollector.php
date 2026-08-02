@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Schedule;
+namespace Flytachi\Winter\Kernel\Schedule;
 
 use Flytachi\Winter\DI\Contract\CollectorInterface;
-use Flytachi\Winter\K2\Schedule\Trigger\CronTrigger;
-use Flytachi\Winter\K2\Schedule\Trigger\FixedDelayTrigger;
-use Flytachi\Winter\K2\Schedule\Trigger\FixedRateTrigger;
-use Flytachi\Winter\K2\Schedule\Trigger\Trigger;
+use Flytachi\Winter\Kernel\Schedule\Trigger\CronTrigger;
+use Flytachi\Winter\Kernel\Schedule\Trigger\FixedDelayTrigger;
+use Flytachi\Winter\Kernel\Schedule\Trigger\FixedRateTrigger;
+use Flytachi\Winter\Kernel\Schedule\Trigger\Trigger;
 use InvalidArgumentException;
 use ReflectionClass;
 use ReflectionMethod;

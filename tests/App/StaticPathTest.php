@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\App;
+namespace Flytachi\Winter\Kernel\Tests\App;
 
-use Flytachi\Winter\K2\App\ApplicationConfigException;
-use Flytachi\Winter\K2\App\Config\ServerSettings;
-use Flytachi\Winter\K2\Core\KernelConfig;
+use Flytachi\Winter\Kernel\App\ApplicationConfigException;
+use Flytachi\Winter\Kernel\App\Config\ServerSettings;
+use Flytachi\Winter\Kernel\Core\KernelConfig;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 

@@ -4,7 +4,7 @@ Binds the raw request body to a controller method parameter.
 The format is auto-detected from the `Content-Type` header unless the type is `string`.
 
 ```php
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestBody;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestBody;
 ```
 
 ---
@@ -154,11 +154,11 @@ declared on DTO constructor parameters after hydration.
 Failed constraints throw `ValidationException (422)`.
 
 ```php
-use Flytachi\Winter\K2\Http\Request\Validation\Valid;
-use Flytachi\Winter\K2\Http\Request\Validation\Required;
-use Flytachi\Winter\K2\Http\Request\Validation\NotBlank;
-use Flytachi\Winter\K2\Http\Request\Validation\Min;
-use Flytachi\Winter\K2\Http\Request\Validation\Max;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Valid;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Required;
+use Flytachi\Winter\Kernel\Http\Request\Validation\NotBlank;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Min;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Max;
 
 class CreateOrderDto
 {

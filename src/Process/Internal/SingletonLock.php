@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process\Internal;
+namespace Flytachi\Winter\Kernel\Process\Internal;
 
-use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\Kernel\Kernel;
 
 /**
- * The per-class singleton guard shared by {@see \Flytachi\Winter\K2\Process\Process}
- * and {@see \Flytachi\Winter\K2\Process\Daemon\Daemon}.
+ * The per-class singleton guard shared by {@see \Flytachi\Winter\Kernel\Process\Stereotype\Process}
+ * and {@see \Flytachi\Winter\Kernel\Process\Stereotype\Daemon}.
  *
  * A crash-safe advisory `flock` — held for the process lifetime and released
  * automatically by the OS on death, so it never goes stale like a PID file. It is

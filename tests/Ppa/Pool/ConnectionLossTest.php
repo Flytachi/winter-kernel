@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Pool;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Pool;
 
 use Flytachi\Winter\Cdo\Connection\CDOException;
-use Flytachi\Winter\K2\Ppa\Pool\ConnectionLoss;
+use Flytachi\Winter\Kernel\Ppa\Pool\ConnectionLoss;
 use PDOException;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;

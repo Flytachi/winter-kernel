@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App\Attribute;
+namespace Flytachi\Winter\Kernel\App\Attribute;
 
 /**
  * Imports a Composer package as a route-prefixed sub-application — the analogue
- * of Spring's @Import. Declared on the {@see \Flytachi\Winter\K2\WinterApplication}
+ * of Spring's @Import. Declared on the {@see \Flytachi\Winter\Kernel\WinterApplication}
  * class; repeatable.
  *
  * The package's install path is resolved via Composer and its `src/` is scanned

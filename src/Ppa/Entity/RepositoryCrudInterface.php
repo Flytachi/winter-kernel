@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Entity;
+namespace Flytachi\Winter\Kernel\Ppa\Entity;
 
 use Flytachi\Winter\Cdo\Qb;
-use Flytachi\Winter\K2\Ppa\Repository\RepositoryException;
+use Flytachi\Winter\Kernel\Ppa\Repository\RepositoryException;
 
 /**
  * Contract for repository classes that support write operations.
  *
  * Extends {@see RepositoryInterface} with INSERT, UPDATE, DELETE, and UPSERT
- * capabilities. Implemented by {@see \Flytachi\Winter\K2\Ppa\Repository\RepositoryCrudTrait}
- * and exposed via {@see \Flytachi\Winter\K2\Ppa\Stereotype\RepositoryCrud} and
- * {@see \Flytachi\Winter\K2\Ppa\Stereotype\Repository}.
+ * capabilities. Implemented by {@see \Flytachi\Winter\Kernel\Ppa\Repository\RepositoryCrudTrait}
+ * and exposed via {@see \Flytachi\Winter\Kernel\Ppa\Stereotype\RepositoryCrud} and
+ * {@see \Flytachi\Winter\Kernel\Ppa\Stereotype\Repository}.
  */
 interface RepositoryCrudInterface extends RepositoryInterface
 {

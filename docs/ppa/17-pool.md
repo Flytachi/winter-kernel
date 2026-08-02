@@ -42,8 +42,8 @@ implement `PpaPoolConfigInterface` via `PpaPoolTrait`:
 
 ```php
 use Flytachi\Winter\Cdo\Config\PgDbConfig;
-use Flytachi\Winter\K2\Ppa\Pool\PpaPoolConfigInterface;
-use Flytachi\Winter\K2\Ppa\Pool\PpaPoolTrait;
+use Flytachi\Winter\Kernel\Ppa\Pool\PpaPoolConfigInterface;
+use Flytachi\Winter\Kernel\Ppa\Pool\PpaPoolTrait;
 
 class AppDb extends PgDbConfig implements PpaPoolConfigInterface
 {

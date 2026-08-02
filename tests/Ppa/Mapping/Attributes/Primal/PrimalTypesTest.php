@@ -2,29 +2,29 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Mapping\Attributes\Primal;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Mapping\Attributes\Primal;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\AttributeDbType;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\BigInteger;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Binary;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Blob;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Boolean;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Char;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Date;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\DateTime;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Decimal;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Double;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\FloatType;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Integer;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Json;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\SmallInteger;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Text;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\TextArray;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Time;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Timestamp;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Type;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Uuid;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Varchar;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\AttributeDbType;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\BigInteger;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Binary;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Blob;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Boolean;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Char;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Date;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\DateTime;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Decimal;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Double;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\FloatType;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Integer;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Json;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\SmallInteger;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Text;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\TextArray;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Time;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Timestamp;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Type;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Uuid;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Varchar;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

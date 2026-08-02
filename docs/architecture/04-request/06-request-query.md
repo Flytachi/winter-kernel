@@ -4,7 +4,7 @@ Binds the entire query string as a typed DTO or raw array.
 Use when multiple query parameters form a logical group (filters, pagination, search).
 
 ```php
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestQuery;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestQuery;
 ```
 
 ---

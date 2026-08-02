@@ -15,8 +15,8 @@ The endpoints are useful for:
 Override `health()` in your `Boot` class and call `Health::configure()`:
 
 ```php
-use Flytachi\Winter\K2\App\Attribute\EnableActuator;
-use Flytachi\Winter\K2\WinterApplication;
+use Flytachi\Winter\Kernel\App\Attribute\EnableActuator;
+use Flytachi\Winter\Kernel\WinterApplication;
 
 #[EnableWeb]
 #[EnableActuator]                  // default built-in indicator, open access
@@ -158,7 +158,7 @@ Subclass `HealthIndicator` to add custom checks without losing the built-in disk
 ```php
 namespace App\Health;
 
-use Flytachi\Winter\K2\Http\Health\HealthIndicator;
+use Flytachi\Winter\Kernel\Http\Health\HealthIndicator;
 
 final class AppHealthIndicator extends HealthIndicator
 {
@@ -215,9 +215,9 @@ Production deployments usually want `/actuator/*` reachable only from inside the
 ```php
 namespace App\Http\Middleware;
 
-use Flytachi\Winter\K2\Stereotype\Middleware;
-use Flytachi\Winter\K2\Http\Contracts\{HttpRequest, HttpResponse};
-use Flytachi\Winter\K2\Http\Middleware\MiddlewareException;
+use Flytachi\Winter\Kernel\Http\Stereotype\Middleware;
+use Flytachi\Winter\Kernel\Http\Contracts\{HttpRequest, HttpResponse};
+use Flytachi\Winter\Kernel\Http\Middleware\MiddlewareException;
 use Flytachi\Winter\Base\HttpCode;
 
 final class InternalOnlyMiddleware extends Middleware

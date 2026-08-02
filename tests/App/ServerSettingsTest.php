@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\App;
+namespace Flytachi\Winter\Kernel\Tests\App;
 
-use Flytachi\Winter\K2\App\Config\ServerSettings;
+use Flytachi\Winter\Kernel\App\Config\ServerSettings;
 use PHPUnit\Framework\TestCase;
 
 /**

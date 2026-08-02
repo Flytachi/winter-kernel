@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process\Integration;
+namespace Flytachi\Winter\Kernel\Tests\Process\Integration;
 
-use Flytachi\Winter\K2\Core\KernelStore;
-use Flytachi\Winter\K2\Kernel;
-use Flytachi\Winter\K2\Tests\Process\Integration\Fixtures\DispatchMarkerProcess;
+use Flytachi\Winter\Kernel\Core\KernelStore;
+use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Kernel\Tests\Process\Integration\Fixtures\DispatchMarkerProcess;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 
@@ -135,8 +135,8 @@ final class DispatchRunnerTest extends TestCase
             declare(strict_types=1);
             require '{$repo}/vendor/autoload.php';
 
-            #[\Flytachi\Winter\K2\App\Attribute\EnableWeb]
-            final class WkDispatchFixtureApp extends \Flytachi\Winter\K2\WinterApplication
+            #[\Flytachi\Winter\Kernel\App\Attribute\EnableWeb]
+            final class WkDispatchFixtureApp extends \Flytachi\Winter\Kernel\WinterApplication
             {
                 public static function main(array \$argv): never { parent::run(\$argv); }
             }

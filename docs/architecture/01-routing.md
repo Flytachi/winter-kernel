@@ -1,6 +1,6 @@
 # Routing
 
-Winter K2 uses a Spring Boot-style dual-mode router that works identically in Swoole coroutine mode and PHP-FPM.
+Winter uses a Spring Boot-style dual-mode router that works identically in Swoole coroutine mode and PHP-FPM.
 
 ---
 
@@ -9,8 +9,8 @@ Winter K2 uses a Spring Boot-style dual-mode router that works identically in Sw
 Define routes via PHP attributes on controller classes and methods.
 
 ```php
-use Flytachi\Winter\K2\Route\Annotation\{RequestMapping, GetMapping, PostMapping, PutMapping, PatchMapping, DeleteMapping};
-use Flytachi\Winter\K2\Stereotype\Controller;
+use Flytachi\Winter\Kernel\Route\Annotation\{RequestMapping, GetMapping, PostMapping, PutMapping, PatchMapping, DeleteMapping};
+use Flytachi\Winter\Kernel\Http\Stereotype\Controller;
 
 #[RequestMapping('users')]   // class-level prefix → /users
 class UserController extends Controller
@@ -168,7 +168,7 @@ request logging do not apply to them. See
 Call once in bootstrap **before** `Router::resolve()`:
 
 ```php
-use Flytachi\Winter\K2\Http\Cors;
+use Flytachi\Winter\Kernel\Http\Cors;
 
 Cors::configure(
     origins:       ['https://app.example.com'],
@@ -195,7 +195,7 @@ Global CORS headers are written **before** route dispatch — they appear on 404
 Placed on a controller class or method, `#[CrossOrigin]` **overrides** (does not merge with) the global config:
 
 ```php
-use Flytachi\Winter\K2\Route\Annotation\CrossOrigin;
+use Flytachi\Winter\Kernel\Route\Annotation\CrossOrigin;
 
 // Entire controller
 #[CrossOrigin(origins: ['https://admin.example.com'], credentials: true)]

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa;
+namespace Flytachi\Winter\Kernel\Ppa;
 
 use Flytachi\Winter\Cdo\Config\Common\DbConfigInterface;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\Table;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Table;
 
 /**
  * Registry of database structure declarations grouped by configuration.

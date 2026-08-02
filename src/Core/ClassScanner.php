@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Core;
+namespace Flytachi\Winter\Kernel\Core;
 
 use Flytachi\Winter\DI\Contract\CollectorInterface;
 use Flytachi\Winter\DI\Scanner;
-use Flytachi\Winter\K2\Kernel;
-use Flytachi\Winter\K2\Plugin;
+use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Kernel\Plugin;
 
 /**
  * Project-wide class discovery — runs a {@see Scanner} pass over the project

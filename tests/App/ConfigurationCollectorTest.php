@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\App;
+namespace Flytachi\Winter\Kernel\Tests\App;
 
 use Flytachi\Winter\DI\Container;
-use Flytachi\Winter\K2\App\Attribute\Bean;
-use Flytachi\Winter\K2\App\Attribute\Configuration;
-use Flytachi\Winter\K2\App\Attribute\Value;
-use Flytachi\Winter\K2\App\Scope;
-use Flytachi\Winter\K2\Collector\ConfigurationCollector;
+use Flytachi\Winter\Kernel\App\Attribute\Bean;
+use Flytachi\Winter\Kernel\App\Attribute\Configuration;
+use Flytachi\Winter\Kernel\App\Attribute\Value;
+use Flytachi\Winter\Kernel\App\Scope;
+use Flytachi\Winter\Kernel\Collector\ConfigurationCollector;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 

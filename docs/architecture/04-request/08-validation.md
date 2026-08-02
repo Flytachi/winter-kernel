@@ -1,11 +1,11 @@
 # Request Validation — `#[Valid]` + Constraints
 
-Winter K2 provides an attribute-based validation system for request DTOs.
+Winter provides an attribute-based validation system for request DTOs.
 Constraints are PHP attributes placed on DTO constructor parameters.
 Validation is triggered by adding `#[Valid]` to the controller method parameter.
 
 ```php
-use Flytachi\Winter\K2\Http\Request\Validation\Valid;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Valid;
 ```
 
 ---
@@ -39,7 +39,7 @@ use Flytachi\Winter\K2\Http\Request\Validation\Valid;
 ## Usage
 
 ```php
-use Flytachi\Winter\K2\Http\Request\Validation\{Valid, Required, NotBlank, Min, Max, Email};
+use Flytachi\Winter\Kernel\Http\Request\Validation\{Valid, Required, NotBlank, Min, Max, Email};
 
 class CreateUserDto
 {
@@ -339,7 +339,7 @@ Return `null` to pass, return a string to fail with that message.
 
 ## Legacy: `K1ValidationTrait`
 
-`Flytachi\Winter\K2\Http\Request\K1ValidationTrait` is the older, string-rule API. It is kept for backwards compatibility — **prefer the attribute-based system above for any new code**.
+`Flytachi\Winter\Kernel\Http\Request\K1ValidationTrait` is the older, string-rule API. It is kept for backwards compatibility — **prefer the attribute-based system above for any new code**.
 
 Use it on any DTO of your own; there is no base class to extend.
 
@@ -378,7 +378,7 @@ Key differences from the attribute system:
 ### Usage
 
 ```php
-use Flytachi\Winter\K2\Http\Request\K1ValidationTrait;
+use Flytachi\Winter\Kernel\Http\Request\K1ValidationTrait;
 
 final class CreateUserRequest
 {

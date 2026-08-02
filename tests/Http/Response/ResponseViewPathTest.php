@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Http\Response;
+namespace Flytachi\Winter\Kernel\Tests\Http\Response;
 
-use Flytachi\Winter\K2\Core\KernelConfig;
-use Flytachi\Winter\K2\Http\Response\ResponseView;
+use Flytachi\Winter\Kernel\Core\KernelConfig;
+use Flytachi\Winter\Kernel\Http\Response\ResponseView;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use RuntimeException;

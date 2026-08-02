@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process\Daemon;
+namespace Flytachi\Winter\Kernel\Process\Daemon;
 
 /**
- * Lifecycle state of one worker slot in a {@see Daemon}'s fleet.
+ * Lifecycle state of one worker slot in a {@see \Flytachi\Winter\Kernel\Process\Stereotype\Daemon}'s fleet.
  *
  * The slot number is stable (a restart reuses the same slot), and the state is
  * the reconcile loop's marker of intent — it lets the supervisor tell a worker

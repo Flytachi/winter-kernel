@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App\Attribute;
+namespace Flytachi\Winter\Kernel\App\Attribute;
 
-use Flytachi\Winter\K2\Schedule\Scheduler;
+use Flytachi\Winter\Kernel\Schedule\Stereotype\Scheduler;
 
 /**
  * Enables the scheduler that runs #[Scheduled] tasks — the analogue of Spring's
- * `@EnableScheduling`. Declared on the {@see \Flytachi\Winter\K2\WinterApplication}
- * class; produces one {@see \Flytachi\Winter\K2\App\Component::scheduler()} in the
+ * `@EnableScheduling`. Declared on the {@see \Flytachi\Winter\Kernel\WinterApplication}
+ * class; produces one {@see \Flytachi\Winter\Kernel\App\Component::scheduler()} in the
  * manifest.
  *
  * ```

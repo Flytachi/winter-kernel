@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\App;
+namespace Flytachi\Winter\Kernel\Tests\App;
 
-use Flytachi\Winter\K2\App\ApplicationArguments;
+use Flytachi\Winter\Kernel\App\ApplicationArguments;
 use PHPUnit\Framework\TestCase;
 
 final class ApplicationArgumentsTest extends TestCase

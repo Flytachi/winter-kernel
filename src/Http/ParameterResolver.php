@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http;
+namespace Flytachi\Winter\Kernel\Http;
 
 use BcMath\Number as BcNumber;
 use BackedEnum;
@@ -13,23 +13,23 @@ use Exception;
 use finfo;
 use Flytachi\Winter\Base\Tool;
 use Flytachi\Winter\DI\ReflectionCache;
-use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
-use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
-use Flytachi\Winter\K2\Http\Request\Annotation\PathVariable;
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestBody;
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestFile;
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestForm;
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestHeader;
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestJson;
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestParam;
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestQuery;
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestXml;
-use Flytachi\Winter\K2\Http\Request\RequestException;
-use Flytachi\Winter\K2\Http\Request\Validation\ListOf;
-use Flytachi\Winter\K2\Http\Request\Validation\Constraint;
-use Flytachi\Winter\K2\Http\Request\Validation\Valid;
-use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
-use Flytachi\Winter\K2\Localization\Locale;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\PathVariable;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestBody;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestFile;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestForm;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestHeader;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestJson;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestParam;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestQuery;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestXml;
+use Flytachi\Winter\Kernel\Http\Request\RequestException;
+use Flytachi\Winter\Kernel\Http\Request\Validation\ListOf;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Constraint;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Valid;
+use Flytachi\Winter\Kernel\Http\Request\Validation\ValidationException;
+use Flytachi\Winter\Kernel\Localization\Locale;
 use LogicException;
 use ReflectionAttribute;
 use ReflectionMethod;
@@ -69,7 +69,7 @@ use ValueError;
  *   - #[ListOf] collections cascade constraints when #[Valid] is on the outer param.
  *   - Variadic params: #[Valid] validates each element; all errors collected with [i].field keys.
  */
-class ParameterResolver
+final class ParameterResolver
 {
     // ── Public API ────────────────────────────────────────────────────────────
 

@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\App\Attribute;
+namespace Flytachi\Winter\Kernel\App\Attribute;
 
-use Flytachi\Winter\K2\Process\Process;
+use Flytachi\Winter\Kernel\Process\Stereotype\Process;
 
 /**
  * Declares a single managed {@see Process} worker as part of the application —
- * produces one {@see \Flytachi\Winter\K2\App\Component::process()} in the manifest.
- * Declared on the {@see \Flytachi\Winter\K2\WinterApplication} class; repeatable.
+ * produces one {@see \Flytachi\Winter\Kernel\App\Component::process()} in the manifest.
+ * Declared on the {@see \Flytachi\Winter\Kernel\WinterApplication} class; repeatable.
  *
  * ```
  * #[EnableProcess(SnmpProc::class)]

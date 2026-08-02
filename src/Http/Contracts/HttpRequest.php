@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Contracts;
+namespace Flytachi\Winter\Kernel\Http\Contracts;
 
 /**
  * Unified HTTP request abstraction.
@@ -11,7 +11,7 @@ namespace Flytachi\Winter\K2\Http\Contracts;
  *   - SwooleRequest  — wraps Swoole\Http\Request (coroutine-safe)
  *   - FpmRequest     — wraps $_SERVER / $_GET / $_POST / php://input
  *
- * All K2 internals (Router, ParameterResolver, Middleware)
+ * All kernel internals (Router, ParameterResolver, Middleware)
  * depend only on this interface — never on a concrete transport.
  */
 interface HttpRequest

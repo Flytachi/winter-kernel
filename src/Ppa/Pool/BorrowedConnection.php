@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Pool;
+namespace Flytachi\Winter\Kernel\Ppa\Pool;
 
-use Flytachi\Winter\K2\ConnectionPool\PoolEntry;
+use Flytachi\Winter\Kernel\ConnectionPool\PoolEntry;
 
 /**
  * The connection a coroutine currently holds, plus whether it was found dead while in

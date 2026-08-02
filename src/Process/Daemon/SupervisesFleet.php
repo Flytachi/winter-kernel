@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process\Daemon;
+namespace Flytachi\Winter\Kernel\Process\Daemon;
 
-use Flytachi\Winter\K2\Process\Activity;
-use Flytachi\Winter\K2\Process\ProcessState;
+use Flytachi\Winter\Kernel\Process\Activity;
+use Flytachi\Winter\Kernel\Process\ProcessState;
 
 /**
- * Fleet supervision for a {@see Daemon} — the master's behaviour, mixed in as
+ * Fleet supervision for a {@see \Flytachi\Winter\Kernel\Process\Stereotype\Daemon} — the master's behaviour, mixed in as
  * all-private methods so none of it leaks into the application-facing API.
  *
  * The master is a plain `pcntl` process with no event loop of its own: it forks
@@ -431,7 +431,7 @@ trait SupervisesFleet
     }
 
     /**
-     * SIGHUP handling: runs the master's {@see Daemon::onReload()} hook and
+     * SIGHUP handling: runs the master's {@see \Flytachi\Winter\Kernel\Process\Stereotype\Daemon::onReload()} hook and
      * forwards the signal to every worker. Reload, not stop.
      */
     private function reload(): void

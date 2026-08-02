@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Repository;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Repository;
 
 use Flytachi\Winter\Cdo\CDOBind;
 use Flytachi\Winter\Cdo\Qb;
-use Flytachi\Winter\K2\Tests\Ppa\Repository\Fixtures\UsersRepo;
+use Flytachi\Winter\Kernel\Tests\Ppa\Repository\Fixtures\UsersRepo;
 use PHPUnit\Framework\TestCase;
 
 final class BindsAndCacheTest extends TestCase

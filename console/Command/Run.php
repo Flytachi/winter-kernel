@@ -6,7 +6,7 @@ namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
 
-class Run extends Cmd
+final class Run extends Cmd
 {
     public static string $title = "run the application: web + declared components (Swoole)";
 

@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process\Daemon;
+namespace Flytachi\Winter\Kernel\Tests\Process\Daemon;
 
-use Flytachi\Winter\K2\Process\Daemon\Daemon;
-use Flytachi\Winter\K2\Process\Daemon\DaemonConfigException;
-use Flytachi\Winter\K2\Process\Daemon\RestartMode;
-use Flytachi\Winter\K2\Process\Daemon\RestartPolicy;
-use Flytachi\Winter\K2\Process\Daemon\ScalingPolicy;
-use Flytachi\Winter\K2\Tests\Process\Fixtures\BlankDaemon;
-use Flytachi\Winter\K2\Tests\Process\Fixtures\ClampDaemon;
-use Flytachi\Winter\K2\Tests\Process\Fixtures\DefaultDaemon;
-use Flytachi\Winter\K2\Tests\Process\Fixtures\ExternalDaemon;
-use Flytachi\Winter\K2\Tests\Process\Fixtures\InlineDaemon;
+use Flytachi\Winter\Kernel\Process\Stereotype\Daemon;
+use Flytachi\Winter\Kernel\Process\Daemon\DaemonConfigException;
+use Flytachi\Winter\Kernel\Process\Daemon\RestartMode;
+use Flytachi\Winter\Kernel\Process\Daemon\RestartPolicy;
+use Flytachi\Winter\Kernel\Process\Daemon\ScalingPolicy;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\BlankDaemon;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\ClampDaemon;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\DefaultDaemon;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\ExternalDaemon;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\InlineDaemon;
 use PHPUnit\Framework\TestCase;
 
 final class DaemonTest extends TestCase

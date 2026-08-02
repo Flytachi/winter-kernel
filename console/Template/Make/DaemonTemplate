@@ -2,7 +2,7 @@
 
 namespace __namespace__;
 
-use Flytachi\Winter\K2\Process\Daemon\Daemon;
+use Flytachi\Winter\Kernel\Process\Stereotype\Daemon;
 
 final class __className__ extends Daemon
 {

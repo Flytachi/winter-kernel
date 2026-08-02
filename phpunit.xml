@@ -50,6 +50,12 @@
             <directory>tests/Route</directory>
             <exclude>tests/Route/Fixtures</exclude>
         </testsuite>
+        <testsuite name="Architecture">
+            <directory>tests/Architecture</directory>
+        </testsuite>
+        <testsuite name="Console">
+            <directory>tests/Console</directory>
+        </testsuite>
     </testsuites>
 
     <groups>

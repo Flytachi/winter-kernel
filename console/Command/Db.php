@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\K2\Ppa\DeclarationItem;
-use Flytachi\Winter\K2\Ppa\PPAMapping;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\Table;
-use Flytachi\Winter\K2\Ppa\Pool\PoolTelemetry;
-use Flytachi\Winter\K2\Plugin;
+use Flytachi\Winter\Kernel\Ppa\DeclarationItem;
+use Flytachi\Winter\Kernel\Ppa\PPAMapping;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Table;
+use Flytachi\Winter\Kernel\Ppa\Pool\PoolTelemetry;
+use Flytachi\Winter\Kernel\Plugin;
 
-class Db extends Cmd
+final class Db extends Cmd
 {
     public static string $title = "manage database migrations and SQL preview";
 

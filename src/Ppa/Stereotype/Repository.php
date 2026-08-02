@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Stereotype;
+namespace Flytachi\Winter\Kernel\Ppa\Stereotype;
 
-use Flytachi\Winter\K2\Ppa\Entity\RepositoryCrudInterface;
-use Flytachi\Winter\K2\Ppa\Entity\RepositoryViewInterface;
-use Flytachi\Winter\K2\Ppa\Repository\RepositoryCore;
-use Flytachi\Winter\K2\Ppa\Repository\RepositoryCrudTrait;
-use Flytachi\Winter\K2\Ppa\Repository\RepositoryViewTrait;
+use Flytachi\Winter\Kernel\Ppa\Entity\RepositoryCrudInterface;
+use Flytachi\Winter\Kernel\Ppa\Entity\RepositoryViewInterface;
+use Flytachi\Winter\Kernel\Ppa\Repository\RepositoryCore;
+use Flytachi\Winter\Kernel\Ppa\Repository\RepositoryCrudTrait;
+use Flytachi\Winter\Kernel\Ppa\Repository\RepositoryViewTrait;
 
 /**
  * Base class for full-access repository implementations (CRUD and View).

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\ConnectionPool;
+namespace Flytachi\Winter\Kernel\ConnectionPool;
 
 /**
  * A pooled connection plus its lifecycle metadata. `lastUsedAt` (mutable) drives

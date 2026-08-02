@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Unit\Pagination;
+namespace Flytachi\Winter\Kernel\Unit\Pagination;
 
 use JsonSerializable;
 
@@ -10,7 +10,7 @@ use JsonSerializable;
  * Page-centric pagination metadata.
  *
  * Carried by {@see WrapResult} when produced by
- * {@see \Flytachi\Winter\K2\Unit\Wrapper::paginator()}. Unlike
+ * {@see \Flytachi\Winter\Kernel\Unit\Wrapper::paginator()}. Unlike
  * {@see PaginationMeta} (which is offset-centric), `WrapMeta` exposes the
  * page-oriented fields a classical numbered-page UI expects — `current`,
  * `pages`, plus `previous` / `next` for prev/next links.

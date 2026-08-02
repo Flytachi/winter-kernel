@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process\Daemon;
+namespace Flytachi\Winter\Kernel\Process\Daemon;
 
-use Flytachi\Winter\K2\Process\Activity;
+use Flytachi\Winter\Kernel\Process\Activity;
 
 /**
  * One worker's line in a {@see DaemonStatus}.

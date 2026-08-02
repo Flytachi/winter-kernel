@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Route;
+namespace Flytachi\Winter\Kernel\Route;
 
 /**
  * Fast dispatcher — O(1) static lookup + grouped-regex dynamic matching.
@@ -10,7 +10,7 @@ namespace Flytachi\Winter\K2\Route;
  * Routes sharing the same URI regex (e.g. GET /users/{id} and DELETE /users/{id})
  * are merged into one URI group so alternation branches never shadow each other.
  */
-class Dispatcher
+final class Dispatcher
 {
     private const int CHUNK_SIZE = 30;
 

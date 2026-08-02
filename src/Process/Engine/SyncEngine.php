@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process\Engine;
+namespace Flytachi\Winter\Kernel\Process\Engine;
 
-use Flytachi\Winter\K2\Concurrent\CompletableFuture;
-use Flytachi\Winter\K2\Concurrent\Future;
-use Flytachi\Winter\K2\Process\InterruptedException;
+use Flytachi\Winter\Kernel\Concurrent\CompletableFuture;
+use Flytachi\Winter\Kernel\Concurrent\Future;
+use Flytachi\Winter\Kernel\Process\InterruptedException;
 
 /**
  * Fork backend for runtimes without Swoole.

@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Process\Daemon;
+namespace Flytachi\Winter\Kernel\Process\Daemon;
 
-use Flytachi\Winter\K2\Process\Activity;
+use Flytachi\Winter\Kernel\Process\Activity;
 
 /**
- * One worker slot in a {@see Daemon}'s fleet.
+ * One worker slot in a {@see \Flytachi\Winter\Kernel\Process\Stereotype\Daemon}'s fleet.
  *
  * Mutable — the {@see SupervisesFleet} loop advances its {@see SlotState} machine in place.
  * The slot {@see $index} is stable: a restart reuses the same slot, so a worker's

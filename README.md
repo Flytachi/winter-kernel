@@ -39,8 +39,8 @@ composer require flytachi/winter-kernel
 <?php
 declare(strict_types=1);
 
-use Flytachi\Winter\K2\App\Attribute\EnableWeb;
-use Flytachi\Winter\K2\WinterApplication;
+use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
+use Flytachi\Winter\Kernel\WinterApplication;
 
 require __DIR__ . '/vendor/autoload.php';
 
@@ -76,8 +76,8 @@ php call run dev    # same, restarting on file changes
 Add a controller anywhere under the project and it is found by the scan:
 
 ```php
-use Flytachi\Winter\K2\Route\Annotation\GetMapping;
-use Flytachi\Winter\K2\Stereotype\Controller;
+use Flytachi\Winter\Kernel\Route\Annotation\GetMapping;
+use Flytachi\Winter\Kernel\Http\Stereotype\Controller;
 
 final class PingController extends Controller
 {

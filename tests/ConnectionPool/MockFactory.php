@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\ConnectionPool;
+namespace Flytachi\Winter\Kernel\Tests\ConnectionPool;
 
-use Flytachi\Winter\K2\ConnectionPool\ConnectionFactory;
+use Flytachi\Winter\Kernel\ConnectionPool\ConnectionFactory;
 
 /**
  * A scriptable {@see ConnectionFactory} for pool tests: it counts create/validate/close

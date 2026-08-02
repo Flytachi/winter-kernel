@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Core;
+namespace Flytachi\Winter\Kernel\Core;
 
 abstract class KernelConfig
 {

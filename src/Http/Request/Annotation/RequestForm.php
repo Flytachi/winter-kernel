@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Request\Annotation;
+namespace Flytachi\Winter\Kernel\Http\Request\Annotation;
 
 use Attribute;
 
@@ -31,7 +31,7 @@ use Attribute;
  * ```
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-readonly class RequestForm
+final readonly class RequestForm
 {
     /**
      * @param string|null $field Extract a single value from the merged form/query data

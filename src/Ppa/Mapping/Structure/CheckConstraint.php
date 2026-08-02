@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Structure;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Structure;
 
-class CheckConstraint implements StructureInterface
+final class CheckConstraint implements StructureInterface
 {
     public function __construct(
         public string $expression,

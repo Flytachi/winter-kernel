@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Route;
+namespace Flytachi\Winter\Kernel\Route;
 
 use Flytachi\Winter\Base\Exception\DebugDumpException;
 use Flytachi\Winter\Base\Exception\ExceptionLogLevel;
@@ -11,28 +11,28 @@ use Flytachi\Winter\DI\ReflectionCache;
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\DI\Scanner;
-use Flytachi\Winter\K2\Core\KernelStore;
-use Flytachi\Winter\K2\Kernel;
-use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
-use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
-use Flytachi\Winter\K2\Http\Header;
-use Flytachi\Winter\K2\Http\ParameterResolver;
-use Flytachi\Winter\K2\Http\Response\Collector\ExceptionCollector;
-use Flytachi\Winter\K2\Localization\Locale;
-use Flytachi\Winter\K2\Http\Response\ExceptionWrapper;
-use Flytachi\Winter\K2\Http\Response\ResponseEntity;
-use Flytachi\Winter\K2\Http\Response\ResponseException;
-use Flytachi\Winter\K2\Http\Response\Sendable;
-use Flytachi\Winter\K2\Http\Cors;
-use Flytachi\Winter\K2\Http\Health\Health;
-use Flytachi\Winter\K2\Http\Health\HealthIndicatorInterface;
-use Flytachi\Winter\K2\Plugin;
-use Flytachi\Winter\K2\Route\Collector\MappingCollector;
-use Flytachi\Winter\K2\Stereotype\Middleware;
+use Flytachi\Winter\Kernel\Core\KernelStore;
+use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\Header;
+use Flytachi\Winter\Kernel\Http\ParameterResolver;
+use Flytachi\Winter\Kernel\Http\Response\Collector\ExceptionCollector;
+use Flytachi\Winter\Kernel\Localization\Locale;
+use Flytachi\Winter\Kernel\Http\Response\ExceptionWrapper;
+use Flytachi\Winter\Kernel\Http\Response\ResponseEntity;
+use Flytachi\Winter\Kernel\Http\Response\ResponseException;
+use Flytachi\Winter\Kernel\Http\Response\Sendable;
+use Flytachi\Winter\Kernel\Http\Cors;
+use Flytachi\Winter\Kernel\Http\Health\Health;
+use Flytachi\Winter\Kernel\Http\Health\HealthIndicatorInterface;
+use Flytachi\Winter\Kernel\Plugin;
+use Flytachi\Winter\Kernel\Route\Collector\MappingCollector;
+use Flytachi\Winter\Kernel\Http\Stereotype\Middleware;
 use Flytachi\Winter\Base\HttpCode;
 
 /**
- * K2 Router — dual-mode (Swoole + FPM), Spring Boot-style.
+ * Router — dual-mode (Swoole + FPM), Spring Boot-style.
  *
  * ── Route registration (manual) ─────────────────────────────────────────────
  *   $router->get('/users',          [UserController::class, 'index']);
@@ -51,13 +51,13 @@ use Flytachi\Winter\Base\HttpCode;
  *
  * ── Static files ─────────────────────────────────────────────────────────────
  *   Not the router's job. Swoole serves them itself, in C, before PHP is reached —
- *   declare the directory with {@see \Flytachi\Winter\K2\App\Config\ServerSettings::staticPath()}.
+ *   declare the directory with {@see \Flytachi\Winter\Kernel\App\Config\ServerSettings::staticPath()}.
  *
  * ── Dispatch ─────────────────────────────────────────────────────────────────
  *   $router->handle(new SwooleRequest($req), new SwooleResponse($res));
  *   $router->handle(new FpmRequest(),        new FpmResponse());
  */
-class Router
+final class Router
 {
     /** @var array<string, array<string, mixed>> [METHOD][path] => handler */
     private array $staticRoutes  = [];

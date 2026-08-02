@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Response;
+namespace Flytachi\Winter\Kernel\Http\Response;
 
 use Flytachi\Winter\Base\Exception\ExceptionHeader;
 use Flytachi\Winter\Base\Exception\ExceptionLogLevel;
 use Flytachi\Winter\Base\Exception\ExceptionTrait;
 use Flytachi\Winter\Base\HttpCode;
-use Flytachi\Winter\K2\Exception\ExceptionHeaderTrait;
+use Flytachi\Winter\Kernel\Exception\ExceptionHeaderTrait;
 use Psr\Log\LogLevel;
 
 /**

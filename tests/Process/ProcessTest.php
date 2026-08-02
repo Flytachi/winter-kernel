@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process;
+namespace Flytachi\Winter\Kernel\Tests\Process;
 
-use Flytachi\Winter\K2\Process\ForkReset;
-use Flytachi\Winter\K2\Process\Process;
-use Flytachi\Winter\K2\Tests\Process\Fixtures\SampleProcess;
-use Flytachi\Winter\K2\Tests\Process\Fixtures\TitledProcess;
+use Flytachi\Winter\Kernel\Process\ForkReset;
+use Flytachi\Winter\Kernel\Process\Stereotype\Process;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\SampleProcess;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\TitledProcess;
 use PHPUnit\Framework\TestCase;
 
 final class ProcessTest extends TestCase

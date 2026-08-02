@@ -2,8 +2,6 @@
 
 namespace __namespace__;
 
-use Flytachi\Winter\K2\Stereotype\Service;
-
-class __className__ extends Service
+class __className__
 {
 }

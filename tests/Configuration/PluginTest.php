@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Configuration;
+namespace Flytachi\Winter\Kernel\Tests\Configuration;
 
-use Flytachi\Winter\K2\Exception\Error;
-use Flytachi\Winter\K2\Plugin;
+use Flytachi\Winter\Kernel\Exception\Error;
+use Flytachi\Winter\Kernel\Plugin;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 

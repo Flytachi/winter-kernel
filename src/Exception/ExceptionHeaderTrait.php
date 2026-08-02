@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Exception;
+namespace Flytachi\Winter\Kernel\Exception;
 
 trait ExceptionHeaderTrait
 {

@@ -2,11 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Response;
+namespace Flytachi\Winter\Kernel\Http\Response;
 
 use Composer\Autoload\ClassLoader;
 use Flytachi\Winter\DI\ReflectionCache;
-use Flytachi\Winter\K2\Ppa\Repository\RepositoryException;
+use Flytachi\Winter\Kernel\Http\Stereotype\ExceptionResponseBase;
+use Flytachi\Winter\Kernel\Ppa\Repository\RepositoryException;
 use ReflectionClass;
 use ReflectionException;
 

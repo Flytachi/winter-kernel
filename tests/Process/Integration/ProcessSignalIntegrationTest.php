@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process\Integration;
+namespace Flytachi\Winter\Kernel\Tests\Process\Integration;
 
-use Flytachi\Winter\K2\Tests\Process\Fixtures\SignalProcess;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\SignalProcess;
 use PHPUnit\Framework\Attributes\Group;
 
 #[Group('integration')]

@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Route\Fixtures\App;
+namespace Flytachi\Winter\Kernel\Tests\Route\Fixtures\App;
 
-use Flytachi\Winter\K2\App\ApplicationArguments;
-use Flytachi\Winter\K2\App\Attribute\EnableWeb;
-use Flytachi\Winter\K2\Kernel;
-use Flytachi\Winter\K2\WinterApplication;
+use Flytachi\Winter\Kernel\App\ApplicationArguments;
+use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
+use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Kernel\WinterApplication;
 
 /**
- * The fixture application {@see \Flytachi\Winter\K2\Tests\Route\ServeHttpTest} boots
+ * The fixture application {@see \Flytachi\Winter\Kernel\Tests\Route\ServeHttpTest} boots
  * for real — the same class shape a project writes, sharing this directory with the
  * controller so the scan finds it exactly as it would in an application.
  *

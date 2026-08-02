@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Route;
+namespace Flytachi\Winter\Kernel\Tests\Route;
 
-use Flytachi\Winter\K2\Tests\Route\Fixtures\ServerProcess;
+use Flytachi\Winter\Kernel\Tests\Route\Fixtures\ServerProcess;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 

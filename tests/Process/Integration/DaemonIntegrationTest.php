@@ -2,26 +2,26 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Process\Integration;
+namespace Flytachi\Winter\Kernel\Tests\Process\Integration;
 
-use Flytachi\Winter\K2\Process\Activity;
-use Flytachi\Winter\K2\Process\Daemon\DaemonStatus;
-use Flytachi\Winter\K2\Process\Daemon\SlotState;
-use Flytachi\Winter\K2\Tests\Process\Fixtures\AutoscaleLoopDaemon;
-use Flytachi\Winter\K2\Tests\Process\Fixtures\BusyIdleDaemon;
-use Flytachi\Winter\K2\Tests\Process\Fixtures\CrashCapDaemon;
-use Flytachi\Winter\K2\Tests\Process\Fixtures\CrashLoopDaemon;
-use Flytachi\Winter\K2\Tests\Process\Fixtures\HungLoopDaemon;
-use Flytachi\Winter\K2\Tests\Process\Fixtures\LoopDaemon;
-use Flytachi\Winter\K2\Tests\Process\Fixtures\NeverCrashDaemon;
-use Flytachi\Winter\K2\Tests\Process\Fixtures\StuckStopDaemon;
-use Flytachi\Winter\K2\Tests\Process\Fixtures\WorkerClassDaemon;
+use Flytachi\Winter\Kernel\Process\Activity;
+use Flytachi\Winter\Kernel\Process\Daemon\DaemonStatus;
+use Flytachi\Winter\Kernel\Process\Daemon\SlotState;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\AutoscaleLoopDaemon;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\BusyIdleDaemon;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\CrashCapDaemon;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\CrashLoopDaemon;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\HungLoopDaemon;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\LoopDaemon;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\NeverCrashDaemon;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\StuckStopDaemon;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\WorkerClassDaemon;
 use PHPUnit\Framework\Attributes\Group;
 
 #[Group('integration')]
 final class DaemonIntegrationTest extends IntegrationCase
 {
-    /** @param class-string<\Flytachi\Winter\K2\Process\Daemon\Daemon> $class */
+    /** @param class-string<\Flytachi\Winter\Kernel\Process\Stereotype\Daemon> $class */
     private function daemonStatus(string $class): ?DaemonStatus
     {
         $s = $class::status();

@@ -2,21 +2,21 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Additive\AttributeDbAdditive;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\AttributeDb;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Constraint\AttributeDbConstraint;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Constraint\AttributeDbConstraintCheck;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Constraint\AttributeDbConstraintForeign;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Hybrid\AttributeDbHybrid;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Idx\AttributeDbIdx;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Idx\Index;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\AttributeDbType;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Sub\AttributeDbSubType;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\CheckConstraint;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\Column;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\ForeignKey;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Additive\AttributeDbAdditive;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\AttributeDb;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Constraint\AttributeDbConstraint;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Constraint\AttributeDbConstraintCheck;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Constraint\AttributeDbConstraintForeign;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Hybrid\AttributeDbHybrid;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Idx\AttributeDbIdx;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Idx\Index;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\AttributeDbType;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Sub\AttributeDbSubType;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\CheckConstraint;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Column;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\ForeignKey;
 use ReflectionAttribute;
 use ReflectionProperty;
 
