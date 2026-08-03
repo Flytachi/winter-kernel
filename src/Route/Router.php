@@ -10,7 +10,7 @@ use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\DI\ReflectionCache;
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\DI\Container;
-use Flytachi\Winter\DI\Scanner;
+use Flytachi\Winter\Kernel\Core\ClassScanner;
 use Flytachi\Winter\Kernel\Core\KernelStore;
 use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
@@ -165,7 +165,7 @@ final class Router
         $mappingCollector   = new MappingCollector($router);
         $exceptionCollector = new ExceptionCollector();
 
-        Scanner::run($rootDir)
+        ClassScanner::scanner($rootDir)
             ->exclude($exclude)
             ->collect($mappingCollector)
             ->collect($exceptionCollector)
@@ -174,7 +174,7 @@ final class Router
         foreach (Plugin::getPlugins() as $prefix => $path) {
             $pluginSrc = $path . '/src';
             if (is_dir($pluginSrc)) {
-                Scanner::run($pluginSrc)
+                ClassScanner::scanner($pluginSrc)
                     ->collect(new MappingCollector($router, $prefix))
                     ->execute();
             }
@@ -193,7 +193,7 @@ final class Router
     /** Add attribute-scanned routes from $rootDir to this Router instance. */
     public function scan(string $rootDir, array $exclude = []): static
     {
-        Scanner::run($rootDir)
+        ClassScanner::scanner($rootDir)
             ->exclude($exclude)
             ->collect(new MappingCollector($this))
             ->execute();

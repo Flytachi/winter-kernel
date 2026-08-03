@@ -8,7 +8,7 @@ use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\Base\RuntimeMode;
 use Flytachi\Winter\Console\Core;
 use Flytachi\Winter\DI\Container;
-use Flytachi\Winter\DI\Scanner;
+use Flytachi\Winter\Kernel\Core\ClassScanner;
 use Flytachi\Winter\Kernel\App\ApplicationArguments;
 use Flytachi\Winter\Kernel\App\ApplicationConfigException;
 use Flytachi\Winter\Kernel\App\Attribute\EnableActuator;
@@ -250,7 +250,7 @@ abstract class WinterApplication
             )
             : null;
 
-        $scan = Scanner::run(
+        $scan = ClassScanner::scanner(
             rootDir: Kernel::$pathRoot,
             cache: $debug ? null : Kernel::$pathStorageVolatile . '/di.php',
         )

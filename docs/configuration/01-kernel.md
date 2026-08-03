@@ -58,7 +58,7 @@ Kernel::init(
     pathStorageLog:      __DIR__ . '/storage/logs',
     pathStorageCache:    __DIR__ . '/storage/cache',
     pathStorageRunnable: __DIR__ . '/storage/runnable',
-    isTmpVolatile:       false,             // see "Volatile storage" below
+    isTmpVolatile:       true,              // the default; see "Volatile storage" below
 );
 ```
 
@@ -101,7 +101,9 @@ Kernel::$pathStorageVolatile
 
 Use `true` for ephemeral containers (Docker, Kubernetes) where `/tmp` is fast and disposable. Use `false` for long-lived deployments where you want the route cache to persist with the rest of your storage.
 
-`Kernel::init()` passes `isTmpVolatile: false` by default; `KernelConfig::init()` defaults to `true` (the `Kernel` wrapper flips it). Pass it explicitly if you want the other behaviour.
+Both `Kernel::init()` and `KernelConfig::init()` default to `true` — the temp directory. Pass `false` explicitly if you want volatile artefacts to live inside your storage tree.
+
+Note one consequence of `false`: volatile storage then sits **inside the project root**, where class discovery runs. The scan excludes it (see `ClassScanner::scanner()`), because that directory holds generated code — the DI cache and the `#[Async]` proxies — and scanning what a previous scan produced is self-referential.
 
 The directory is auto-created (`mkdir 0777 recursive`) on first call.
 

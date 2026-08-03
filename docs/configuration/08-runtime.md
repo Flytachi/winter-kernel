@@ -90,6 +90,34 @@ The `.env` shorthands `SERVER_WORKERS`, `SERVER_TASKS`, `SERVER_MAX_REQUEST` and
 
 ---
 
+## Set `opcache.enable_cli=1`
+
+A Swoole server runs under the **CLI SAPI**, and `opcache.enable_cli` is `0` by default.
+Leave it off and the server gets no opcache at all — every worker keeps its own copy of
+every compiled class instead of sharing one in opcache's shared memory.
+
+Measured on a synthetic 400-class application (560 lines per class), loading all of them:
+
+| | memory held by the process |
+|---|---:|
+| `opcache.enable_cli=0` | 52.3 MiB |
+| `opcache.enable_cli=1` | **7.7 MiB** |
+
+Seven times less, per worker, for one ini line. Time is roughly unchanged — opcache saves
+the parse, not the class linking, which every process still does for itself.
+
+```ini
+opcache.enable=1
+opcache.enable_cli=1          ; required: Swoole is a CLI process
+opcache.validate_timestamps=0 ; production — no stat() per file per request
+opcache.jit=0                 ; Swoole registers opcode handlers; JIT is auto-disabled anyway
+```
+
+The shipped Docker template (`call docker`) already sets these; the values above matter
+when you build your own image or run outside a container.
+
+---
+
 ## The one thing to watch: shared state
 
 A Swoole worker is long-lived, so a `#[Singleton]` is created once and **reused across

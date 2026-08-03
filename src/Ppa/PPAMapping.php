@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Ppa;
 
 use Flytachi\Winter\Cdo\Config\Common\DbConfigInterface;
-use Flytachi\Winter\DI\Scanner;
+use Flytachi\Winter\Kernel\Core\ClassScanner;
 use Flytachi\Winter\Kernel\Collector\ImplementorCollector;
 use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Kernel\Ppa\Entity\RepositoryInterface;
@@ -24,7 +24,7 @@ final class PPAMapping
     public static function scanningConfigs(?string $rootDir = null): array
     {
         $collector = new ImplementorCollector(DbConfigInterface::class);
-        Scanner::run($rootDir ?? Kernel::$pathRoot)->collect($collector)->execute();
+        ClassScanner::scanner($rootDir ?? Kernel::$pathRoot)->collect($collector)->execute();
 
         $configs = [];
         foreach ($collector->getResult() as $ref) {
@@ -39,7 +39,7 @@ final class PPAMapping
     public static function scanningDeclaration(?string $rootDir = null): Declaration
     {
         $collector = new ImplementorCollector(RepositoryInterface::class);
-        Scanner::run($rootDir ?? Kernel::$pathRoot)->collect($collector)->execute();
+        ClassScanner::scanner($rootDir ?? Kernel::$pathRoot)->collect($collector)->execute();
 
         return self::scanDeclarationFilter($collector->getResult());
     }

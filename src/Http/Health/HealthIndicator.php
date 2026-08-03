@@ -7,7 +7,7 @@ namespace Flytachi\Winter\Kernel\Http\Health;
 use Composer\InstalledVersions;
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\DI\Container;
-use Flytachi\Winter\DI\Scanner;
+use Flytachi\Winter\Kernel\Core\ClassScanner;
 use Flytachi\Winter\Kernel\Collector\ImplementorCollector;
 use Flytachi\Winter\Kernel\Http\Header;
 use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
@@ -162,7 +162,7 @@ class HealthIndicator implements HealthIndicatorInterface
 
         if ($rootDir !== '' && interface_exists($interface)) {
             $collector = new ImplementorCollector($interface);
-            Scanner::run($rootDir)->collect($collector)->execute();
+            ClassScanner::scanner($rootDir)->collect($collector)->execute();
 
             foreach ($collector->getResult() as $ref) {
                 /** @var \Flytachi\Winter\Cdo\Config\Common\DbConfigInterface $config */
@@ -262,7 +262,7 @@ class HealthIndicator implements HealthIndicatorInterface
         }
 
         $collector = new ImplementorCollector($interface);
-        Scanner::run($rootDir)->collect($collector)->execute();
+        ClassScanner::scanner($rootDir)->collect($collector)->execute();
         $details     = [];
         $worstStatus = 'up';
 

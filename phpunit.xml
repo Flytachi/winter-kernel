@@ -8,6 +8,7 @@
     <testsuites>
         <testsuite name="Http">
             <directory>tests/Http</directory>
+            <exclude>tests/Http/Fixtures</exclude>
         </testsuite>
         <testsuite name="Localization">
             <directory>tests/Localization</directory>
@@ -52,6 +53,9 @@
         </testsuite>
         <testsuite name="Architecture">
             <directory>tests/Architecture</directory>
+        </testsuite>
+        <testsuite name="Core">
+            <directory>tests/Core</directory>
         </testsuite>
         <testsuite name="Console">
             <directory>tests/Console</directory>

@@ -8,7 +8,7 @@ use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\DI\Collector\DICollector;
 use Flytachi\Winter\DI\Contract\CollectorInterface;
-use Flytachi\Winter\DI\Scanner;
+use Flytachi\Winter\Kernel\Core\ClassScanner;
 use Flytachi\Winter\Kernel\App\Attribute\EnableAsync;
 use Flytachi\Winter\Kernel\Concurrent\Async\AsyncCollector;
 use Flytachi\Winter\Kernel\Concurrent\Async\Proxy\BypassScanner;
@@ -188,7 +188,7 @@ final class Di extends Cmd
             // Container and writes the FQCN list to $cachePath as a side effect. The
             // class list and the #[Async] proxies come from the same scan on purpose:
             // two commands would leave a window where one is stale.
-            $scan = Scanner::run(rootDir: Kernel::$pathRoot, cache: $cachePath)
+            $scan = ClassScanner::scanner(rootDir: Kernel::$pathRoot, cache: $cachePath)
                 ->collect(new DICollector($container));
             if ($async !== null) {
                 $scan->collect($async);
@@ -441,7 +441,7 @@ final class Di extends Cmd
             }
         };
 
-        Scanner::run(rootDir: Kernel::$pathRoot)
+        ClassScanner::scanner(rootDir: Kernel::$pathRoot)
             ->collect($sink)
             ->execute();
 
@@ -466,7 +466,7 @@ final class Di extends Cmd
             }
         };
 
-        Scanner::run(rootDir: Kernel::$pathRoot)
+        ClassScanner::scanner(rootDir: Kernel::$pathRoot)
             ->collect($sink)
             ->execute();
 
