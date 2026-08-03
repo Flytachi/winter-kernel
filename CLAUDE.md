@@ -366,6 +366,43 @@ Also: built-in `console/Command/*` are `final` because two of them (`Process`, `
 share a short name with a real stereotype, and an open command made both appear in
 completion. That was the original complaint; `final` fixed it without renaming anything.
 
+### DI scopes — one rule, enforced at boot (added 2026-08-03)
+
+> **A class may hold a reference to a shorter-lived object only if it does not outlive it.**
+
+Injected properties resolve **once, when the holder is built**. So a `#[Singleton]`
+holding a `#[Request]` bean freezes the first request's instance for the worker's
+lifetime — every later request keeps seeing it, with no error and nothing in the log.
+Measured live: three users, all three served as the first one.
+
+The reach is **transitive** — a singleton freezes its whole dependency subtree, so
+`#[Singleton] → plain service → #[Request]` leaks identically. Also measured, not reasoned.
+
+`Collector\ScopeGraphCollector` gathers the dependency graph during the single scan pass;
+`assertNoFrozenRequestScope()` walks it in `bootstrap()` and throws `ScopeConflictException`
+naming the whole path. Cost: ~0.01 ms at boot, nothing per request. Cycle-guarded.
+
+This mirrors Spring's *safe* branch: there, `@RequestScope` injects a scoped proxy, and a
+raw `@Scope("request")` without one fails at startup. Spring never leaks silently because
+its singletons are built eagerly, before any request exists, so the resolution simply has
+nothing to capture. Ours are built lazily — during the first request — which is exactly
+why the capture succeeds and then rots. The boot check restores the guarantee.
+
+`#[Request]` outside HTTP: a worker's body is **one** coroutine, so a request-scoped bean
+resolved there would outlive every job. `Process::markBusy()` — which already marks where a
+unit of work starts — therefore also ends the request scope, via
+`Container::flushRequestScope()`. Singletons are untouched, and a body that never marks a
+unit resets nothing. Measured before the fix: four iterations, one object, each seeing what
+the one before it wrote.
+
+Consequences worth remembering:
+- `#[Singleton]` is **per worker process**, not per application: 4 workers = 4 instances.
+  Counters and caches in singleton fields disagree with themselves.
+- Repositories are safe to share because their query state lives in the coroutine context,
+  not the object — hence `#[Singleton]` in the generated template (§13-adjacent, `call make -r`).
+- `Http\Stereotype\Controller::__construct()` is `final`: no constructor means no natural
+  place to stash request state, which removes half the trap before it appears.
+
 ---
 
 ## 8. CLI

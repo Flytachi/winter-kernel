@@ -236,13 +236,47 @@ final class ReportBuilder extends Process
 }
 ```
 
-`markBusy()` and `markIdle()` are pure in-memory flags — they cost nothing and are
+`markBusy()` and `markIdle()` are in-memory flags — they cost nothing and are
 safe to call on every iteration. They combine with the spawn count by OR, so a
 process that both marks itself busy and has spawns in flight stays `BUSY` until
 both are clear; it can never report a false `IDLE` while work is genuinely
 outstanding. The value is persisted to the status record on a roughly one-second
 heartbeat, and only when it actually changes, so a worker flipping between busy
 and idle on every message never touches the disk for it.
+
+### `markBusy()` also opens a new request scope
+
+A `#[Request]` binding means *one instance per unit of work*. Over HTTP the framework
+knows what a unit is — a request is a coroutine, and the scope dies with it. **A worker
+has no such boundary**: its whole body runs inside one coroutine, so a request-scoped
+bean resolved there would live for the entire run and hand each job the previous job's
+state:
+
+```
+итерация 1: объект #61, at entry saw "unset"
+итерация 2: объект #61, at entry saw "job-1"     ← the last job's data
+итерация 3: объект #61, at entry saw "job-2"
+```
+
+Only the body knows where a unit ends, and `markBusy()` already says so. So it doubles as
+the scope boundary: request-scoped bindings resolved after it are new.
+
+```php
+while ($this->isRunning()) {
+    $job = $this->queue->pop(timeout: 1.0);
+    if ($job === null) { continue; }
+
+    $this->markBusy();                      // ← unit starts; request scope reset
+    $ctx = Container::getInstance()->make(JobContext::class);   // fresh every job
+    // ... work ...
+    $this->markIdle();
+}
+```
+
+Two things this does **not** do. Singletons are untouched — a pool, a warm cache or a
+counter is not scoped to a unit and keeps both identity and state. And a body that never
+calls `markBusy()` has declared no units, so nothing is reset; a process that simply runs
+behaves as it always did.
 
 ---
 

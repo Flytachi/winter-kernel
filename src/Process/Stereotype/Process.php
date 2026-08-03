@@ -155,10 +155,26 @@ abstract class Process
     /**
      * Marks the start of an inline unit of work (no {@see spawn()}). Keeps the
      * process BUSY so it is not interrupted mid-unit and not scaled down.
+     *
+     * This is also where the **request scope ends and a new one begins**. Under HTTP a
+     * request is a coroutine and its scope dies with it; a worker has no such boundary —
+     * its whole body runs in one coroutine, so a `#[Request]` bean resolved inside would
+     * survive every iteration and carry the previous job's state into the next. Verified:
+     * four iterations, one object, each seeing what the one before it wrote.
+     *
+     * Only the body knows where a unit ends, and this call already says so — the activity
+     * flag and the scope boundary are two readings of the same event, so the developer
+     * gets correct scoping without having to know the scope exists.
+     *
+     * A body that never calls this has declared no units, and nothing is reset.
      */
     final protected function markBusy(): void
     {
         $this->inlineBusy = true;
+
+        if (Container::isInitialized()) {
+            Container::getInstance()->flushRequestScope();
+        }
     }
 
     /**

@@ -54,6 +54,9 @@
         <testsuite name="Architecture">
             <directory>tests/Architecture</directory>
         </testsuite>
+        <testsuite name="Collector">
+            <directory>tests/Collector</directory>
+        </testsuite>
         <testsuite name="Core">
             <directory>tests/Core</directory>
         </testsuite>

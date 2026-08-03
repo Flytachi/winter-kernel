@@ -28,6 +28,7 @@ use Flytachi\Winter\Kernel\App\Config\ServerSettings;
 use Flytachi\Winter\Kernel\App\Config\WebConfigurer;
 use Flytachi\Winter\Kernel\Collector\ConfigurationCollector;
 use Flytachi\Winter\Kernel\Collector\ImplementorCollector;
+use Flytachi\Winter\Kernel\Collector\ScopeGraphCollector;
 use Flytachi\Winter\Kernel\Concurrent\Async\AsyncCollector;
 use Flytachi\Winter\Kernel\Concurrent\Async\Proxy\ProxyFactory;
 use Flytachi\Winter\Kernel\Http\Health\Health;
@@ -236,6 +237,7 @@ abstract class WinterApplication
         $webCollector = new ImplementorCollector(WebConfigurer::class);
         $logCollector = new ImplementorCollector(LoggingConfigurer::class);
         $actuatorCollector = new ImplementorCollector(HealthContributor::class);
+        $scopeGraph = new ScopeGraphCollector();
 
         // #[Async] proxying is opt-in, like Spring's @EnableAsync: the collector is
         // created and wired only when #[EnableAsync] is present. Without it, classes
@@ -258,12 +260,17 @@ abstract class WinterApplication
             ->collect($config)
             ->collect($webCollector)
             ->collect($logCollector)
-            ->collect($actuatorCollector);
+            ->collect($actuatorCollector)
+            ->collect($scopeGraph);
 
         if ($async !== null) {
             $scan->collect($async);
         }
         $scan->execute();
+
+        // Before anything is resolved: a #[Singleton] holding a #[Request] bean would
+        // freeze the first request's instance for the worker's lifetime, and say nothing.
+        $scopeGraph->assertNoFrozenRequestScope();
 
         $async?->flush();
 
