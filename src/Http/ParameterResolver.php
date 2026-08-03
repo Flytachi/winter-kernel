@@ -71,6 +71,15 @@ use ValueError;
  */
 final class ParameterResolver
 {
+    /**
+     * Declared types that accept an array, so binding one to them is not an error.
+     *
+     * `mixed` and `iterable` are here because PHP itself accepts an array for both; the
+     * absence of `object` is deliberate, since an array bound to it would only fail later
+     * at construction, and failing here says why.
+     */
+    private const array ARRAY_COMPATIBLE = ['array', 'mixed', 'iterable'];
+
     // ── Public API ────────────────────────────────────────────────────────────
 
     public static function resolve(
@@ -870,7 +879,13 @@ final class ParameterResolver
 
     private static function cast(mixed $value, ?string $typeName, string $label = 'Parameter'): mixed
     {
-        if (is_array($value) && $typeName !== null && $typeName !== 'array') {
+        // An array reaching a scalar is a client error worth reporting — `?id[]=1` bound
+        // to an int would otherwise cast to the string "Array". But the check has to name
+        // the types that genuinely reject an array: `mixed` and `iterable` accept one, and
+        // comparing against 'array' alone refused them. A DataGrid filter is where this
+        // surfaced — its `value` is `mixed` because `isAnyOf` sends a list where
+        // `contains` sends a string.
+        if (is_array($value) && $typeName !== null && !in_array($typeName, self::ARRAY_COMPATIBLE, true)) {
             RequestException::throw("$label must be $typeName, got array");
         }
 

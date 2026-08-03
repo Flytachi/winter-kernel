@@ -5,10 +5,6 @@ namespace __namespace__;
 use Flytachi\Winter\DI\Attribute\Singleton;
 use Flytachi\Winter\Kernel\Ppa\Stereotype\Repository;
 
-// A repository is safe to share: its query state (sqlParts, alias, entity class) lives
-// in the coroutine context, not in the object, so concurrent requests never see each
-// other's builder. Sharing it skips a constructor that reaches into the connection pool
-// on every request. Drop #[Singleton] only if you add mutable fields of your own.
 #[Singleton]
 class __className__ extends Repository
 {

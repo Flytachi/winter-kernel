@@ -29,7 +29,7 @@
     "bin": ["wKernelRunner"],
     "require": {
         "php": ">=8.4",
-        "flytachi/winter-di": "^1.0",
+        "flytachi/winter-di": "^2.0",
         "flytachi/winter-base": "^3.0",
         "flytachi/winter-logger": "^1.0",
         "flytachi/winter-thread": "^3.0",
