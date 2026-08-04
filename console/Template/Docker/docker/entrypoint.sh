@@ -7,9 +7,9 @@
 # If you set up a crontab in a docker/dependencies/ script, start crond here:
 # crond -l 8
 
-# The port comes from compose, which read it from .env — the same value it published
-# with `ports:`. Passing it as a flag keeps the two in step without the application
-# needing to know it is running in a container.
+# The port arrives from compose's `environment:`, holding the same anchor it published
+# with `ports:`. Passing it as a flag keeps the two in step and leaves the application
+# unaware it is running in a container — the framework has no Docker-specific setting.
 PORT="${SERVER_PORT:-8000}"
 
 # Opcache is toggled here (runtime, as root before su-exec), so switching dev/prod

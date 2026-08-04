@@ -70,10 +70,9 @@ RUN php call cfg completion -if || true
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Documentation only — EXPOSE publishes nothing. The host binding is done by `ports:`
-# in docker-compose.yml, and the app binds where SERVER_PORT says. Kept in step with
-# both so `docker image inspect` and `docker run -P` report the truth.
-ARG SERVER_PORT=8000
-EXPOSE ${SERVER_PORT}
-
+# No EXPOSE on purpose. It publishes nothing — `ports:` in docker-compose.yml does that,
+# and the port itself is decided there too. Baking a number in here would only add one
+# that can disagree: `docker compose up` without `--build` reuses the existing image, so
+# the recorded port would be whatever the last build happened to use. A metadata line
+# that quietly lies is worse than no metadata line.
 ENTRYPOINT ["/entrypoint.sh"]

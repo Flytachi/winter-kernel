@@ -1,3 +1,11 @@
+# The port lives here and nowhere else. Change this one number and both the published
+# port and the port the application binds follow — they are the same anchor below.
+#
+# The `${SERVER_PORT:-…}` form keeps an escape hatch: set SERVER_PORT in the environment
+# (or in .env) and it wins without this file being touched, which is usually what a
+# production host wants.
+x-port: &port ${SERVER_PORT:-8000}
+
 services:
   server:
     container_name: ${COMPOSE_PROJECT_NAME:-app}
@@ -5,20 +13,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        # Only feeds EXPOSE, which is metadata. The binding below is what publishes.
-        SERVER_PORT: ${SERVER_PORT:-8000}
     environment:
-      - COMPOSE_BAKE=true
+      COMPOSE_BAKE: "true"
       # Default (no DEV) → prod: `call run`, tuned opcache on. Opt into dev per run
       # (no rebuild): DEV=true docker compose up → `call run dev`, opcache off.
-      - DEV=${DEV:-false}
+      DEV: ${DEV:-false}
       # Read by entrypoint.sh, which passes it as `call run --port=…`.
-      - SERVER_PORT=${SERVER_PORT:-8000}
-    # One source of truth: SERVER_PORT in .env. Compose reads it here and hands the
-    # same value to the entrypoint above, so the published port and the bound port
-    # cannot drift apart. Change it in one place.
+      SERVER_PORT: *port
     ports:
-      - "${SERVER_PORT:-8000}:${SERVER_PORT:-8000}"
+      - target: *port
+        published: *port
     volumes:
       - ./:/var/www/html/
