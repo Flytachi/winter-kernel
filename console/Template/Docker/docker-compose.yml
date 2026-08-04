@@ -8,6 +8,7 @@ x-port: &port ${SERVER_PORT:-8000}
 
 services:
   server:
+    tty: true
     container_name: ${COMPOSE_PROJECT_NAME:-app}
     network_mode: bridge
     build:
@@ -15,11 +16,8 @@ services:
       dockerfile: Dockerfile
     environment:
       COMPOSE_BAKE: "true"
-      # Default (no DEV) → prod: `call run`, tuned opcache on. Opt into dev per run
-      # (no rebuild): DEV=true docker compose up → `call run dev`, opcache off.
-      DEV: ${DEV:-false}
-      # Read by entrypoint.sh, which passes it as `call run --port=…`.
       SERVER_PORT: *port
+      DEV: ${DEV:-false}
     ports:
       - target: *port
         published: *port

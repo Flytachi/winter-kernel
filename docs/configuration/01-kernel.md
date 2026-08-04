@@ -180,9 +180,19 @@ use Flytachi\Winter\Kernel\Http\Middleware\ClientTimezoneMiddleware;
 class ReportController extends Controller { ... }
 ```
 
-The middleware calls `date_default_timezone_set()` in `before()` with the client value (or `env('TIME_ZONE', 'UTC')` as fallback) and restores the canonical default in `after()`.
+The middleware stores the client value (or `env('TIME_ZONE', 'UTC')`) in `Timezone`, and additionally sets PHP's own default so unadapted code keeps working:
 
-**Swoole caveat.** `after()` does not run when the handler throws — `Router::dispatch` catches `Throwable` outside the after-loop. In a long-running worker, an unhandled exception leaves the global TZ at the client's value until the next request that passes through the middleware overwrites it. Apply the middleware uniformly across routes, or skip it and call `getClientTimezone()` explicitly inside handlers.
+```php
+use Flytachi\Winter\Kernel\Localization\Timezone;
+
+Timezone::current();   // 'Asia/Tashkent' — this request's zone, coroutine-local
+```
+
+**`Timezone::current()` is the safe read; `date()` is not.** PHP keeps its default timezone in an engine global, and a Swoole worker runs many requests as coroutines in one process — so a request that sets its zone and then waits on I/O can resume to find a concurrent request's value in place. That is measured behaviour, not a theoretical risk, and no library can change it. `Timezone` lives in `RequestLocal` instead, so concurrent requests cannot see each other's.
+
+The framework reads `Timezone` for everything it does on the request's behalf, including the timezone of the database session — a pooled connection is handed from one user to the next, and its session zone is corrected on every query rather than left as the previous user found it.
+
+**Swoole caveat.** `after()` does not run when the handler throws — `Router::dispatch` catches `Throwable` outside the after-loop. The coroutine-local value disappears with the coroutine regardless, but the engine global keeps the client's value until the next request through the middleware resets it.
 
 ---
 

@@ -88,6 +88,23 @@ final class WebConfig extends WebConfigurerAdapter
 The `.env` shorthands `SERVER_WORKERS`, `SERVER_TASKS`, `SERVER_MAX_REQUEST` and
 `SERVER_MAX_REQUEST_GRACE` seed the same settings before the configurer runs.
 
+### One worker by default
+
+Say nothing and the server runs **a single worker process** — the framework sets no
+`worker_num`, and Swoole's own default in `SWOOLE_BASE` mode is one. Concurrency still
+works: requests are coroutines inside that process, and a blocking call yields rather
+than stalling the others.
+
+What one worker does not give you is more than one CPU core. Measured on a 12-core box,
+a single worker saturates one core at roughly 2 400 req/s against a database and 8 500
+req/s without one. `->workers(swoole_cpu_num())` is what spreads the load; until then,
+extra cores sit idle.
+
+The setting also changes what a pool size means. `maximumPoolSize` is **per worker**, so
+one worker makes it the whole server's connection budget, while `workers(12)` multiplies
+it by twelve — and a database with `max_connections = 100` will refuse the difference.
+Size it as `worker_num × maximumPoolSize` ≤ what the server allows.
+
 ---
 
 ## Set `opcache.enable_cli=1`

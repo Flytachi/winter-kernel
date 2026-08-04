@@ -13,6 +13,7 @@ use Flytachi\Winter\Kernel\ConnectionPool\PoolEntry;
 use Flytachi\Winter\Kernel\ConnectionPool\PoolException;
 use Flytachi\Winter\Kernel\ConnectionPool\PoolPolicy;
 use Flytachi\Winter\Kernel\ConnectionPool\SingleConnection;
+use Flytachi\Winter\Kernel\Localization\Timezone;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
@@ -81,6 +82,21 @@ final class PpaConnectionPool
      * @var array<string, SingleConnection>
      */
     private static array $static = [];
+
+    /**
+     * Timezone last applied to each pooled connection, so {@see syncTimezone()} can skip
+     * a `SET TIMEZONE` the connection does not need.
+     *
+     * Keyed by the pooled resource itself — {@see CdoConnectionFactory} pools the config
+     * instance — and weak, so the entry disappears with the connection instead of
+     * pinning a closed one in memory.
+     *
+     * Built lazily — `new WeakMap()` is not a constant expression, so it cannot be a
+     * property default.
+     *
+     * @var \WeakMap<object, string>|null
+     */
+    private static ?\WeakMap $appliedTimezone = null;
 
     private static function logger(): LoggerInterface
     {
@@ -357,12 +373,46 @@ final class PpaConnectionPool
         $config = $held->entry->resource;
         $cdo    = $config->connection();
 
-        $driver = $cdo->getAttribute(\PDO::ATTR_DRIVER_NAME);
-        if (!empty($driver)) {
-            $cdo->applyDatabaseTimezone($driver, date_default_timezone_get());
-        }
+        self::syncTimezone($config, $cdo);
 
         return $cdo;
+    }
+
+    /**
+     * Makes the connection's session timezone match the request's.
+     *
+     * This runs on **every** `db()` call, not once per borrow, and that is deliberate:
+     * a pooled connection passes from one user to the next, so the previous user's
+     * timezone must never be left in place — a client in London would receive dates in
+     * Tashkent's zone. See {@see \Flytachi\Winter\Kernel\Http\Middleware\ClientTimezoneMiddleware}.
+     *
+     * The zone comes from {@see Timezone}, which is coroutine-local. Reading PHP's
+     * `date_default_timezone_get()` here — as this did — meant reading an engine global
+     * shared by every request in the worker: a request that yielded on I/O could resume
+     * after a concurrent request had overwritten it, and then hand *that* zone to its
+     * own database session. Measured, not theorised.
+     *
+     * The command itself is skipped when the connection already carries the right zone.
+     * That is not the same as hoisting it out of the hot path: the check is per
+     * connection, so a connection arriving from a user in another timezone is still
+     * corrected, including mid-request. It removes two round-trips per request in the
+     * ordinary case where everyone shares one zone.
+     */
+    private static function syncTimezone(object $config, CDO $cdo): void
+    {
+        $driver = $cdo->getAttribute(\PDO::ATTR_DRIVER_NAME);
+        if (empty($driver)) {
+            return;
+        }
+
+        $applied = self::$appliedTimezone ??= new \WeakMap();
+        $tz      = Timezone::current();
+        if (($applied[$config] ?? null) === $tz) {
+            return;
+        }
+
+        $cdo->applyDatabaseTimezone($driver, $tz);
+        $applied[$config] = $tz;
     }
 
     /**
