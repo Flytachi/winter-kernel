@@ -104,6 +104,27 @@ Source: `src/Route/Router.php` (`registerHealth()`).
 
 Aggregation rule: any `down` → overall `down`; otherwise any `degraded` → overall `degraded`; otherwise `up`.
 
+### Response code
+
+The overall status is also the response code, so a probe that reads the code rather than the body reaches the same verdict:
+
+| Overall status | Code |
+|---|---|
+| `up` | `200` |
+| `degraded` | `200` |
+| `down` | `503 Service Unavailable` |
+
+`degraded` stays `200` on purpose: it means working worse, not not working, and a readiness probe that pulled the instance out of rotation over it would turn a partial outage into a full one. The body is the same in either case — the code carries no information the report does not.
+
+Only `/actuator/health` is affected. The other endpoints answer `200`, including one whose payload happens to contain a `status` key of its own.
+
+This makes the endpoint usable directly as a container health check or a k8s probe:
+
+```yaml
+readinessProbe:
+  httpGet: { path: /actuator/health, port: 8000 }
+```
+
 ### Disk / memory thresholds
 
 Built into `HealthIndicator`:

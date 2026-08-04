@@ -36,10 +36,18 @@ final class PoolTelemetryTest extends TestCase
 
         // Kernel caches FileStorage by name against the path it was first built with.
         $this->clearRunnableCache();
+        PoolTelemetry::forget();
     }
 
     protected function tearDown(): void
     {
+        // An armed repeating timer would keep the reactor — and PHP's own shutdown —
+        // from ever draining, hanging the suite. Assertions have already run.
+        if (extension_loaded('swoole')) {
+            \Swoole\Timer::clearAll();
+        }
+        PoolTelemetry::forget();
+
         if ($this->originalEnv === null) {
             unset($_ENV['PPA_POOL_TELEMETRY']);
         } else {
@@ -184,5 +192,102 @@ final class PoolTelemetryTest extends TestCase
         (new ReflectionMethod(PoolTelemetry::class, 'publish'))->invoke(null, 0, 60);
 
         self::assertSame([], PoolTelemetry::snapshot(), 'an app that never touches PPA leaves no records');
+    }
+
+    // ── Lifecycle: nothing is paid for until a pool exists ──────────────────────
+
+    private function timerId(): ?int
+    {
+        return new ReflectionProperty(PoolTelemetry::class, 'timerId')->getValue();
+    }
+
+    /** The store directory is created by the mere act of asking for the store. */
+    private function storeDirExists(): bool
+    {
+        return is_dir($this->storage . '/ppa.pool');
+    }
+
+    public function test_enable_arms_no_timer_on_its_own(): void
+    {
+        $this->requireSwoole();
+
+        PoolTelemetry::enable(0);
+
+        self::assertNull($this->timerId(), 'a worker with no datasource must not run a publisher');
+    }
+
+    public function test_the_publisher_starts_when_a_pool_appears(): void
+    {
+        $this->requireSwoole();
+        PoolTelemetry::enable(0);
+        $armed = null;
+
+        // Inside a coroutine, where a worker really opens its first pool. The timer is
+        // released before the closure ends: a live repeating timer holds the reactor
+        // open and `Coroutine\run()` would never return.
+        \Swoole\Coroutine\run(function () use (&$armed): void {
+            PoolTelemetry::arm();
+            $armed = $this->timerId();
+            PoolTelemetry::stop(0);
+        });
+
+        self::assertNotNull($armed, 'the first pool is the first thing worth reporting');
+    }
+
+    /** A daemon worker or a CLI process opens pools too, and publishes for nobody. */
+    public function test_arming_without_an_eligible_worker_does_nothing(): void
+    {
+        $this->requireSwoole();
+
+        PoolTelemetry::arm();
+
+        self::assertNull($this->timerId());
+    }
+
+    public function test_a_forked_child_does_not_inherit_the_publishing_identity(): void
+    {
+        $this->requireSwoole();
+        PoolTelemetry::enable(0);
+
+        PoolTelemetry::forget();
+        PoolTelemetry::arm();
+
+        self::assertNull($this->timerId(), 'the child would otherwise overwrite its parent record');
+    }
+
+    /**
+     * The regression this pair of fixes is really about: a worker that never published
+     * must not reach for the store on the way out. Asking for it creates the directory,
+     * and an empty `runnable/ppa.pool/` reads as "this application uses PPA".
+     */
+    public function test_a_worker_that_never_published_leaves_no_directory_behind(): void
+    {
+        $this->requireSwoole();
+        PoolTelemetry::enable(0);
+
+        \Swoole\Coroutine\run(static function (): void {
+            PoolTelemetry::arm();
+            PoolTelemetry::stop(0);
+        });
+
+        self::assertNull($this->timerId(), 'the timer is released either way');
+        self::assertFalse($this->storeDirExists(), 'nothing was written, so nothing is asked for');
+    }
+
+    public function test_stop_drops_the_record_of_a_worker_that_did_publish(): void
+    {
+        $this->publishRecord(0, ['App\\Config\\MainDb' => ['total' => 1, 'idle' => 1, 'active' => 0, 'maximum' => 5]]);
+        new ReflectionProperty(PoolTelemetry::class, 'published')->setValue(null, true);
+
+        PoolTelemetry::stop(0);
+
+        self::assertSame([], PoolTelemetry::snapshot(), 'a worker leaving takes its record with it');
+    }
+
+    private function requireSwoole(): void
+    {
+        if (!extension_loaded('swoole')) {
+            self::markTestSkipped('The publisher is a Swoole timer.');
+        }
     }
 }

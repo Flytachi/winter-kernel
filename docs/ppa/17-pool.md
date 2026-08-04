@@ -140,7 +140,11 @@ per worker
 The CLI is a separate process and cannot read a running server's memory, so each worker
 publishes its stats to the shared store on a timer — `PPA_POOL_TELEMETRY` (seconds,
 default `5`, `0` disables). Records carry a TTL of three intervals, so a worker that
-stops simply expires; a worker holding no pool writes nothing at all.
+stops simply expires.
+
+The publisher starts on the worker's **first pool**, not at worker start. An application
+with no datasource runs no timer, writes no record and creates no store directory — it
+pays nothing for a subsystem it never uses.
 
 The same numbers appear in the `db` component of `/actuator/health`, nested under the
 datasource they belong to, where a saturated pool marks it `degraded`.

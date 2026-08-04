@@ -27,6 +27,11 @@ use Flytachi\Winter\Kernel\Kernel;
  * holding no pool writes nothing at all, so an application that never touches PPA
  * pays exactly zero.
  *
+ * Nothing is armed until there is something to report: {@see enable()} only marks the
+ * worker as eligible, and the timer starts on the first pool ({@see arm()}, called by
+ * {@see PpaConnectionPool}) — the same lazy shape the pool uses for its own housekeeper.
+ * An application with no datasource therefore has no timer and leaves no directory.
+ *
  * Set `PPA_POOL_TELEMETRY` to the publish interval in seconds, or `0` to disable.
  */
 final class PoolTelemetry
@@ -39,6 +44,16 @@ final class PoolTelemetry
 
     /** Swoole timer id of the publisher in this worker, or null when not running. */
     private static ?int $timerId = null;
+
+    /** The worker this process publishes as, or null where telemetry does not apply. */
+    private static ?int $workerId = null;
+
+    /**
+     * Whether a record was ever written from this process — the only thing that
+     * justifies touching the store on the way out. Reaching for it otherwise would
+     * create the store directory in an application that has no pool at all.
+     */
+    private static bool $published = false;
 
     /**
      * Publish interval in seconds from `PPA_POOL_TELEMETRY`; `0.0` disables telemetry.
@@ -53,18 +68,39 @@ final class PoolTelemetry
     }
 
     /**
-     * Starts publishing this worker's pool utilisation. Call once per worker (from the
-     * server's `workerStart`); a no-op when telemetry is disabled, Swoole is absent, or
-     * this worker already publishes.
+     * Marks this worker as eligible to publish. Call once per worker (from the server's
+     * `workerStart`); a no-op when telemetry is disabled or Swoole is absent.
+     *
+     * This arms nothing. Only a process that goes on to open a pool has anything to
+     * report, and only that process should own a timer — see {@see arm()}.
      */
-    public static function start(int $workerId): void
+    public static function enable(int $workerId): void
     {
-        $interval = self::interval();
-        if (self::$timerId !== null || $interval <= 0.0 || !extension_loaded('swoole')) {
+        if (self::interval() <= 0.0 || !extension_loaded('swoole')) {
             return;
         }
 
-        $ttl = (int) ceil($interval * 3);
+        self::$workerId = $workerId;
+    }
+
+    /**
+     * Starts the publisher, if this process is an eligible worker and is not already
+     * publishing. Called by {@see PpaConnectionPool} when it opens its first pool —
+     * the first moment there is anything to report.
+     */
+    public static function arm(): void
+    {
+        $interval = self::interval();
+        if (self::$timerId !== null
+            || self::$workerId === null
+            || $interval <= 0.0
+            || !extension_loaded('swoole')
+        ) {
+            return;
+        }
+
+        $workerId = self::$workerId;
+        $ttl      = (int) ceil($interval * 3);
         self::$timerId = \Swoole\Timer::tick(
             (int) ($interval * 1000),
             static fn() => self::publish($workerId, $ttl),
@@ -74,22 +110,37 @@ final class PoolTelemetry
     /** Stops publishing and drops this worker's record. */
     public static function stop(int $workerId): void
     {
-        if (self::$timerId === null) {
-            // Never published, so there is no record to drop — and asking for the store
-            // would create its directory in an application that has no pool at all.
-            return;
-        }
-
-        if (extension_loaded('swoole')) {
+        if (self::$timerId !== null && extension_loaded('swoole')) {
             \Swoole\Timer::clear(self::$timerId);
         }
-        self::$timerId = null;
+        self::$timerId  = null;
+        self::$workerId = null;
+
+        if (!self::$published) {
+            return;
+        }
+        self::$published = false;
 
         try {
             self::store()->del(self::recordKey($workerId));
         } catch (\Throwable) {
             // Telemetry must never break a shutdown.
         }
+    }
+
+    /**
+     * Drops this process's publishing identity without touching the store — the
+     * fork-safe counterpart of {@see stop()}, called from
+     * {@see PpaConnectionPool::reset()}.
+     *
+     * A forked child inherits these statics, so without this it would publish under its
+     * parent's worker id and overwrite the parent's record with its own numbers.
+     */
+    public static function forget(): void
+    {
+        self::$timerId   = null;
+        self::$workerId  = null;
+        self::$published = false;
     }
 
     /**
@@ -172,6 +223,7 @@ final class PoolTelemetry
                 ['worker' => $workerId, 'at' => time(), 'pools' => $pools],
                 time() + $ttl,
             );
+            self::$published = true;
         } catch (\Throwable) {
             // Telemetry is best-effort: a failed write must never disturb the worker.
         }

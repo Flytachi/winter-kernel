@@ -620,8 +620,22 @@ of an interrupted transaction is meaningless. One request fails; the connection 
    `Kernel::runnable('ppa.pool', false)`, the same store indirection `call process
    status` uses (the CLI is a different process and can never see a worker's memory).
    Interval via `PPA_POOL_TELEMETRY` (default 5s, `0` = off); records carry a TTL of
-   three intervals so a dead worker's record expires by itself; a worker holding no pool
-   writes nothing.
+   three intervals so a dead worker's record expires by itself.
+
+   **Nothing is armed until there is something to report.** `workerStart` only calls
+   `PoolTelemetry::enable($workerId)` (marks the worker eligible); the timer starts from
+   `PpaConnectionPool::pool()` on the **first pool**, via `arm()` — the same lazy shape
+   the pool uses for its own housekeeper. `arm()` is a no-op where `enable()` never ran,
+   which is what keeps a daemon worker or a CLI process from publishing. `stop()` reaches
+   for the store only if something was actually written (`$published`), and
+   `PpaConnectionPool::reset()` calls `forget()` so a forked child cannot publish under
+   its parent's worker id.
+
+   That last pair is a fix, not decoration: `stop()` used to guard on "is the timer
+   armed", which was true in *every* worker, so the shutdown path called
+   `store()->del()` — and `new FileStorage(...)` mkdirs its folder — leaving an empty
+   `storage/runnable/ppa.pool/` in applications with no datasource at all. Do not
+   re-guard on the timer.
 
 Numbers are **per worker** (each has its own pool, like HikariCP per-JVM). Saturation is
 therefore counted per worker, never derived from fleet sums — a summed pool can look

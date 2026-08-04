@@ -26,6 +26,7 @@ use Flytachi\Winter\Kernel\Http\Response\Sendable;
 use Flytachi\Winter\Kernel\Http\Cors;
 use Flytachi\Winter\Kernel\Http\Health\Health;
 use Flytachi\Winter\Kernel\Http\Health\HealthIndicatorInterface;
+use Flytachi\Winter\Kernel\Http\Health\Status;
 use Flytachi\Winter\Kernel\Plugin;
 use Flytachi\Winter\Kernel\Route\Collector\MappingCollector;
 use Flytachi\Winter\Kernel\Http\Stereotype\Middleware;
@@ -352,11 +353,39 @@ final class Router
                 throw new ResponseException('Actuator endpoint not found', HttpCode::NOT_FOUND);
             }
 
-            return ResponseEntity::ok($indicator->{$method}());
+            $body = $indicator->{$method}();
+
+            return ResponseEntity::status(self::healthCode($method, $body))->body($body);
         };
 
         $this->add('GET', '/actuator', $handler, $middlewares);
         $this->add('GET', '/actuator/{method}', $handler, $middlewares);
+    }
+
+    /**
+     * The response code carrying the health verdict: `down` → 503, everything else → 200.
+     *
+     * Without this the endpoint answered 200 while reporting `status: down` inside, so
+     * every consumer that reads the code rather than the body — a container health check,
+     * a k8s liveness/readiness probe, a load balancer — saw a dead application as healthy.
+     *
+     * `degraded` deliberately stays 200: it means working worse, not not working, and a
+     * probe that pulls the instance out of rotation over it would turn a partial outage
+     * into a full one.
+     *
+     * Only `health` reports a status; `info`, `metrics` and the rest are plain reads.
+     */
+    private static function healthCode(string $method, mixed $body): HttpCode
+    {
+        if ($method !== 'health' || !is_array($body)) {
+            return HttpCode::OK;
+        }
+        $status = $body['status'] ?? null;
+        $status = $status instanceof Status ? $status->value : $status;
+
+        return is_string($status) && strtolower($status) === Status::Down->value
+            ? HttpCode::SERVICE_UNAVAILABLE
+            : HttpCode::OK;
     }
 
     // ── Dispatch ──────────────────────────────────────────────────────────────

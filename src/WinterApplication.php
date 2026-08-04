@@ -459,12 +459,13 @@ abstract class WinterApplication
             $router->handle($request, new SwooleResponse($res, $isHead));
         };
 
-        // Request workers log on 'http' with per-request coroutine isolation, and
-        // publish their connection-pool utilisation so `call db pool` can read it.
+        // Request workers log on 'http' with per-request coroutine isolation, and are
+        // marked eligible to publish their connection-pool utilisation for
+        // `call db pool` — the publisher itself only starts if a pool is ever opened.
         $workerStart = static function (\Swoole\Http\Server $server, int $workerId): void {
             LoggerFactory::setContextStorage(new CoroutineContext());
             LoggerFactory::setDefaultChannel('http');
-            PoolTelemetry::start($workerId);
+            PoolTelemetry::enable($workerId);
         };
 
         // A worker cannot leave while its reactor still holds a repeating timer, so a

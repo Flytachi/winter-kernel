@@ -273,6 +273,10 @@ final class PpaConnectionPool
         self::$pools = [];
         self::$static = [];
         self::$configs = [];
+
+        // The child inherited the parent's publishing identity along with everything
+        // else; keeping it would let the child overwrite the parent's telemetry record.
+        PoolTelemetry::forget();
     }
 
     // -------------------------------------------------------------------------
@@ -391,6 +395,9 @@ final class PpaConnectionPool
                 new CdoConnectionFactory($configClass, self::logger()),
                 $policy,
             );
+
+            // First pool in this worker — from here on there is something to report.
+            PoolTelemetry::arm();
         }
         return self::$pools[$key];
     }
