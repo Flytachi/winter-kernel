@@ -5,12 +5,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVER_PORT: ${SERVER_PORT:-8000}
     environment:
       - COMPOSE_BAKE=true
-      # Default (no DEV) → prod: `call run`, tuned opcache on. Opt into dev per run
-      # (no rebuild): DEV=true docker compose up → `call run dev`, opcache off.
       - DEV=${DEV:-false}
     ports:
-      - "8000:8000"
+      - "${SERVER_PORT:-8000}:${SERVER_PORT:-8000}"
     volumes:
       - ./:/var/www/html/

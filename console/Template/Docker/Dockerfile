@@ -70,5 +70,10 @@ RUN php call cfg completion -if || true
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-EXPOSE 8000
+# Documentation only — EXPOSE publishes nothing. The host binding is done by `ports:`
+# in docker-compose.yml, and the app binds where SERVER_PORT says. Kept in step with
+# both so `docker image inspect` and `docker run -P` report the truth.
+ARG SERVER_PORT=8000
+EXPOSE ${SERVER_PORT}
+
 ENTRYPOINT ["/entrypoint.sh"]
