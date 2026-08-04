@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\ConnectionPool;
 
 use Closure;
+use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
 use Throwable;
 
@@ -138,19 +139,40 @@ final class ConnectionPool
         $this->total = 0;
     }
 
-    /** Closes every idle connection and the pool itself (also stops the housekeeper). */
+    /**
+     * Stops the housekeeper, closes every idle connection and the pool itself.
+     *
+     * Called outside a coroutine (worker shutdown) only the housekeeper is stopped —
+     * see the comment in the body for why the connections are left to the kernel.
+     */
     public function close(): void
     {
         $this->clearHousekeeper();
         if ($this->idle === null) {
             return;
         }
-        while ($this->idle->length() > 0) {
-            $entry = $this->idle->pop(0.001);
-            if ($entry instanceof PoolEntry) {
-                $this->safeClose($entry->resource);
+
+        // Draining needs a coroutine: Channel::pop() is a coroutine API and raises a
+        // *fatal* outside one — not catchable, the process dies. The caller that closes
+        // outside a coroutine is Swoole's `workerExit`, which fires while the reactor is
+        // already winding down; the worker then dies mid-shutdown and, under `run dev`,
+        // never comes back.
+        //
+        // So the drain is skipped there rather than forced. The point of closing at that
+        // moment is the housekeeping timer above — a live repeating timer keeps the
+        // reactor from draining at all. The sockets need no ceremony: the process is
+        // ending, the kernel closes them, and a dropped client is routine for a database.
+        // Starting a scheduler just to say goodbye politely would risk hanging the very
+        // exit this is meant to keep clean.
+        if (Coroutine::getCid() > 0) {
+            while ($this->idle->length() > 0) {
+                $entry = $this->idle->pop(0.001);
+                if ($entry instanceof PoolEntry) {
+                    $this->safeClose($entry->resource);
+                }
             }
         }
+
         $this->idle->close();
         $this->idle  = null;
         $this->total = 0;
