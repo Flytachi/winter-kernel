@@ -88,29 +88,6 @@ final class WebConfig extends WebConfigurerAdapter
 The `.env` shorthands `SERVER_WORKERS`, `SERVER_TASKS`, `SERVER_MAX_REQUEST` and
 `SERVER_MAX_REQUEST_GRACE` seed the same settings before the configurer runs.
 
-### Where it binds
-
-`SERVER_HOST` and `SERVER_PORT` do the same for the bind address, with the flag winning:
-
-```
---host / --port   ▸   .env   ▸   0.0.0.0:8000
-```
-
-```dotenv
-SERVER_HOST=0.0.0.0
-SERVER_PORT=8003
-```
-
-The flag stays on top because a one-off `--port=9501` is an override by intent. The
-generated `docker-compose.yml` reads `SERVER_PORT` from the same `.env`, so the published
-port and the bound port cannot drift apart.
-
-> Do not also put `SERVER_PORT` under `environment:` in compose. A real environment
-> variable shows up in `$_SERVER`, which makes Dotenv consider the name already set and
-> skip the `.env` value — while `env()` reads `$_ENV` only and never sees the environment
-> one. Set in both places, the application ends up seeing neither and falls back to the
-> default.
-
 ---
 
 ## Set `opcache.enable_cli=1`

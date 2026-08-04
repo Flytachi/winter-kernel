@@ -6,10 +6,18 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
+        # Only feeds EXPOSE, which is metadata. The binding below is what publishes.
         SERVER_PORT: ${SERVER_PORT:-8000}
     environment:
       - COMPOSE_BAKE=true
+      # Default (no DEV) → prod: `call run`, tuned opcache on. Opt into dev per run
+      # (no rebuild): DEV=true docker compose up → `call run dev`, opcache off.
       - DEV=${DEV:-false}
+      # Read by entrypoint.sh, which passes it as `call run --port=…`.
+      - SERVER_PORT=${SERVER_PORT:-8000}
+    # One source of truth: SERVER_PORT in .env. Compose reads it here and hands the
+    # same value to the entrypoint above, so the published port and the bound port
+    # cannot drift apart. Change it in one place.
     ports:
       - "${SERVER_PORT:-8000}:${SERVER_PORT:-8000}"
     volumes:

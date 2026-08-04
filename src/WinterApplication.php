@@ -593,13 +593,9 @@ abstract class WinterApplication
      */
     private static function buildServerSettings(ApplicationArguments $args): ServerSettings
     {
-        // Precedence: --host/--port ▸ .env ▸ built-in default. The flag wins because a
-        // one-off override is what a flag is for; `.env` carries the environment's own
-        // answer, which is what every other SERVER_* setting already does. Passing the
-        // environment value as the argument default gives exactly that order.
         $settings = ServerSettings::fromEnv(
-            $args->option('host', (string) env('SERVER_HOST', '0.0.0.0')) ?? '0.0.0.0',
-            $args->int('port', (int) env('SERVER_PORT', 8000)),
+            $args->option('host', '0.0.0.0') ?? '0.0.0.0',
+            $args->int('port', 8000),
         );
         $c = self::$container;
         if ($c !== null) {
