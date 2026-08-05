@@ -146,6 +146,21 @@ final class RequestWatchdog
         return $cid !== null && isset(self::$expired[$cid]);
     }
 
+    /**
+     * The same question about the request running right now.
+     *
+     * Error handling deep in the pipeline has no reference to the id — it only has the
+     * exception — so it asks about the coroutine it is already in.
+     */
+    public static function isCurrentExpired(): bool
+    {
+        if (self::$expired === [] || !Runtime::isSwooleCoroutine()) {
+            return false;
+        }
+
+        return isset(self::$expired[Coroutine::getCid()]);
+    }
+
     /** Forgets a finished request. Safe to call for an id that was never registered. */
     public static function release(?int $cid): void
     {

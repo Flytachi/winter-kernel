@@ -496,15 +496,8 @@ final class Router
                 )->withHeader('Allow', implode(', ', $result->allowedMethods)),
                 default => throw new ResponseException('Not Found', HttpCode::NOT_FOUND),
             };
-
-            // A handler that swallowed the cancellation reaches this line having
-            // completed no I/O — every wait was cut short. Its answer is built from
-            // queries that never ran, so it is not the answer to send.
-            if (RequestWatchdog::hasExpired($watched)) {
-                throw new ResponseException('Gateway Timeout', HttpCode::GATEWAY_TIMEOUT);
-            }
         } catch (\Throwable $e) {
-            $this->sendError($this->asTimeout($e, $watched), $response);
+            $this->sendError($e, $response);
         }
     }
 
@@ -548,6 +541,13 @@ final class Router
                 $result = $mw->after($result);
             }
 
+            // A handler that swallowed the watchdog's cancellation arrives here having
+            // completed no I/O — every wait was cut short — so its result was built from
+            // queries that never ran. Answer the deadline instead of that.
+            if (RequestWatchdog::isCurrentExpired()) {
+                throw new ResponseException('Gateway Timeout', HttpCode::GATEWAY_TIMEOUT);
+            }
+
             // ── Serialize return value ────────────────────────────────────────
             if ($result instanceof Sendable) {
                 $result->send($res, $req);
@@ -561,6 +561,12 @@ final class Router
 
     private function sendError(\Throwable $e, HttpResponse $res): void
     {
+        // Past the deadline, whatever surfaced is a consequence of the cancellation —
+        // typically Swoole\Coroutine\CanceledException, raised wherever the request
+        // happened to be waiting. On its own that is an empty message with code 0, which
+        // would be logged as a server fault and answered 500. Say what actually happened.
+        $e = $this->asTimeout($e);
+
         if ($e instanceof DebugDumpException) {
             $res->status(200);
             $res->header('Content-Type', 'text/html; charset=utf-8');
@@ -743,17 +749,21 @@ final class Router
     }
 
     /**
-     * Presents a watchdog cancellation as `504 Gateway Timeout`.
+     * Presents anything raised after the deadline as `504 Gateway Timeout`.
      *
-     * What surfaces when the deadline passes is `Swoole\Coroutine\CanceledException`,
-     * thrown wherever the request happened to be waiting — a message about coroutines
-     * that says nothing to whoever made the request, and would be logged as a server
-     * fault rather than a deadline. Anything else is left exactly as it was: a request
-     * that timed out *and* had a real bug should still report the bug.
+     * Applied where the response is built rather than where the request is dispatched,
+     * because {@see invoke()} has a `catch` of its own: it answered the raw
+     * `CanceledException` — code 0, empty message, logged as a server fault and sent as
+     * 500 — before the outer handler ever saw it, and the outer 504 then arrived too late
+     * to change the response and only added a second log line.
+     *
+     * A `ResponseException` already carrying 504 is left alone, so re-wrapping cannot
+     * stack. Everything else on a request that did not time out passes through untouched:
+     * a request that timed out *and* had a real bug still reports the bug as the cause.
      */
-    private function asTimeout(\Throwable $e, ?int $watched): \Throwable
+    private function asTimeout(\Throwable $e): \Throwable
     {
-        if (!RequestWatchdog::hasExpired($watched)) {
+        if ($e instanceof ResponseException && $e->getCode() === HttpCode::GATEWAY_TIMEOUT->value) {
             return $e;
         }
 
