@@ -41,6 +41,11 @@ RUN docker-php-ext-install -j"$(nproc)" pcntl
 # code is always live.
 COPY docker/php-opcache.ini /opt/winter/php-opcache.ini
 
+# Memory ceiling per worker — active in both modes, so it is not staged like opcache.
+# PHP's 128M default is invisible until a worker dies of it; this puts the dial in
+# sight. Read the file before changing it: the box must hold worker_num × this value.
+COPY docker/php-memory.ini /usr/local/etc/php/conf.d/20-memory.ini
+
 # User hook: DB drivers / PHP extensions / cron. Modular scripts in
 # docker/dependencies/ — delete what you don't need; they run in filename order
 # (numeric prefixes). Placed BEFORE the app code copy so this rarely-changing

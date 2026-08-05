@@ -56,27 +56,73 @@ $id = $repo->insert($user);
 
 ---
 
-## insertGroup()
+## insertBatch()
 
 ```php
-public function insertGroup(array|object ...$entities): void
+public function insertBatch(iterable|object ...$entities): void
 ```
 
-Batch-inserts multiple records efficiently. Rows are chunked to avoid
-exceeding database placeholder limits.
+Inserts many records, sent to the database in batches so no single statement
+exceeds the driver's placeholder limit.
 
 ```php
 $repo = new UserRepository();
 
-$repo->insertGroup(
+$repo->insertBatch(
     ['name' => 'Alice', 'email' => 'a@example.com', 'status' => 'active'],
     ['name' => 'Bob',   'email' => 'b@example.com', 'status' => 'trial'],
     ['name' => 'Carol', 'email' => 'c@example.com', 'status' => 'active'],
 );
 
 // Or spread an array:
-$repo->insertGroup(...$usersArray);
+$repo->insertBatch(...$usersArray);
 ```
+
+### One rule: an array is a row, a stream is many
+
+Every argument is read the same way — **an array is one row, anything traversable
+is a stream of rows** — so the forms combine freely:
+
+```php
+$repo->insertBatch($user1, $user2);       // entities
+$repo->insertBatch(['name' => 'John']);   // an array is one row
+$repo->insertBatch(...$entities);         // an unpacked array
+$repo->insertBatch($generator);           // a stream
+$repo->insertBatch($fromCsv, $extraRow);  // mixed, one call
+```
+
+Nothing is ambiguous: an array is a valid entity here, and a `Traversable` never is.
+
+### Streaming: why the shape matters
+
+Rows reach the driver lazily and each batch is flushed as it fills, so **peak
+memory follows the batch size, not the size of the job**:
+
+```php
+// 500 000 rows, ~4 MiB peak — the collection never exists at once
+$repo->insertBatch((function () {
+    for ($i = 1; $i <= 500_000; $i++) {
+        $row = new Bench();
+        $row->field      = "Record #{$i}";
+        $row->created_at = TimeTool::now()->format('Y-m-d H:i:s');
+        yield $row;
+    }
+})());
+```
+
+Building the collection first costs whatever that collection costs. Measured on
+500 000 entities: **440 MiB** as an array against **4 MiB** streamed — and most of
+that 440 was not the entities but their conversion to rows, which used to happen
+for all of them before the first statement was sent.
+
+That measurement is also how a worker dies: PHP's default `memory_limit` is 128 MiB,
+per worker, and the array form crosses it around 150 000 rows.
+
+### Failure
+
+Batches are sent as they fill, so a failure part-way leaves the earlier batches
+committed. Wrap the call in a transaction when the whole job must be
+all-or-nothing.
 
 ---
 
@@ -174,22 +220,24 @@ $repo->upsert(
 
 ---
 
-## upsertGroup()
+## upsertBatch()
 
 ```php
-public function upsertGroup(
-    array   $entities,
-    array   $conflictColumns,
-    ?array  $updateColumns = null
+public function upsertBatch(
+    iterable  $entities,
+    array     $conflictColumns,
+    ?array    $updateColumns = null
 ): void
 ```
 
-Batch version of `upsert()`. Rows are chunked to avoid database limits.
+Batch version of `upsert()`. `$entities` is any `iterable` — an array, a generator,
+any `Traversable` — and a generator keeps peak memory at one batch whatever the
+total, exactly as in [`insertBatch()`](#insertbatch).
 
 ```php
 $repo = new ProductRepository();
 
-$repo->upsertGroup(
+$repo->upsertBatch(
     $stockItems,
     ['sku'],
     [
@@ -199,6 +247,17 @@ $repo->upsertGroup(
     ]
 );
 ```
+
+`$updateColumns` maps **column => expression**, not a list of column names:
+
+```php
+['price' => ':new']       // ✅ replace price with the incoming value
+['price', 'stock']        // ❌ RepositoryException — this is Laravel's shape
+[]  or  null              // ✅ ignore conflicts (DO NOTHING / INSERT IGNORE)
+```
+
+The list form is refused with a message naming the column and showing the corrected
+call, rather than reaching the database and coming back as `no such column: 0`.
 
 ---
 

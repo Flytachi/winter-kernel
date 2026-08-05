@@ -204,7 +204,7 @@ try {
 // Sync stock levels — accumulate quantity, always overwrite cost.
 
 $repo = new ProductRepository();
-$repo->upsertGroup(
+$repo->upsertBatch(
     $incomingStock,         // array of ['sku', 'quantity', 'cost']
     ['sku'],
     [

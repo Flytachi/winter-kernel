@@ -26,6 +26,7 @@ use Flytachi\Winter\Kernel\App\Config\CorsRegistry;
 use Flytachi\Winter\Kernel\App\Config\LoggingConfigurer;
 use Flytachi\Winter\Kernel\App\Config\ServerSettings;
 use Flytachi\Winter\Kernel\App\Config\WebConfigurer;
+use Flytachi\Winter\Kernel\App\Config\WorkerMemory;
 use Flytachi\Winter\Kernel\Collector\ConfigurationCollector;
 use Flytachi\Winter\Kernel\Collector\ImplementorCollector;
 use Flytachi\Winter\Kernel\Collector\ScopeGraphCollector;
@@ -436,6 +437,16 @@ abstract class WinterApplication
         $server = new \Swoole\Http\Server($host, $port);
         $server->set($settings->toArray());
 
+        // Says the arithmetic out loud before any worker exists: the memory limit is per
+        // worker and shared by every coroutine in it, so what the box must hold is
+        // worker_num × limit plus opcache. Warns, never refuses — over-committing is a
+        // legitimate choice and this is a worst-case estimate.
+        WorkerMemory::check(
+            $settings->getMemoryLimit(),
+            (int) ($settings->toArray()['worker_num'] ?? 1),
+            LoggerFactory::getLogger('sys'),
+        );
+
         $names = [];
         foreach ($companions as $companion) {
             $class = (string) $companion->class;
@@ -462,7 +473,11 @@ abstract class WinterApplication
         // Request workers log on 'http' with per-request coroutine isolation, and are
         // marked eligible to publish their connection-pool utilisation for
         // `call db pool` — the publisher itself only starts if a pool is ever opened.
-        $workerStart = static function (\Swoole\Http\Server $server, int $workerId): void {
+        $memoryLimit = $settings->getMemoryLimit();
+        $workerStart = static function (\Swoole\Http\Server $server, int $workerId) use ($memoryLimit): void {
+            // Per worker, because the limit is a property of this process — and a no-op
+            // when nothing was configured, so PHP's own value stands.
+            WorkerMemory::apply($memoryLimit);
             LoggerFactory::setContextStorage(new CoroutineContext());
             LoggerFactory::setDefaultChannel('http');
             PoolTelemetry::enable($workerId);

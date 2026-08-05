@@ -8,7 +8,7 @@ use Flytachi\Winter\Cdo\CDOBind;
 use Flytachi\Winter\Cdo\Qb;
 
 /**
- * CRUD test bodies — insert / insertGroup / update / delete / upsert.
+ * CRUD test bodies — insert / insertBatch / update / delete / upsert.
  *
  * Schema/lifecycle are owned by {@see ProductsTableTestCase}. Tests start
  * with an empty `products` table (setUp truncates) and insert rows with
@@ -61,7 +61,7 @@ abstract class CrudIntegrationTestCase extends ProductsTableTestCase
 
     public function test_insert_group_creates_all_rows(): void
     {
-        $this->repo()->insertGroup(
+        $this->repo()->insertBatch(
             ['id' => 1, 'name' => 'a', 'price' => 1.0],
             ['id' => 2, 'name' => 'b', 'price' => 2.0],
             ['id' => 3, 'name' => 'c', 'price' => 3.0],
@@ -74,7 +74,7 @@ abstract class CrudIntegrationTestCase extends ProductsTableTestCase
 
     public function test_update_changes_matched_rows_only(): void
     {
-        $this->repo()->insertGroup(
+        $this->repo()->insertBatch(
             ['id' => 1, 'name' => 'old',  'price' => 1.0],
             ['id' => 2, 'name' => 'keep', 'price' => 2.0],
         );
@@ -91,7 +91,7 @@ abstract class CrudIntegrationTestCase extends ProductsTableTestCase
 
     public function test_delete_removes_only_matched_rows(): void
     {
-        $this->repo()->insertGroup(
+        $this->repo()->insertBatch(
             ['id' => 1, 'name' => 'a', 'price' => 1.0],
             ['id' => 2, 'name' => 'b', 'price' => 2.0],
             ['id' => 3, 'name' => 'c', 'price' => 3.0],

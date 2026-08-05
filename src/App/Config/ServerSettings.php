@@ -26,6 +26,7 @@ final class ServerSettings
         private string $host,
         private int $port,
         private array $options = [],
+        private ?string $memoryLimit = null,
     ) {
     }
 
@@ -44,13 +45,20 @@ final class ServerSettings
             'SERVER_MAX_REQUEST'       => 'max_request',
             'SERVER_MAX_REQUEST_GRACE' => 'max_request_grace',
         ];
+        // `SERVER_MEMORY_LIMIT` is handled below — it is a PHP ini, not a Swoole key.
         foreach ($map as $envKey => $swooleKey) {
             $raw = env($envKey);
             if ($raw !== null && is_numeric($raw)) {
                 $options[$swooleKey] = (int) $raw;
             }
         }
-        return new self($host, $port, $options);
+
+        // Not a Swoole option — a PHP ini, so it is carried separately and never
+        // reaches Swoole\Server::set(). Kept as written ('256M', '1G', '-1').
+        $memoryLimit = env('SERVER_MEMORY_LIMIT');
+        $memoryLimit = is_string($memoryLimit) && $memoryLimit !== '' ? $memoryLimit : null;
+
+        return new self($host, $port, $options, $memoryLimit);
     }
 
     /** Bind host (e.g. '0.0.0.0', '127.0.0.1'). */
@@ -140,6 +148,48 @@ final class ServerSettings
             ->set('enable_static_handler', true);
     }
 
+    /**
+     * Memory ceiling for each worker process, applied on worker start.
+     *
+     * ```
+     * $server->workers(4)->memoryLimit('256M');
+     * ```
+     *
+     * Say nothing and the framework does not touch the setting at all — PHP's own
+     * value stands (128M compiled in, unless a php.ini raises it). Nothing existing
+     * changes by upgrading.
+     *
+     * **This is a PHP ini value, not a Swoole option**, so it never reaches
+     * `Swoole\Server::set()` — see {@see toArray()}. It lives here because the limit
+     * is only half of an arithmetic whose other half, `worker_num`, is already set
+     * on this object: a box has to hold `worker_num × memoryLimit` plus opcache's
+     * shared memory, and keeping the two apart is how that product goes unnoticed
+     * until a worker dies.
+     *
+     * The limit is **per worker, shared by every coroutine in it** — a Swoole worker
+     * serves many requests at once out of one heap, so this bounds their sum, not any
+     * single request. Raising it moves the threshold; it does not remove it. What
+     * stops a worker dying is bounding concurrency, not the ceiling.
+     *
+     * `-1` (unlimited) is accepted but warned about at boot: without a limit PHP never
+     * stops, so the process grows until the kernel's OOM killer sends SIGKILL — no
+     * shutdown functions, no log line, and the whole container when the server is
+     * PID 1. A limit at least fails through PHP, which the manager can recover from.
+     *
+     * @param string $limit A PHP memory value: '256M', '1G', or '-1' for unlimited.
+     */
+    public function memoryLimit(string $limit): self
+    {
+        $this->memoryLimit = $limit;
+        return $this;
+    }
+
+    /** The configured per-worker memory limit, or null when the ini is left alone. */
+    public function getMemoryLimit(): ?string
+    {
+        return $this->memoryLimit;
+    }
+
     /** Set any raw Swoole option. */
     public function set(string $key, mixed $value): self
     {
@@ -147,7 +197,14 @@ final class ServerSettings
         return $this;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * The Swoole options only.
+     *
+     * `memoryLimit` is deliberately absent: it is a PHP ini value, and Swoole answers
+     * an option it does not know with `unsupported option` on every start.
+     *
+     * @return array<string, mixed>
+     */
     public function toArray(): array
     {
         return $this->options;

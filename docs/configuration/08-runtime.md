@@ -85,8 +85,51 @@ final class WebConfig extends WebConfigurerAdapter
 }
 ```
 
-The `.env` shorthands `SERVER_WORKERS`, `SERVER_TASKS`, `SERVER_MAX_REQUEST` and
-`SERVER_MAX_REQUEST_GRACE` seed the same settings before the configurer runs.
+The `.env` shorthands `SERVER_WORKERS`, `SERVER_TASKS`, `SERVER_MAX_REQUEST`,
+`SERVER_MAX_REQUEST_GRACE` and `SERVER_MEMORY_LIMIT` seed the same settings before the
+configurer runs.
+
+### Memory per worker
+
+```php
+$server->workers(4)->memoryLimit('256M');
+```
+
+```dotenv
+SERVER_MEMORY_LIMIT=256M
+```
+
+Say nothing and **the framework does not touch the setting at all** — PHP's own value
+stands (128M compiled in, unless a `php.ini` raises it). Configure it and the limit is
+applied on worker start.
+
+`memoryLimit()` is a PHP ini, not a Swoole option, so it never reaches
+`Swoole\Server::set()`. It lives on `ServerSettings` because it is one half of an
+arithmetic whose other half — `worker_num` — is already there:
+
+> The box must hold **`worker_num × memory_limit`**, plus opcache's shared memory.
+
+Four workers at 256M want 1 GiB before a row of data is read. The framework says this
+out loud at startup and **warns** when the product exceeds the container's memory
+limit (read from cgroup). It warns rather than refuses: every worker peaking together
+is a worst case, and over-committing memory is a legitimate choice.
+
+Two properties of this limit are easy to get wrong:
+
+- **It is per process, and a Swoole worker runs many requests at once out of one
+  heap.** So it bounds their *sum*, not any single request. Measured on a small API:
+  roughly 90 KB of heap per in-flight request — about 1 400 concurrent requests fit in
+  128M. When the sum is reached the worker dies and takes every request it was holding
+  (measured: 1 193 coroutines discarded at once).
+- **Raising it moves the threshold, it does not remove it.** At high enough concurrency
+  any ceiling is reached. What keeps a worker alive under a spike is bounding
+  concurrency, not the ceiling.
+
+**Do not set `-1`.** Unlimited does not remove the ceiling — it moves it into the
+kernel. PHP never stops the process, so the OOM killer eventually sends `SIGKILL`: no
+shutdown functions, no log entry, and the whole container when the server is PID 1. A
+real limit at least fails through PHP, and the manager restarts that one worker. The
+framework warns at startup when it finds `-1`.
 
 ### One worker by default
 
