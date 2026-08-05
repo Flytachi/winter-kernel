@@ -205,7 +205,11 @@ final class RequestWatchdog
                 continue;
             }
             if (!Coroutine::exists($cid)) {
-                // Finished between the deadline and this pass; its own defer will clean up.
+                // Finished between its deadline and this pass. Its own defer normally
+                // clears the entry; dropping it here as well costs nothing and keeps the
+                // registry from growing for the worker's whole life if a defer is ever
+                // missed. Unsetting during foreach is safe — the loop walks a copy.
+                self::release($cid);
                 continue;
             }
 

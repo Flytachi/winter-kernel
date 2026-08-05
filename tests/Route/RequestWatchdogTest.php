@@ -305,6 +305,78 @@ final class RequestWatchdogTest extends TestCase
         $this->addToAssertionCount(1);
     }
 
+    // ── Nothing accumulates ────────────────────────────────────────────────────
+
+    /** @return array{deadlines: int, expired: int} */
+    private function registrySize(): array
+    {
+        return [
+            'deadlines' => count(new \ReflectionProperty(RequestWatchdog::class, 'deadlines')->getValue()),
+            'expired'   => count(new \ReflectionProperty(RequestWatchdog::class, 'expired')->getValue()),
+        ];
+    }
+
+    /**
+     * The registry lives as long as the worker, so anything left in it is left for hours.
+     * Two hundred requests — half of them timing out — must leave it exactly as they
+     * found it.
+     */
+    public function test_the_registry_returns_to_empty_after_many_requests(): void
+    {
+        \Swoole\Coroutine\run(static function (): void {
+            RequestWatchdog::enable(0.08);
+
+            for ($i = 0; $i < 200; $i++) {
+                $slow = $i % 2 === 0;
+                Coroutine::create(static function () use ($slow): void {
+                    $cid = RequestWatchdog::register();
+                    Coroutine::defer(static fn() => RequestWatchdog::release($cid));
+                    try {
+                        Coroutine::sleep($slow ? 1.0 : 0.001);
+                    } catch (\Throwable) {
+                        // half of them are cancelled, on purpose
+                    }
+                });
+            }
+
+            Coroutine::sleep(0.6);
+            RequestWatchdog::disable();
+        });
+
+        self::assertSame(['deadlines' => 0, 'expired' => 0], $this->registrySize());
+    }
+
+    /**
+     * A request that ends between its deadline and the next sweep is never cancelled, so
+     * only its `defer` would clear it. The sweep drops it too rather than trusting that —
+     * an entry kept for a coroutine that no longer exists would never leave.
+     */
+    public function test_a_request_gone_before_the_sweep_leaves_nothing_behind(): void
+    {
+        $sweep = new \ReflectionMethod(RequestWatchdog::class, 'sweep');
+        $deadlines = new \ReflectionProperty(RequestWatchdog::class, 'deadlines');
+
+        // A coroutine id that has certainly finished, already past its deadline.
+        $deadlines->setValue(null, [999_999 => hrtime(true) / 1e9 - 1.0]);
+
+        \Swoole\Coroutine\run(static fn() => $sweep->invoke(null));
+
+        self::assertSame(['deadlines' => 0, 'expired' => 0], $this->registrySize());
+    }
+
+    /** Shutting the worker down forgets everything — nothing survives into the next one. */
+    public function test_disable_clears_the_registry(): void
+    {
+        \Swoole\Coroutine\run(static function (): void {
+            RequestWatchdog::enable(5.0);
+            RequestWatchdog::register();
+            RequestWatchdog::disable();
+        });
+
+        self::assertSame(['deadlines' => 0, 'expired' => 0], $this->registrySize());
+        self::assertSame(0, RequestWatchdog::watching());
+    }
+
     // ── The limit, stated rather than hidden ───────────────────────────────────
 
     /**
