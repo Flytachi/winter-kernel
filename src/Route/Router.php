@@ -85,25 +85,31 @@ final class Router
      *     maxAge:int,
      *     vary:string[]
      * }|null $cors
+     * @param int|null $timeout Per-route deadline in seconds from #[Timeout]; 0 opts
+     *   the route out, null leaves the global deadline in force.
      */
     public function add(
         string $method,
         string $path,
         mixed $handler,
         array $middlewares = [],
-        ?array $cors = null
+        ?array $cors = null,
+        ?int $timeout = null
     ): static {
         $this->dispatcher = null;
 
         $method = strtoupper($method);
 
-        if ($middlewares !== [] || $cors !== null) {
+        if ($middlewares !== [] || $cors !== null || $timeout !== null) {
             $stored = ['__handler' => $handler];
             if ($middlewares !== []) {
                 $stored['__middlewares'] = $middlewares;
             }
             if ($cors !== null) {
                 $stored['__cors'] = $cors;
+            }
+            if ($timeout !== null) {
+                $stored['__timeout'] = $timeout;
             }
         } else {
             $stored = $handler;
@@ -435,6 +441,15 @@ final class Router
             $ctx['__request_uri']    = $request->getUri();
         }
 
+        // Watched from here, with the global deadline; a route carrying its own
+        // #[Timeout] adjusts it below, once dispatch has said which route this is.
+        // Released via defer so it happens however the request ends — including the
+        // cancellation the watchdog itself raises.
+        $watched = RequestWatchdog::register();
+        if ($watched !== null) {
+            \Swoole\Coroutine::defer(static fn() => RequestWatchdog::release($watched));
+        }
+
         try {
             $method = $request->getMethod();
 
@@ -465,6 +480,14 @@ final class Router
                 }
             }
 
+            // ── Per-route #[Timeout] overrides the global deadline ────────────
+            if ($result->status === RouteResult::FOUND) {
+                $routeTimeout = $this->extractRouteTimeout($result->handler);
+                if ($routeTimeout !== null) {
+                    RequestWatchdog::extend($watched, (float) $routeTimeout);
+                }
+            }
+
             match ($result->status) {
                 RouteResult::FOUND => $this->invoke($result->handler, $request, $response, $result->params),
                 RouteResult::METHOD_NOT_ALLOWED => throw new ResponseException(
@@ -473,8 +496,15 @@ final class Router
                 )->withHeader('Allow', implode(', ', $result->allowedMethods)),
                 default => throw new ResponseException('Not Found', HttpCode::NOT_FOUND),
             };
+
+            // A handler that swallowed the cancellation reaches this line having
+            // completed no I/O — every wait was cut short. Its answer is built from
+            // queries that never ran, so it is not the answer to send.
+            if (RequestWatchdog::hasExpired($watched)) {
+                throw new ResponseException('Gateway Timeout', HttpCode::GATEWAY_TIMEOUT);
+            }
         } catch (\Throwable $e) {
-            $this->sendError($e, $response);
+            $this->sendError($this->asTimeout($e, $watched), $response);
         }
     }
 
@@ -697,6 +727,37 @@ final class Router
             return $stored['__cors'];
         }
         return null;
+    }
+
+    /**
+     * Extract the per-route deadline stored by {@see Collector\MappingCollector} under
+     * '__timeout' — the seconds from a route's own `#[Timeout]`, or null when it has
+     * none and the global deadline stands. `0` there means the route opts out.
+     */
+    private function extractRouteTimeout(mixed $stored): ?int
+    {
+        if (is_array($stored) && array_key_exists('__timeout', $stored)) {
+            return $stored['__timeout'];
+        }
+        return null;
+    }
+
+    /**
+     * Presents a watchdog cancellation as `504 Gateway Timeout`.
+     *
+     * What surfaces when the deadline passes is `Swoole\Coroutine\CanceledException`,
+     * thrown wherever the request happened to be waiting — a message about coroutines
+     * that says nothing to whoever made the request, and would be logged as a server
+     * fault rather than a deadline. Anything else is left exactly as it was: a request
+     * that timed out *and* had a real bug should still report the bug.
+     */
+    private function asTimeout(\Throwable $e, ?int $watched): \Throwable
+    {
+        if (!RequestWatchdog::hasExpired($watched)) {
+            return $e;
+        }
+
+        return new ResponseException('Gateway Timeout', HttpCode::GATEWAY_TIMEOUT, $e);
     }
     // ── Debug helpers ─────────────────────────────────────────────────────────
 

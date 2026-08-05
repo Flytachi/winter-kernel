@@ -42,6 +42,7 @@ use Flytachi\Winter\Kernel\Ppa\Pool\PoolTelemetry;
 use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
 use Flytachi\Winter\Kernel\Process\ForkReset;
 use Flytachi\Winter\Kernel\Route\DevWatcher;
+use Flytachi\Winter\Kernel\Route\RequestWatchdog;
 use Flytachi\Winter\Kernel\Route\Router;
 use Flytachi\Winter\Logger\Context\CoroutineContext;
 use Flytachi\Winter\Logger\Context\ProcessContext;
@@ -473,11 +474,18 @@ abstract class WinterApplication
         // Request workers log on 'http' with per-request coroutine isolation, and are
         // marked eligible to publish their connection-pool utilisation for
         // `call db pool` — the publisher itself only starts if a pool is ever opened.
-        $memoryLimit = $settings->getMemoryLimit();
-        $workerStart = static function (\Swoole\Http\Server $server, int $workerId) use ($memoryLimit): void {
+        $memoryLimit    = $settings->getMemoryLimit();
+        $requestTimeout = $settings->getRequestTimeout();
+        $workerStart = static function (
+            \Swoole\Http\Server $server,
+            int $workerId
+        ) use ($memoryLimit, $requestTimeout): void {
             // Per worker, because the limit is a property of this process — and a no-op
             // when nothing was configured, so PHP's own value stands.
             WorkerMemory::apply($memoryLimit);
+            // One sweep per worker rather than a timer per request; a no-op at 0, so an
+            // application that wants no deadline runs no timer at all.
+            RequestWatchdog::enable($requestTimeout);
             LoggerFactory::setContextStorage(new CoroutineContext());
             LoggerFactory::setDefaultChannel('http');
             PoolTelemetry::enable($workerId);
@@ -488,6 +496,7 @@ abstract class WinterApplication
         // `workerExit` fires exactly while the reactor is trying to drain, which is
         // where those timers have to be released.
         $workerExit = static function (\Swoole\Http\Server $server, int $workerId): void {
+            RequestWatchdog::disable();
             PoolTelemetry::stop($workerId);
             PpaConnectionPool::shutdown();
         };

@@ -21,12 +21,25 @@ use Flytachi\Winter\Kernel\Kernel;
  */
 final class ServerSettings
 {
+    /**
+     * Seconds a request may run before the watchdog cancels it.
+     *
+     * Chosen at 30 rather than PHP-FPM's 60: under Swoole a stuck request holds more
+     * than itself — a pooled connection is borrowed for the whole request, and the pool
+     * is shared by every request in the worker. .NET settles on the same 30.
+     *
+     * A route that legitimately runs longer says so with #[Timeout]; the global value is
+     * there to stop the ones that hang by accident.
+     */
+    private const float DEFAULT_REQUEST_TIMEOUT = 30.0;
+
     /** @param array<string, mixed> $options */
     private function __construct(
         private string $host,
         private int $port,
         private array $options = [],
         private ?string $memoryLimit = null,
+        private float $requestTimeout = self::DEFAULT_REQUEST_TIMEOUT,
     ) {
     }
 
@@ -58,7 +71,10 @@ final class ServerSettings
         $memoryLimit = env('SERVER_MEMORY_LIMIT');
         $memoryLimit = is_string($memoryLimit) && $memoryLimit !== '' ? $memoryLimit : null;
 
-        return new self($host, $port, $options, $memoryLimit);
+        $timeout = env('SERVER_REQUEST_TIMEOUT');
+        $timeout = is_numeric($timeout) ? max(0.0, (float) $timeout) : self::DEFAULT_REQUEST_TIMEOUT;
+
+        return new self($host, $port, $options, $memoryLimit, $timeout);
     }
 
     /** Bind host (e.g. '0.0.0.0', '127.0.0.1'). */
@@ -188,6 +204,43 @@ final class ServerSettings
     public function getMemoryLimit(): ?string
     {
         return $this->memoryLimit;
+    }
+
+    /**
+     * How long a request may run before the server stops waiting for it, in seconds.
+     * `0` disables the deadline. Default: 30.
+     *
+     * ```
+     * $server->requestTimeout(60);   // globally
+     * $server->requestTimeout(0);    // no deadline at all
+     * ```
+     *
+     * Individual routes override it with
+     * {@see \Flytachi\Winter\Kernel\Route\Annotation\Timeout} — a report that legitimately
+     * takes ten minutes carries `#[Timeout(600)]`, and the global value protects
+     * everything else.
+     *
+     * Swoole has no request timeout of its own — verified against the extension: no
+     * option in its lists concerns execution time, and `max_request_execution_time` is
+     * absent from the binary and does nothing when set. The deadline is enforced by
+     * {@see \Flytachi\Winter\Kernel\Route\RequestWatchdog}, which cancels the request's
+     * coroutine; `finally` and `defer` run, so transactions close and pooled connections
+     * return, and the client receives `504`.
+     *
+     * It interrupts a request that **waits**. A request burning CPU is not interrupted —
+     * the event loop is single-threaded, so nothing else in the worker runs, the watchdog
+     * included. See the watchdog's docblock for the full picture.
+     */
+    public function requestTimeout(float $seconds): self
+    {
+        $this->requestTimeout = max(0.0, $seconds);
+        return $this;
+    }
+
+    /** The configured request deadline in seconds; `0.0` when disabled. */
+    public function getRequestTimeout(): float
+    {
+        return $this->requestTimeout;
     }
 
     /** Set any raw Swoole option. */

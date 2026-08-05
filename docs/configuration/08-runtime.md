@@ -131,6 +131,76 @@ shutdown functions, no log entry, and the whole container when the server is PID
 real limit at least fails through PHP, and the manager restarts that one worker. The
 framework warns at startup when it finds `-1`.
 
+### Request timeout
+
+A request that never finishes holds more than itself: its pooled database connection is
+borrowed for the whole request, and the pool is shared by every request in the worker.
+So requests have a deadline — **30 seconds by default**.
+
+```php
+$server->requestTimeout(60);   // globally
+$server->requestTimeout(0);    // no deadline at all
+```
+
+```dotenv
+SERVER_REQUEST_TIMEOUT=60
+```
+
+Individual routes override it with `#[Timeout]`, on the controller or on the method —
+the method wins:
+
+```php
+use Flytachi\Winter\Kernel\Route\Annotation\Timeout;
+
+#[RequestMapping('reports')]
+#[Timeout(120)]                       // everything here gets two minutes
+class ReportController extends Controller
+{
+    #[GetMapping('export')]
+    #[Timeout(600)]                   // …but the export gets ten
+    public function export(): ResponseEntity { ... }
+
+    #[GetMapping('stream')]
+    #[Timeout(0)]                     // …and this one is never timed out
+    public function stream(): ResponseEntity { ... }
+}
+```
+
+The attribute is read once, during the scan, and stored in the compiled route table —
+nothing is reflected per request.
+
+When the deadline passes the request's coroutine is cancelled: `finally` and `defer` run
+(so transactions close and pooled connections go back), and the client receives
+**504 Gateway Timeout**.
+
+**Swoole has no request timeout of its own.** Verified against the extension: none of its
+67 server options concerns execution time, `max_request_execution_time` appears nowhere in
+the binary, and setting it changes nothing — a handler sleeping three seconds under a
+one-second "limit" still answers 200 after three, in both server modes. What it does
+produce is `unsupported option` on every start.
+
+#### What it can and cannot interrupt
+
+| The handler | What happens at the deadline |
+|---|---|
+| waits on I/O and does not swallow errors | interrupted, `finally`/`defer` run, client gets 504 |
+| waits on I/O but catches `Throwable` | cannot complete any further I/O; its result is discarded and the client still gets 504 |
+| burns CPU without yielding | **not interrupted** — it runs to completion |
+
+The last row is a property of a single-threaded event loop, not a gap in the
+implementation: while a handler loops without touching I/O nothing else in the worker
+runs, the watchdog included. Measured — a sweep scheduled for 0.10 s woke at 1.91 s,
+behind the 1.8 s loop it was waiting on.
+
+PHP-FPM has the mirror-image limitation: its `max_execution_time` kills a runaway loop
+but not a hung query. Neither model covers both.
+
+The second row exists because cancellation is **not sticky**: after application code
+catches the `CanceledException` the coroutine is fully functional again — a following
+`sleep(2)` really sleeps two seconds. So an overdue request is cancelled on every sweep,
+and the framework answers 504 rather than sending a report built from queries that never
+ran.
+
 ### One worker by default
 
 Say nothing and the server runs **a single worker process** — the framework sets no
