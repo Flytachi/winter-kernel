@@ -85,9 +85,17 @@ final class WebConfig extends WebConfigurerAdapter
 }
 ```
 
-The `.env` shorthands `SERVER_WORKERS`, `SERVER_TASKS`, `SERVER_MAX_REQUEST`,
-`SERVER_MAX_REQUEST_GRACE` and `SERVER_MEMORY_LIMIT` seed the same settings before the
-configurer runs.
+The `.env` shorthands seed the same settings before the configurer runs:
+
+| Variable | Method | Default |
+|---|---|---|
+| `SERVER_WORKERS` | `workers()` | 1 — see below |
+| `SERVER_TASKS` | `taskWorkers()` | Swoole's |
+| `SERVER_MAX_REQUEST` | `maxRequest()` | `100000` |
+| `SERVER_MAX_REQUEST_GRACE` | `maxRequestGrace()` | `10000` |
+| `SERVER_MEMORY_LIMIT` | `memoryLimit()` | untouched — PHP's own 128M |
+| `SERVER_MEMORY_TRIM` | `memoryTrimThreshold()` | `32M` |
+| `SERVER_REQUEST_TIMEOUT` | `requestTimeout()` | `30` seconds |
 
 ### Memory per worker
 
@@ -130,6 +138,91 @@ kernel. PHP never stops the process, so the OOM killer eventually sends `SIGKILL
 shutdown functions, no log entry, and the whole container when the server is PID 1. A
 real limit at least fails through PHP, and the manager restarts that one worker. The
 framework warns at startup when it finds `-1`.
+
+### Workers are replaced, and have to be
+
+A worker does not live forever: after **100 000 requests** it is replaced by a fresh one.
+This is a default, not a precaution.
+
+**Swoole leaks 56 bytes every time a coroutine suspends and resumes.** Measured to the
+byte across five runs of ten thousand, and it survives both `gc_collect_cycles()` and
+`gc_mem_caches()`. Neither a coroutine on its own nor a timer on its own leaks — only the
+pair. An HTTP request always suspends: on the database, on an upstream call, on writing
+the response. Through the full pipeline it measures nearer 170 bytes a request.
+
+| Load | Leaked | A 256M worker lasts |
+|---:|---:|---:|
+| 500 req/s | 96 MB/h | 2.7 hours |
+| 2 000 req/s | 385 MB/h | 42 minutes |
+| 5 000 req/s | 961 MB/h | 16 minutes |
+
+So the choice is not whether to recycle but how often. 100 000 keeps the leak near 17 MB
+— comfortably inside any sane limit — while being rare enough that the cost of
+replacement disappears. Replacement is not free: the new worker starts with an empty
+connection pool and has to fill it, about 30 ms, which spread over 100 000 requests is
+0.0003 ms each.
+
+`SERVER_MAX_REQUEST_GRACE` (default `10000`) is what keeps workers from recycling
+together. Swoole **adds** a random amount up to the grace, so the real limit is
+`max_request + rand(0, grace)` — verified: at `max_request = 20, grace = 15` worker
+instances served 30, 27, 34 and 26 requests, while at `grace = 0` every one served exactly
+20. Without it, workers counting to the same number under even traffic go cold almost
+together and the survivors take the load.
+
+> **What a replacement resets.** Everything living in that worker's memory: `#[Singleton]`
+> instances, in-process caches, its share of the connection pool. This was always possible
+> — a worker could die at any moment — but it now happens on a schedule. State that must
+> outlive a request belongs in a database or a cache, not in a singleton's property.
+
+### Giving memory back
+
+PHP frees memory to **its own allocator**, not to the kernel. Whether the kernel ever
+sees it again depends on how it was taken: one large block is mapped directly and
+unmapped on release, but many small objects live in the allocator's chunks, and those
+are kept for reuse. So a worker that once built a large result goes on holding that
+memory for the rest of its life — measured on a live worker, `top` reading 114 MiB
+against 6 MiB actually in use.
+
+On a host running several containers that is first-come-first-served: one spike and the
+memory is spoken for.
+
+After each request the framework checks how much the allocator is holding idle and hands
+it back when that passes a threshold — **32M by default**:
+
+```php
+$server->memoryLimit('256M')->memoryTrimThreshold('64M');
+```
+
+```dotenv
+SERVER_MEMORY_TRIM=64M
+```
+
+`0` never hands anything back.
+
+Measured on 600 000 small objects:
+
+| | in use | taken from the OS | idle reserve |
+|---|---:|---:|---:|
+| request working | 282 MB | 284 MB | 1.7 MB |
+| request finished | 10 MB | 268 MB | **258 MB** |
+| after the release | 10 MB | 12 MB | 2 MB |
+
+The decision is made on that **reserve** — what the allocator took minus what is in use —
+rather than on the process peak, for two reasons. A worker in the middle of a large
+request has a high peak and almost no reserve, so sustained load never trips it; and the
+reserve falls again once released, so one release is enough. `memory_get_peak_usage()`
+never decreases, and would trigger on every request for the rest of the worker's life.
+
+Cost, measured: **80 ms** when there is 128 MB to give back, **5 µs** when there is
+nothing — which is what an ordinary request pays — and about 10 % on the next large
+allocation, which has to take fresh chunks. The release runs after the response is sent,
+so no client waits for it.
+
+`gc_collect_cycles()` does none of this: measured, it collects nothing here and frees
+nothing. What is being held are not cycles.
+
+`WorkerMemory::idleReserve()` returns the same number, if you want to see where a
+worker's resident size went.
 
 ### Request timeout
 

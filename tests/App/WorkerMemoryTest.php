@@ -361,6 +361,48 @@ final class WorkerMemoryTest extends TestCase
         self::assertArrayNotHasKey('memoryTrimThreshold', $options);
     }
 
+    /**
+     * Worker recycling is on by default, and has to be: Swoole leaks 56 bytes every time
+     * a coroutine suspends — measured to the byte — and an HTTP request always suspends.
+     * At 2 000 req/s that is ~385 MB an hour, so a worker that never recycles dies of it.
+     */
+    public function test_worker_recycling_is_configured_by_default(): void
+    {
+        $options = ServerSettings::fromEnv()->toArray();
+
+        self::assertSame(100_000, $options['max_request'], 'a worker must not live forever');
+        self::assertSame(10_000, $options['max_request_grace'], 'and they must not all recycle at once');
+    }
+
+    /**
+     * Swoole **adds** the grace to the limit — verified live: at `max_request = 20,
+     * grace = 15` worker instances served 30, 27, 34 and 26 requests, while at `grace = 0`
+     * every one served exactly 20. So the default spread is 100 000 – 110 000.
+     */
+    public function test_recycling_can_be_overridden(): void
+    {
+        $options = ServerSettings::fromEnv()->maxRequest(500)->maxRequestGrace(50)->toArray();
+
+        self::assertSame(500, $options['max_request']);
+        self::assertSame(50, $options['max_request_grace']);
+    }
+
+    public function test_the_env_shorthand_overrides_the_recycling_default(): void
+    {
+        $original = $_ENV['SERVER_MAX_REQUEST'] ?? null;
+        $_ENV['SERVER_MAX_REQUEST'] = '250000';
+
+        try {
+            self::assertSame(250_000, ServerSettings::fromEnv()->toArray()['max_request']);
+        } finally {
+            if ($original === null) {
+                unset($_ENV['SERVER_MAX_REQUEST']);
+            } else {
+                $_ENV['SERVER_MAX_REQUEST'] = $original;
+            }
+        }
+    }
+
     public function test_the_trim_threshold_defaults_to_32m(): void
     {
         $original = $_ENV['SERVER_MEMORY_TRIM'] ?? null;
