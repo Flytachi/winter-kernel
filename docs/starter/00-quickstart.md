@@ -185,7 +185,7 @@ final class WebConfig extends WebConfigurerAdapter
     public function configureServer(ServerSettings $server, ApplicationArguments $args): void
     {
         $server->port(8000)
-               ->workers(swoole_cpu_num() * 2)
+               ->profile(Profile::Performance)     // small requests — see 09-web-server.md
                ->staticPath('resources/static');   // resources/static/app.css → /app.css
     }
 }

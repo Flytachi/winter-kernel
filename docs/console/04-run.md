@@ -122,5 +122,6 @@ Use this only for local development — there is no concurrency.
 
 - [`../architecture/01-routing.md`](../architecture/01-routing.md) — how routes are scanned
 - [07-mapping.md](07-mapping.md) — `Router` cache management
-- [`../configuration/08-runtime.md`](../configuration/08-runtime.md) — server settings and the runtime
+- [`../configuration/09-web-server.md`](../configuration/09-web-server.md) — every server setting
+- [`../configuration/08-runtime.md`](../configuration/08-runtime.md) — the runtime and its caveats
 - [`../configuration/02-logging.md`](../configuration/02-logging.md) — per-coroutine log context

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\App;
 
+use Flytachi\Winter\Kernel\App\Config\Profile;
 use Flytachi\Winter\Kernel\App\Config\ServerSettings;
 use Flytachi\Winter\Kernel\App\Config\WorkerMemory;
 use PHPUnit\Framework\TestCase;
@@ -368,10 +369,10 @@ final class WorkerMemoryTest extends TestCase
      */
     public function test_worker_recycling_is_configured_by_default(): void
     {
-        $options = ServerSettings::fromEnv()->toArray();
+        $options = self::settings('256M')->toArray();
 
-        self::assertSame(100_000, $options['max_request'], 'a worker must not live forever');
-        self::assertSame(10_000, $options['max_request_grace'], 'and they must not all recycle at once');
+        self::assertSame(157_903, $options['max_request'], 'a worker must not live forever');
+        self::assertSame(15_790, $options['max_request_grace'], 'and they must not all recycle at once');
     }
 
     /**
@@ -403,30 +404,210 @@ final class WorkerMemoryTest extends TestCase
         }
     }
 
-    public function test_the_trim_threshold_defaults_to_32m(): void
+    /**
+     * Swoole's own limit is 2 MB — measured, 2 000 KB passes and 2 048 KB comes back 413
+     * — which is tight for anything accepting a document, and invisible when it bites.
+     * 8 MB matches PHP's `post_max_size`, the number a PHP developer expects.
+     */
+    public function test_the_request_size_limit_is_raised_from_swooles_2mb(): void
     {
-        $original = $_ENV['SERVER_MEMORY_TRIM'] ?? null;
-        unset($_ENV['SERVER_MEMORY_TRIM']);
+        self::assertSame(
+            8 * 1024 ** 2,
+            ServerSettings::fromEnv()->toArray()['package_max_length'],
+        );
+        self::assertSame(
+            32 * 1024 ** 2,
+            ServerSettings::fromEnv()->maxRequestSize(32 * 1024 ** 2)->toArray()['package_max_length'],
+        );
+    }
 
+    /**
+     * The idle timeout stays off, because Swoole applies it to requests that are still
+     * running: it measures the time since the client last *sent* something, and a client
+     * waiting for a slow response sends nothing. Measured — with the timeout at 2 seconds
+     * a 5-second request was cut at 2.07 s with no response and no log line; at 8 seconds
+     * the same request returned normally.
+     *
+     * A default here would therefore be a silent ceiling on request duration, overruling
+     * #[Timeout] on the routes that legitimately take longer. What it would buy is small:
+     * the connection table costs about 160 KB between 1 024 and 1 000 000 connections.
+     */
+    public function test_no_idle_timeout_is_imposed_on_running_requests(): void
+    {
+        self::assertArrayNotHasKey('heartbeat_idle_time', ServerSettings::fromEnv()->toArray());
+        self::assertSame(
+            600,
+            ServerSettings::fromEnv()->idleConnectionTimeout(600)->toArray()['heartbeat_idle_time'],
+        );
+    }
+
+    /**
+     * Connections are not requests. A keep-alive connection serves many in turn, and idle
+     * ones hold none at all — measured: `max_connection = 2` did not slow six concurrent
+     * requests, while `worker_max_concurrency = 2` doubled their time by queueing. So this
+     * bounds file descriptors, not work, and Swoole's own 100 000 is left alone: lowering
+     * it only refuses clients earlier, and memory runs out first.
+     */
+    public function test_the_connection_ceiling_is_derived_rather_than_left_to_swoole(): void
+    {
+        // Swoole's own 100 000 is no limit at all: at the measured 68 KB apiece it would
+        // take 6.8 GB to reach, and the worker dies at ~1 900 with the default 128M.
+        self::assertSame(1792, self::settings('256M')->toArray()['max_connection']);
+        self::assertSame(
+            5000,
+            self::settings('256M')->maxConnections(5000)->toArray()['max_connection'],
+        );
+    }
+
+    /**
+     * Every in-flight request is budgeted at the measured floor (78 KB) plus what the
+     * profile grants it, plus one idle connection (68 KB) for the keep-alive client that
+     * is connected and not currently asking.
+     */
+    public function test_each_profile_derives_its_own_concurrency(): void
+    {
+        $expected = [
+            // profile,             256M,  128M
+            [Profile::Stable,        611,   285],
+            [Profile::Balance,       896,   418],
+            [Profile::Performance,  1170,   546],
+        ];
+
+        foreach ($expected as [$profile, $at256, $at128]) {
+            self::assertSame(
+                $at256,
+                self::settings('256M')->profile($profile)->getMaxConcurrency(),
+                $profile->value . ' at 256M',
+            );
+            self::assertSame(
+                $at128,
+                self::settings('128M')->profile($profile)->getMaxConcurrency(),
+                $profile->value . ' at 128M',
+            );
+        }
+    }
+
+    /** Connections are the working ones plus an idle one apiece. */
+    public function test_connections_leave_room_for_idle_keep_alive_clients(): void
+    {
+        $settings = self::settings('256M')->profile(Profile::Balance);
+
+        self::assertSame($settings->getMaxConcurrency() * 2, $settings->getMaxConnections());
+    }
+
+    /** Balance is what an application that says nothing gets. */
+    public function test_balance_is_the_default_profile(): void
+    {
+        self::assertSame(Profile::Balance, ServerSettings::fromEnv()->getProfile());
+        self::assertSame(
+            self::settings('256M')->profile(Profile::Balance)->getMaxConcurrency(),
+            self::settings('256M')->getMaxConcurrency(),
+        );
+    }
+
+    /** The bench profile caps nothing, so it contributes no key and Swoole's own stands. */
+    public function test_stress_removes_the_caps_entirely(): void
+    {
+        $options = self::settings('256M')->profile(Profile::Stress)->toArray();
+
+        foreach (['worker_max_concurrency', 'max_connection', 'max_request', 'max_request_grace'] as $key) {
+            self::assertArrayNotHasKey($key, $options, "{$key} must be left to Swoole under stress");
+        }
+        self::assertSame(0, self::settings('256M')->profile(Profile::Stress)->getMemoryTrimThreshold());
+    }
+
+    /**
+     * Resolved on read, so the order of calls in a WebConfigurer cannot matter — deriving
+     * in fromEnv() would freeze the ini's value before ->memoryLimit() is reached.
+     */
+    public function test_raising_the_memory_limit_raises_everything_derived_from_it(): void
+    {
+        $settings = self::settings('256M');
+        $before   = $settings->getMaxConcurrency();
+
+        $settings->memoryLimit('512M');
+
+        self::assertSame(1853, $settings->getMaxConcurrency());
+        self::assertGreaterThan($before, $settings->getMaxConcurrency());
+        self::assertSame(1853, $settings->toArray()['worker_max_concurrency']);
+        self::assertSame(3706, $settings->toArray()['max_connection']);
+    }
+
+    /** An explicit value wins over the profile, whichever way it was given. */
+    public function test_a_configured_value_is_not_second_guessed(): void
+    {
+        self::assertSame(
+            10000,
+            self::settings('128M')->maxConcurrency(10000)->getMaxConcurrency(),
+        );
+
+        $original = $_ENV['SERVER_MAX_CONCURRENCY'] ?? null;
+        $_ENV['SERVER_MAX_CONCURRENCY'] = '7777';
         try {
-            self::assertSame('32M', ServerSettings::fromEnv()->getMemoryTrimThreshold());
-            self::assertSame(32 * 1024 ** 2, WorkerMemory::bytes('32M'));
+            self::assertSame(7777, ServerSettings::fromEnv()->getMaxConcurrency());
         } finally {
-            if ($original !== null) {
-                $_ENV['SERVER_MEMORY_TRIM'] = $original;
+            if ($original === null) {
+                unset($_ENV['SERVER_MAX_CONCURRENCY']);
+            } else {
+                $_ENV['SERVER_MAX_CONCURRENCY'] = $original;
             }
         }
     }
 
+    /** The profile can be chosen by an operator without touching code. */
+    public function test_the_profile_can_come_from_the_environment(): void
+    {
+        $original = $_ENV['SERVER_PROFILE'] ?? null;
+
+        try {
+            $_ENV['SERVER_PROFILE'] = 'performance';
+            self::assertSame(Profile::Performance, ServerSettings::fromEnv()->getProfile());
+
+            $_ENV['SERVER_PROFILE'] = '  STRESS ';
+            self::assertSame(Profile::Stress, ServerSettings::fromEnv()->getProfile());
+
+            $_ENV['SERVER_PROFILE'] = 'nonsense';
+            self::assertSame(Profile::Balance, ServerSettings::fromEnv()->getProfile(), 'an unknown name is not fatal');
+        } finally {
+            if ($original === null) {
+                unset($_ENV['SERVER_PROFILE']);
+            } else {
+                $_ENV['SERVER_PROFILE'] = $original;
+            }
+        }
+    }
+
+    /**
+     * With no limit to derive from there is still a ceiling. And it never derives zero,
+     * which Swoole stores as given and reads as "no limit" — verified — so a tiny budget
+     * would become an unlimited one.
+     */
+    public function test_an_unreadable_memory_limit_still_yields_a_ceiling(): void
+    {
+        self::assertSame(418, self::settings('-1')->getMaxConcurrency(), 'falls back to a 128M budget');
+        self::assertSame(418, self::settings('lots')->getMaxConcurrency());
+        self::assertSame(1, self::settings('1K')->getMaxConcurrency(), 'never zero, which would mean no limit');
+    }
+
+    /** The threshold scales with the limit: what counts as "unused" depends on how much there is. */
+    public function test_the_trim_threshold_follows_the_profile(): void
+    {
+        $of = static fn(Profile $p): int => self::settings('256M')->profile($p)->getMemoryTrimThreshold();
+
+        self::assertSame(32 * 1024 ** 2, self::settings('256M')->getMemoryTrimThreshold());
+        self::assertSame(16 * 1024 ** 2, $of(Profile::Stable));
+        self::assertSame(64 * 1024 ** 2, $of(Profile::Performance));
+    }
+
     public function test_the_trim_threshold_is_configurable(): void
     {
-        self::assertSame('64M', ServerSettings::fromEnv()->memoryTrimThreshold('64M')->getMemoryTrimThreshold());
+        self::assertSame(64 * 1024 ** 2, self::settings('256M')->memoryTrimThreshold('64M')->getMemoryTrimThreshold());
 
         $original = $_ENV['SERVER_MEMORY_TRIM'] ?? null;
         $_ENV['SERVER_MEMORY_TRIM'] = '128M';
 
         try {
-            self::assertSame('128M', ServerSettings::fromEnv()->getMemoryTrimThreshold());
+            self::assertSame(128 * 1024 ** 2, ServerSettings::fromEnv()->getMemoryTrimThreshold());
         } finally {
             if ($original === null) {
                 unset($_ENV['SERVER_MEMORY_TRIM']);
@@ -434,6 +615,20 @@ final class WorkerMemoryTest extends TestCase
                 $_ENV['SERVER_MEMORY_TRIM'] = $original;
             }
         }
+    }
+
+    /**
+     * Settings with a known worker baseline, so the derived numbers are exact rather than
+     * a function of whatever the test process happens to hold. Sixteen megabytes is what a
+     * booted application carries; the framework measures it for real at startup.
+     */
+    private static function settings(string $limit): ServerSettings
+    {
+        $settings = ServerSettings::fromEnv()->memoryLimit($limit);
+        new \ReflectionProperty(ServerSettings::class, 'baselineBytes')
+            ->setValue($settings, 16 * 1024 ** 2);
+
+        return $settings;
     }
 }
 

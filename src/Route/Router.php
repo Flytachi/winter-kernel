@@ -445,7 +445,12 @@ final class Router
         // #[Timeout] adjusts it below, once dispatch has said which route this is.
         // Released via defer so it happens however the request ends — including the
         // cancellation the watchdog itself raises.
-        $watched = RequestWatchdog::register();
+        //
+        // The time already spent queueing counts against the deadline. Under
+        // worker_max_concurrency a request's coroutine is not created until the worker
+        // lets it through, so without this a request that waited three seconds would
+        // start a fresh thirty — while the client has been waiting the whole time.
+        $watched = RequestWatchdog::register(elapsed: self::waitedInQueue($request));
         if ($watched !== null) {
             \Swoole\Coroutine::defer(static fn() => RequestWatchdog::release($watched));
         }
@@ -772,6 +777,26 @@ final class Router
 
         return new ResponseException('Gateway Timeout', HttpCode::GATEWAY_TIMEOUT, $e);
     }
+
+    /**
+     * Seconds this request spent waiting to be picked up, before any of it ran.
+     *
+     * Swoole stamps `request_time_float` when the packet arrives, which is *before*
+     * `worker_max_concurrency` decides whether there is room to run it — verified with a
+     * limit of one and a 0.3-second handler: five simultaneous requests reported 0.000,
+     * 0.301, 0.603, 0.904 and 1.206 seconds of waiting.
+     *
+     * Returns 0.0 when the stamp is missing or nonsensical (a clock adjustment between
+     * arrival and now would otherwise charge the request for it), so the deadline then
+     * behaves exactly as it did before.
+     */
+    private static function waitedInQueue(HttpRequest $request): float
+    {
+        $arrived = $request->getServerParam('request_time_float');
+
+        return is_numeric($arrived) ? max(0.0, microtime(true) - (float) $arrived) : 0.0;
+    }
+
     // ── Debug helpers ─────────────────────────────────────────────────────────
 
     /** @return list<array{method:string, path:string, handler:string}> */

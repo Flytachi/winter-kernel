@@ -77,7 +77,7 @@ final class WebConfig extends WebConfigurerAdapter
 {
     public function configureServer(ServerSettings $server, ApplicationArguments $args): void
     {
-        $server->workers(swoole_cpu_num() * 2)
+        $server->workers(4)
                ->maxRequest(5000)
                ->maxRequestGrace(500)
                ->set('ssl_cert_file', '/etc/ssl/app.pem');   // any raw Swoole option
@@ -91,11 +91,51 @@ The `.env` shorthands seed the same settings before the configurer runs:
 |---|---|---|
 | `SERVER_WORKERS` | `workers()` | 1 — see below |
 | `SERVER_TASKS` | `taskWorkers()` | Swoole's |
-| `SERVER_MAX_REQUEST` | `maxRequest()` | `100000` |
-| `SERVER_MAX_REQUEST_GRACE` | `maxRequestGrace()` | `10000` |
+| `SERVER_MAX_REQUEST` | `maxRequest()` | from the profile |
+| `SERVER_MAX_REQUEST_GRACE` | `maxRequestGrace()` | from the profile |
+| `SERVER_PROFILE` | `profile()` | `balance` |
+| `SERVER_MAX_REQUEST_SIZE` | `maxRequestSize()` | `8388608` (8 MB) |
+| `SERVER_MAX_CONCURRENCY` | `maxConcurrency()` | from the profile |
+| `SERVER_IDLE_TIMEOUT` | `idleConnectionTimeout()` | off |
+| `SERVER_MAX_CONNECTIONS` | `maxConnections()` | from the profile |
 | `SERVER_MEMORY_LIMIT` | `memoryLimit()` | untouched — PHP's own 128M |
-| `SERVER_MEMORY_TRIM` | `memoryTrimThreshold()` | `32M` |
+| `SERVER_MEMORY_TRIM` | `memoryTrimThreshold()` | from the profile |
 | `SERVER_REQUEST_TIMEOUT` | `requestTimeout()` | `30` seconds |
+
+### Limits, and the profile behind them
+
+Most of what bounds a request — how many run at once, how many clients may be connected,
+how large a request may be, when a worker is replaced — follows from a single profile:
+
+```php
+$server->profile(Profile::Performance);
+```
+
+| Profile | One request may use | Suits |
+|---|---:|---|
+| `Stable` | 256 KB | reports, exports, a monolith with wide joins |
+| **`Balance`** (default) | 128 KB | ordinary CRUD |
+| `Performance` | 64 KB | a thin API, a proxy, an integration bridge |
+| `Stress` | — | benchmarks only |
+
+The axis is the **shape of a request, not caution**: `Performance` gives a service with
+small requests more concurrency, not less. Everything else is derived from measured
+constants — 78 KB per in-flight request, 68 KB per open connection, 170 B leaked per
+request — against the heap left after the application's own baseline, which is measured at
+startup rather than assumed.
+
+Swoole **queues** what exceeds the concurrency cap rather than refusing it, so overload
+becomes latency, not errors — measured, twenty concurrent 0.3-second requests against a
+cap of 2 all succeeded, taking 3.3 seconds instead of 0.3. Time spent queueing counts
+against the request deadline, since a request's coroutine is not created until the worker
+lets it through.
+
+**None of it is a rate limit.** It has no idea who is calling, so it cannot give one
+partner 50 requests a second and another 20, and it delays rather than rejects where a
+quota has to answer `429`.
+
+Every setting, its measurement, and how to override it:
+[`09-web-server.md`](09-web-server.md).
 
 ### Memory per worker
 
@@ -141,8 +181,9 @@ framework warns at startup when it finds `-1`.
 
 ### Workers are replaced, and have to be
 
-A worker does not live forever: after **100 000 requests** it is replaced by a fresh one.
-This is a default, not a precaution.
+A worker does not live forever: after a number of requests derived from the profile —
+157 903 under `Balance` at 256M — it is replaced by a fresh one. This is a default, not a
+precaution.
 
 **Swoole leaks 56 bytes every time a coroutine suspends and resumes.** Measured to the
 byte across five runs of ten thousand, and it survives both `gc_collect_cycles()` and
@@ -303,8 +344,9 @@ than stalling the others.
 
 What one worker does not give you is more than one CPU core. Measured on a 12-core box,
 a single worker saturates one core at roughly 2 400 req/s against a database and 8 500
-req/s without one. `->workers(swoole_cpu_num())` is what spreads the load; until then,
-extra cores sit idle.
+req/s without one. `->workers(n)` is what spreads the load; until then, extra
+cores sit idle. Set `n` from the cores the **container** was given — `swoole_cpu_num()`
+reports the host's, and answers 12 under `--cpus=1` on a 12-core machine.
 
 The setting also changes what a pool size means. `maximumPoolSize` is **per worker**, so
 one worker makes it the whole server's connection budget, while `workers(12)` multiplies
@@ -396,6 +438,7 @@ self-maintaining connection.
 
 ## See also
 
+- [`09-web-server.md`](09-web-server.md) — `WebConfig`, and every server setting in one reference
 - [`01-kernel.md`](01-kernel.md) — paths, `.env`, and the boot order
 - [`07-di.md`](07-di.md) — singleton lifetime and the shared-state caveat
 - [`../architecture/01-routing.md`](../architecture/01-routing.md) — the dispatch pipeline behind `handle()`

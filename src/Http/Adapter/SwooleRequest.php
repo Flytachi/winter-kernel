@@ -61,7 +61,7 @@ final class SwooleRequest implements HttpRequest
         return $this->request->files ?? [];
     }
 
-    public function getServerParam(string $key): ?string
+    public function getServerParam(string $key): string|int|float|null
     {
         return $this->request->server[$key] ?? null;
     }

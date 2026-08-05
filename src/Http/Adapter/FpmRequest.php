@@ -79,7 +79,7 @@ final class FpmRequest implements HttpRequest
         return $result;
     }
 
-    public function getServerParam(string $key): ?string
+    public function getServerParam(string $key): string|int|float|null
     {
         return $_SERVER[$key] ?? null;
     }

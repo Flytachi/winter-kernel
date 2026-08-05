@@ -465,7 +465,7 @@ abstract class WinterApplication
             ));
         }
 
-        $trimThreshold = WorkerMemory::bytes($settings->getMemoryTrimThreshold());
+        $trimThreshold = $settings->getMemoryTrimThreshold();
         $handler = static function (
             \Swoole\Http\Request $req,
             \Swoole\Http\Response $res
@@ -521,7 +521,11 @@ abstract class WinterApplication
         $server->on('workerExit', $workerExit);
 
         if (Banner::isEnabled($args)) {
-            Banner::print(static::bannerRows($companions, $host, $port), self::elapsedMs());
+            $rows = static::bannerRows($companions, $host, $port);
+            // What the profile resolved to, because a limit nobody can see is a limit
+            // nobody thinks of when a request starts queueing or a connection is refused.
+            $rows[] = ['profile', self::profileSummary($settings)];
+            Banner::print($rows, self::elapsedMs());
         }
 
         $logger->info(sprintf(
@@ -689,6 +693,29 @@ abstract class WinterApplication
      * @param list<Component> $companions
      * @return list<array{string, string}>
      */
+    /**
+     * The profile and the numbers it resolved to, for the startup banner.
+     *
+     * `Profile::Stress` prints a warning instead of numbers: it removes the caps and the
+     * periodic work that would distort a measurement, which is right for a benchmark and
+     * wrong for anything else, and a banner is the last place it can still be noticed.
+     */
+    private static function profileSummary(ServerSettings $settings): string
+    {
+        $profile = $settings->getProfile();
+        if (!$profile->guards()) {
+            return $profile->value . ' — guards off, benchmarks only';
+        }
+
+        return sprintf(
+            '%s · %d in flight · %d connections · recycle at %s',
+            $profile->value,
+            $settings->getMaxConcurrency(),
+            $settings->getMaxConnections(),
+            number_format($settings->getMaxRequest()),
+        );
+    }
+
     private static function bannerRows(array $companions, ?string $host, ?int $port): array
     {
         $rows = [];

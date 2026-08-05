@@ -34,47 +34,22 @@ final class ServerSettings
     private const float DEFAULT_REQUEST_TIMEOUT = 30.0;
 
     /**
-     * Idle memory a worker may hold before giving it back to the kernel.
+     * Largest request accepted, in bytes — the whole packet, headers included.
      *
-     * An ordinary worker carries two or three megabytes of reserve — the allocator's
-     * chunk is 2 MB — so 32M is unmistakably "a large request happened here", while
-     * being small enough that the memory is worth reclaiming.
+     * Swoole's own limit is **2 MB** — measured, 2 000 KB passes and 2 048 KB comes back
+     * `413` — which is tight for anything that accepts a document or an image, and
+     * invisible: the client gets a bare status with nothing explaining it. 8 MB matches
+     * PHP's own `post_max_size` default, so a PHP developer meets the number they expect.
+     *
+     * It is not raised further on purpose. The body is held in the worker's heap for the
+     * duration of the request, and the heap is shared by every request in flight — 64 MB
+     * bodies at a hundred concurrent uploads is 6.4 GB, and the worker dies before the
+     * upload does.
      */
-    private const string DEFAULT_MEMORY_TRIM = '32M';
+    private const int DEFAULT_MAX_REQUEST_SIZE = 8 * 1024 * 1024;
 
-    /**
-     * Requests a worker serves before it is replaced by a fresh one.
-     *
-     * Not a precaution — a necessity. Swoole leaks **56 bytes every time a coroutine
-     * suspends and resumes**, measured to the byte across five runs of ten thousand, and
-     * surviving both `gc_collect_cycles()` and `gc_mem_caches()`. Neither a coroutine on
-     * its own nor a timer on its own leaks; only the pair. An HTTP request always
-     * suspends — on the database, on an upstream call, on writing the response — so every
-     * request leaves at least that behind, and through the full pipeline it measures
-     * nearer 170 bytes. At 2 000 req/s that is roughly 385 MB an hour: a worker with a
-     * 256M limit would die in well under an hour of ordinary traffic.
-     *
-     * 100 000 keeps the leak near 17 MB, comfortably inside any sane limit, while being
-     * rare enough that the cost of replacement disappears. Replacement is not free: the
-     * new worker starts with an empty connection pool and has to fill it — about 30 ms —
-     * which spread over 100 000 requests is 0.0003 ms each. At Laravel Octane's default
-     * of 500 that same cost would be felt.
-     */
-    private const int DEFAULT_MAX_REQUEST = 100_000;
-
-    /**
-     * How far apart workers are allowed to drift before recycling.
-     *
-     * Swoole **adds** a random amount up to this to `max_request`, so the real limit is
-     * `max_request + rand(0, grace)` — verified: at `max_request = 20, grace = 15` the
-     * worker instances served 30, 27, 34 and 26 requests, while at `grace = 0` every one
-     * of them served exactly 20.
-     *
-     * Without it, workers counting to the same number under even traffic recycle almost
-     * together: several connection pools go cold at once and the survivors take the load.
-     * Ten per cent spreads them by about a minute at 2 000 req/s.
-     */
-    private const int DEFAULT_MAX_REQUEST_GRACE = 10_000;
+    /** Assumed heap when the limit cannot be read — `-1`, or a value PHP cannot parse. */
+    private const int ASSUMED_MEMORY_LIMIT = 128 * 1024 * 1024;
 
     /** @param array<string, mixed> $options */
     private function __construct(
@@ -83,7 +58,9 @@ final class ServerSettings
         private array $options = [],
         private ?string $memoryLimit = null,
         private float $requestTimeout = self::DEFAULT_REQUEST_TIMEOUT,
-        private string $memoryTrimThreshold = self::DEFAULT_MEMORY_TRIM,
+        private ?string $memoryTrimThreshold = null,
+        private ?Profile $profile = null,
+        private int $baselineBytes = 0,
     ) {
     }
 
@@ -92,20 +69,25 @@ final class ServerSettings
      * framework's default policy is `--host`/`--port`); tuning options come from the
      * environment — only variables that are actually set contribute a key (so Swoole
      * defaults apply otherwise).
+     *
+     * Nothing the profile decides is seeded here. Those are resolved when read, so a
+     * {@see WebConfigurer} that raises `memoryLimit()` raises everything derived from it
+     * no matter which order the two calls are made in.
      */
     public static function fromEnv(string $host = '0.0.0.0', int $port = 8000): self
     {
-        // Framework defaults, before the environment gets a say. Both exist because
-        // Swoole leaks on every coroutine suspension — see the constants.
         $options = [
-            'max_request'       => self::DEFAULT_MAX_REQUEST,
-            'max_request_grace' => self::DEFAULT_MAX_REQUEST_GRACE,
+            'package_max_length' => self::DEFAULT_MAX_REQUEST_SIZE,
         ];
         $map = [
             'SERVER_WORKERS'           => 'worker_num',
             'SERVER_TASKS'             => 'task_worker_num',
             'SERVER_MAX_REQUEST'       => 'max_request',
             'SERVER_MAX_REQUEST_GRACE' => 'max_request_grace',
+            'SERVER_MAX_REQUEST_SIZE'  => 'package_max_length',
+            'SERVER_MAX_CONNECTIONS'   => 'max_connection',
+            'SERVER_MAX_CONCURRENCY'   => 'worker_max_concurrency',
+            'SERVER_IDLE_TIMEOUT'      => 'heartbeat_idle_time',
         ];
         // `SERVER_MEMORY_LIMIT` is handled below — it is a PHP ini, not a Swoole key.
         foreach ($map as $envKey => $swooleKey) {
@@ -124,9 +106,16 @@ final class ServerSettings
         $timeout = is_numeric($timeout) ? max(0.0, (float) $timeout) : self::DEFAULT_REQUEST_TIMEOUT;
 
         $trim = env('SERVER_MEMORY_TRIM');
-        $trim = is_string($trim) && $trim !== '' ? $trim : self::DEFAULT_MEMORY_TRIM;
+        $trim = is_string($trim) && $trim !== '' ? $trim : null;
 
-        return new self($host, $port, $options, $memoryLimit, $timeout, $trim);
+        $profile = env('SERVER_PROFILE');
+        $profile = is_string($profile) ? Profile::tryFrom(strtolower(trim($profile))) : null;
+
+        // Captured once, here, rather than on every read: this runs after bootstrap and
+        // before any worker exists, which is exactly the heap a worker starts from, and a
+        // value that changed between two reads would make the derived limits disagree
+        // with each other.
+        return new self($host, $port, $options, $memoryLimit, $timeout, $trim, $profile, memory_get_usage(true));
     }
 
     /** Bind host (e.g. '0.0.0.0', '127.0.0.1'). */
@@ -163,14 +152,250 @@ final class ServerSettings
         return $this->set('task_worker_num', $count);
     }
 
+    /**
+     * Requests a worker serves before it is replaced by a fresh one. `0` never replaces
+     * it. Derived from the profile when not set — see {@see Profile::maxRequest()}.
+     *
+     * Replacement is not a precaution but a necessity: Swoole leaks 56 bytes on every
+     * coroutine suspend/resume, and an HTTP request always suspends.
+     */
     public function maxRequest(int $count): self
     {
         return $this->set('max_request', $count);
     }
 
+    /**
+     * How far apart workers may drift before recycling. Derived from the profile when not
+     * set — a tenth of {@see maxRequest()}.
+     *
+     * Swoole **adds** a random amount up to this to `max_request`, so the real limit is
+     * `max_request + rand(0, grace)`.
+     */
     public function maxRequestGrace(int $count): self
     {
         return $this->set('max_request_grace', $count);
+    }
+
+    /**
+     * The stance this server takes on its own memory — and, through it, every limit that
+     * keeps a worker alive. {@see Profile::Balance} when nothing is said.
+     *
+     * ```
+     * $server->profile(Profile::Performance);
+     * ```
+     *
+     * It supplies {@see maxConcurrency()}, {@see maxConnections()}, {@see maxRequest()},
+     * {@see maxRequestGrace()} and {@see memoryTrimThreshold()} as **defaults**, resolved
+     * when each is read. Anything set explicitly — here, or through a `SERVER_*` variable
+     * — wins regardless of the order the calls are made in:
+     *
+     * ```
+     * $server->profile(Profile::Performance)
+     *        ->maxConnections(10_000);   // browsers hold connections open; the rest stands
+     * ```
+     *
+     * Choosing one is answering how much memory a single request uses, which is
+     * measurable — see {@see Profile}.
+     */
+    public function profile(Profile $profile): self
+    {
+        $this->profile = $profile;
+        return $this;
+    }
+
+    /** The profile in force: the configured one, `SERVER_PROFILE`, or {@see Profile::Balance}. */
+    public function getProfile(): Profile
+    {
+        return $this->profile ?? Profile::Balance;
+    }
+
+    /** Requests a worker will serve before replacement; `0` when it is never replaced. */
+    public function getMaxRequest(): int
+    {
+        $configured = $this->options['max_request'] ?? null;
+
+        return is_int($configured) ? $configured : $this->getProfile()->maxRequest($this->limitBytes());
+    }
+
+    /** The random spread added to {@see getMaxRequest()}. */
+    public function getMaxRequestGrace(): int
+    {
+        $configured = $this->options['max_request_grace'] ?? null;
+
+        return is_int($configured) ? $configured : $this->getProfile()->maxRequestGrace($this->limitBytes());
+    }
+
+    /**
+     * Largest request accepted, in bytes — **headers included**. Default: 8 MB.
+     *
+     * ```
+     * $server->maxRequestSize(32 * 1024 * 1024);   // room for 32 MB uploads
+     * ```
+     *
+     * The limit is on the whole packet, not the body alone: at the default, a body of
+     * 8 388 400 bytes passes and 8 388 608 does not — the difference is the request's own
+     * headers. Leave room for them when sizing an upload endpoint.
+     *
+     * Swoole's own limit is 2 MB and says nothing when it is hit — the client gets a bare
+     * `413`, which sends the reader looking anywhere but here. The default matches PHP's
+     * `post_max_size`, so a PHP developer meets the number they expect.
+     *
+     * Raise it knowing what it costs: the request sits in the worker's heap for its whole
+     * life, and that heap is shared by every request in flight. Large bodies and high
+     * concurrency multiply.
+     */
+    public function maxRequestSize(int $bytes): self
+    {
+        return $this->set('package_max_length', $bytes);
+    }
+
+    /**
+     * Largest number of simultaneous TCP connections. Derived from the profile when not
+     * set — twice {@see getMaxConcurrency()}, the working ones and an idle one apiece.
+     *
+     * Not the same thing as concurrent requests, though it is easy to read it that way:
+     * a keep-alive connection serves many requests one after another, and an idle one
+     * serves none. Measured — `max_connection = 2` did not slow six concurrent requests
+     * at all, while `worker_max_concurrency = 2` doubled their total time by queueing.
+     *
+     * It is not free, though. A held connection costs about **68 KB of PHP heap** —
+     * measured linearly at 401, 801 and 1 201 connections, and charged to `memory_limit`,
+     * not merely to RSS — so a worker with the default 128M dies at roughly 1 900 idle
+     * keep-alive connections. Swoole's own 100 000 is therefore no limit at all: it would
+     * take 6.8 GB to reach.
+     *
+     * Raise it for a service whose clients hold connections open while asking nothing —
+     * browsers with open tabs, mobile clients polling rarely. The profile assumes one such
+     * client per working request, which suits a service behind nginx or one called by
+     * other services.
+     */
+    public function maxConnections(int $count): self
+    {
+        return $this->set('max_connection', $count);
+    }
+
+    /** Connections allowed at once: the configured value, or the profile's derivation. */
+    public function getMaxConnections(): int
+    {
+        $configured = $this->options['max_connection'] ?? null;
+        if (is_int($configured) && $configured > 0) {
+            return $configured;
+        }
+
+        return $this->getProfile()->connections($this->availableBytes());
+    }
+
+    /**
+     * Seconds a connection may go without sending data before the server closes it.
+     * Off by default, which is Swoole's own behaviour.
+     *
+     * ```
+     * $server->idleConnectionTimeout(300);   // must exceed the longest request
+     * ```
+     *
+     * **It also cuts requests that are still running**, and this is the whole reason it is
+     * off. Swoole measures the time since the client last *sent* something, and a client
+     * waiting for a slow response sends nothing — so a request being worked on looks
+     * exactly like an abandoned connection. Measured: with the timeout at 2 seconds a
+     * 5-second request was cut at 2.07 s and the client got no response; at 8 seconds the
+     * same request returned normally at 5.00 s. Nothing was written to the log either
+     * time — the connection simply ends.
+     *
+     * So it is a ceiling on request duration as much as on idleness, and it would silently
+     * overrule {@see \Flytachi\Winter\Kernel\Route\Annotation\Timeout} — a route allowed
+     * ten minutes would still die here. Set it above the longest request the application
+     * permits, and prefer {@see requestTimeout()} for bounding request duration: that one
+     * cancels the coroutine, so `finally` runs, connections return to the pool, and the
+     * client is told what happened with a `504`.
+     *
+     * What it does buy: a client that opens a connection and vanishes otherwise holds a
+     * file descriptor for the life of the worker. That is a small prize — the connection
+     * table costs nothing measurable (1 024 vs 1 000 000 connections differ by 160 KB of
+     * RSS) and containers here allow about a million descriptors — which is why it does
+     * not pay for the hazard by default.
+     *
+     * A related detail worth knowing, since the two are usually mentioned together:
+     * `heartbeat_check_interval` is **not** required for this to work — verified, the
+     * timeout closes idle connections on its own.
+     */
+    public function idleConnectionTimeout(int $seconds): self
+    {
+        return $this->set('heartbeat_idle_time', $seconds);
+    }
+
+    /**
+     * Largest number of requests one worker processes at the same time. Derived from the
+     * profile when not set — see {@see getMaxConcurrency()}.
+     *
+     * ```
+     * $server->maxConcurrency(10000);   // a proxy: requests are cheap, mostly waiting
+     * ```
+     *
+     * Swoole **queues** what exceeds it rather than refusing — measured: twenty concurrent
+     * 0.3-second requests against a limit of 2 all succeeded, taking 3.3 seconds in total
+     * instead of 0.3. So overload turns into latency, not errors, and no client is turned
+     * away because the server is briefly busy.
+     *
+     * This is the setting that actually protects the worker. `memory_limit` decides when
+     * it dies; this decides whether it gets there. Not to be confused with
+     * {@see maxConnections()}, which counts sockets: a keep-alive connection serves many
+     * requests in turn and an idle one serves none.
+     *
+     * It is not a rate limit, and cannot be used as one. It has no idea who is calling, so
+     * it cannot give one client 50 requests a second and another 20 — and it delays rather
+     * than rejects, where a quota has to answer `429`. A per-client quota also has to be
+     * shared between workers, which a per-worker number never is.
+     */
+    public function maxConcurrency(int $count): self
+    {
+        return $this->set('worker_max_concurrency', $count);
+    }
+
+    /**
+     * The concurrency ceiling that will be applied: the configured value, or the
+     * profile's derivation from the heap left after the worker's own baseline.
+     *
+     * At 256M with {@see Profile::Balance}, 896 in flight; at 512M, 1 853. Doubling the
+     * limit doubles the ceiling — but only turns into throughput if the ceiling was what
+     * bound. `worker_concurrency` in `Swoole\Server::stats()` says whether it was:
+     * sitting at the ceiling means requests are queueing, well below it means the
+     * bottleneck is somewhere else.
+     */
+    public function getMaxConcurrency(): int
+    {
+        $configured = $this->options['worker_max_concurrency'] ?? null;
+        if (is_int($configured) && $configured > 0) {
+            return $configured;
+        }
+
+        return $this->getProfile()->concurrency($this->availableBytes());
+    }
+
+    /**
+     * The worker's memory ceiling in bytes, or {@see ASSUMED_MEMORY_LIMIT} when it cannot
+     * be read (`-1`, or a value PHP cannot parse) — an application that opts out of
+     * memory limits still gets limits derived, rather than none.
+     */
+    private function limitBytes(): int
+    {
+        $bytes = WorkerMemory::bytes($this->memoryLimit ?? (string) ini_get('memory_limit'));
+
+        return $bytes > 0 ? $bytes : self::ASSUMED_MEMORY_LIMIT;
+    }
+
+    /**
+     * Heap the requests may actually share: the limit less what the application already
+     * holds before serving anything.
+     *
+     * The baseline is **measured, not assumed** — an application with a hundred routes,
+     * three connection pools and a wide dependency graph starts heavier than an empty
+     * one, and gets a correspondingly smaller ceiling without being asked. It is taken in
+     * the master, which has run the same bootstrap the workers inherit; a worker allocates
+     * a little more of its own (its pool fills lazily), so this errs slightly generous.
+     */
+    private function availableBytes(): int
+    {
+        return max(0, $this->limitBytes() - $this->baselineBytes);
     }
 
     /**
@@ -319,6 +544,9 @@ final class ServerSettings
      * there is none — which is what an ordinary request pays. The next large allocation
      * pays roughly 10 % more, having to take fresh chunks.
      *
+     * Derived from the profile when not set, as a fraction of the memory limit — what
+     * counts as "suspiciously unused" depends on how much there is.
+     *
      * @param string $bytes A PHP memory value: '32M', '512K', or '0' to disable.
      */
     public function memoryTrimThreshold(string $bytes): self
@@ -327,10 +555,14 @@ final class ServerSettings
         return $this;
     }
 
-    /** The configured idle-memory threshold, as written. */
-    public function getMemoryTrimThreshold(): string
+    /** The idle-memory threshold in bytes: the configured value, or the profile's. */
+    public function getMemoryTrimThreshold(): int
     {
-        return $this->memoryTrimThreshold;
+        if ($this->memoryTrimThreshold !== null) {
+            return max(0, WorkerMemory::bytes($this->memoryTrimThreshold));
+        }
+
+        return $this->getProfile()->trimThreshold($this->limitBytes());
     }
 
     /** Set any raw Swoole option. */
@@ -346,10 +578,22 @@ final class ServerSettings
      * `memoryLimit` is deliberately absent: it is a PHP ini value, and Swoole answers
      * an option it does not know with `unsupported option` on every start.
      *
+     * The profile's four Swoole settings are filled in here rather than in
+     * {@see fromEnv()} because they derive from the memory limit, which a
+     * {@see WebConfigurer} may still change. A profile that caps nothing
+     * ({@see Profile::Stress}) contributes no key, leaving Swoole's own behaviour.
+     *
      * @return array<string, mixed>
      */
     public function toArray(): array
     {
-        return $this->options;
+        $derived = array_filter([
+            'worker_max_concurrency' => $this->getMaxConcurrency(),
+            'max_connection'         => $this->getMaxConnections(),
+            'max_request'            => $this->getMaxRequest(),
+            'max_request_grace'      => $this->getMaxRequestGrace(),
+        ], static fn(int $value): bool => $value > 0);
+
+        return $this->options + $derived;
     }
 }

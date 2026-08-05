@@ -120,7 +120,7 @@ final class RequestWatchdog
      * The caller must {@see release()} the id when the request ends — via `defer`, so it
      * happens however the request finishes.
      */
-    public static function register(?float $seconds = null): ?int
+    public static function register(?float $seconds = null, float $elapsed = 0.0): ?int
     {
         $seconds ??= self::$default;
         if ($seconds <= 0.0 || !Runtime::isSwooleCoroutine()) {
@@ -128,7 +128,11 @@ final class RequestWatchdog
         }
 
         $cid = Coroutine::getCid();
-        self::$deadlines[$cid] = self::now() + $seconds;
+        // `$elapsed` is spent budget, not a start time: the deadline runs on the monotonic
+        // clock, and the caller measures the wait on the wall clock Swoole stamps arrivals
+        // with. Subtracting keeps the two apart. A request that used its whole budget
+        // queueing gets a deadline in the past and is cancelled by the next sweep.
+        self::$deadlines[$cid] = self::now() + $seconds - max(0.0, $elapsed);
 
         return $cid;
     }

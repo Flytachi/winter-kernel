@@ -182,6 +182,97 @@ final class RequestWatchdogTest extends TestCase
         self::assertTrue($deferRan, 'defer must run — pooled connections have to come back');
     }
 
+    /**
+     * Time spent queueing counts against the deadline.
+     *
+     * Under `worker_max_concurrency` a request's coroutine is not created until the worker
+     * lets it through, so the watchdog never sees the wait — measured with a limit of one
+     * and a 0.3-second handler, five simultaneous requests waited 0.000 to 1.206 seconds
+     * before any of their code ran. Without this, each would then start a fresh full
+     * budget while the client had already been waiting.
+     */
+    public function test_time_spent_queueing_is_charged_to_the_deadline(): void
+    {
+        $outcome = null;
+
+        \Swoole\Coroutine\run(static function () use (&$outcome): void {
+            RequestWatchdog::enable(1.0);
+
+            Coroutine::create(static function () use (&$outcome): void {
+                // 0.9 s of the one-second budget was spent waiting to be picked up.
+                $cid = RequestWatchdog::register(elapsed: 0.9);
+                try {
+                    Coroutine::sleep(0.3);
+                    $outcome = 'finished';
+                } catch (\Throwable $e) {
+                    $outcome = $e::class;
+                }
+                RequestWatchdog::release($cid);
+            });
+
+            Coroutine::sleep(0.6);
+            RequestWatchdog::disable();
+        });
+
+        self::assertSame(
+            'Swoole\Coroutine\CanceledException',
+            $outcome,
+            'a 0.3 s body must not survive on a 1 s budget already 0.9 s spent',
+        );
+    }
+
+    /** A budget wholly spent queueing is cancelled at the first sweep, not granted anew. */
+    public function test_a_request_that_queued_past_its_budget_does_not_start_afresh(): void
+    {
+        $outcome = null;
+
+        \Swoole\Coroutine\run(static function () use (&$outcome): void {
+            RequestWatchdog::enable(0.5);
+
+            Coroutine::create(static function () use (&$outcome): void {
+                $cid = RequestWatchdog::register(elapsed: 2.0);
+                try {
+                    Coroutine::sleep(5);
+                    $outcome = 'finished';
+                } catch (\Throwable $e) {
+                    $outcome = $e::class;
+                }
+                RequestWatchdog::release($cid);
+            });
+
+            Coroutine::sleep(0.4);
+            RequestWatchdog::disable();
+        });
+
+        self::assertSame('Swoole\Coroutine\CanceledException', $outcome);
+    }
+
+    /** Nothing queued, nothing charged — the ordinary request is unaffected. */
+    public function test_a_request_that_did_not_queue_keeps_its_whole_budget(): void
+    {
+        $outcome = null;
+
+        \Swoole\Coroutine\run(static function () use (&$outcome): void {
+            RequestWatchdog::enable(1.0);
+
+            Coroutine::create(static function () use (&$outcome): void {
+                $cid = RequestWatchdog::register(elapsed: 0.0);
+                try {
+                    Coroutine::sleep(0.3);
+                    $outcome = 'finished';
+                } catch (\Throwable $e) {
+                    $outcome = $e::class;
+                }
+                RequestWatchdog::release($cid);
+            });
+
+            Coroutine::sleep(0.6);
+            RequestWatchdog::disable();
+        });
+
+        self::assertSame('finished', $outcome);
+    }
+
     public function test_a_request_inside_its_deadline_is_untouched(): void
     {
         $outcome = null;
