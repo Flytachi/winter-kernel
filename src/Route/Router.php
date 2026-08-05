@@ -766,6 +766,9 @@ final class Router
         if ($e instanceof ResponseException && $e->getCode() === HttpCode::GATEWAY_TIMEOUT->value) {
             return $e;
         }
+        if (!RequestWatchdog::isCurrentExpired()) {
+            return $e;
+        }
 
         return new ResponseException('Gateway Timeout', HttpCode::GATEWAY_TIMEOUT, $e);
     }
