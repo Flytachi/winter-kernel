@@ -465,10 +465,19 @@ abstract class WinterApplication
             ));
         }
 
-        $handler = static function (\Swoole\Http\Request $req, \Swoole\Http\Response $res) use ($router): void {
+        $trimThreshold = WorkerMemory::bytes($settings->getMemoryTrimThreshold());
+        $handler = static function (
+            \Swoole\Http\Request $req,
+            \Swoole\Http\Response $res
+        ) use ($router, $trimThreshold): void {
             $request = new SwooleRequest($req);
             $isHead  = strtoupper($request->getMethod()) === 'HEAD';
             $router->handle($request, new SwooleResponse($res, $isHead));
+
+            // After the response, not before it: giving memory back can take tens of
+            // milliseconds when there is a lot of it, and the client should not wait for
+            // that. A request that reserved nothing unusual pays 5 µs to find out.
+            WorkerMemory::trimIfIdle($trimThreshold);
         };
 
         // Request workers log on 'http' with per-request coroutine isolation, and are

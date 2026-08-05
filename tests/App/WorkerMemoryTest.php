@@ -171,6 +171,149 @@ final class WorkerMemoryTest extends TestCase
         self::assertSame([], $diagnostics, 'the ini was never touched');
     }
 
+    // ── Handing idle memory back ───────────────────────────────────────────────
+
+    /**
+     * Leaves the allocator holding roughly 30 MB it no longer needs — the shape of a
+     * request that built a large result, at a size the 128M test limit tolerates. The
+     * mechanism does not care about the magnitude; the live case was 258 MB.
+     */
+    private function buildAndDropALargeResult(): void
+    {
+        $many = [];
+        for ($i = 0; $i < 60_000; $i++) {
+            $many[] = (object) ['a' => "value {$i}", 'b' => $i];
+        }
+        unset($many);
+    }
+
+    /**
+     * PHP frees memory to its own allocator, not to the kernel: many small objects live
+     * in chunks that are kept for reuse, so a worker that once built a large result goes
+     * on holding that memory for the rest of its life. Measured on a live worker — a
+     * request building 100 000 entities left `top` reading 114 MB against 6 MB in use.
+     */
+    public function test_a_large_reserve_is_handed_back(): void
+    {
+        $this->buildAndDropALargeResult();
+
+        $reserveBefore = memory_get_usage(true) - memory_get_usage();
+        self::assertGreaterThan(
+            8 * 1024 ** 2,
+            $reserveBefore,
+            'the fixture must actually leave a reserve, or the test proves nothing',
+        );
+
+        $freed = WorkerMemory::trimIfIdle(8 * 1024 ** 2);
+
+        self::assertGreaterThan(0, $freed);
+        self::assertLessThan(
+            $reserveBefore,
+            memory_get_usage(true) - memory_get_usage(),
+            'the reserve must actually shrink',
+        );
+    }
+
+    /** An ordinary worker carries a few megabytes of reserve and must be left alone. */
+    public function test_a_small_reserve_is_left_alone(): void
+    {
+        WorkerMemory::trimIfIdle(1024);          // clear whatever this process holds
+
+        self::assertSame(0, WorkerMemory::trimIfIdle(512 * 1024 ** 2), 'nothing near half a gig');
+    }
+
+    /**
+     * The threshold has to be the deciding factor, not a formality: with a reserve worth
+     * releasing but a threshold above it, nothing may happen. Otherwise every request
+     * would pay the release — 80 ms when there is a lot to give back.
+     */
+    public function test_a_reserve_below_the_threshold_is_kept(): void
+    {
+        $this->buildAndDropALargeResult();
+
+        $reserve = memory_get_usage(true) - memory_get_usage();
+        self::assertGreaterThan(8 * 1024 ** 2, $reserve, 'there is something to release');
+
+        self::assertSame(
+            0,
+            WorkerMemory::trimIfIdle(512 * 1024 ** 2),
+            '…but the threshold says it is not worth it',
+        );
+
+        WorkerMemory::trimIfIdle(8 * 1024 ** 2);   // tidy up for the tests that follow
+    }
+
+    /**
+     * Why the decision is made on the reserve and not on the process peak.
+     *
+     * A worker in the middle of a large request has a **high peak and almost no
+     * reserve** — the memory is in use, none of it is idle. Once the request ends the
+     * reserve is exactly what stayed behind. The peak, by contrast, never decreases: it
+     * says "something large happened here once" for the rest of the worker's life and
+     * cannot tell whether anything is being held *now*.
+     *
+     * Note what this test does and does not prove. The two triggers differ in **cost**,
+     * not in outcome: with memory in use, releasing would find nothing to release either
+     * way, so both return 0. What is provable — and what this asserts — is that the
+     * reserve tracks what is idle while the peak does not.
+     */
+    public function test_the_reserve_falls_again_while_the_peak_never_does(): void
+    {
+        WorkerMemory::trimIfIdle(1024);
+
+        $held = [];
+        for ($i = 0; $i < 60_000; $i++) {
+            $held[] = (object) ['a' => "value {$i}", 'b' => $i];
+        }
+
+        self::assertGreaterThan(8 * 1024 ** 2, memory_get_peak_usage(), 'the peak is high…');
+        self::assertLessThan(8 * 1024 ** 2, WorkerMemory::idleReserve(), '…while nothing is idle');
+        self::assertSame(0, WorkerMemory::trimIfIdle(8 * 1024 ** 2), 'a busy worker is left alone');
+
+        unset($held);
+
+        self::assertGreaterThan(
+            8 * 1024 ** 2,
+            WorkerMemory::idleReserve(),
+            'the request ended and its memory is now idle — this is what the peak cannot say',
+        );
+
+        WorkerMemory::trimIfIdle(8 * 1024 ** 2);
+
+        self::assertLessThan(
+            8 * 1024 ** 2,
+            WorkerMemory::idleReserve(),
+            'and the reserve falls again, which is why one release is enough',
+        );
+        self::assertGreaterThan(
+            8 * 1024 ** 2,
+            memory_get_peak_usage(),
+            'while the peak still reads high, and would go on triggering forever',
+        );
+    }
+
+    /**
+     * Releasing closes the gap, so the next check finds nothing to do. That is what keeps
+     * a busy worker from paying the cost on every request — unlike the process peak,
+     * which never decreases and would trip forever after one heavy request.
+     */
+    public function test_the_trigger_is_self_correcting(): void
+    {
+        $this->buildAndDropALargeResult();
+
+        self::assertGreaterThan(0, WorkerMemory::trimIfIdle(8 * 1024 ** 2), 'first call releases');
+        self::assertSame(0, WorkerMemory::trimIfIdle(8 * 1024 ** 2), 'second finds nothing');
+    }
+
+    public function test_a_zero_threshold_disables_it(): void
+    {
+        $this->buildAndDropALargeResult();
+
+        self::assertSame(0, WorkerMemory::trimIfIdle(0), 'opted out, whatever is held');
+
+        WorkerMemory::trimIfIdle(8 * 1024 ** 2);   // tidy up for the tests that follow
+    }
+
     // ── Wiring through ServerSettings ──────────────────────────────────────────
 
     public function test_the_setting_is_absent_until_asked_for(): void
@@ -206,11 +349,49 @@ final class WorkerMemoryTest extends TestCase
      */
     public function test_it_never_reaches_the_swoole_options(): void
     {
-        $options = ServerSettings::fromEnv()->workers(4)->memoryLimit('256M')->toArray();
+        $options = ServerSettings::fromEnv()
+            ->workers(4)
+            ->memoryLimit('256M')
+            ->memoryTrimThreshold('64M')
+            ->toArray();
 
         self::assertArrayHasKey('worker_num', $options);
         self::assertArrayNotHasKey('memory_limit', $options);
         self::assertArrayNotHasKey('memoryLimit', $options);
+        self::assertArrayNotHasKey('memoryTrimThreshold', $options);
+    }
+
+    public function test_the_trim_threshold_defaults_to_32m(): void
+    {
+        $original = $_ENV['SERVER_MEMORY_TRIM'] ?? null;
+        unset($_ENV['SERVER_MEMORY_TRIM']);
+
+        try {
+            self::assertSame('32M', ServerSettings::fromEnv()->getMemoryTrimThreshold());
+            self::assertSame(32 * 1024 ** 2, WorkerMemory::bytes('32M'));
+        } finally {
+            if ($original !== null) {
+                $_ENV['SERVER_MEMORY_TRIM'] = $original;
+            }
+        }
+    }
+
+    public function test_the_trim_threshold_is_configurable(): void
+    {
+        self::assertSame('64M', ServerSettings::fromEnv()->memoryTrimThreshold('64M')->getMemoryTrimThreshold());
+
+        $original = $_ENV['SERVER_MEMORY_TRIM'] ?? null;
+        $_ENV['SERVER_MEMORY_TRIM'] = '128M';
+
+        try {
+            self::assertSame('128M', ServerSettings::fromEnv()->getMemoryTrimThreshold());
+        } finally {
+            if ($original === null) {
+                unset($_ENV['SERVER_MEMORY_TRIM']);
+            } else {
+                $_ENV['SERVER_MEMORY_TRIM'] = $original;
+            }
+        }
     }
 }
 

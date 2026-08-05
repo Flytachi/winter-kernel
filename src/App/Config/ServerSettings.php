@@ -33,6 +33,15 @@ final class ServerSettings
      */
     private const float DEFAULT_REQUEST_TIMEOUT = 30.0;
 
+    /**
+     * Idle memory a worker may hold before giving it back to the kernel.
+     *
+     * An ordinary worker carries two or three megabytes of reserve — the allocator's
+     * chunk is 2 MB — so 32M is unmistakably "a large request happened here", while
+     * being small enough that the memory is worth reclaiming.
+     */
+    private const string DEFAULT_MEMORY_TRIM = '32M';
+
     /** @param array<string, mixed> $options */
     private function __construct(
         private string $host,
@@ -40,6 +49,7 @@ final class ServerSettings
         private array $options = [],
         private ?string $memoryLimit = null,
         private float $requestTimeout = self::DEFAULT_REQUEST_TIMEOUT,
+        private string $memoryTrimThreshold = self::DEFAULT_MEMORY_TRIM,
     ) {
     }
 
@@ -74,7 +84,10 @@ final class ServerSettings
         $timeout = env('SERVER_REQUEST_TIMEOUT');
         $timeout = is_numeric($timeout) ? max(0.0, (float) $timeout) : self::DEFAULT_REQUEST_TIMEOUT;
 
-        return new self($host, $port, $options, $memoryLimit, $timeout);
+        $trim = env('SERVER_MEMORY_TRIM');
+        $trim = is_string($trim) && $trim !== '' ? $trim : self::DEFAULT_MEMORY_TRIM;
+
+        return new self($host, $port, $options, $memoryLimit, $timeout, $trim);
     }
 
     /** Bind host (e.g. '0.0.0.0', '127.0.0.1'). */
@@ -241,6 +254,44 @@ final class ServerSettings
     public function getRequestTimeout(): float
     {
         return $this->requestTimeout;
+    }
+
+    /**
+     * How much idle memory a worker may hold before handing it back to the operating
+     * system, checked after each request. Default: 32M. `0` never hands anything back.
+     *
+     * ```
+     * $server->memoryLimit('256M')->memoryTrimThreshold('64M');
+     * ```
+     *
+     * PHP releases memory to its own allocator, not to the kernel: many small objects
+     * live in chunks that are kept for reuse, so a worker that once built a large result
+     * goes on holding that memory for the rest of its life. On a host running several
+     * containers that is first-come-first-served — measured, a single request that built
+     * 600 000 objects left 258 MB reserved and unused.
+     *
+     * The threshold is compared against the **reserve** — what the allocator has taken
+     * from the kernel minus what is actually in use — so a busy worker is never trimmed
+     * (its memory is in use, the reserve is small) and one trim is enough (releasing
+     * closes the gap). 32M is far above the two or three megabytes an ordinary worker
+     * carries, and far below anything worth keeping.
+     *
+     * Handing memory back costs about 80 ms when there is a lot of it, and 5 µs when
+     * there is none — which is what an ordinary request pays. The next large allocation
+     * pays roughly 10 % more, having to take fresh chunks.
+     *
+     * @param string $bytes A PHP memory value: '32M', '512K', or '0' to disable.
+     */
+    public function memoryTrimThreshold(string $bytes): self
+    {
+        $this->memoryTrimThreshold = $bytes;
+        return $this;
+    }
+
+    /** The configured idle-memory threshold, as written. */
+    public function getMemoryTrimThreshold(): string
+    {
+        return $this->memoryTrimThreshold;
     }
 
     /** Set any raw Swoole option. */
