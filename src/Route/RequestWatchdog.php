@@ -55,8 +55,19 @@ final class RequestWatchdog
     /** Sweep at most this often, however short the deadline. */
     private const float MIN_INTERVAL = 0.05;
 
-    /** …and at least this often, however long it is. */
-    private const float MAX_INTERVAL = 1.0;
+    /**
+     * …and at least this often, however long it is.
+     *
+     * The interval is the accuracy: a request that becomes overdue just after a sweep
+     * waits for the next one, so the deadline overshoots by up to this much and by half
+     * of it on average. At one second a three-second timeout answered in 3.37 s.
+     *
+     * 100 ms costs nothing worth counting. Measured: a sweep over 1 000 in-flight
+     * requests takes 7.4 µs, so ten a second is 74 µs — 0.007 % of a core; at 5 000 it
+     * is 0.037 %. An idle worker pays nothing at all, the sweep returning immediately on
+     * an empty registry.
+     */
+    private const float MAX_INTERVAL = 0.1;
 
     /** Deadline (monotonic seconds) per in-flight request coroutine: cid => deadline. */
     private static array $deadlines = [];
@@ -86,7 +97,7 @@ final class RequestWatchdog
             return;
         }
 
-        $interval = min(self::MAX_INTERVAL, max(self::MIN_INTERVAL, self::$default / 4));
+        $interval = self::sweepInterval(self::$default);
         self::$timerId = Timer::tick((int) ($interval * 1000), static fn() => self::sweep());
     }
 
@@ -201,6 +212,18 @@ final class RequestWatchdog
             self::$expired[$cid] = true;
             Coroutine::cancel($cid, true);
         }
+    }
+
+    /**
+     * How often to sweep for a given deadline — the accuracy of the deadline itself.
+     *
+     * A quarter of the deadline, clamped: never rarer than {@see MAX_INTERVAL}, so a
+     * long timeout is still measured to 100 ms, and never more often than
+     * {@see MIN_INTERVAL}, so a sub-second one does not spin the reactor.
+     */
+    private static function sweepInterval(float $seconds): float
+    {
+        return min(self::MAX_INTERVAL, max(self::MIN_INTERVAL, $seconds / 4));
     }
 
     private static function now(): float

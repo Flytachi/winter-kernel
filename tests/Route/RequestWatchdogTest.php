@@ -42,6 +42,34 @@ final class RequestWatchdogTest extends TestCase
         \Swoole\Timer::clearAll();
     }
 
+    // ── Accuracy of the deadline ───────────────────────────────────────────────
+
+    private function interval(float $seconds): float
+    {
+        return new \ReflectionMethod(RequestWatchdog::class, 'sweepInterval')->invoke(null, $seconds);
+    }
+
+    /**
+     * The sweep interval *is* the accuracy: a request that goes overdue right after one
+     * pass waits for the next, so the deadline overshoots by up to an interval. At one
+     * second — the first choice here — a three-second timeout answered in 3.37 s, which
+     * is the average overshoot of a 750 ms sweep, not network noise.
+     */
+    public function test_a_long_deadline_is_still_measured_to_a_tenth_of_a_second(): void
+    {
+        self::assertSame(0.1, $this->interval(3.0), 'a 3 s timeout must not sweep every 750 ms');
+        self::assertSame(0.1, $this->interval(30.0));
+        self::assertSame(0.1, $this->interval(600.0), 'even a ten-minute deadline stays precise');
+    }
+
+    /** A short deadline gets a proportionally short sweep, down to a floor. */
+    public function test_a_short_deadline_sweeps_proportionally(): void
+    {
+        self::assertSame(0.075, $this->interval(0.3), 'a quarter of the deadline');
+        self::assertSame(0.05, $this->interval(0.2), '…until the floor');
+        self::assertSame(0.05, $this->interval(0.01), 'a tiny deadline must not spin the reactor');
+    }
+
     // ── Registration ───────────────────────────────────────────────────────────
 
     public function test_nothing_is_watched_while_the_deadline_is_disabled(): void
