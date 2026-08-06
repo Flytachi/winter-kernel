@@ -113,16 +113,18 @@ $server->profile(Profile::Performance);
 
 | Profile | One request may use | Suits |
 |---|---:|---|
-| `Stable` | 256 KB | reports, exports, a monolith with wide joins |
+| `Stable` | 512 KB | reports, exports, a monolith with wide joins |
 | **`Balance`** (default) | 128 KB | ordinary CRUD |
 | `Performance` | 64 KB | a thin API, a proxy, an integration bridge |
 | `Stress` | — | benchmarks only |
 
 The axis is the **shape of a request, not caution**: `Performance` gives a service with
 small requests more concurrency, not less. Everything else is derived from measured
-constants — 78 KB per in-flight request, 68 KB per open connection, 170 B leaked per
-request — against the heap left after the application's own baseline, which is measured at
-startup rather than assumed.
+constants — 78 KB per in-flight request, 68 KB per open connection, 180 B leaked by a
+request that arms a timer — against the heap left after the application's own baseline,
+which is measured at startup rather than assumed. Worker replacement is the one derived
+setting that does *not* vary with the profile: what it guards against is the same for all
+of them, and what it costs — the requests the worker was serving — is too.
 
 Swoole **queues** what exceeds the concurrency cap rather than refusing it, so overload
 becomes latency, not errors — measured, twenty concurrent 0.3-second requests against a

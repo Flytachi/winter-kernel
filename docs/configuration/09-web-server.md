@@ -78,7 +78,7 @@ $server->profile(Profile::Performance);
 
 | Profile | One request may use | Suits |
 |---|---:|---|
-| `Stable` | 256 KB | reports, exports, a monolith with wide joins |
+| `Stable` | 512 KB | reports, exports, a monolith with wide joins |
 | **`Balance`** (default) | 128 KB | ordinary CRUD |
 | `Performance` | 64 KB | a thin API, a proxy, an integration bridge |
 | `Stress` | — | benchmarks only: every cap and every periodic task off |
@@ -100,15 +100,28 @@ Everything else follows arithmetically, from measurements rather than preference
 | Setting | Derivation |
 |---|---|
 | `maxConcurrency` | available heap ÷ (78 KB + the profile's number + 68 KB) |
-| `maxConnections` | twice that — the working ones and one idle client apiece |
+| `maxConnections` | twice that — the working ones and one idle client apiece, capped by `ulimit -n` |
 | `memoryTrimThreshold` | `memory_limit` ÷ 16 · 8 · 4 |
-| `maxRequest` | `memory_limit` × 5% · 10% · 20% ÷ 170 B leaked per request |
+| `maxRequest` | `memory_limit` × 20% ÷ 180 B — **the same for every profile** |
 | `maxRequestGrace` | a tenth of `maxRequest` |
+
+Worker replacement is the one setting that does **not** vary with the profile, and that is
+deliberate. What it guards against is a fixed number of bytes per request, which knows
+nothing about how large a request is; what it costs is the requests the worker was
+serving, which it kills. Tying it to the profile made the most cautious one replace four
+times as often as the least, and drop clients accordingly — measured on a live stand,
+6 805 connections lost against 48. Making it uniform took a Stable run from 751 failures
+to 95, and a Balance run from 15 to none.
+
+The leak it guards against is also **conditional**, which is worth knowing before raising
+it further: 4.6 million ordinary requests grew the heap by nothing at all, and neither did
+`defer`, a channel round-trip, or a pooled borrow that waits. Only a timer that fires —
+`Coroutine::sleep()` and what builds on it — leaks, at about 180 bytes a request.
 
 The three constants are measured, not assumed: **78 KB** is what an in-flight request
 holds before allocating anything of its own (600 requests suspended in a trivial handler
 cost 78.2 KB each), **68 KB** is an idle connection (measured linearly at 401, 801 and
-1 201), and **170 B** is what Swoole leaks per request.
+1 201), and **180 B** is what a request that arms a timer leaks.
 
 "Available heap" is the limit less what the application already holds at boot — and that
 baseline is **measured**, not guessed, so an application with a hundred routes and three
@@ -118,9 +131,9 @@ At 256M, with a booted application carrying ~16M:
 
 | Profile | In flight | Connections | Trim at | Recycle at |
 |---|---:|---:|---:|---:|
-| Stable | 611 | 1 222 | 16M | 78 951 |
-| Balance | 896 | 1 792 | 32M | 157 903 |
-| Performance | 1 170 | 2 340 | 64M | 315 806 |
+| Stable | 373 | 746 | 16M | 298 261 |
+| Balance | 896 | 1 792 | 32M | 298 261 |
+| Performance | 1 170 | 2 340 | 64M | 298 261 |
 
 Double the memory limit and every number roughly doubles. The profile stays the same
 decision, so it does not have to be revisited when the container is resized.

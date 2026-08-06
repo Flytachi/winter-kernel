@@ -371,8 +371,24 @@ final class WorkerMemoryTest extends TestCase
     {
         $options = self::settings('256M')->toArray();
 
-        self::assertSame(157_903, $options['max_request'], 'a worker must not live forever');
-        self::assertSame(15_790, $options['max_request_grace'], 'and they must not all recycle at once');
+        self::assertSame(298_261, $options['max_request'], 'a worker must not live forever');
+        self::assertSame(29_826, $options['max_request_grace'], 'and they must not all recycle at once');
+    }
+
+    /**
+     * Replacement costs the same whatever the profile — it kills the requests the worker
+     * was serving — while what it guards against, a per-request leak, has nothing to do
+     * with how large a request is. Tying it to the profile made the most cautious one
+     * replace four times as often as the least, and drop clients accordingly: measured on
+     * a live stand, 6 805 connections lost against 48.
+     */
+    public function test_recycling_does_not_vary_with_the_profile(): void
+    {
+        $of = static fn(Profile $p): int => self::settings('256M')->profile($p)->getMaxRequest();
+
+        self::assertSame($of(Profile::Balance), $of(Profile::Stable));
+        self::assertSame($of(Profile::Balance), $of(Profile::Performance));
+        self::assertSame(0, $of(Profile::Stress), 'the bench profile never replaces its worker');
     }
 
     /**

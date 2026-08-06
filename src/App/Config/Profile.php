@@ -78,12 +78,25 @@ enum Profile: string
     private const int CONNECTION_FLOOR = 68 * 1024;
 
     /**
-     * Bytes leaked per request through the whole pipeline. Swoole loses 56 bytes on every
-     * coroutine suspend/resume — measured to the byte over five runs of ten thousand, and
-     * surviving both `gc_collect_cycles()` and `gc_mem_caches()` — and a request suspends
-     * several times. {@see maxRequest()} turns this into a replacement interval.
+     * Bytes leaked by a request that **arms a timer** — `Coroutine::sleep()` and anything
+     * built on it. Measured against a live server with replacement disabled: 248 723 such
+     * requests grew the heap from 2.16 MB to 44.89 MB, or 180 bytes each.
+     *
+     * It is not a cost every request pays, and the distinction matters because
+     * {@see maxRequest()} is what the framework charges everyone for it. Measured on the
+     * same server: 4.6 million ordinary requests grew the heap by **zero** bytes, and so
+     * did `Coroutine::defer()`, a channel round-trip, and a pooled borrow that actually
+     * waits (`Channel::pop($timeout)` — the pool's own path). Only the fired timer leaks.
      */
-    private const int LEAK_PER_REQUEST = 170;
+    private const int LEAK_PER_REQUEST = 180;
+
+    /**
+     * Fraction of the heap the leak may reach before a worker is replaced.
+     *
+     * One value for every profile: the leak is per request and has nothing to do with how
+     * much memory a request uses, so there was never anything for it to vary with.
+     */
+    private const float LEAK_BUDGET_SHARE = 0.20;
 
     /** Assumed heap when the limit cannot be read (`-1`, or a value PHP cannot parse). */
     private const int ASSUMED_LIMIT = 128 * 1024 * 1024;
@@ -189,21 +202,36 @@ enum Profile: string
     /**
      * Requests a worker serves before it is replaced. `0` never replaces it.
      *
-     * Derived from what the leak is allowed to reach: a bigger heap tolerates more of it
-     * before replacement is worth its cost — the new worker starts with an empty
-     * connection pool and has to fill it, about 30 ms.
+     * The same for every profile, because what it guards against does not vary with them:
+     * the leak is a fixed number of bytes per request and knows nothing about how large a
+     * request is. Tying it to the profile — which is what this did at first — made the
+     * most cautious profile replace its worker four times as often as the least, and
+     * replacement is the one thing here with a **certain** cost.
+     *
+     * That cost, measured on a live stand: replacing a worker kills the requests it was
+     * serving. Under load the three profiles differed only in how often they did it, and
+     * the dropped connections followed exactly — 6 805 for a worker replaced every 78 951
+     * requests, 48 for one replaced every 315 806. Nothing was written to any log; only
+     * the client sees it.
+     *
+     * The benefit, by contrast, is **conditional**. Measured: 4.6 million ordinary
+     * requests grew the heap by nothing at all, and neither did `defer`, a channel, or a
+     * pooled borrow that waits. Only a **timer that fires** leaks — `Coroutine::sleep()`
+     * costs about 180 bytes a request. So an application that never sleeps in a handler
+     * does not leak, and pays for this in dropped requests without receiving anything.
+     *
+     * Hence one share for everyone, sized so a leaking application stays well inside its
+     * limit: at 20 %, a worker at 256M is replaced after ~315 000 requests, having leaked
+     * about 51 MB if every request slept.
      */
     public function maxRequest(int $limitBytes): int
     {
+        if (!$this->guards()) {
+            return 0;
+        }
         $limit = $limitBytes > 0 ? $limitBytes : self::ASSUMED_LIMIT;
-        $share = match ($this) {
-            self::Stable      => 0.05,
-            self::Balance     => 0.10,
-            self::Performance => 0.20,
-            self::Stress      => 0.0,
-        };
 
-        return (int) ($limit * $share / self::LEAK_PER_REQUEST);
+        return (int) ($limit * self::LEAK_BUDGET_SHARE / self::LEAK_PER_REQUEST);
     }
 
     /**
