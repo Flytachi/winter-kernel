@@ -36,7 +36,7 @@ namespace Flytachi\Winter\Kernel\App\Config;
  */
 enum Profile: string
 {
-    /** Heavy requests — reports, exports, a monolith with wide joins. 256 KB each. */
+    /** Heavy requests — reports, exports, a monolith with wide joins. 512 KB each. */
     case Stable = 'stable';
 
     /** Ordinary CRUD. 128 KB per request, and the default when nothing is said. */
@@ -95,14 +95,20 @@ enum Profile: string
     }
 
     /**
-     * Heap this profile reserves for one in-flight request's own work, on top of
-     * {@see REQUEST_FLOOR}. Zero for {@see Stress}, which reserves nothing because it
-     * caps nothing.
+     * Heap one in-flight request may use for **its own work** — the entities it loads,
+     * the string it serialises — on top of {@see REQUEST_FLOOR}, which is the framework's
+     * and which no application can influence. Zero for {@see Stress}, which budgets
+     * nothing because it caps nothing.
+     *
+     * It is an assumption about the application, however the profile is described: a
+     * ceiling of 1 170 in flight is the same statement as "a request here fits in 64 KB".
+     * Choose the profile knowing that, and an application whose requests are heavier is
+     * not made safe by the framework — it is made to die later.
      */
-    public function requestHeadroom(): int
+    public function requestBudget(): int
     {
         return match ($this) {
-            self::Stable      => 256 * 1024,
+            self::Stable      => 512 * 1024,
             self::Balance     => 128 * 1024,
             self::Performance => 64 * 1024,
             self::Stress      => 0,
@@ -113,11 +119,17 @@ enum Profile: string
      * Requests this profile allows in flight at once, given the heap left after the
      * worker's own baseline. `0` means no cap.
      *
-     * Each one is budgeted at floor + headroom, plus a second connection at
+     * Each is budgeted at floor + budget, plus a second connection at
      * {@see CONNECTION_FLOOR} for the client that is connected and *not* currently asking
      * — the ordinary keep-alive case. That one-to-one assumption is what
      * {@see connections()} spends; a service whose clients hold connections open far
      * longer says so with `maxConnections()`.
+     *
+     * How far this can be pushed is bounded by the floor, not by the profile: measured at
+     * 256M, cutting the budget to **zero** — an application allowed to allocate nothing at
+     * all — raises the ceiling from 1 170 to 1 683, and no further. At `Performance` the
+     * framework's own 146 KB is already 70 % of what a request costs. What multiplies the
+     * ceiling is memory: the same profile gives 2 418 at 512M and 4 915 at 1G.
      */
     public function concurrency(int $availableBytes): int
     {
@@ -125,15 +137,32 @@ enum Profile: string
             return 0;
         }
 
-        $perRequest = self::REQUEST_FLOOR + $this->requestHeadroom() + self::CONNECTION_FLOOR;
+        $perRequest = self::REQUEST_FLOOR + $this->requestBudget() + self::CONNECTION_FLOOR;
 
         return max(1, intdiv(max(0, $availableBytes), $perRequest));
     }
 
-    /** Connections allowed at once: the working ones and an idle one apiece. `0` = no cap. */
-    public function connections(int $availableBytes): int
+    /**
+     * Connections allowed at once: the working ones and an idle one apiece, but never
+     * more than the process has file descriptors for. `0` = no cap.
+     *
+     * A socket is a descriptor, so `ulimit -n` is a second ceiling entirely independent of
+     * memory — and the tighter one on a stingy host. Swoole enforces it either way: asked
+     * for more it prints `max_connection is exceed the maximum value, it's reset to N` and
+     * silently uses N. Clamping here means the number the framework reports is the number
+     * that will apply, and the warning never appears.
+     *
+     * Only the derived value is clamped. An explicit `maxConnections()` above the limit is
+     * left to Swoole, so its warning still reaches the operator who asked for it — that
+     * warning is the one thing telling them to raise `ulimit -n`.
+     */
+    public function connections(int $availableBytes, int $descriptorLimit): int
     {
-        return $this->guards() ? $this->concurrency($availableBytes) * 2 : 0;
+        if (!$this->guards()) {
+            return 0;
+        }
+
+        return min($this->concurrency($availableBytes) * 2, max(1, $descriptorLimit));
     }
 
     /**

@@ -282,7 +282,25 @@ final class ServerSettings
             return $configured;
         }
 
-        return $this->getProfile()->connections($this->availableBytes());
+        return $this->getProfile()->connections($this->availableBytes(), $this->descriptorLimit());
+    }
+
+    /**
+     * The process's file-descriptor ceiling, or {@see PHP_INT_MAX} when there is none to
+     * read — a socket is a descriptor, so this bounds connections independently of memory.
+     *
+     * The soft limit, because that is the one in force and the one Swoole clamps to. It is
+     * often the tighter of the two ceilings on a developer's own machine: measured, a
+     * container from the same image allows 1 048 576, while a macOS shell allows 1 024.
+     */
+    private function descriptorLimit(): int
+    {
+        if (!function_exists('posix_getrlimit')) {
+            return PHP_INT_MAX;
+        }
+        $limit = posix_getrlimit()['soft openfiles'] ?? null;
+
+        return is_numeric($limit) && (int) $limit > 0 ? (int) $limit : PHP_INT_MAX;
     }
 
     /**
@@ -368,7 +386,9 @@ final class ServerSettings
             return $configured;
         }
 
-        return $this->getProfile()->concurrency($this->availableBytes());
+        // Never more than there are connections to carry them: a request in flight holds
+        // a socket, so a descriptor ceiling below the memory one binds here too.
+        return min($this->getProfile()->concurrency($this->availableBytes()), $this->getMaxConnections());
     }
 
     /**

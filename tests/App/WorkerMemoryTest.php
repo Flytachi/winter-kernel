@@ -468,7 +468,7 @@ final class WorkerMemoryTest extends TestCase
     {
         $expected = [
             // profile,             256M,  128M
-            [Profile::Stable,        611,   285],
+            [Profile::Stable,        373,   174],
             [Profile::Balance,       896,   418],
             [Profile::Performance,  1170,   546],
         ];
@@ -493,6 +493,41 @@ final class WorkerMemoryTest extends TestCase
         $settings = self::settings('256M')->profile(Profile::Balance);
 
         self::assertSame($settings->getMaxConcurrency() * 2, $settings->getMaxConnections());
+    }
+
+    /**
+     * A socket is a file descriptor, so `ulimit -n` bounds connections independently of
+     * memory — and is the tighter ceiling on a stingy host. Asked for more than it allows,
+     * Swoole prints `max_connection is exceed the maximum value, it's reset to N` and uses
+     * N, so a derived number above it would be a number the framework reports and Swoole
+     * ignores.
+     */
+    public function test_derived_connections_never_exceed_the_descriptor_limit(): void
+    {
+        $available = 240 * 1024 ** 2;
+
+        self::assertSame(1792, Profile::Balance->connections($available, PHP_INT_MAX));
+        self::assertSame(1024, Profile::Balance->connections($available, 1024), 'clamped by descriptors');
+        self::assertSame(1, Profile::Balance->connections($available, 0), 'never zero, which means "no cap"');
+    }
+
+    /** A request in flight holds a socket, so the descriptor ceiling binds concurrency too. */
+    public function test_concurrency_never_exceeds_the_connections_that_carry_it(): void
+    {
+        $settings = self::settings('256M')->maxConnections(100);
+
+        self::assertSame(100, $settings->getMaxConnections());
+        self::assertSame(100, $settings->getMaxConcurrency(), 'cannot work more requests than sockets');
+    }
+
+    /**
+     * An explicit value above the limit is left alone. Swoole's warning is then the only
+     * thing telling the operator to raise `ulimit -n`, and swallowing it would leave them
+     * wondering why a number they set is not the number in force.
+     */
+    public function test_an_explicit_connection_ceiling_is_left_for_swoole_to_complain_about(): void
+    {
+        self::assertSame(999_999, self::settings('256M')->maxConnections(999_999)->getMaxConnections());
     }
 
     /** Balance is what an application that says nothing gets. */
