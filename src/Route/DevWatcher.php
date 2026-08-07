@@ -42,6 +42,24 @@ final class DevWatcher
     private readonly bool $color;
 
     /**
+     * File the watcher touches to ask for a restart, because a property cannot carry that
+     * answer to the process that acts on it.
+     *
+     * The watch timer is armed from `onStart`, and as soon as the application declares a
+     * companion — `#[EnableProcess]`, `#[EnableDaemon]`, `#[EnableScheduler]` — Swoole runs
+     * that callback in a **manager process of its own**. Measured: with no companion the
+     * flag set in the timer is visible after `start()` returns; with one, `onStart` runs in
+     * pid B while `start()` was called in pid A, so pid A saw `false`, skipped the re-exec
+     * and exited 0. The symptom was exact — "↻ change … restarting…" printed, then the
+     * server simply gone — and it only ever appeared in applications with a companion,
+     * which is why it survived so long.
+     *
+     * The path carries the watcher's own pid, so two dev servers cannot collide and a
+     * marker abandoned by an earlier run cannot be mistaken for this one's.
+     */
+    private readonly string $signalPath;
+
+    /**
      * @param list<string> $watchPaths Directories scanned for `.php` changes.
      * @param float $interval Poll interval in seconds.
      * @param list<string> $exclude Directory names skipped during the scan.
@@ -52,6 +70,11 @@ final class DevWatcher
         private readonly array $exclude = ['vendor', 'storage', '.git', 'node_modules'],
     ) {
         $this->color = self::wantsColor();
+        // Constructed in the process that calls start(); every child inherits the value,
+        // so both sides of the fork name the same file without having to agree on one.
+        $this->signalPath = sys_get_temp_dir() . '/winter-dev-reload-'
+            . substr(sha1(implode('|', $watchPaths)), 0, 12) . '-' . getmypid();
+        @unlink($this->signalPath);
     }
 
     /** Colour the dev output using the same LOG_COLOR contract as the logger. */
@@ -122,7 +145,7 @@ final class DevWatcher
                 echo "\n" . $this->paint('33', '↻ [dev]') . ' change'
                     . ($changed !== null ? $this->paint('90', ' · ') . $this->paint('1;33', $changed) : '')
                     . $this->paint('90', ' — restarting…') . "\n";
-                $this->reloadRequested = true;
+                $this->requestReload();
                 if ($this->timerId !== null) {
                     Timer::clear($this->timerId);
                     $this->timerId = null;
@@ -162,10 +185,32 @@ final class DevWatcher
         };
     }
 
-    /** True when a watched file changed and the server was stopped for a restart. */
+    /**
+     * Records the request both in memory and on disk — the caller may be a different
+     * process than the one that will act on it. See {@see $signalPath}.
+     */
+    private function requestReload(): void
+    {
+        $this->reloadRequested = true;
+        @file_put_contents($this->signalPath, (string) getmypid());
+    }
+
+    /**
+     * True when a watched file changed and the server was stopped for a restart.
+     *
+     * Read once: the marker is removed as it is answered, so a restart cannot repeat
+     * itself if the process is stopped and started again.
+     */
     public function reloadRequested(): bool
     {
-        return $this->reloadRequested;
+        $requested = $this->reloadRequested || is_file($this->signalPath);
+
+        // Both sides are cleared together, so the answer cannot differ depending on which
+        // of them happened to carry it.
+        $this->reloadRequested = false;
+        @unlink($this->signalPath);
+
+        return $requested;
     }
 
     /**
