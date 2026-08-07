@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Localization;
 
 use Flytachi\Winter\Kernel\Http\Header;
+use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Base\Runtime;
 
 /**
@@ -13,9 +14,10 @@ use Flytachi\Winter\Base\Runtime;
  * Coroutine-safe: each Swoole coroutine gets its own LocaleService instance.
  * In FPM mode, a single static instance is used (one request per process).
  *
- * Bootstrap (once, before Router::handle):
- *   Locale::setBasePath(__DIR__ . '/lang');
- *   Locale::setDefault('en');
+ * Dictionaries live in `resources/lang/<lang>.php` and need no configuration; both the
+ * directory and the fallback language can be changed at boot:
+ *   Locale::setBasePath(Kernel::$pathRoot . '/translations');
+ *   Locale::setDefault('ru');
  *
  * Per-request auto-init (called inside Router::handle via Header::init):
  *   Locale::initFromRequest();  // reads Accept-Language, picks best locale
@@ -28,7 +30,10 @@ use Flytachi\Winter\Base\Runtime;
  */
 final class Locale
 {
-    private static string $basePath = '';
+    /** Directory under `resources/` holding `<lang>.php` dictionaries. */
+    private const string DEFAULT_DIR = 'lang';
+
+    private static ?string $basePath = null;
     private static string $default  = 'en';
 
     /** FPM fallback — used when not inside a Swoole coroutine. */
@@ -40,10 +45,51 @@ final class Locale
 
     // ── Configuration ─────────────────────────────────────────────────────────
 
+    /**
+     * Where the `<lang>.php` dictionaries live. Say nothing and it is
+     * `resources/lang`, beside `resources/views` — the same shape
+     * {@see \Flytachi\Winter\Kernel\Http\Response\ResponseView} uses.
+     *
+     * ```
+     * Locale::setBasePath(Kernel::$pathRoot . '/translations');
+     * ```
+     *
+     * Call it before the first translation — from `configure()` on the application class,
+     * which runs right after {@see Kernel::init()} has settled the paths. A later call
+     * still takes effect, but anything already translated used the old directory.
+     *
+     * The default exists because its absence read as a broken feature rather than a
+     * missing setting: with no base path the dictionary was looked up at `/<lang>.php`,
+     * the file was never there, and every key came back as itself — no exception, no log
+     * line, nothing to search for.
+     */
     public static function setBasePath(string $path): void
     {
         self::$basePath = rtrim($path, '/\\');
         self::$static   = null;
+    }
+
+    /**
+     * The directory in force: the configured one, or `resources/lang`.
+     *
+     * Resolved on read rather than at boot, because {@see Kernel::init()} settles
+     * `$pathResource` after this class is loaded.
+     */
+    public static function basePath(): string
+    {
+        if (self::$basePath !== null) {
+            return self::$basePath;
+        }
+        // `Kernel::$pathResource` is a typed static: reading it before Kernel::init() is a
+        // fatal, not a null. Translating that early is legitimate (a CLI verb that never
+        // boots the kernel), so answer "nowhere" and stay unmemoised — the next call, once
+        // the paths are settled, resolves properly.
+        if (!isset(Kernel::$pathResource)) {
+            return '';
+        }
+
+        return self::$basePath = rtrim(Kernel::$pathResource, '/\\')
+            . DIRECTORY_SEPARATOR . self::DEFAULT_DIR;
     }
 
     public static function setDefault(string $locale): void
@@ -63,7 +109,7 @@ final class Locale
         $available = self::scanAvailable();
         $lang      = LanguageNegotiator::negotiate($accept, $available, self::$default);
 
-        self::store(new LocaleService(self::$basePath, $lang));
+        self::store(new LocaleService(self::basePath(), $lang));
     }
 
     /**
@@ -71,7 +117,7 @@ final class Locale
      */
     public static function set(string $lang): void
     {
-        self::store(new LocaleService(self::$basePath, $lang));
+        self::store(new LocaleService(self::basePath(), $lang));
     }
 
     // ── API ───────────────────────────────────────────────────────────────────
@@ -118,7 +164,7 @@ final class Locale
 
     private static function makeDefault(): LocaleService
     {
-        $svc = new LocaleService(self::$basePath, self::$default);
+        $svc = new LocaleService(self::basePath(), self::$default);
         self::store($svc);
         return $svc;
     }
@@ -131,10 +177,11 @@ final class Locale
     /** Scan lang/ directory for available locale files. */
     private static function scanAvailable(): array
     {
-        if (self::$basePath === '') {
+        $base = self::basePath();
+        if ($base === '') {
             return [];
         }
-        $files = glob(self::$basePath . DIRECTORY_SEPARATOR . '*.php');
+        $files = glob($base . DIRECTORY_SEPARATOR . '*.php');
         return $files ? array_map(fn($f) => basename($f, '.php'), $files) : [];
     }
 }
