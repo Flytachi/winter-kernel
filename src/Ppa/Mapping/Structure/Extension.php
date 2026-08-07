@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Structure;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Structure;
 
 /**
  * SQL emitter for a PostgreSQL extension declaration.
  *
- * Built from {@see \Flytachi\Winter\K2\Ppa\Mapping\Attributes\Config\Extension}
- * attributes during {@see \Flytachi\Winter\K2\Ppa\DeclarationItem} construction.
+ * Built from {@see \Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Config\Extension}
+ * attributes during {@see \Flytachi\Winter\Kernel\Ppa\DeclarationItem} construction.
  */
 final class Extension implements StructureInterface
 {

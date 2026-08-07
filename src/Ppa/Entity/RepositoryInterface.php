@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Entity;
+namespace Flytachi\Winter\Kernel\Ppa\Entity;
 
 use Flytachi\Winter\Cdo\CDOBind;
 use Flytachi\Winter\Cdo\Connection\CDO;
 use Flytachi\Winter\Cdo\Qb;
-use Flytachi\Winter\K2\Ppa\Repository\RepositoryException;
+use Flytachi\Winter\Kernel\Ppa\Repository\RepositoryException;
 use ValueError;
 
 /**
@@ -19,7 +19,7 @@ use ValueError;
  *
  * Extended by {@see RepositoryCrudInterface} (write operations) and
  * {@see RepositoryViewInterface} (read operations). Implemented by
- * {@see \Flytachi\Winter\K2\Ppa\Repository\RepositoryCore}.
+ * {@see \Flytachi\Winter\Kernel\Ppa\Repository\RepositoryCore}.
  */
 interface RepositoryInterface
 {

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Response\Collector;
+namespace Flytachi\Winter\Kernel\Http\Response\Collector;
 
 use Flytachi\Winter\DI\Contract\CollectorInterface;
-use Flytachi\Winter\K2\Http\Response\AdviceException;
-use Flytachi\Winter\K2\Http\Response\ResponseExceptionInterface;
+use Flytachi\Winter\Kernel\Http\Response\AdviceException;
+use Flytachi\Winter\Kernel\Http\Response\ResponseExceptionInterface;
 use ReflectionClass;
 
 final class ExceptionCollector implements CollectorInterface

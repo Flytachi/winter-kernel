@@ -2,28 +2,35 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Response;
+namespace Flytachi\Winter\Kernel\Http\Response;
 
 use Flytachi\Winter\Base\HttpCode;
-use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
-use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
-use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Kernel;
 
 /**
  * PHP template response — port of ViewBase + View.
  *
- * Configure once per app (e.g. in bootstrap):
- *   ResponseView::setBasePath(__DIR__ . '/resources/views');
+ * Views live in `resources/views` by default; no configuration is needed. Override
+ * the root only for a non-standard layout:
+ *   ResponseView::setBasePath(__DIR__ . '/theme');
  *
  * Factory methods:
  *   ResponseView::view('user/profile', ['user' => $user])
  *   ResponseView::render('layouts/main', 'user/profile', ['user' => $user])
  *
- * Template receives all $data keys as variables plus $content (rendered resource).
- * Resource receives all $data keys as variables.
+ * The two names are not interchangeable: the **template** is the layout, and it
+ * receives all $data keys plus $content (the rendered resource); the **resource** is
+ * the page, and it receives the $data keys. Both are resolved under the same root, so
+ * the directory is named after neither — `views` covers both, with layouts
+ * conventionally under `views/layouts`.
  */
-class ResponseView implements Sendable
+final class ResponseView implements Sendable
 {
+    /** Directory under {@see Kernel::$pathResource} holding the views. */
+    private const string DEFAULT_DIR = 'views';
+
     private static string $basePath = '';
 
     private ?string $templateName;
@@ -39,7 +46,7 @@ class ResponseView implements Sendable
         HttpCode $httpCode,
     ) {
         if (empty(self::getBasePath())) {
-            self::setBasePath(Kernel::$pathResource);
+            self::setBasePath(Kernel::$pathResource . '/' . self::DEFAULT_DIR);
         }
         $this->templateName = $templateName;
         $this->resourceName = $resourceName;
@@ -127,7 +134,7 @@ class ResponseView implements Sendable
                 ? $this->capture($this->templatePath(), $this->data)
                 : $resource;
 
-            return $html . RenderContext::current()?->debugger();
+            return $html;
         } finally {
             RenderContext::pop();
         }

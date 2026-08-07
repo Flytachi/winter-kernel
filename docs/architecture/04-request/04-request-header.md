@@ -5,7 +5,7 @@ are case-insensitive by spec, so `Authorization`, `authorization`, and `AUTHORIZ
 refer to the same header — the framework handles this transparently.
 
 ```php
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestHeader;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestHeader;
 ```
 
 ---

@@ -1,6 +1,6 @@
 # Routing
 
-Winter K2 uses a Spring Boot-style dual-mode router that works identically in Swoole coroutine mode and PHP-FPM.
+Winter uses a Spring Boot-style dual-mode router that works identically in Swoole coroutine mode and PHP-FPM.
 
 ---
 
@@ -9,8 +9,8 @@ Winter K2 uses a Spring Boot-style dual-mode router that works identically in Sw
 Define routes via PHP attributes on controller classes and methods.
 
 ```php
-use Flytachi\Winter\K2\Route\Annotation\{RequestMapping, GetMapping, PostMapping, PutMapping, PatchMapping, DeleteMapping};
-use Flytachi\Winter\K2\Stereotype\Controller;
+use Flytachi\Winter\Kernel\Route\Annotation\{RequestMapping, GetMapping, PostMapping, PutMapping, PatchMapping, DeleteMapping};
+use Flytachi\Winter\Kernel\Http\Stereotype\Controller;
 
 #[RequestMapping('users')]   // class-level prefix → /users
 class UserController extends Controller
@@ -146,13 +146,18 @@ All errors — including middleware abort and validation failures — are caught
 
 ## Static file serving
 
-Required for Swoole (unlike FPM+nginx, Swoole does not serve static files natively):
+Not the router's job. Swoole serves files itself, in C, before PHP is reached — it
+streams them, honours `Range`, and cannot be walked out of the directory with `..`.
+Declare the directory and it never touches the dispatch pipeline:
 
 ```php
-$router->static(Kernel::$pathPublic);
+$server->staticPath('resources/static');   // resources/static/app.css → /app.css
 ```
 
-On a `GET` request, the router checks whether the URI maps to an existing file under `$publicDir`. If found, the file is served directly with auto-detected MIME type and a 24-hour `Cache-Control: public, max-age=86400`. No route matching occurs.
+Static serving is opt-in: say nothing and no file is ever served, which is what an
+API-only service wants. Because those responses never reach PHP, middleware, CORS and
+request logging do not apply to them. See
+[`../configuration/08-runtime.md`](../configuration/08-runtime.md).
 
 ---
 
@@ -163,7 +168,7 @@ On a `GET` request, the router checks whether the URI maps to an existing file u
 Call once in bootstrap **before** `Router::resolve()`:
 
 ```php
-use Flytachi\Winter\K2\Http\Cors;
+use Flytachi\Winter\Kernel\Http\Cors;
 
 Cors::configure(
     origins:       ['https://app.example.com'],
@@ -190,7 +195,7 @@ Global CORS headers are written **before** route dispatch — they appear on 404
 Placed on a controller class or method, `#[CrossOrigin]` **overrides** (does not merge with) the global config:
 
 ```php
-use Flytachi\Winter\K2\Route\Annotation\CrossOrigin;
+use Flytachi\Winter\Kernel\Route\Annotation\CrossOrigin;
 
 // Entire controller
 #[CrossOrigin(origins: ['https://admin.example.com'], credentials: true)]

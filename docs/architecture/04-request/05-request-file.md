@@ -5,7 +5,7 @@ controller pre-validated and ready to use — transfer errors, size limits, and 
 type restrictions are all enforced by `ParameterResolver` before the method is called.
 
 ```php
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestFile;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestFile;
 ```
 
 ---

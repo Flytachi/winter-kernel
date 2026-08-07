@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\Kernel\Kernel;
 
-class Cfg extends Cmd
+final class Cfg extends Cmd
 {
     public static string $title = "manage project configuration, environment and keys";
     private string $templatePath;
@@ -200,37 +200,18 @@ class Cfg extends Cmd
 
     private function dockerArg(): void
     {
-        $runtime = array_key_exists('swoole', $this->args['options']) ? 'swoole' : 'fpm';
-
-        // Single unified template: one stable Dockerfile + docker/ (fpm, swoole,
-        // dependencies.sh) + compose. The runtime is selected by the RUNTIME
-        // build arg, not by which files are copied.
+        // Flat Swoole template: Dockerfile + docker-compose.yml + docker/
+        // (entrypoint.sh, php-opcache.ini, dependencies/*.sh). dev vs prod is the
+        // DEV var in compose; DB drivers / extensions are the dependencies/ scripts.
         multiCopy($this->templatePath . '/Docker', Kernel::$pathRoot);
-        $this->setComposeRuntime($runtime);
 
-        self::printBadge('runtime', $runtime, 34, 36);
         self::printBadge('docker/', 'CREATED', 34, 32);
-        self::printBadge('docker/dependencies.sh', 'CREATED', 34, 32);
+        self::printBadge('docker/dependencies/', 'CREATED', 34, 32);
         self::printBadge('.dockerignore', 'CREATED', 34, 32);
         self::printBadge('docker-compose.yml', 'CREATED', 34, 32);
         self::printBadge('Dockerfile', 'CREATED', 34, 32);
-        self::printInfo("Switch runtime anytime: set RUNTIME (fpm|swoole) in docker-compose.yml");
-        self::printInfo("Add extensions/cron: edit docker/dependencies.sh");
-    }
-
-    /**
-     * Pin the default RUNTIME build arg in the freshly scaffolded compose file.
-     * The template ships `RUNTIME: fpm`; on `--swoole` we flip it to swoole so
-     * `docker compose build` picks the requested runtime out of the box.
-     */
-    private function setComposeRuntime(string $runtime): void
-    {
-        $compose = Kernel::$pathRoot . '/docker-compose.yml';
-        if (is_file($compose)) {
-            $content = file_get_contents($compose);
-            $content = preg_replace('/(RUNTIME:\s*)(?:fpm|swoole)/', '${1}' . $runtime, $content, 1);
-            file_put_contents($compose, $content);
-        }
+        self::printInfo("Run:  docker compose up  (dev, hot-reload)  |  DEV=false docker compose up  (prod)");
+        self::printInfo("DB drivers / extensions: keep or remove docker/dependencies/*.sh");
     }
 
     private function completionArg(): void
@@ -356,11 +337,11 @@ class Cfg extends Cmd
 
         // docker
         self::printLabel("docker — scaffold Docker files", $cl);
-        self::print("--fpm        default runtime = PHP-FPM + Nginx (default)", $cl);
-        self::print("--swoole     default runtime = Swoole HTTP server", $cl);
-        self::print("             one stable Dockerfile serves both; switch via", $cl);
-        self::print("             RUNTIME in docker-compose.yml. Extra packages,", $cl);
-        self::print("             redis/pgsql/mysql, cron → docker/dependencies.sh", $cl);
+        self::print("Swoole image. dev vs prod = DEV in docker-compose.yml:", $cl);
+        self::print("  docker compose up            dev (hot-reload, opcache off)", $cl);
+        self::print("  DEV=false docker compose up  prod (opcache on, no watcher)", $cl);
+        self::print("DB drivers / extensions / cron → docker/dependencies/*.sh", $cl);
+        self::print("  (keep or remove; bcmath, pgsql, mysql, redis shipped)", $cl);
         self::printLabel("docker — scaffold Docker files", $cl);
 
         // examples
@@ -372,9 +353,7 @@ class Cfg extends Cmd
         self::printInfo("call cfg env -i");
         self::printInfo("call cfg env -s");
         self::printInfo("call cfg env -s --file");
-        self::printInfo("call cfg docker           (fpm mode, default)");
-        self::printInfo("call cfg docker --fpm     (explicit fpm mode)");
-        self::printInfo("call cfg docker --swoole  (swoole mode)");
+        self::printInfo("call cfg docker           (scaffold Docker files)");
         self::printInfo("call cfg completion        (print scripts to stdout)");
         self::printInfo("call cfg completion -i     (install: ~/.zsh/completions/_call or ~/.bash_completion.d/call)");
         self::printInfo("call cfg completion -if    (force update installed file)");

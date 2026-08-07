@@ -161,4 +161,4 @@ Each prints the candidate list to stdout, one per line.
 - [03-cfg.md](03-cfg.md#cfg-completion--shell-tab-completion) — installing completion
 - [01-help.md](01-help.md) — `call help` discovery
 - [05-script.md](05-script.md) — `call sc list` (same discovery as `sc` completion)
-- [09-thread.md](09-thread.md) — `call thread list` / `daemons` (same discovery as `thread` completion)
+- [../process/03-control.md](../process/03-control.md) — `call process` / `call daemon`, which the completion discovers the same way

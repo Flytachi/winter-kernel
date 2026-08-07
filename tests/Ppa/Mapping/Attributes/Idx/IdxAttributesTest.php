@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Mapping\Attributes\Idx;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Mapping\Attributes\Idx;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Idx\Index;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Idx\Primary;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Idx\Unique;
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\IndexMethod;
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\IndexType;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\Index as IndexStructure;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Idx\Index;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Idx\Primary;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Idx\Unique;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\IndexMethod;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\IndexType;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Index as IndexStructure;
 use PHPUnit\Framework\TestCase;
 
 final class IdxAttributesTest extends TestCase

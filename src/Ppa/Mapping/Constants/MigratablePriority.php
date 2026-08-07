@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Constants;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Constants;
 
 /**
- * Migration ordering priority for {@see \Flytachi\Winter\K2\Ppa\Mapping\Attributes\Config\Migratable}.
+ * Migration ordering priority for {@see \Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Config\Migratable}.
  *
  * Lower value = earlier in the migration order. Sort ascending.
  */

@@ -16,7 +16,7 @@ RepositoryCore (abstract)
     ├── implements RepositoryMappingInterface — originTable, mapIdentifierColumnName
     └── extends Stereotype (PSR-3 logger)
 
-    ├── + RepositoryCrudTrait   → insert, insertGroup, update, delete, upsert, upsertGroup
+    ├── + RepositoryCrudTrait   → insert, insertBatch, update, delete, upsert, upsertBatch
     └── + RepositoryViewTrait   → find, findAll, findColumn, count, exists, rawFetch
                                    findById, findBy, findAllBy, *OrThrow
 
@@ -109,7 +109,7 @@ $repo->update(['status' => 'inactive'], Qb::lt('last_login', '2024-01-01'));
 |---|------|----------|
 | 12 | [12-view-fetch.md](12-view-fetch.md) | `find`, `findAll`, `findColumn`, `count`, `exists`, `rawFetch` |
 | 13 | [13-static-finders.md](13-static-finders.md) | `findById`, `findBy`, `findAllBy`, `findByIdOrThrow`, `findByOrThrow` |
-| 14 | [14-crud.md](14-crud.md) | `insert`, `insertGroup`, `update`, `delete`, `upsert`, `upsertGroup` |
+| 14 | [14-crud.md](14-crud.md) | `insert`, `insertBatch`, `update`, `delete`, `upsert`, `upsertBatch` |
 
 ### Utilities
 

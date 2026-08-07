@@ -1,0 +1,29 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Flytachi\Winter\Kernel\Tests\Process\Fixtures;
+
+use Flytachi\Winter\Kernel\Process\Stereotype\Daemon;
+use Flytachi\Winter\Kernel\Process\Daemon\RestartMode;
+use Flytachi\Winter\Kernel\Process\Daemon\RestartPolicy;
+
+/**
+ * Integration fixture: worker always crashes. Exercises restart-into-the-same-slot
+ * with back-off and the maxRestarts ceiling → FAILED (self-terminates).
+ */
+class CrashCapDaemon extends Daemon
+{
+    protected int $replicas = 1;
+
+    protected function restart(): RestartPolicy
+    {
+        return new RestartPolicy(mode: RestartMode::ON_FAILURE, maxRestarts: 2, backoff: 0.1);
+    }
+
+    protected function workerRun(): void
+    {
+        usleep(80_000);
+        throw new \RuntimeException('boom');
+    }
+}

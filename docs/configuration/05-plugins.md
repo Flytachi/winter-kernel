@@ -1,9 +1,9 @@
 # Plugins
 
-Plugins are regular Composer packages that contribute controllers, exception handlers, and DI services under a URL prefix. Each plugin registration is one line in your `Boot::plugins()` hook:
+Plugins are regular Composer packages that contribute controllers, exception handlers, and DI services under a URL prefix. Each plugin is one attribute on the application class:
 
 ```php
-Plugin::registry('acme/billing-plugin', '/billing');
+#[Import('acme/billing-plugin', '/billing')]
 ```
 
 After that, every `#[Controller]` discovered under `vendor/acme/billing-plugin/src/` is mounted under `/billing/...`. No extra wiring needed.
@@ -15,17 +15,17 @@ After that, every `#[Controller]` discovered under `vendor/acme/billing-plugin/s
 Override `plugins()` in your `Boot` class:
 
 ```php
-use Flytachi\Winter\K2\Plugin;
+use Flytachi\Winter\Kernel\App\Attribute\Import;
+use Flytachi\Winter\Kernel\WinterApplication;
 
-class Boot extends BaseBoot
-{
-    protected static function plugins(): void
-    {
-        Plugin::registry('acme/auth-plugin',    '/auth');
-        Plugin::registry('acme/billing-plugin', '/billing');
-    }
-}
+#[EnableWeb]
+#[Import('acme/auth-plugin',    '/auth')]
+#[Import('acme/billing-plugin', '/billing')]
+final class Application extends WinterApplication { /* ... */ }
 ```
+
+A package that must be present but is not installed fails the boot; pass
+`required: false` to make it optional.
 
 ### `Plugin::registry()` parameters
 
@@ -57,11 +57,11 @@ Source: `src/Plugin.php`.
 Plugin registration runs **before** the route scan. During `Router::fromScan()` (or the first request after a clean cache):
 
 ```
-1. Boot::plugins() runs            ← Plugin::registry() entries collected
+1. #[Import] attributes applied    ← plugin packages registered
 2. Router::fromScan(pathRoot)      ← scans your application src/
 3. For each registered plugin:
      scan vendor/<package>/src/     ← MappingCollector with prefix
-4. Health::configure() endpoints   ← only the app-level ones
+4. #[EnableActuator] endpoints     ← only the app-level ones
 5. Cache compiled routes           ← if DEBUG=false
 ```
 

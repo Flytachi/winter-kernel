@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Entity;
+namespace Flytachi\Winter\Kernel\Ppa\Entity;
 
 /**
  * Marker interface for entity classes with custom column selection mapping.

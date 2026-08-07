@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal;
 
 use Attribute;
 
 #[Attribute(Attribute::TARGET_PROPERTY)]
-readonly class Varchar implements AttributeDbType
+final readonly class Varchar implements AttributeDbType
 {
     /**
      * @param int $length The maximum length of the VARCHAR string. Defaults to 255.

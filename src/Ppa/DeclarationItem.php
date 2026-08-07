@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa;
+namespace Flytachi\Winter\Kernel\Ppa;
 
 use Flytachi\Winter\Cdo\Config\Common\DbConfigInterface;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Config\Extension as ExtensionAttribute;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Config\Migratable;
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\MigratablePriority;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\Extension as ExtensionStructure;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\Table;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Config\Extension as ExtensionAttribute;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Config\Migratable;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\MigratablePriority;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Extension as ExtensionStructure;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Table;
 use ReflectionAttribute;
 use ReflectionClass;
 

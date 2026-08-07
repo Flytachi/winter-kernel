@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Entity;
+namespace Flytachi\Winter\Kernel\Ppa\Entity;
 
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\Cdo\Qb;
-use Flytachi\Winter\K2\Ppa\Repository\RepositoryException;
-use Flytachi\Winter\K2\Ppa\Stereotype\Repository;
+use Flytachi\Winter\Kernel\Ppa\Repository\RepositoryException;
+use Flytachi\Winter\Kernel\Ppa\Stereotype\Repository;
 
 /**
  * Contract for repository classes that support read operations.
@@ -16,8 +16,8 @@ use Flytachi\Winter\K2\Ppa\Stereotype\Repository;
  * raw SQL execution, single/collection fetch, count, exists, and
  * static convenience finders with optional throw-on-miss variants.
  *
- * Implemented by {@see \Flytachi\Winter\K2\Ppa\Repository\RepositoryViewTrait}
- * and exposed via {@see \Flytachi\Winter\K2\Ppa\Stereotype\RepositoryView} and
+ * Implemented by {@see \Flytachi\Winter\Kernel\Ppa\Repository\RepositoryViewTrait}
+ * and exposed via {@see \Flytachi\Winter\Kernel\Ppa\Stereotype\RepositoryView} and
  * {@see Repository}.
  *
  * `TEntity` is the entity class declared by a concrete repository via

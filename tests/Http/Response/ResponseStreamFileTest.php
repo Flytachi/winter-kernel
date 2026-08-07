@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Http\Response;
+namespace Flytachi\Winter\Kernel\Tests\Http\Response;
 
 use Flytachi\Winter\Base\HttpCode;
-use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
-use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
-use Flytachi\Winter\K2\Http\Response\ResponseStreamFile;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\Response\ResponseStreamFile;
 use PHPUnit\Framework\TestCase;
 
 // ── Spy HttpResponse — records everything send() does ─────────────────────────

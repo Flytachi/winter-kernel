@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Constraint;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Constraint;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\ForeignKey;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\ForeignKey;
 
 interface AttributeDbConstraintForeign extends AttributeDbConstraint
 {

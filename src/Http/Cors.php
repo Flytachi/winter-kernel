@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http;
+namespace Flytachi\Winter\Kernel\Http;
 
 final class Cors
 {

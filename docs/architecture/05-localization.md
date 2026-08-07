@@ -11,7 +11,7 @@ Coroutine-safe: each Swoole coroutine carries its own locale state. In FPM mode 
 **1. Bootstrap (once, in your Boot class):**
 
 ```php
-use Flytachi\Winter\K2\Localization\Locale;
+use Flytachi\Winter\Kernel\Localization\Locale;
 
 Locale::setBasePath(__DIR__ . '/lang');
 Locale::setDefault('en');

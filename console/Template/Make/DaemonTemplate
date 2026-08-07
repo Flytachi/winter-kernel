@@ -2,23 +2,25 @@
 
 namespace __namespace__;
 
-use Flytachi\Winter\K2\Stereotype\Daemon;
+use Flytachi\Winter\Kernel\Process\Stereotype\Daemon;
 
-class __className__ extends Daemon
+final class __className__ extends Daemon
 {
-    public function resolution(mixed $data = null): void
-    {
-        $this->logger?->info('START');
-        $this->prepare();
-        $pid = $this->forkAnonymous();
-        $this->wait($pid, function ($pid, $status) {
-            $this->logger?->info("PROC finally (status {$status})");
-        });
-        $this->logger?->info('END');
-    }
+    /** Baseline fleet size — replicas the master keeps alive. */
+    protected int $replicas = 3;
 
-    public function anonymousResolution(mixed $data = null): void
+    /**
+     * The worker body — the daemon is also the worker, so this runs in every
+     * replica. (Alternatively drop this and set `$workerClass` to a Process class.)
+     */
+    protected function workerRun(): void
     {
-        $this->logger?->info("PROC running");
+        while ($this->isRunning()) {
+            $this->markBusy();
+            // ... work ...
+            $this->markIdle();
+
+            $this->sleep(1.0);
+        }
     }
 }

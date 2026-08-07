@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal;
 
 use Attribute;
 
 #[Attribute(Attribute::TARGET_PROPERTY)]
-readonly class BigInteger implements AttributeDbType
+final readonly class BigInteger implements AttributeDbType
 {
     public function supports(array $phpTypes): bool
     {

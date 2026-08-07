@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Hybrid;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Hybrid;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Additive\AttributeDbAdditive;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\AttributeDb;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Idx\AttributeDbIdx;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\AttributeDbType;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Sub\AttributeDbSubType;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Additive\AttributeDbAdditive;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\AttributeDb;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Idx\AttributeDbIdx;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\AttributeDbType;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Sub\AttributeDbSubType;
 
 interface AttributeDbHybrid extends AttributeDb
 {

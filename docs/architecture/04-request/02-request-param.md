@@ -5,7 +5,7 @@ key-value pair that follows the `?` separator in a URL — it is part of the req
 not part of the path that the router uses to select the route.
 
 ```php
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestParam;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestParam;
 ```
 
 ---

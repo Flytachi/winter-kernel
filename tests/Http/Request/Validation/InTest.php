@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Http\Request\Validation;
+namespace Flytachi\Winter\Kernel\Tests\Http\Request\Validation;
 
-use Flytachi\Winter\K2\Http\Request\Validation\In;
+use Flytachi\Winter\Kernel\Http\Request\Validation\In;
 use PHPUnit\Framework\TestCase;
 
 class InTest extends TestCase

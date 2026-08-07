@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Request\Validation;
+namespace Flytachi\Winter\Kernel\Http\Request\Validation;
 
 use Attribute;
 
@@ -24,7 +24,7 @@ use Attribute;
  * ```
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-readonly class Size implements Constraint
+final readonly class Size implements Constraint
 {
     /**
      * @param int $min Required. Lower bound (inclusive). When `$max` is omitted, also acts as the exact required size.

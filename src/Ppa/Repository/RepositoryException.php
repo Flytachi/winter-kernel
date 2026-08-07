@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Repository;
+namespace Flytachi\Winter\Kernel\Ppa\Repository;
 
 use Flytachi\Winter\Base\Exception\ExceptionLogLevel;
 use Flytachi\Winter\Base\Exception\ExceptionTrait;

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Configuration;
+namespace Flytachi\Winter\Kernel\Tests\Configuration;
 
 use Flytachi\FileStore\FileStorage;
-use Flytachi\Winter\K2\Core\KernelStore;
-use Flytachi\Winter\K2\Kernel;
+use Flytachi\Winter\Kernel\Core\KernelStore;
+use Flytachi\Winter\Kernel\Kernel;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
@@ -23,7 +23,7 @@ final class KernelStoreTest extends TestCase
         mkdir($this->tmpDir . '/volatile');
 
         // KernelConfig holds path state in static properties — point them at our tempdir.
-        $cfg                                   = new ReflectionClass(\Flytachi\Winter\K2\Core\KernelConfig::class);
+        $cfg                                   = new ReflectionClass(\Flytachi\Winter\Kernel\Core\KernelConfig::class);
         $cfg->getProperty('pathStorageCache')->setValue(null, $this->tmpDir . '/cache');
         $cfg->getProperty('pathStorageRunnable')->setValue(null, $this->tmpDir . '/runnable');
         $cfg->getProperty('pathStorageVolatile')->setValue(null, $this->tmpDir . '/volatile');

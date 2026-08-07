@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Integration\Migration;
+namespace Flytachi\Winter\Kernel\Tests\Integration\Migration;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\FKAction;
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\IndexType;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\CheckConstraint;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\Column;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\Extension;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\ForeignKey;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\Index;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\Table;
-use Flytachi\Winter\K2\Tests\Integration\Fixtures\IntegrationTestCase;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\FKAction;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\IndexType;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\CheckConstraint;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Column;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Extension;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\ForeignKey;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Index;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Table;
+use Flytachi\Winter\Kernel\Tests\Integration\Fixtures\IntegrationTestCase;
 use PHPUnit\Framework\Attributes\Group;
 
 /**

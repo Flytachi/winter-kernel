@@ -15,7 +15,7 @@
     "autoload": {
         "psr-4": {
             "Flytachi\\Winter\\Console\\": "console/",
-            "Flytachi\\Winter\\K2\\": "src/"
+            "Flytachi\\Winter\\Kernel\\": "src/"
         },
         "files": [
             "function/dependencies.php"
@@ -23,17 +23,17 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Flytachi\\Winter\\K2\\Tests\\": "tests"
+            "Flytachi\\Winter\\Kernel\\Tests\\": "tests"
         }
     },
     "bin": ["wKernelRunner"],
     "require": {
         "php": ">=8.4",
-        "flytachi/winter-di": "^1.0",
+        "flytachi/winter-di": "^2.0",
         "flytachi/winter-base": "^3.0",
         "flytachi/winter-logger": "^1.0",
         "flytachi/winter-thread": "^3.0",
-        "flytachi/winter-cdo": "^3.0",
+        "flytachi/winter-cdo": "^4.0",
         "flytachi/winter-cache": "^1.0",
         "flytachi/file-store": "^2.0",
         "vlucas/phpdotenv": "^5.6",

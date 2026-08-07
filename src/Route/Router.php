@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Route;
+namespace Flytachi\Winter\Kernel\Route;
 
 use Flytachi\Winter\Base\Exception\DebugDumpException;
 use Flytachi\Winter\Base\Exception\ExceptionLogLevel;
@@ -10,30 +10,30 @@ use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\DI\ReflectionCache;
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\DI\Container;
-use Flytachi\Winter\DI\Scanner;
-use Flytachi\Winter\K2\Core\KernelStore;
-use Flytachi\Winter\K2\Kernel;
-use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
-use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
-use Flytachi\Winter\K2\Http\Header;
-use Flytachi\Winter\K2\Http\ParameterResolver;
-use Flytachi\Winter\K2\Http\Response\Collector\ExceptionCollector;
-use Flytachi\Winter\K2\Localization\Locale;
-use Flytachi\Winter\K2\Http\Response\ExceptionWrapper;
-use Flytachi\Winter\K2\Http\Response\RenderContext;
-use Flytachi\Winter\K2\Http\Response\ResponseEntity;
-use Flytachi\Winter\K2\Http\Response\ResponseException;
-use Flytachi\Winter\K2\Http\Response\Sendable;
-use Flytachi\Winter\K2\Http\Cors;
-use Flytachi\Winter\K2\Http\Health\Health;
-use Flytachi\Winter\K2\Http\Health\HealthIndicatorInterface;
-use Flytachi\Winter\K2\Plugin;
-use Flytachi\Winter\K2\Route\Collector\MappingCollector;
-use Flytachi\Winter\K2\Stereotype\Middleware;
+use Flytachi\Winter\Kernel\Core\ClassScanner;
+use Flytachi\Winter\Kernel\Core\KernelStore;
+use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\Header;
+use Flytachi\Winter\Kernel\Http\ParameterResolver;
+use Flytachi\Winter\Kernel\Http\Response\Collector\ExceptionCollector;
+use Flytachi\Winter\Kernel\Localization\Locale;
+use Flytachi\Winter\Kernel\Http\Response\ExceptionWrapper;
+use Flytachi\Winter\Kernel\Http\Response\ResponseEntity;
+use Flytachi\Winter\Kernel\Http\Response\ResponseException;
+use Flytachi\Winter\Kernel\Http\Response\Sendable;
+use Flytachi\Winter\Kernel\Http\Cors;
+use Flytachi\Winter\Kernel\Http\Health\Health;
+use Flytachi\Winter\Kernel\Http\Health\HealthIndicatorInterface;
+use Flytachi\Winter\Kernel\Http\Health\Status;
+use Flytachi\Winter\Kernel\Plugin;
+use Flytachi\Winter\Kernel\Route\Collector\MappingCollector;
+use Flytachi\Winter\Kernel\Http\Stereotype\Middleware;
 use Flytachi\Winter\Base\HttpCode;
 
 /**
- * K2 Router — dual-mode (Swoole + FPM), Spring Boot-style.
+ * Router — dual-mode (Swoole + FPM), Spring Boot-style.
  *
  * ── Route registration (manual) ─────────────────────────────────────────────
  *   $router->get('/users',          [UserController::class, 'index']);
@@ -51,13 +51,14 @@ use Flytachi\Winter\Base\HttpCode;
  *   // Per-route override: #[CrossOrigin] attribute on controller class or method
  *
  * ── Static files ─────────────────────────────────────────────────────────────
- *   $router->static(Kernel::$pathPublic);
+ *   Not the router's job. Swoole serves them itself, in C, before PHP is reached —
+ *   declare the directory with {@see \Flytachi\Winter\Kernel\App\Config\ServerSettings::staticPath()}.
  *
  * ── Dispatch ─────────────────────────────────────────────────────────────────
  *   $router->handle(new SwooleRequest($req), new SwooleResponse($res));
  *   $router->handle(new FpmRequest(),        new FpmResponse());
  */
-class Router
+final class Router
 {
     /** @var array<string, array<string, mixed>> [METHOD][path] => handler */
     private array $staticRoutes  = [];
@@ -66,23 +67,6 @@ class Router
     private array $dynamicRoutes = [];
 
     private ?Dispatcher $dispatcher = null;
-
-    private ?string $publicDir = null;
-
-    // ── Static file serving ───────────────────────────────────────────────────
-
-    /**
-     * Serve static files from $publicDir for GET requests that match an existing file.
-     * Required for Swoole — unlike FPM+nginx, Swoole does not serve files natively.
-     *
-     * Example:
-     *   $router->static(__DIR__ . '/public');
-     */
-    public function static(string $publicDir): static
-    {
-        $this->publicDir = rtrim($publicDir, '/\\');
-        return $this;
-    }
 
     // ── Route registration ────────────────────────────────────────────────────
 
@@ -101,25 +85,31 @@ class Router
      *     maxAge:int,
      *     vary:string[]
      * }|null $cors
+     * @param int|null $timeout Per-route deadline in seconds from #[Timeout]; 0 opts
+     *   the route out, null leaves the global deadline in force.
      */
     public function add(
         string $method,
         string $path,
         mixed $handler,
         array $middlewares = [],
-        ?array $cors = null
+        ?array $cors = null,
+        ?int $timeout = null
     ): static {
         $this->dispatcher = null;
 
         $method = strtoupper($method);
 
-        if ($middlewares !== [] || $cors !== null) {
+        if ($middlewares !== [] || $cors !== null || $timeout !== null) {
             $stored = ['__handler' => $handler];
             if ($middlewares !== []) {
                 $stored['__middlewares'] = $middlewares;
             }
             if ($cors !== null) {
                 $stored['__cors'] = $cors;
+            }
+            if ($timeout !== null) {
+                $stored['__timeout'] = $timeout;
             }
         } else {
             $stored = $handler;
@@ -182,7 +172,7 @@ class Router
         $mappingCollector   = new MappingCollector($router);
         $exceptionCollector = new ExceptionCollector();
 
-        Scanner::run($rootDir)
+        ClassScanner::scanner($rootDir)
             ->exclude($exclude)
             ->collect($mappingCollector)
             ->collect($exceptionCollector)
@@ -191,7 +181,7 @@ class Router
         foreach (Plugin::getPlugins() as $prefix => $path) {
             $pluginSrc = $path . '/src';
             if (is_dir($pluginSrc)) {
-                Scanner::run($pluginSrc)
+                ClassScanner::scanner($pluginSrc)
                     ->collect(new MappingCollector($router, $prefix))
                     ->execute();
             }
@@ -210,7 +200,7 @@ class Router
     /** Add attribute-scanned routes from $rootDir to this Router instance. */
     public function scan(string $rootDir, array $exclude = []): static
     {
-        Scanner::run($rootDir)
+        ClassScanner::scanner($rootDir)
             ->exclude($exclude)
             ->collect(new MappingCollector($this))
             ->execute();
@@ -369,11 +359,39 @@ class Router
                 throw new ResponseException('Actuator endpoint not found', HttpCode::NOT_FOUND);
             }
 
-            return ResponseEntity::ok($indicator->{$method}());
+            $body = $indicator->{$method}();
+
+            return ResponseEntity::status(self::healthCode($method, $body))->body($body);
         };
 
         $this->add('GET', '/actuator', $handler, $middlewares);
         $this->add('GET', '/actuator/{method}', $handler, $middlewares);
+    }
+
+    /**
+     * The response code carrying the health verdict: `down` → 503, everything else → 200.
+     *
+     * Without this the endpoint answered 200 while reporting `status: down` inside, so
+     * every consumer that reads the code rather than the body — a container health check,
+     * a k8s liveness/readiness probe, a load balancer — saw a dead application as healthy.
+     *
+     * `degraded` deliberately stays 200: it means working worse, not not working, and a
+     * probe that pulls the instance out of rotation over it would turn a partial outage
+     * into a full one.
+     *
+     * Only `health` reports a status; `info`, `metrics` and the rest are plain reads.
+     */
+    private static function healthCode(string $method, mixed $body): HttpCode
+    {
+        if ($method !== 'health' || !is_array($body)) {
+            return HttpCode::OK;
+        }
+        $status = $body['status'] ?? null;
+        $status = $status instanceof Status ? $status->value : $status;
+
+        return is_string($status) && strtolower($status) === Status::Down->value
+            ? HttpCode::SERVICE_UNAVAILABLE
+            : HttpCode::OK;
     }
 
     // ── Dispatch ──────────────────────────────────────────────────────────────
@@ -401,16 +419,15 @@ class Router
      *   1. Header::init()            — snapshot request headers into the static bag
      *   2. Locale::initFromRequest() — detect Accept-Language / locale cookie
      *   3. Swoole context            — stamp start time, method, uri in coroutine ctx
-     *   4. Static file check         — short-circuit for existing files (GET only)
-     *   5. Global CORS headers       — applied before dispatch (covers 404 / 500 too)
-     *   6. OPTIONS preflight         — returns 204 before handler invocation
-     *   7. Route dispatch            — O(1) static map → chunked regex dynamic scan
-     *   8. Per-route #[CrossOrigin]  — overrides global CORS if present
-     *   9. Middleware before()       — run in declaration order
-     *  10. Controller method         — resolved via ReflectionCache + ParameterResolver
-     *  11. Middleware after()        — run in reverse order
-     *  12. Response serialise        — Sendable::send() or ResponseEntity::ok()->send()
-     *  13. Error handling            — ExceptionWrapper maps Throwable → HTTP response
+     *   4. Global CORS headers       — applied before dispatch (covers 404 / 500 too)
+     *   5. OPTIONS preflight         — returns 204 before handler invocation
+     *   6. Route dispatch            — O(1) static map → chunked regex dynamic scan
+     *   7. Per-route #[CrossOrigin]  — overrides global CORS if present
+     *   8. Middleware before()       — run in declaration order
+     *   9. Controller method         — resolved via ReflectionCache + ParameterResolver
+     *  10. Middleware after()        — run in reverse order
+     *  11. Response serialise        — Sendable::send() or ResponseEntity::ok()->send()
+     *  12. Error handling            — ExceptionWrapper maps Throwable → HTTP response
      */
     public function handle(HttpRequest $request, HttpResponse $response): void
     {
@@ -424,15 +441,18 @@ class Router
             $ctx['__request_uri']    = $request->getUri();
         }
 
-        // static - files (js,css,media)
-        if (Runtime::isSwoole() && $this->publicDir !== null && strtoupper($request->getMethod()) === 'GET') {
-            $uri  = $request->getUri();
-            $path = ($pos = strpos($uri, '?')) !== false ? substr($uri, 0, $pos) : $uri;
-            $file = $this->publicDir . $path;
-            if (is_file($file)) {
-                $this->serveStaticFile($file, $response);
-                return;
-            }
+        // Watched from here, with the global deadline; a route carrying its own
+        // #[Timeout] adjusts it below, once dispatch has said which route this is.
+        // Released via defer so it happens however the request ends — including the
+        // cancellation the watchdog itself raises.
+        //
+        // The time already spent queueing counts against the deadline. Under
+        // worker_max_concurrency a request's coroutine is not created until the worker
+        // lets it through, so without this a request that waited three seconds would
+        // start a fresh thirty — while the client has been waiting the whole time.
+        $watched = RequestWatchdog::register(elapsed: self::waitedInQueue($request));
+        if ($watched !== null) {
+            \Swoole\Coroutine::defer(static fn() => RequestWatchdog::release($watched));
         }
 
         try {
@@ -442,7 +462,6 @@ class Router
                 LoggerFactory::getLogger(self::class)->debug(
                     $request->getClientIp() . " -- $method " . $request->getUri()
                 );
-                RenderContext::setRoutes($this->getRoutesSummary());
             }
 
             // ── Global CORS applied eagerly (covers 404, 405, and errors too) ─
@@ -463,6 +482,14 @@ class Router
                 $routeCors = $this->extractRouteCors($result->handler);
                 if ($routeCors !== null) {
                     $this->writeCorsHeaders($request, $response, $routeCors);
+                }
+            }
+
+            // ── Per-route #[Timeout] overrides the global deadline ────────────
+            if ($result->status === RouteResult::FOUND) {
+                $routeTimeout = $this->extractRouteTimeout($result->handler);
+                if ($routeTimeout !== null) {
+                    RequestWatchdog::extend($watched, (float) $routeTimeout);
                 }
             }
 
@@ -509,9 +536,6 @@ class Router
                 $object    = Container::getInstance()->make($class);
                 $refMethod = ReflectionCache::method($class, $methodName);
                 $args      = ParameterResolver::resolve($refMethod, $req, $res, $params);
-                if (env('DEBUG', false)) {
-                    RenderContext::setMeta($class, $methodName);
-                }
                 $result    = $refMethod->invokeArgs($object, $args);
             } else {
                 $result = ($handler)($req, $res, $params);
@@ -520,6 +544,13 @@ class Router
             // ── Run after() in reverse order ──────────────────────────────────
             foreach (array_reverse($stack) as $mw) {
                 $result = $mw->after($result);
+            }
+
+            // A handler that swallowed the watchdog's cancellation arrives here having
+            // completed no I/O — every wait was cut short — so its result was built from
+            // queries that never ran. Answer the deadline instead of that.
+            if (RequestWatchdog::isCurrentExpired()) {
+                throw new ResponseException('Gateway Timeout', HttpCode::GATEWAY_TIMEOUT);
             }
 
             // ── Serialize return value ────────────────────────────────────────
@@ -535,6 +566,12 @@ class Router
 
     private function sendError(\Throwable $e, HttpResponse $res): void
     {
+        // Past the deadline, whatever surfaced is a consequence of the cancellation —
+        // typically Swoole\Coroutine\CanceledException, raised wherever the request
+        // happened to be waiting. On its own that is an empty message with code 0, which
+        // would be logged as a server fault and answered 500. Say what actually happened.
+        $e = $this->asTimeout($e);
+
         if ($e instanceof DebugDumpException) {
             $res->status(200);
             $res->header('Content-Type', 'text/html; charset=utf-8');
@@ -703,21 +740,61 @@ class Router
         return null;
     }
 
-    // ── Static file helper ────────────────────────────────────────────────────
-
-    private function serveStaticFile(string $filePath, HttpResponse $response): void
+    /**
+     * Extract the per-route deadline stored by {@see Collector\MappingCollector} under
+     * '__timeout' — the seconds from a route's own `#[Timeout]`, or null when it has
+     * none and the global deadline stands. `0` there means the route opts out.
+     */
+    private function extractRouteTimeout(mixed $stored): ?int
     {
-        $content = file_get_contents($filePath);
-        if ($content === false) {
-            $response->status(500);
-            $response->end('');
-            return;
+        if (is_array($stored) && array_key_exists('__timeout', $stored)) {
+            return $stored['__timeout'];
         }
-        $mime = mime_content_type($filePath) ?: 'application/octet-stream';
-        $response->status(200);
-        $response->header('Content-Type', $mime);
-        $response->header('Cache-Control', 'public, max-age=86400');
-        $response->end($content);
+        return null;
+    }
+
+    /**
+     * Presents anything raised after the deadline as `504 Gateway Timeout`.
+     *
+     * Applied where the response is built rather than where the request is dispatched,
+     * because {@see invoke()} has a `catch` of its own: it answered the raw
+     * `CanceledException` — code 0, empty message, logged as a server fault and sent as
+     * 500 — before the outer handler ever saw it, and the outer 504 then arrived too late
+     * to change the response and only added a second log line.
+     *
+     * A `ResponseException` already carrying 504 is left alone, so re-wrapping cannot
+     * stack. Everything else on a request that did not time out passes through untouched:
+     * a request that timed out *and* had a real bug still reports the bug as the cause.
+     */
+    private function asTimeout(\Throwable $e): \Throwable
+    {
+        if ($e instanceof ResponseException && $e->getCode() === HttpCode::GATEWAY_TIMEOUT->value) {
+            return $e;
+        }
+        if (!RequestWatchdog::isCurrentExpired()) {
+            return $e;
+        }
+
+        return new ResponseException('Gateway Timeout', HttpCode::GATEWAY_TIMEOUT, $e);
+    }
+
+    /**
+     * Seconds this request spent waiting to be picked up, before any of it ran.
+     *
+     * Swoole stamps `request_time_float` when the packet arrives, which is *before*
+     * `worker_max_concurrency` decides whether there is room to run it — verified with a
+     * limit of one and a 0.3-second handler: five simultaneous requests reported 0.000,
+     * 0.301, 0.603, 0.904 and 1.206 seconds of waiting.
+     *
+     * Returns 0.0 when the stamp is missing or nonsensical (a clock adjustment between
+     * arrival and now would otherwise charge the request for it), so the deadline then
+     * behaves exactly as it did before.
+     */
+    private static function waitedInQueue(HttpRequest $request): float
+    {
+        $arrived = $request->getServerParam('request_time_float');
+
+        return is_numeric($arrived) ? max(0.0, microtime(true) - (float) $arrived) : 0.0;
     }
 
     // ── Debug helpers ─────────────────────────────────────────────────────────

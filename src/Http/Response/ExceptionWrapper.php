@@ -2,11 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Response;
+namespace Flytachi\Winter\Kernel\Http\Response;
 
 use Composer\Autoload\ClassLoader;
 use Flytachi\Winter\DI\ReflectionCache;
-use Flytachi\Winter\K2\Ppa\Repository\RepositoryException;
+use Flytachi\Winter\Kernel\Http\Stereotype\ExceptionResponseBase;
+use Flytachi\Winter\Kernel\Ppa\Repository\RepositoryException;
 use ReflectionClass;
 use ReflectionException;
 
@@ -30,8 +31,7 @@ use ReflectionException;
  *   match expression to mask new sensitive exception types. redactMessage()
  *   MUTATES the Throwable's $message in place (clone is not used — some
  *   Throwables in PHP are not cloneable), so callers must log the original
- *   message BEFORE invoking wrap(). Router::sendError() and
- *   BaseBoot::handleBootError() already follow this order.
+ *   message BEFORE invoking wrap(). Router::sendError() already follows this order.
  *
  * Specific handlers (with exception class names) are tried first.
  * Catch-all handlers (without class names) are tried last.

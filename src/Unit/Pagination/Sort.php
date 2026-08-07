@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Unit\Pagination;
+namespace Flytachi\Winter\Kernel\Unit\Pagination;
 
 /**
  * Sort direction for ordered queries — used by {@see CursorKey} and forwarded

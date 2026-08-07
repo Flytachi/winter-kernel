@@ -2,8 +2,10 @@
 
 namespace __namespace__;
 
-use Flytachi\Winter\K2\Ppa\Stereotype\Repository;
+use Flytachi\Winter\DI\Attribute\Singleton;
+use Flytachi\Winter\Kernel\Ppa\Stereotype\Repository;
 
+#[Singleton]
 class __className__ extends Repository
 {
     protected string $dbConfigClassName;

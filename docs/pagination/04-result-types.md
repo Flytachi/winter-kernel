@@ -150,7 +150,7 @@ See [03-cursor.md](03-cursor.md).
 ## Example — full round trip
 
 ```php
-use Flytachi\Winter\K2\Unit\Pagination\Paginator;
+use Flytachi\Winter\Kernel\Unit\Pagination\Paginator;
 
 // Controller
 public function index(Request $req): JsonResponse
@@ -205,7 +205,7 @@ Generic over `<TItem>`:
  */
 ```
 
-Returned by {@see \Flytachi\Winter\K2\Unit\Wrapper::paginator()}. Pairs with
+Returned by {@see \Flytachi\Winter\Kernel\Unit\Wrapper::paginator()}. Pairs with
 {@see WrapMeta}. See [05-wrapper.md](05-wrapper.md) for the full Wrapper
 contract.
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes;
 
 interface AttributeDb
 {

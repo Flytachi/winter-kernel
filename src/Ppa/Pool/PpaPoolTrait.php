@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Pool;
+namespace Flytachi\Winter\Kernel\Ppa\Pool;
 
 /**
  * Default pool-settings implementation for {@see PpaPoolConfigInterface}.
@@ -23,6 +23,9 @@ namespace Flytachi\Winter\K2\Ppa\Pool;
  *
  * @property int   $poolMaxConnections Maximum number of CDO connections in the pool (default: 5).
  * @property float $poolWaitTimeout    Seconds to wait for a free slot before {@see PpaPoolException} (default: 3.0).
+ * @property float $keepaliveTime      Background probe of idle connections; 0 = off (default: 0.0). Swoole only.
+ * @property float $idleTimeout        Close idle connections after N seconds; 0 = never (default: 0.0). Swoole only.
+ * @property int   $minimumIdle        Warm connection floor; 0 = fully lazy (default: 0). Swoole only.
  */
 trait PpaPoolTrait
 {
@@ -34,5 +37,20 @@ trait PpaPoolTrait
     public function getPoolWaitTimeout(): float
     {
         return $this->poolWaitTimeout ?? 3.0;
+    }
+
+    public function getKeepaliveTime(): float
+    {
+        return $this->keepaliveTime ?? 0.0;
+    }
+
+    public function getIdleTimeout(): float
+    {
+        return $this->idleTimeout ?? 0.0;
+    }
+
+    public function getMinimumIdle(): int
+    {
+        return $this->minimumIdle ?? 0;
     }
 }

@@ -2,22 +2,22 @@
 
 namespace __namespace__;
 
-use Flytachi\Winter\K2\Stereotype\Process;
+use Flytachi\Winter\Kernel\Process\Stereotype\Process;
 
-class __className__ extends Process
+final class __className__ extends Process
 {
-    public function resolution(mixed $data = null): void
+    /**
+     * The process body — loop while the process is running. A stop signal flips
+     * isRunning() to false; an idle sleep() is interrupted at once.
+     */
+    public function run(): void
     {
-        $this->logger->info('START');
-        $pid = $this->forkAnonymous();
-        $this->wait($pid, function ($pid, $status) {
-            $this->logger->info("fork finally (status {$status})");
-        });
-        $this->logger->info('END');
-    }
+        while ($this->isRunning()) {
+            $this->markBusy();
+            // ... work ...
+            $this->markIdle();
 
-    public function anonymousResolution(mixed $data = null): void
-    {
-        $this->logger->info("fork running");
+            $this->sleep(1.0);
+        }
     }
 }

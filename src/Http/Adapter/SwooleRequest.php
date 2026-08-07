@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Adapter;
+namespace Flytachi\Winter\Kernel\Http\Adapter;
 
-use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
 use Swoole\Http\Request;
 
 /**
@@ -61,7 +61,7 @@ final class SwooleRequest implements HttpRequest
         return $this->request->files ?? [];
     }
 
-    public function getServerParam(string $key): ?string
+    public function getServerParam(string $key): string|int|float|null
     {
         return $this->request->server[$key] ?? null;
     }

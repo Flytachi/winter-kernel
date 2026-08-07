@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Pool;
+namespace Flytachi\Winter\Kernel\Ppa\Pool;
 
 class PpaPoolException extends \RuntimeException
 {

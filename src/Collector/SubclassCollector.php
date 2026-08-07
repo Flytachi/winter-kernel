@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Collector;
+namespace Flytachi\Winter\Kernel\Collector;
 
 use Flytachi\Winter\DI\Contract\CollectorInterface;
 use ReflectionClass;

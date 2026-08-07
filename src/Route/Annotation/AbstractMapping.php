@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Route\Annotation;
+namespace Flytachi\Winter\Kernel\Route\Annotation;
 
 abstract class AbstractMapping
 {

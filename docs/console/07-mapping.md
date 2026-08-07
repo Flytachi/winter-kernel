@@ -3,7 +3,7 @@
 Manages the on-disk route cache. Routing is normally scanned from
 controllers at boot via `Router::fromScan(Kernel::$pathRoot)`; on every
 boot. For production you compile that scan into a single PHP file with
-`mapping build`, and `BaseBoot` loads it with `Router::fromCache()`
+`mapping build`, and the boot loads it with `Router::fromCache()`
 instead.
 
 ---
@@ -45,8 +45,8 @@ call mapping build
 Run this in your image build / deploy step so production cold starts
 don't pay for the controller scan.
 
-`Router::fromCache()` is what `BaseBoot::boot()` prefers when the cache
-file exists; `fromScan()` is the live fallback.
+`Router::fromCache()` is what the boot prefers when the cache file exists;
+`fromScan()` is the live fallback.
 
 ---
 

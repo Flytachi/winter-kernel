@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Http\Response;
+namespace Flytachi\Winter\Kernel\Tests\Http\Response;
 
-use Flytachi\Winter\K2\Http\Adapter\FpmResponse;
+use Flytachi\Winter\Kernel\Http\Adapter\FpmResponse;
 use PHPUnit\Framework\TestCase;
 
 final class FpmResponseSendfileTest extends TestCase

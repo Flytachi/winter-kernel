@@ -4,9 +4,9 @@ Force a specific body format regardless of the `Content-Type` header.
 Use when you need strict format enforcement instead of auto-detection.
 
 ```php
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestJson;
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestForm;
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestXml;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestJson;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestForm;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestXml;
 ```
 
 ---

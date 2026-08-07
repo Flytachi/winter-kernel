@@ -2,8 +2,8 @@
 
 namespace Main;
 
-use Flytachi\Winter\K2\Http\Request\Validation\ListOf;
-use Flytachi\Winter\K2\Http\Request\Validation\Size;
+use Flytachi\Winter\Kernel\Http\Request\Validation\ListOf;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Size;
 
 readonly class ListOrder
 {

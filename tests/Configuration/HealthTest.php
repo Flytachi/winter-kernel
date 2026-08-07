@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Configuration;
+namespace Flytachi\Winter\Kernel\Tests\Configuration;
 
-use Flytachi\Winter\K2\Http\Health\Health;
-use Flytachi\Winter\K2\Http\Health\HealthIndicator;
-use Flytachi\Winter\K2\Http\Health\HealthIndicatorInterface;
-use Flytachi\Winter\K2\Stereotype\Middleware;
+use Flytachi\Winter\Kernel\Http\Health\Health;
+use Flytachi\Winter\Kernel\Http\Health\HealthIndicator;
+use Flytachi\Winter\Kernel\Http\Health\HealthIndicatorInterface;
+use Flytachi\Winter\Kernel\Http\Stereotype\Middleware;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 

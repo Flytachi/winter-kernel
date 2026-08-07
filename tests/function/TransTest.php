@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Func;
+namespace Flytachi\Winter\Kernel\Tests\Func;
 
-use Flytachi\Winter\K2\Localization\Locale;
+use Flytachi\Winter\Kernel\Localization\Locale;
 use PHPUnit\Framework\TestCase;
 
 final class TransTest extends TestCase

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Idx;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Idx;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\AttributeDb;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\Index;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\AttributeDb;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Index;
 
 interface AttributeDbIdx extends AttributeDb
 {

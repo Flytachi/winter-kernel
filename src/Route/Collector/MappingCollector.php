@@ -2,15 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Route\Collector;
+namespace Flytachi\Winter\Kernel\Route\Collector;
 
 use Flytachi\Winter\DI\Contract\CollectorInterface;
-use Flytachi\Winter\K2\Route\Annotation\AbstractMapping;
-use Flytachi\Winter\K2\Route\Annotation\CrossOrigin;
-use Flytachi\Winter\K2\Route\Annotation\RequestMapping;
-use Flytachi\Winter\K2\Route\Router;
-use Flytachi\Winter\K2\Stereotype\ControllerInterface;
-use Flytachi\Winter\K2\Stereotype\Middleware;
+use Flytachi\Winter\Kernel\Route\Annotation\AbstractMapping;
+use Flytachi\Winter\Kernel\Route\Annotation\CrossOrigin;
+use Flytachi\Winter\Kernel\Route\Annotation\Timeout;
+use Flytachi\Winter\Kernel\Route\Annotation\RequestMapping;
+use Flytachi\Winter\Kernel\Route\Router;
+use Flytachi\Winter\Kernel\Http\Stereotype\ControllerInterface;
+use Flytachi\Winter\Kernel\Http\Stereotype\Middleware;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
@@ -39,6 +40,7 @@ final readonly class MappingCollector implements CollectorInterface
             $ref->getAttributes(Middleware::class, ReflectionAttribute::IS_INSTANCEOF)
         );
         $classCors = $this->collectCrossOrigin($ref->getAttributes(CrossOrigin::class));
+        $classTimeout = $this->collectTimeout($ref->getAttributes(Timeout::class));
 
         foreach ($ref->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
             if ($method->name === '__construct') {
@@ -66,12 +68,15 @@ final readonly class MappingCollector implements CollectorInterface
                 $middlewares = array_merge($classMiddlewares, $methodMiddlewares);
 
                 $cors = $this->collectCrossOrigin($method->getAttributes(CrossOrigin::class)) ?? $classCors;
+                // The method's own #[Timeout] wins over the controller's; neither
+                // present leaves the global deadline in force (null).
+                $timeout = $this->collectTimeout($method->getAttributes(Timeout::class)) ?? $classTimeout;
 
                 if ($httpMethod !== null) {
-                    $this->router->add($httpMethod, $url, $handler, $middlewares, $cors);
+                    $this->router->add($httpMethod, $url, $handler, $middlewares, $cors, $timeout);
                 } else {
                     foreach (['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as $m) {
-                        $this->router->add($m, $url, $handler, $middlewares, $cors);
+                        $this->router->add($m, $url, $handler, $middlewares, $cors, $timeout);
                     }
                 }
             }
@@ -86,6 +91,25 @@ final readonly class MappingCollector implements CollectorInterface
             $result[] = ['class' => $attr->getName(), 'args' => $attr->getArguments()];
         }
         return $result;
+    }
+
+    /**
+     * The route's own deadline in seconds, or null when it carries no #[Timeout].
+     *
+     * Resolved here, at scan time, so it lands in the compiled route table and the
+     * mapping cache — nothing is reflected per request.
+     *
+     * @param ReflectionAttribute[] $attrs
+     */
+    private function collectTimeout(array $attrs): ?int
+    {
+        if (empty($attrs)) {
+            return null;
+        }
+        /** @var Timeout $inst */
+        $inst = $attrs[0]->newInstance();
+
+        return max(0, $inst->seconds);
     }
 
     /** @param ReflectionAttribute[] $attrs */

@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Entity;
+namespace Flytachi\Winter\Kernel\Ppa\Entity;
 
 use Flytachi\Winter\Cdo\Qb;
-use Flytachi\Winter\K2\Ppa\Repository\RepositoryException;
+use Flytachi\Winter\Kernel\Ppa\Repository\RepositoryException;
 
 /**
  * Contract for repository classes that support write operations.
  *
  * Extends {@see RepositoryInterface} with INSERT, UPDATE, DELETE, and UPSERT
- * capabilities. Implemented by {@see \Flytachi\Winter\K2\Ppa\Repository\RepositoryCrudTrait}
- * and exposed via {@see \Flytachi\Winter\K2\Ppa\Stereotype\RepositoryCrud} and
- * {@see \Flytachi\Winter\K2\Ppa\Stereotype\Repository}.
+ * capabilities. Implemented by {@see \Flytachi\Winter\Kernel\Ppa\Repository\RepositoryCrudTrait}
+ * and exposed via {@see \Flytachi\Winter\Kernel\Ppa\Stereotype\RepositoryCrud} and
+ * {@see \Flytachi\Winter\Kernel\Ppa\Stereotype\Repository}.
  */
 interface RepositoryCrudInterface extends RepositoryInterface
 {
@@ -27,13 +27,18 @@ interface RepositoryCrudInterface extends RepositoryInterface
     public function insert(object|array $entity): mixed;
 
     /**
-     * Inserts multiple entities in a single batch statement.
+     * Inserts many entities, sent to the database in batches.
      *
-     * @param array|object ...$entities One or more entities to insert
+     * One rule, applied per argument: **an array is one row, anything traversable is
+     * a stream of rows.** So entities, unpacked arrays and generators all work, in
+     * any combination — and a generator keeps peak memory at one batch whatever the
+     * total.
+     *
+     * @param iterable|object ...$entities Entities, streams of entities, or both
      * @return void
      * @throws RepositoryException
      */
-    public function insertGroup(array|object ...$entities): void;
+    public function insertBatch(iterable|object ...$entities): void;
 
     /**
      * Updates rows matching the given condition.
@@ -66,13 +71,13 @@ interface RepositoryCrudInterface extends RepositoryInterface
     public function upsert(object|array $entity, array $conflictColumns, ?array $updateColumns = null): mixed;
 
     /**
-     * Batch-inserts multiple entities, updating specified columns on conflict.
+     * Upserts many entities, sent to the database in batches.
      *
-     * @param array      $entities        Array of entities to upsert
-     * @param array      $conflictColumns Columns that define the conflict target
-     * @param array|null $updateColumns   Columns to update on conflict; null updates all non-conflict columns
+     * @param iterable $entities Entities to upsert — array, generator, any Traversable
+     * @param array $conflictColumns Columns that define the conflict target
+     * @param array|null $updateColumns Column => expression map; null or [] ignores conflicts
      * @return void
      * @throws RepositoryException
      */
-    public function upsertGroup(array $entities, array $conflictColumns, ?array $updateColumns = null): void;
+    public function upsertBatch(iterable $entities, array $conflictColumns, ?array $updateColumns = null): void;
 }

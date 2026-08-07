@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Contracts;
+namespace Flytachi\Winter\Kernel\Http\Contracts;
 
 /**
  * Unified HTTP response abstraction.

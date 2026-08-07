@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Integration\Cli;
+namespace Flytachi\Winter\Kernel\Tests\Integration\Cli;
 
 use PHPUnit\Framework\Attributes\Group;
 

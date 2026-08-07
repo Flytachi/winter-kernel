@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Request\Validation;
+namespace Flytachi\Winter\Kernel\Http\Request\Validation;
 
 use Flytachi\Winter\Base\HttpCode;
-use Flytachi\Winter\K2\Http\Response\ResponseException;
+use Flytachi\Winter\Kernel\Http\Response\ResponseException;
 
 /**
  * Thrown when #[Valid] constraint validation fails on a DTO parameter.

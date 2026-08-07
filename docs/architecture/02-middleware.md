@@ -6,13 +6,13 @@ Middleware intercepts requests before and after the controller method runs.
 
 ## Creating a middleware
 
-Extend `Flytachi\Winter\K2\Stereotype\Middleware` and override `before()`, `after()`, or both.
+Extend `Flytachi\Winter\Kernel\Http\Stereotype\Middleware` and override `before()`, `after()`, or both.
 Both methods have default no-op implementations — override only what you need.
 
 ```php
-use Flytachi\Winter\K2\Stereotype\Middleware;
-use Flytachi\Winter\K2\Http\Contracts\{HttpRequest, HttpResponse};
-use Flytachi\Winter\K2\Http\Middleware\MiddlewareException;
+use Flytachi\Winter\Kernel\Http\Stereotype\Middleware;
+use Flytachi\Winter\Kernel\Http\Contracts\{HttpRequest, HttpResponse};
+use Flytachi\Winter\Kernel\Http\Middleware\MiddlewareException;
 
 class AuthMiddleware extends Middleware
 {
@@ -123,7 +123,7 @@ class TimingMiddleware extends Middleware
 Shorthand for aborting a request with a specific HTTP status from inside middleware:
 
 ```php
-use Flytachi\Winter\K2\Http\Middleware\MiddlewareException;
+use Flytachi\Winter\Kernel\Http\Middleware\MiddlewareException;
 use Flytachi\Winter\Base\HttpCode;
 
 throw new MiddlewareException('Token expired');                           // 401 Unauthorized
@@ -143,16 +143,35 @@ throw (new MiddlewareException('Rate limited', HttpCode::TOO_MANY_REQUESTS))
 
 ### `ClientTimezoneMiddleware`
 
-Applies the client's IANA timezone to `date_default_timezone_set()` for the duration of the request. The value is read from `HttpRequest::getClientTimezone()`, which parses the `Timezone` or `X-Timezone` header and validates it against `timezone_identifiers_list()`. When no valid timezone is supplied, `before()` falls back to `env('TIME_ZONE', 'UTC')`; `after()` restores the same canonical default.
+Applies the client's IANA timezone for the duration of the request. The value is read from `HttpRequest::getClientTimezone()`, which parses the `Timezone` or `X-Timezone` header and validates it against `timezone_identifiers_list()`. When no valid timezone is supplied, `before()` falls back to `env('TIME_ZONE', 'UTC')`.
 
 ```php
-use Flytachi\Winter\K2\Http\Middleware\ClientTimezoneMiddleware;
+use Flytachi\Winter\Kernel\Http\Middleware\ClientTimezoneMiddleware;
 
 #[ClientTimezoneMiddleware]
 class ReportController extends Controller { ... }
 ```
 
-**Swoole caveat.** `after()` is not invoked when the handler throws — the `catch (\Throwable)` in `Router::dispatch` sits outside the after-loop. In a long-running worker, an unhandled exception leaves the global TZ at the client's value until the next request that passes through this middleware overwrites it. Apply uniformly across routes, or skip the middleware and read `$request->getClientTimezone()` explicitly inside handlers.
+It stores the timezone in two places, and the difference decides which of your code is safe:
+
+| | Where | Safe under concurrency |
+|---|---|---|
+| `Timezone::current()` | coroutine-local (`RequestLocal`) | **yes** |
+| `date_default_timezone_set()` | PHP engine global | only while concurrent requests share one zone |
+
+`Timezone` is the source of truth. Everything the framework does on the request's behalf reads it — including the timezone of the database session, so a pooled connection never carries the previous user's zone into your query.
+
+The engine global is set as a convenience for code that has not been adapted, and it is genuinely shared: a Swoole worker runs many requests as coroutines in one process, so a request that sets its zone and then waits on I/O can resume to find another request's value in place. Measured, not reasoned — a request from `Asia/Tashkent` yielded, a request from `Europe/London` set its own, and the first read `Europe/London` on resume. No library can fix that; it is where PHP keeps its default.
+
+So pass the zone explicitly wherever the answer must belong to the requesting user:
+
+```php
+use Flytachi\Winter\Kernel\Localization\Timezone;
+
+$when = new \DateTimeImmutable('now', new \DateTimeZone(Timezone::current()));
+```
+
+**Swoole caveat.** `after()` is not invoked when the handler throws — the `catch (\Throwable)` in `Router::dispatch` sits outside the after-loop. The coroutine-local value dies with the coroutine either way, but the engine global keeps the client's value until the next request through this middleware resets it — one more reason not to lean on it.
 
 See [Client timezone detection](../configuration/01-kernel.md#client-timezone-detection) for the request-side contract and the no-mutation usage pattern.
 

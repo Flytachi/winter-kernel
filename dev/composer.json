@@ -1,6 +1,6 @@
 {
-    "name": "project/winter-k2",
-    "description": "My Project winter-k2",
+    "name": "project/winter",
+    "description": "My Project winter",
     "type": "project",
     "license": "MIT",
     "scripts": {
@@ -13,7 +13,7 @@
     },
     "require": {
         "php": ">=8.3",
-        "flytachi/winter-kernel": "dev-k2"
+        "flytachi/winter-kernel": "dev-alpha"
     },
     "require-dev": {
         "phpunit/phpunit": "@stable",

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Stereotype;
+namespace Flytachi\Winter\Kernel\Ppa\Stereotype;
 
-use Flytachi\Winter\K2\Ppa\Entity\RepositoryCrudInterface;
-use Flytachi\Winter\K2\Ppa\Repository\RepositoryCore;
-use Flytachi\Winter\K2\Ppa\Repository\RepositoryCrudTrait;
+use Flytachi\Winter\Kernel\Ppa\Entity\RepositoryCrudInterface;
+use Flytachi\Winter\Kernel\Ppa\Repository\RepositoryCore;
+use Flytachi\Winter\Kernel\Ppa\Repository\RepositoryCrudTrait;
 
 /**
  * Base class for write-only repository implementations.

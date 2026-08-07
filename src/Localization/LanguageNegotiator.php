@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Localization;
+namespace Flytachi\Winter\Kernel\Localization;
 
 /**
  * Parses Accept-Language header and picks the best available locale.

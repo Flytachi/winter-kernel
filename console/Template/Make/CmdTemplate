@@ -2,7 +2,7 @@
 
 namespace __namespace__;
 
-use Flytachi\Winter\Console\Inc\CmdCustom;
+use Flytachi\Winter\Console\Stereotype\CmdCustom;
 
 class __className__ extends CmdCustom
 {

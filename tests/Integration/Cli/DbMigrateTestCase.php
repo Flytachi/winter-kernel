@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Integration\Cli;
+namespace Flytachi\Winter\Kernel\Tests\Integration\Cli;
 
 use Flytachi\Winter\Console\Command\Db;
-use Flytachi\Winter\K2\Kernel;
-use Flytachi\Winter\K2\Tests\Integration\Fixtures\IntegrationTestCase;
+use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Kernel\Tests\Integration\Fixtures\IntegrationTestCase;
 
 /**
  * End-to-end test of the `Db` console command's migrate flow.

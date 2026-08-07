@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Unit\Pagination;
+namespace Flytachi\Winter\Kernel\Unit\Pagination;
 
 use JsonSerializable;
 
 /**
  * Page-centric pagination response container — meta plus page data.
  *
- * Returned by {@see \Flytachi\Winter\K2\Unit\Wrapper::paginator()}.
+ * Returned by {@see \Flytachi\Winter\Kernel\Unit\Wrapper::paginator()}.
  * Implements {@see JsonSerializable} so `json_encode($result)` produces an
  * API-ready payload:
  * ```

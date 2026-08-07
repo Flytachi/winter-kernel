@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Response;
+namespace Flytachi\Winter\Kernel\Http\Response;
 
-use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
 
 /**
  * Shared builder + header logic for file-style responses.

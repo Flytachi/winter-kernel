@@ -19,7 +19,7 @@ Each one wires together `RepositoryCore` with the appropriate traits.
 ## Repository — Full Access
 
 ```php
-use Flytachi\Winter\K2\Ppa\Stereotype\Repository;
+use Flytachi\Winter\Kernel\Ppa\Stereotype\Repository;
 
 class UserRepository extends Repository
 {
@@ -56,7 +56,7 @@ $repo->update(['status' => 'inactive'], Qb::lt('last_login', '2024-01-01'));
 ## RepositoryView — Read-Only
 
 ```php
-use Flytachi\Winter\K2\Ppa\Stereotype\RepositoryView;
+use Flytachi\Winter\Kernel\Ppa\Stereotype\RepositoryView;
 
 class ReportRepository extends RepositoryView
 {
@@ -73,7 +73,7 @@ Ideal for database views or projections where writes are not allowed.
 ## RepositoryCrud — Write-Only
 
 ```php
-use Flytachi\Winter\K2\Ppa\Stereotype\RepositoryCrud;
+use Flytachi\Winter\Kernel\Ppa\Stereotype\RepositoryCrud;
 
 class EventLogRepository extends RepositoryCrud
 {
@@ -95,7 +95,7 @@ not require subclassing — use it for one-off queries that don't belong to a
 dedicated repository.
 
 ```php
-use Flytachi\Winter\K2\Ppa\Stereotype\CteRepo;
+use Flytachi\Winter\Kernel\Ppa\Stereotype\CteRepo;
 
 // Ad-hoc query against any table:
 $repo = new CteRepo(DbConfig::class);

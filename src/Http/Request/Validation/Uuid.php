@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Request\Validation;
+namespace Flytachi\Winter\Kernel\Http\Request\Validation;
 
 use Attribute;
 
@@ -18,7 +18,7 @@ use Attribute;
  * ```
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-readonly class Uuid implements Constraint
+final readonly class Uuid implements Constraint
 {
     private const string PATTERN = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i';
     private const string PATTERN_VER = '/^[0-9a-f]{8}-[0-9a-f]{4}-%d[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/i';

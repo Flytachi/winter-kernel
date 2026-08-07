@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Integration\Fixtures;
+namespace Flytachi\Winter\Kernel\Tests\Integration\Fixtures;
 
 use Flytachi\Winter\Cdo\Config\MySqlDbConfig;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Config\Migratable;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Config\Migratable;
 
 /**
  * MariaDB configuration — separate from MysqlTestDbConfig only so the pool

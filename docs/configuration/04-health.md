@@ -1,6 +1,6 @@
 # Health / Actuator
 
-Read-only diagnostic endpoints under `/actuator/*` — modelled after Spring Boot Actuator. Disabled by default; opt in from your `Boot::health()` hook.
+Read-only diagnostic endpoints under `/actuator/*` — modelled after Spring Boot Actuator. Disabled by default; opt in with `#[EnableActuator]` on the application class.
 
 The endpoints are useful for:
 
@@ -15,15 +15,21 @@ The endpoints are useful for:
 Override `health()` in your `Boot` class and call `Health::configure()`:
 
 ```php
-use Flytachi\Winter\K2\Http\Health\Health;
+use Flytachi\Winter\Kernel\App\Attribute\EnableActuator;
+use Flytachi\Winter\Kernel\WinterApplication;
 
-class Boot extends BaseBoot
-{
-    protected static function health(): void
-    {
-        Health::configure();   // default built-in indicator, open access
-    }
-}
+#[EnableWeb]
+#[EnableActuator]                  // default built-in indicator, open access
+final class Application extends WinterApplication { /* ... */ }
+```
+
+The attribute accepts a custom indicator and a guard middleware:
+
+```php
+#[EnableActuator(
+    indicator:  App\Health\AppHealthIndicator::class,
+    middleware: App\Http\Middleware\InternalOnlyMiddleware::class,
+)]
 ```
 
 To restrict access or replace the indicator, pass arguments:
@@ -87,7 +93,7 @@ Source: `src/Route/Router.php` (`registerHealth()`).
 {
   "status": "degraded",
   "components": {
-    "db":     {"status": "up",       "details": {...}},
+    "db":     {"status": "up",       "details": {...}},   // per datasource, pool nested inside
     "cache":  {"status": "up",       "details": {...}},
     "disk":   {"status": "degraded", "details": {"usage_percent": 85.4, "warning": "Disk usage above 80%"}},
     "memory": {"status": "up",       "details": {...}},
@@ -97,6 +103,27 @@ Source: `src/Route/Router.php` (`registerHealth()`).
 ```
 
 Aggregation rule: any `down` → overall `down`; otherwise any `degraded` → overall `degraded`; otherwise `up`.
+
+### Response code
+
+The overall status is also the response code, so a probe that reads the code rather than the body reaches the same verdict:
+
+| Overall status | Code |
+|---|---|
+| `up` | `200` |
+| `degraded` | `200` |
+| `down` | `503 Service Unavailable` |
+
+`degraded` stays `200` on purpose: it means working worse, not not working, and a readiness probe that pulled the instance out of rotation over it would turn a partial outage into a full one. The body is the same in either case — the code carries no information the report does not.
+
+Only `/actuator/health` is affected. The other endpoints answer `200`, including one whose payload happens to contain a `status` key of its own.
+
+This makes the endpoint usable directly as a container health check or a k8s probe:
+
+```yaml
+readinessProbe:
+  httpGet: { path: /actuator/health, port: 8000 }
+```
 
 ### Disk / memory thresholds
 
@@ -121,6 +148,28 @@ Optional — only reports `up` and an empty `details` map unless one of these pa
 
 `HealthIndicator` scans `Kernel::$pathRoot` for implementations and calls `pingDetail()` on each. A latency ≥ **500 ms** flips the component to `degraded`. Connection failure → `down`.
 
+The `db` component carries **one entry per datasource**, holding both its reachability
+and how loaded its connection pool is:
+
+```json
+"db": {
+  "status": "up",
+  "details": {
+    "App\\Config\\AppDb": {
+      "status": "up", "driver": "pgsql", "latency": 1.2, "error": null,
+      "pool": {"total": 5, "idle": 3, "active": 2, "maximum": 10}
+    }
+  }
+}
+```
+
+The two answer different questions — the ping says whether the database is reachable, the
+pool says whether this worker has connections left — so they live together rather than in
+separate components. A saturated pool (`active >= maximum`) degrades its datasource.
+`pool` is `null` when the worker holds no pool for that config, and the numbers are **per
+worker**: a health request reports the worker that served it. For the fleet-wide view use
+[`call db pool`](../console/06-db.md).
+
 ---
 
 ## Authoring a custom indicator
@@ -130,7 +179,7 @@ Subclass `HealthIndicator` to add custom checks without losing the built-in disk
 ```php
 namespace App\Health;
 
-use Flytachi\Winter\K2\Http\Health\HealthIndicator;
+use Flytachi\Winter\Kernel\Http\Health\HealthIndicator;
 
 final class AppHealthIndicator extends HealthIndicator
 {
@@ -187,9 +236,9 @@ Production deployments usually want `/actuator/*` reachable only from inside the
 ```php
 namespace App\Http\Middleware;
 
-use Flytachi\Winter\K2\Stereotype\Middleware;
-use Flytachi\Winter\K2\Http\Contracts\{HttpRequest, HttpResponse};
-use Flytachi\Winter\K2\Http\Middleware\MiddlewareException;
+use Flytachi\Winter\Kernel\Http\Stereotype\Middleware;
+use Flytachi\Winter\Kernel\Http\Contracts\{HttpRequest, HttpResponse};
+use Flytachi\Winter\Kernel\Http\Middleware\MiddlewareException;
 use Flytachi\Winter\Base\HttpCode;
 
 final class InternalOnlyMiddleware extends Middleware
@@ -245,9 +294,8 @@ See [`../architecture/02-middleware.md`](../architecture/02-middleware.md) for m
 
 ```json
 {
-  "sys":  {"level": "INFO",  "output": "syslog", "format": "line"},
   "http": {"level": "WARN",  "output": "file",   "format": "json", "file": {"path": "storage/logs/http.log", "max_files": 14}},
-  "cli":  {"level": "DEBUG", "output": "stderr", "format": "line"}
+  "sys":  {"level": "INFO",  "output": "syslog", "format": "line"}
 }
 ```
 

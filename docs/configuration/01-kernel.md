@@ -1,48 +1,49 @@
 # Kernel & Bootstrap
 
-The kernel resolves application paths, loads `.env`, configures logging and the thread runner, and exposes a small `Boot` class that you extend to wire up everything else.
+The kernel resolves application paths, loads `.env`, and configures logging and the thread runner. It runs once, at the very start of the boot, before anything is scanned.
 
 This page describes the configuration knobs at the bottom of the stack. Logging, CORS, health, and plugins are documented separately — links at the end.
 
 ---
 
-## The Boot class
+## When it runs
 
-Every application has one `Boot` class that extends `Flytachi\Winter\K2\BaseBoot`. It overrides only the hooks it needs and is called from one of four entry points (`web()`, `swoole()`, `cli()`, `executor()`).
+`Kernel::init()` is the first thing the boot does, because it decides where the scan
+will look. Everything after it — DI, configurers, routes — depends on the paths it sets.
+
+You normally never call it: `WinterApplication::configure()` does, deriving the project
+root from the application class's own file.
 
 ```php
-// bootstrap.php
-use Flytachi\Winter\K2\BaseBoot;
-use Flytachi\Winter\K2\Kernel;
-
-class Boot extends BaseBoot
+// bootstrap.php — no Kernel::init() in sight
+#[EnableWeb]
+final class Application extends WinterApplication
 {
-    protected static function configure(): void
-    {
-        Kernel::init(pathRoot: __DIR__);
-    }
+    public static function main(array $argv): never { parent::run($argv); }
 }
 ```
 
+Override `configure()` only for a non-standard layout — for instance to keep runtime
+files outside the project:
+
 ```php
-// public/index.php
-require __DIR__ . '/../bootstrap.php';
-Boot::web();
+use Flytachi\Winter\Kernel\App\ApplicationArguments;
+use Flytachi\Winter\Kernel\Kernel;
+
+#[EnableWeb]
+final class Application extends WinterApplication
+{
+    protected static function configure(ApplicationArguments $args): void
+    {
+        Kernel::init(pathRoot: __DIR__, pathStorage: '/var/lib/myapp');
+    }
+
+    public static function main(array $argv): never { parent::run($argv); }
+}
 ```
 
-The full hook list:
-
-| Hook | When called | Purpose |
-|---|---|---|
-| `configure()` | first, before everything else | Call `Kernel::init(...)`, set paths and timezone. |
-| `providers(Container $c)` | after DI scan | Manual DI bindings (factories, named scalars, service providers). |
-| `channels()` | after `configure()` | Register custom log channels via `Kernel::channel('name')`. |
-| `httpCors()` | before request dispatch | Call `Cors::configure(...)`. |
-| `health()` | before request dispatch | Call `Health::configure(...)`. |
-| `plugins()` | before route scan | Call `Plugin::registry(...)` for each plugin. |
-| `swooleConfig()` | only in `swoole()` mode | Return options for `Swoole\Http\Server::set()`. |
-
-All hooks except `swooleConfig()` are `protected` — override only what you need; defaults are no-ops or sane defaults.
+Because `configure()` decides where the scan looks, it cannot itself be a discovered
+class — it is the one thing that stays a method on the application.
 
 ---
 
@@ -52,22 +53,22 @@ All hooks except `swooleConfig()` are `protected` — override only what you nee
 Kernel::init(
     pathRoot:            __DIR__,           // project root
     pathEnv:             __DIR__ . '/.env',
-    pathPublic:          __DIR__ . '/public',
     pathResource:        __DIR__ . '/resources',
     pathStorage:         __DIR__ . '/storage',
     pathStorageLog:      __DIR__ . '/storage/logs',
     pathStorageCache:    __DIR__ . '/storage/cache',
     pathStorageRunnable: __DIR__ . '/storage/runnable',
-    isTmpVolatile:       false,             // see "Volatile storage" below
+    isTmpVolatile:       true,              // the default; see "Volatile storage" below
 );
 ```
 
-Every parameter is **optional**. When `pathRoot` is omitted, it is derived from the calling location (`dirname(__DIR__, 5)`). All other paths are derived from `pathRoot` if not given:
+Every parameter is **optional**. When `pathRoot` is omitted, it is derived from the calling location. All other paths are derived from `pathRoot` if not given.
+
+There is no `pathPublic`: a document root is an FPM concept, and the Swoole server decides for itself what it serves (see [`../starter/00-quickstart.md`](../starter/00-quickstart.md)).
 
 | Param | Default |
 |---|---|
 | `pathEnv` | `$pathRoot . '/.env'` |
-| `pathPublic` | `$pathRoot . '/public'` |
 | `pathResource` | `$pathRoot . '/resources'` |
 | `pathStorage` | `$pathRoot . '/storage'` |
 | `pathStorageLog` | `$pathStorage . '/logs'` |
@@ -79,7 +80,6 @@ After `init()`, all of these are available as public static properties on `Kerne
 ```php
 Kernel::$pathRoot
 Kernel::$pathEnv
-Kernel::$pathPublic
 Kernel::$pathResource
 Kernel::$pathStorage
 Kernel::$pathStorageLog
@@ -101,7 +101,9 @@ Kernel::$pathStorageVolatile
 
 Use `true` for ephemeral containers (Docker, Kubernetes) where `/tmp` is fast and disposable. Use `false` for long-lived deployments where you want the route cache to persist with the rest of your storage.
 
-`K2\Kernel::init()` passes `isTmpVolatile: false` by default; `KernelConfig::init()` defaults to `true` (the `K2\Kernel` wrapper flips it). Pass it explicitly if you want the other behaviour.
+Both `Kernel::init()` and `KernelConfig::init()` default to `true` — the temp directory. Pass `false` explicitly if you want volatile artefacts to live inside your storage tree.
+
+Note one consequence of `false`: volatile storage then sits **inside the project root**, where class discovery runs. The scan excludes it (see `ClassScanner::scanner()`), because that directory holds generated code — the DI cache and the `#[Async]` proxies — and scanning what a previous scan produced is self-referential.
 
 The directory is auto-created (`mkdir 0777 recursive`) on first call.
 
@@ -146,12 +148,15 @@ The constant `WINTER_STARTUP_TIME` is defined here if not already set elsewhere.
 
 ### Thread runner discovery
 
-`bindThread()` looks for the executor binary in this order:
+Detaching a process spawns a fresh PHP process running the **thread runner**, which
+boots the application again and runs the staged payload. `Kernel::init()` resolves it:
 
-1. `WINTER_THREAD_RUNNER` env var (absolute path)
-2. `<pathRoot>/vendor/bin/wKernelExecutor`
-3. `<pathRoot>/vendor/bin/wExecutor`
-4. If none exists, the runner is left unbound — `Thread::dispatch()` will fail at runtime.
+1. `WINTER_THREAD_RUNNER` env var — an absolute path, used when the file exists;
+2. otherwise `<pathRoot>/vendor/bin/wKernelRunner`, the binary this package ships.
+
+The runner resolves the project root from its own location, so it must be **copied**
+into place rather than symlinked — PHP resolves `__DIR__` through symlinks and the path
+would point at the package instead of the project.
 
 When `ext-shmop` is loaded, payload mode is set to `PAYLOAD_SHM` automatically (avoids fd conflicts in Swoole).
 
@@ -169,15 +174,25 @@ $now = new DateTime('now', $tz);
 For applications that want the timezone applied globally for the duration of the request, attach `ClientTimezoneMiddleware` to a controller or method:
 
 ```php
-use Flytachi\Winter\K2\Http\Middleware\ClientTimezoneMiddleware;
+use Flytachi\Winter\Kernel\Http\Middleware\ClientTimezoneMiddleware;
 
 #[ClientTimezoneMiddleware]
 class ReportController extends Controller { ... }
 ```
 
-The middleware calls `date_default_timezone_set()` in `before()` with the client value (or `env('TIME_ZONE', 'UTC')` as fallback) and restores the canonical default in `after()`.
+The middleware stores the client value (or `env('TIME_ZONE', 'UTC')`) in `Timezone`, and additionally sets PHP's own default so unadapted code keeps working:
 
-**Swoole caveat.** `after()` does not run when the handler throws — `Router::dispatch` catches `Throwable` outside the after-loop. In a long-running worker, an unhandled exception leaves the global TZ at the client's value until the next request that passes through the middleware overwrites it. Apply the middleware uniformly across routes, or skip it and call `getClientTimezone()` explicitly inside handlers.
+```php
+use Flytachi\Winter\Kernel\Localization\Timezone;
+
+Timezone::current();   // 'Asia/Tashkent' — this request's zone, coroutine-local
+```
+
+**`Timezone::current()` is the safe read; `date()` is not.** PHP keeps its default timezone in an engine global, and a Swoole worker runs many requests as coroutines in one process — so a request that sets its zone and then waits on I/O can resume to find a concurrent request's value in place. That is measured behaviour, not a theoretical risk, and no library can change it. `Timezone` lives in `RequestLocal` instead, so concurrent requests cannot see each other's.
+
+The framework reads `Timezone` for everything it does on the request's behalf, including the timezone of the database session — a pooled connection is handed from one user to the next, and its session zone is corrected on every query rather than left as the previous user found it.
+
+**Swoole caveat.** `after()` does not run when the handler throws — `Router::dispatch` catches `Throwable` outside the after-loop. The coroutine-local value disappears with the coroutine regardless, but the engine global keeps the client's value until the next request through the middleware resets it.
 
 ---
 
@@ -222,7 +237,7 @@ runs as the first step of the request pipeline and snapshots the origin alongsid
 headers, so these getters need no `HttpRequest` argument:
 
 ```php
-use Flytachi\Winter\K2\Http\Header;
+use Flytachi\Winter\Kernel\Http\Header;
 
 Header::getBaseUrl();  // "https://example.com:8443"
 Header::getScheme();   // "https"
@@ -242,67 +257,45 @@ process-wide static under FPM.
 
 ## Entry points
 
-A complete request lifecycle from each entry point. Detailed pipelines live in [`../architecture/01-routing.md`](../architecture/01-routing.md#request-handling-pipeline).
-
-### `Boot::web()` — FPM / nginx
-
-```php
-// public/index.php
-require __DIR__ . '/../bootstrap.php';
-Boot::web();
-```
-
-Reads the HTTP request from PHP superglobals, dispatches via `Router::resolve(Kernel::$pathRoot)` (cache-first), serves static files in `Kernel::$pathPublic`, then `exit(0)`. Default log channel is `http`.
-
-### `Boot::swoole(host, port)` — Swoole HTTP server
+There is one: `Application::main($argv)`, reached from `call`. What happens next depends
+on the verb, not on a different entry file.
 
 ```php
-// server.php
-require __DIR__ . '/bootstrap.php';
-Boot::swoole(host: '0.0.0.0', port: 9501);
+#!/usr/bin/env php
+<?php
+chdir(__DIR__);
+require './bootstrap.php';
+Application::main($argv);
 ```
 
-Single-process router, one route scan at startup, all requests share the same instance. Per-coroutine isolation for headers and locale. Override `swooleConfig()` to tune workers / `max_request` / SSL:
-
-```php
-protected static function swooleConfig(): array
-{
-    return [
-        'worker_num'        => swoole_cpu_num() * 2,
-        'max_request'       => 5000,
-        'max_request_grace' => 500,
-        'enable_coroutine'  => true,
-    ];
-}
-```
-
-Default log channel is `http`.
-
-### `Boot::cli($argv)` — Console
-
-```php
-// call
-require __DIR__ . '/bootstrap.php';
-Boot::cli($argv);
-```
-
-Runs the console application (`Flytachi\Winter\Console\Core`). Default log channel is `cli`.
-
-### `Boot::executor($argv)` — Thread / job runner
-
-Invoked by the `wKernelExecutor` binary (you do not call this directly). Reads a serialised `Runnable` from stdin or shared memory, runs it, exits with the appropriate status code. Default log channel is `cli`.
-
-CLI flags accepted by the binary:
-
-| Flag | Purpose |
+| Invocation | What runs |
 |---|---|
-| `--namespace=App` | Process title namespace prefix |
-| `--name=MyJob` | Override process title name (default: class short name) |
-| `--tag=worker` | Process title tag (default: `runnable`) |
-| `--shmkey=1234` | Read payload from SHM segment instead of stdin |
-| `--debug` | Enable full error reporting in the child |
-| `--arg-key=value` | Pass `['key' => 'value']` into `Runnable::run()` |
-| `--arg-flag` | Pass `['flag' => true]` into `Runnable::run()` |
+| `php call run` | boots, then serves the components in the manifest (`serve()`) |
+| `php call run dev` | the same with the file watcher |
+| `php call <verb>` | boots, then hands the verb to the console |
+| `php call` | boots, prints the command list |
+
+Two more entries exist but are not called by hand:
+
+- **`WinterApplication::executor($argv)`** — the child side of `Process::dispatch()`.
+  Detaching cannot be a fork (the parent may be a Swoole worker whose reactor must not
+  be duplicated), so the launcher spawns a fresh PHP process running
+  `vendor/bin/wKernelRunner`, which boots the application again and runs the staged
+  payload. Its CLI flags are the thread runner's own:
+
+  | Flag | Purpose |
+  |---|---|
+  | `--namespace=App` | process title namespace prefix |
+  | `--name=MyJob` | process title name (default: class short name) |
+  | `--tag=worker` | process title tag |
+  | `--shmkey=1234` | read the payload from a SHM segment instead of stdin |
+  | `--detach` | daemonise (fork + `setsid`) before running |
+  | `--debug` | full error reporting in the child |
+
+- **`WinterApplication::discoverAppClass()`** — how that runner finds your application
+  class after requiring `bootstrap.php`, without knowing its name.
+
+FPM has no entry here; it is moving to a separate `winter-fpm` project.
 
 ---
 
@@ -318,20 +311,23 @@ CLI flags accepted by the binary:
 
 ## Boot order
 
-`BaseBoot` runs the hooks in a fixed order — knowing this matters when you cross-reference services:
+The boot runs in a fixed order — knowing it matters when you cross-reference services:
 
 ```
-1. configure()          ← Kernel::init() + .env + paths
-2. DI Scanner pass      ← discovers #[Singleton] / #[Request] / #[Transient]
-3. providers(Container) ← manual DI bindings
-4. channels()           ← Kernel::channel('job') etc.
-5. httpCors()           ← Cors::configure()
-6. health()             ← Health::configure()
-7. plugins()            ← Plugin::registry()
-8. <entry point body>   ← web() / swoole() / cli() / executor()
+1. configure()             ← Kernel::init(): paths, .env, logging
+2. Container::init()       ← the shared container
+3. one Scanner pass        ← DI classes, #[Configuration]/#[Bean],
+                             WebConfigurer, LoggingConfigurer, HealthContributor
+4. apply logging           ← discovered LoggingConfigurer classes
+5. apply CORS              ← discovered WebConfigurer classes
+6. apply actuator          ← #[EnableActuator] + discovered contributors
+7. apply imports           ← #[Import] plugin packages
+8. dispatch                ← serve() or the console
 ```
 
-`BaseBoot::getBootClass()` returns the concrete `Boot` class name set during step 1.
+Everything from step 3 onward is discovered, not registered: adding a configurer is
+adding a class. `WinterApplication::getAppClass()` returns the concrete application
+class name, set at the start of step 1.
 
 ---
 

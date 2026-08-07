@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\K2\Kernel;
-use Flytachi\Winter\K2\Route\Router;
+use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Kernel\Route\Router;
 
-class Mapping extends Cmd
+final class Mapping extends Cmd
 {
     public static string $title = "manage and inspect route mapping cache (build, clean, show)";
 

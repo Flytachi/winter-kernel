@@ -38,9 +38,9 @@ a warning and exits.
 | `--max_request_grace=<n>`  | off         | `max_request_grace`                      |
 | `-w` / `--watcher`         | off         | Enable `MemoryWatcher` to recycle workers on RSS pressure |
 
-CLI options **override** the base config returned by
-`Boot::swooleConfig()` (`Flytachi\Winter\K2\BaseBoot`). Anything not
-overridden falls back to the Boot class's value or Swoole defaults.
+CLI options are read by `ServerSettings::fromEnv()` together with the `SERVER_*`
+environment variables; a discovered `WebConfigurer::configureServer()` then tunes the
+result. Anything left alone falls back to Swoole's own defaults.
 
 ### Runtime behavior
 
@@ -53,7 +53,8 @@ On start, `run`:
 5. Swaps the log context to `CoroutineContext` so per-request fields
    (request_id, user_id, …) are isolated per coroutine.
 6. Sets the `http` log channel as default.
-7. Maps `Router::static(Kernel::$pathPublic)` for static assets.
+7. Applies the Swoole options built from `.env`, CLI flags and the `WebConfigurer`
+   (static files among them, when `staticPath()` was declared).
 8. Sets a descriptive `cli_set_process_title()` for `ps` visibility.
 9. With `-w`: wraps the request handler in `MemoryWatcher` to track
    per-request memory growth.
@@ -73,7 +74,7 @@ call run --host=127.0.0.1 --port=9501
 ## `call run dev` — PHP built-in dev server
 
 A `passthru` wrapper around `php -S`. No Swoole, no workers, no
-coroutines — just one process serving from `Kernel::$pathPublic`.
+coroutines — just one process serving the declared static directory.
 
 ### Options
 
@@ -121,5 +122,6 @@ Use this only for local development — there is no concurrency.
 
 - [`../architecture/01-routing.md`](../architecture/01-routing.md) — how routes are scanned
 - [07-mapping.md](07-mapping.md) — `Router` cache management
-- [`../configuration/01-kernel.md`](../configuration/01-kernel.md) — `Boot::swooleConfig()`
+- [`../configuration/09-web-server.md`](../configuration/09-web-server.md) — every server setting
+- [`../configuration/08-runtime.md`](../configuration/08-runtime.md) — the runtime and its caveats
 - [`../configuration/02-logging.md`](../configuration/02-logging.md) — per-coroutine log context

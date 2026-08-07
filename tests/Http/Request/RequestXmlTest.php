@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Http\Request;
+namespace Flytachi\Winter\Kernel\Tests\Http\Request;
 
-use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
-use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
-use Flytachi\Winter\K2\Http\ParameterResolver;
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestXml;
-use Flytachi\Winter\K2\Http\Request\Validation\NotBlank;
-use Flytachi\Winter\K2\Http\Request\Validation\Positive;
-use Flytachi\Winter\K2\Http\Request\Validation\Required;
-use Flytachi\Winter\K2\Http\Request\Validation\Size;
-use Flytachi\Winter\K2\Http\Request\Validation\Valid;
-use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
-use Flytachi\Winter\K2\Http\Request\RequestException;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\ParameterResolver;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestXml;
+use Flytachi\Winter\Kernel\Http\Request\Validation\NotBlank;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Positive;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Required;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Size;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Valid;
+use Flytachi\Winter\Kernel\Http\Request\Validation\ValidationException;
+use Flytachi\Winter\Kernel\Http\Request\RequestException;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 

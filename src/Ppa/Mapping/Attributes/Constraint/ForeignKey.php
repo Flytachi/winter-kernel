@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Constraint;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Constraint;
 
 use Attribute;
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\FKAction;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\FKAction;
 
 #[Attribute(Attribute::TARGET_PROPERTY)]
-readonly class ForeignKey implements AttributeDbConstraintForeign
+final readonly class ForeignKey implements AttributeDbConstraintForeign
 {
     public function __construct(
         public string $referencedTable,
@@ -22,8 +22,8 @@ readonly class ForeignKey implements AttributeDbConstraintForeign
     public function toObject(
         string $columnName,
         string $dialect = 'mysql'
-    ): \Flytachi\Winter\K2\Ppa\Mapping\Structure\ForeignKey {
-        return new \Flytachi\Winter\K2\Ppa\Mapping\Structure\ForeignKey(
+    ): \Flytachi\Winter\Kernel\Ppa\Mapping\Structure\ForeignKey {
+        return new \Flytachi\Winter\Kernel\Ppa\Mapping\Structure\ForeignKey(
             referencedTable: $this->referencedTable,
             referencedColumn: $this->referencedColumn,
             onUpdate: $this->onUpdate,

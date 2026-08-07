@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Structure;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Structure;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\IndexMethod;
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\IndexType;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\IndexMethod;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\IndexType;
 
-class Index implements StructureInterface
+final class Index implements StructureInterface
 {
     public function __construct(
         public array $columns,
@@ -77,6 +77,18 @@ class Index implements StructureInterface
                     . "{$columnsSql}{$includeSql}{$whereSql}",
                 IndexType::INDEX => "CREATE INDEX {$nameSql} ON {$tableName}{$usingSql}"
                     . "{$columnsSql}{$includeSql}{$whereSql}",
+            };
+        }
+
+        if ($dialect === 'sqlite') {
+            // SQLite has one index implementation, so there is no USING clause; partial
+            // indexes (WHERE) are supported, covering indexes (INCLUDE) are not.
+            $whereSql = $this->where ? " WHERE {$this->where}" : '';
+
+            return match ($this->type) {
+                IndexType::PRIMARY => "PRIMARY KEY" . $columnsSql,
+                IndexType::UNIQUE => "CREATE UNIQUE INDEX {$nameSql} ON {$tableName}{$columnsSql}{$whereSql}",
+                IndexType::INDEX => "CREATE INDEX {$nameSql} ON {$tableName}{$columnsSql}{$whereSql}",
             };
         }
 

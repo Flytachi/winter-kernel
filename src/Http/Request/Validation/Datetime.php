@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Request\Validation;
+namespace Flytachi\Winter\Kernel\Http\Request\Validation;
 
 use Attribute;
 
@@ -19,7 +19,7 @@ use Attribute;
  * ```
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-readonly class Datetime implements Constraint
+final readonly class Datetime implements Constraint
 {
     /**
      * @param string|null $format PHP datetime format string. null = flexible ISO 8601 via DateTimeImmutable.

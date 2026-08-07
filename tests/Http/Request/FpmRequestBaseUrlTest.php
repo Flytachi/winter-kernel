@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Http\Request;
+namespace Flytachi\Winter\Kernel\Tests\Http\Request;
 
-use Flytachi\Winter\K2\Http\Adapter\FpmRequest;
+use Flytachi\Winter\Kernel\Http\Adapter\FpmRequest;
 use PHPUnit\Framework\TestCase;
 
 /**

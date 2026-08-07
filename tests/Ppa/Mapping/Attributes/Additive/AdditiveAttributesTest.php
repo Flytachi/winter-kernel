@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Mapping\Attributes\Additive;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Mapping\Attributes\Additive;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Additive\DefaultVal;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Additive\NullableIs;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Additive\DefaultVal;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Additive\NullableIs;
 use PHPUnit\Framework\TestCase;
 
 final class AdditiveAttributesTest extends TestCase

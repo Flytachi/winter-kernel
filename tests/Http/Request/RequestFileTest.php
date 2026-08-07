@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Http\Request;
+namespace Flytachi\Winter\Kernel\Tests\Http\Request;
 
-use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
-use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
-use Flytachi\Winter\K2\Http\ParameterResolver;
-use Flytachi\Winter\K2\Http\Request\Annotation\RequestFile;
-use Flytachi\Winter\K2\Http\Request\RequestException;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\ParameterResolver;
+use Flytachi\Winter\Kernel\Http\Request\Annotation\RequestFile;
+use Flytachi\Winter\Kernel\Http\Request\RequestException;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 

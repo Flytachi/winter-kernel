@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Configuration;
+namespace Flytachi\Winter\Kernel\Tests\Configuration;
 
-use Flytachi\Winter\K2\Core\KernelConfig;
+use Flytachi\Winter\Kernel\Core\KernelConfig;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
@@ -52,7 +52,7 @@ final class KernelConfigTest extends TestCase
         KernelConfig::init(
             pathRoot:    $this->tmpDir,
             pathStorage: $this->tmpDir . '/storage',
-            // isTmpVolatile defaults to true on KernelConfig, but the K2\Kernel
+            // isTmpVolatile defaults to true on KernelConfig, but the Kernel
             // wrapper passes false. We explicitly pass false here to mimic the
             // production-FPM scenario where the bug bit hardest.
             isTmpVolatile: false,
@@ -84,11 +84,37 @@ final class KernelConfigTest extends TestCase
 
         self::assertSame($this->tmpDir,                       KernelConfig::$pathRoot);
         self::assertSame($this->tmpDir . '/.env',             KernelConfig::$pathEnv);
-        self::assertSame($this->tmpDir . '/public',           KernelConfig::$pathPublic);
+        self::assertSame($this->tmpDir . '/resources',        KernelConfig::$pathResource);
         self::assertSame($this->tmpDir . '/storage',          KernelConfig::$pathStorage);
         self::assertSame($this->tmpDir . '/storage/logs',     KernelConfig::$pathStorageLog);
         self::assertSame($this->tmpDir . '/storage/cache',    KernelConfig::$pathStorageCache);
         self::assertSame($this->tmpDir . '/storage/runnable', KernelConfig::$pathStorageRunnable);
+    }
+
+    /**
+     * `$pathResource` used to be derived under `if ($pathStorageLog === null)`, so
+     * passing a log path alone left it unassigned and init died on the typed property.
+     */
+    public function test_an_explicit_log_path_does_not_break_resource_resolution(): void
+    {
+        KernelConfig::init(
+            pathRoot:       $this->tmpDir,
+            pathStorageLog: $this->tmpDir . '/var/log',
+        );
+
+        self::assertSame($this->tmpDir . '/resources', KernelConfig::$pathResource);
+        self::assertSame($this->tmpDir . '/var/log',   KernelConfig::$pathStorageLog);
+    }
+
+    /** The mirror case: an explicit resource path used to be silently overwritten. */
+    public function test_an_explicit_resource_path_is_kept(): void
+    {
+        KernelConfig::init(
+            pathRoot:     $this->tmpDir,
+            pathResource: $this->tmpDir . '/app/views',
+        );
+
+        self::assertSame($this->tmpDir . '/app/views', KernelConfig::$pathResource);
     }
 
     public function test_volatile_path_uses_temp_dir_when_isTmpVolatile_is_true(): void

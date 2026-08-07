@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Integration\Cli\Fixtures\Mysql;
+namespace Flytachi\Winter\Kernel\Tests\Integration\Cli\Fixtures\Mysql;
 
-use Flytachi\Winter\K2\Ppa\Stereotype\RepositoryView;
-use Flytachi\Winter\K2\Tests\Integration\Cli\Fixtures\MigrEntity;
-use Flytachi\Winter\K2\Tests\Integration\Fixtures\MysqlTestDbConfig;
+use Flytachi\Winter\Kernel\Ppa\Stereotype\RepositoryView;
+use Flytachi\Winter\Kernel\Tests\Integration\Cli\Fixtures\MigrEntity;
+use Flytachi\Winter\Kernel\Tests\Integration\Fixtures\MysqlTestDbConfig;
 
 final class MigrMysqlRepo extends RepositoryView
 {

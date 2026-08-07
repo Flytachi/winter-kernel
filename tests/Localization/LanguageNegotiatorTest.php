@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Localization;
+namespace Flytachi\Winter\Kernel\Tests\Localization;
 
-use Flytachi\Winter\K2\Localization\LanguageNegotiator;
+use Flytachi\Winter\Kernel\Localization\LanguageNegotiator;
 use PHPUnit\Framework\TestCase;
 
 final class LanguageNegotiatorTest extends TestCase

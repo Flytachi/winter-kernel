@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Mapping;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Mapping;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Additive\DefaultVal;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Additive\NullableIs;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Constraint\Check;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Constraint\ForeignKey as ForeignKeyAttr;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Hybrid\Id;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Idx\Index as IndexAttr;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Idx\Unique;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Integer;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Varchar;
-use Flytachi\Winter\K2\Ppa\Mapping\ColumnMapping;
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\IndexType;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\Column;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Additive\DefaultVal;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Additive\NullableIs;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Constraint\Check;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Constraint\ForeignKey as ForeignKeyAttr;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Hybrid\Id;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Idx\Index as IndexAttr;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Idx\Unique;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Integer;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Varchar;
+use Flytachi\Winter\Kernel\Ppa\Mapping\ColumnMapping;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\IndexType;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Column;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 

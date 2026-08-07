@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Config;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Config;
 
 use Attribute;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\AttributeDbConfig;
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\MigratablePriority;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\AttributeDbConfig;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\MigratablePriority;
 
 /**
  * Opts a DbConfig into `db migrate` / `db sql` tooling.
@@ -31,7 +31,7 @@ use Flytachi\Winter\K2\Ppa\Mapping\Constants\MigratablePriority;
  * ```
  */
 #[Attribute(Attribute::TARGET_CLASS)]
-readonly class Migratable implements AttributeDbConfig
+final readonly class Migratable implements AttributeDbConfig
 {
     public function __construct(
         public MigratablePriority $priority = MigratablePriority::Normal,

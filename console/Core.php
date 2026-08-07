@@ -6,12 +6,14 @@ namespace Flytachi\Winter\Console;
 
 use Flytachi\Winter\Console\Inc\CoreHandle;
 
-class Core extends CoreHandle
+final class Core extends CoreHandle
 {
     /** Short aliases → Command class name */
     protected static array $aliases = [
         'sc' => 'Script',
-        'th' => 'Thread',
+        'proc' => 'Process',
+        'dmn' => 'Daemon',
+        'sch' => 'Schedule',
     ];
 
     public function __construct($args)

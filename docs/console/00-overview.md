@@ -5,8 +5,8 @@ single binary — `call` — that dispatches to a small set of built-in commands
 (scaffolding, config, runtime, mapping, DB, threads…) and to any custom
 command the project or its plugins register.
 
-The entry point on disk is `wKernelExecutor`, which boots the kernel and
-hands `$argv` to `Boot::executor()`. In a typical project the user-facing
+The entry point on disk is `call`, which requires `bootstrap.php` and hands `$argv`
+to `Application::main()`; any verb other than `run` goes to the console. In a typical project the user-facing
 binary is `call` (a project script, alias, or symlink to the executor);
 the rest of this section uses `call` as the canonical invocation.
 
@@ -28,12 +28,15 @@ three buckets:
 | `options`    | `--key` or `--key=v`| `--port=8000`, `--mvc`           |
 
 The first positional argument is the command name; if omitted, `Help` runs.
-Two short aliases are wired in `console/Core.php`:
+Short aliases are wired in `console/Core.php`:
 
-| Alias | Resolves to |
-|-------|-------------|
-| `sc`  | `Script`    |
-| `th`  | `Thread`    |
+| Alias  | Resolves to |
+|--------|-------------|
+| `sc`   | `Script`    |
+| `th`   | `Thread`    |
+| `proc` | `Process`   |
+| `dmn`  | `Daemon`    |
+| `sch`  | `Schedule`  |
 
 A command name is mapped to `Flytachi\Winter\Console\Command\<Name>` via
 `ucwords()`, and `::script($parsed)` is called on it.
@@ -176,12 +179,17 @@ it directly. See [11-complete.md](11-complete.md).
 | [03](03-cfg.md)      | `cfg`     | Manage configuration, `.env`, key, Docker, completion |
 | [04](04-run.md)      | `run`     | Start the HTTP server (Swoole / dev)                |
 | [05](05-script.md)   | `script`  | Run custom `Cmd` / `CmdCustom` scripts (alias `sc`) |
-| [06](06-db.md)       | `db`      | Database ping / migrate / SQL preview               |
+| [06](06-db.md)       | `db`      | Database ping / migrate / SQL preview / pool stats  |
 | [07](07-mapping.md)  | `mapping` | Build / clean / show route cache                    |
 | [08](08-storage.md)  | `storage` | Initialize and clean `storage/` folders             |
-| [09](09-thread.md)   | `thread`  | Run `Dispatchable` tasks (alias `th`)               |
 | [10](10-di.md)       | `di`      | Build / clean / show DI scanner cache               |
 | [11](11-complete.md) | `complete`| Shell-completion endpoint (internal)                |
+| [12](12-schedule.md) | `schedule`| Run the scheduler; list `#[Scheduled]` tasks (alias `sch`) |
+
+The **`process`** and **`daemon`** commands (aliases `proc` / `dmn`) manage
+long-lived worker processes and supervised fleets; they are documented with the
+runtime itself in [`process/03-control.md`](../process/03-control.md) and
+[`process/daemon/03-control.md`](../process/daemon/03-control.md).
 
 ---
 

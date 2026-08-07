@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Repository;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Repository;
 
-use Flytachi\Winter\K2\Tests\Ppa\Repository\Fixtures\SelectionMappedRepo;
-use Flytachi\Winter\K2\Tests\Ppa\Repository\Fixtures\TypedUsersRepo;
+use Flytachi\Winter\Kernel\Tests\Ppa\Repository\Fixtures\SelectionMappedRepo;
+use Flytachi\Winter\Kernel\Tests\Ppa\Repository\Fixtures\TypedUsersRepo;
 use PHPUnit\Framework\TestCase;
 
 final class PrepareSelectTest extends TestCase
@@ -15,7 +15,7 @@ final class PrepareSelectTest extends TestCase
     public function test_stdClass_entity_emits_select_star(): void
     {
         // UsersRepo uses default stdClass entity → '*' in SELECT.
-        $r = \Flytachi\Winter\K2\Tests\Ppa\Repository\Fixtures\UsersRepo::instance();
+        $r = \Flytachi\Winter\Kernel\Tests\Ppa\Repository\Fixtures\UsersRepo::instance();
         self::assertStringStartsWith('SELECT * FROM ', $r->buildSql());
     }
 

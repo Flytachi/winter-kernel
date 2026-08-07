@@ -2,13 +2,20 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Pool;
+namespace Flytachi\Winter\Kernel\Ppa\Pool;
 
 use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\Cdo\Config\Common\DbConfigInterface;
 use Flytachi\Winter\Cdo\Connection\CDO;
 use Flytachi\Winter\Base\Runtime;
+use Flytachi\Winter\Kernel\ConnectionPool\ConnectionPool;
+use Flytachi\Winter\Kernel\ConnectionPool\PoolEntry;
+use Flytachi\Winter\Kernel\ConnectionPool\PoolException;
+use Flytachi\Winter\Kernel\ConnectionPool\PoolPolicy;
+use Flytachi\Winter\Kernel\ConnectionPool\SingleConnection;
+use Flytachi\Winter\Kernel\Localization\Timezone;
 use Psr\Log\LoggerInterface;
+use Throwable;
 
 /**
  * PpaConnectionPool — driver-agnostic connection pool for FPM and Swoole.
@@ -18,14 +25,20 @@ use Psr\Log\LoggerInterface;
  * one `CDO` instance per config class per process, reused for the entire request.
  *
  * ## Swoole (coroutines)
- * Uses {@see \Swoole\ConnectionPool} (which wraps `Swoole\Coroutine\Channel`)
- * per config class.  Connections are created **lazily** — only when first requested,
- * up to `poolMaxConnections`.  On the **first** `db()` call inside a coroutine one
- * CDO is borrowed and cached in the coroutine context; a `defer` returns it
- * automatically when the coroutine ends — no manual release anywhere in the codebase.
+ * Uses the framework's {@see ConnectionPool} (a HikariCP-inspired pool over a
+ * `Swoole\Coroutine\Channel`) per config class. Connections are created **lazily** —
+ * only when first requested, up to `poolMaxConnections`. On the **first** `db()` call
+ * inside a coroutine one connection is borrowed and cached in the coroutine context;
+ * a `defer` returns it automatically when the coroutine ends — no manual release
+ * anywhere in the codebase.
  *
- * Broken connections: pass `null` to `Swoole\ConnectionPool::put()` and the pool
- * will discard and recreate the slot automatically.
+ * Unlike a plain `Swoole\ConnectionPool` (a dumb channel), {@see ConnectionPool}
+ * actively keeps connections usable across a database outage: a connection idle beyond
+ * `aliveBypassWindow` is probed on borrow ({@see CdoConnectionFactory::validate()} →
+ * `ping()`) and a dead one is retired for a fresh socket, and a connection older than
+ * `maxLifetime` is rotated before it can go stale — restoring the FPM-era resilience
+ * (fresh connection ⇒ self-heal after recovery) without a per-borrow probe on hot
+ * connections.
  *
  * ## Pool size
  * Configs that implement {@see PpaPoolConfigInterface} (via {@see PpaPoolTrait})
@@ -53,7 +66,7 @@ final class PpaConnectionPool
 
     /**
      * Swoole: one ConnectionPool per config class.
-     * @var array<string, \Swoole\ConnectionPool>
+     * @var array<string, ConnectionPool>
      */
     private static array $pools = [];
 
@@ -64,10 +77,26 @@ final class PpaConnectionPool
     private static array $configs = [];
 
     /**
-     * FPM: one CDO per config class for the lifetime of the process/request.
-     * @var array<string, CDO>
+     * FPM / non-coroutine: one self-maintaining {@see SingleConnection} per config
+     * class for the lifetime of the process.
+     * @var array<string, SingleConnection>
      */
     private static array $static = [];
+
+    /**
+     * Timezone last applied to each pooled connection, so {@see syncTimezone()} can skip
+     * a `SET TIMEZONE` the connection does not need.
+     *
+     * Keyed by the pooled resource itself — {@see CdoConnectionFactory} pools the config
+     * instance — and weak, so the entry disappears with the connection instead of
+     * pinning a closed one in memory.
+     *
+     * Built lazily — `new WeakMap()` is not a constant expression, so it cannot be a
+     * property default.
+     *
+     * @var \WeakMap<object, string>|null
+     */
+    private static ?\WeakMap $appliedTimezone = null;
 
     private static function logger(): LoggerInterface
     {
@@ -129,26 +158,177 @@ final class PpaConnectionPool
         return self::$configs;
     }
 
+    /**
+     * Reports a failure that happened **while using** a borrowed connection, so a dead
+     * one is retired instead of being handed to the next caller.
+     *
+     * Only a genuine connection loss evicts ({@see ConnectionLoss}) — a constraint
+     * violation or a syntax error means the connection is healthy and is left alone.
+     *
+     * The pool deliberately does **not** retry the failed statement. It cannot know
+     * what was executed: the break may have happened after the server applied the
+     * write, so replaying it could duplicate the effect, and replaying one statement
+     * of an interrupted transaction is meaningless. The request fails once; the
+     * connection is thrown away, so the next one — including the next query in this
+     * same request — gets a healthy connection.
+     *
+     * @param class-string $configClass Config whose connection failed.
+     * @param Throwable $error The failure as thrown by CDO/PDO.
+     * @return bool Whether the connection was classified as lost and evicted.
+     */
+    public static function reportFailure(string $configClass, Throwable $error): bool
+    {
+        $lost      = ConnectionLoss::isLost($error);
+        $undecided = !$lost && ConnectionLoss::isUndecided($error);
+        if (!$lost && !$undecided) {
+            return false;
+        }
+
+        $key = base64_encode($configClass);
+
+        if (Runtime::isSwooleCoroutine()) {
+            $ctxKey = 'ppa_cdo_' . $key;
+            $ctx    = \Swoole\Coroutine::getContext();
+            $held   = $ctx[$ctxKey] ?? null;
+            if (!$held instanceof BorrowedConnection) {
+                return false;
+            }
+            $config = $held->entry->resource;
+            if ($undecided && $config instanceof DbConfigInterface && CdoConnectionFactory::probe($config)) {
+                return false; // the driver was vague but the connection answered
+            }
+            // Mark for the defer to evict, and drop it from the context so the next
+            // query in this same coroutine borrows a fresh connection.
+            $held->dead = true;
+            unset($ctx[$ctxKey]);
+            self::logger()->warning("evict: {$configClass} (connection lost in use)");
+
+            return true;
+        }
+
+        // Static (FPM / non-coroutine) path: close now, reopen lazily on next use.
+        if (!isset(self::$static[$key])) {
+            return false;
+        }
+        $config = self::$static[$key]->peek();
+        if ($undecided && $config instanceof DbConfigInterface && CdoConnectionFactory::probe($config)) {
+            return false;
+        }
+        self::$static[$key]->evict();
+        self::logger()->warning("evict: {$configClass} (connection lost in use)");
+
+        return true;
+    }
+
+    /**
+     * Live utilisation of every Swoole coroutine pool, keyed by config FQCN — the
+     * HikariCP-style view (active / idle / total vs maximum) for `/actuator/health`.
+     *
+     * These numbers are **per worker**: each Swoole worker holds its own in-memory
+     * pool (as HikariCP is per-JVM), so a health request reflects the worker that
+     * served it. The static FPM/non-coroutine path has no pool and is not reported.
+     *
+     * @return array<string, array{total: int, idle: int, active: int, maximum: int}>
+     */
+    public static function stats(): array
+    {
+        $out = [];
+        foreach (self::$pools as $key => $pool) {
+            $out[base64_decode($key)] = $pool->stats();
+        }
+        return $out;
+    }
+
+    /**
+     * Drops every cached connection, pool and config so the next `db()` opens
+     * fresh sockets — the fork-safety reset.
+     *
+     * A fork copies file descriptors, so any connection cached before the fork
+     * would be shared with the parent and corrupt the wire protocol. A forked
+     * daemon worker runs this via {@see \Flytachi\Winter\Kernel\Process\ForkReset}
+     * (registered in {@see \Flytachi\Winter\Kernel\Kernel::init()}), then re-opens
+     * lazily in the child. Because access is static — repositories call
+     * `PpaConnectionPool::db()`, never an injected instance — clearing the caches
+     * is a complete "reconnect": nothing holds a stale reference.
+     *
+     * Keep connections lazy (do not query from a supervisor before it forks
+     * workers) so this stays a cheap no-op in the common case.
+     */
+    /**
+     * Closes every pool and connection this process owns — the worker-shutdown
+     * counterpart of {@see reset()}.
+     *
+     * The difference matters. {@see reset()} is for a **forked child**, which must
+     * forget inherited sockets without closing them. Here the process genuinely owns
+     * them, so they are closed properly; just as importantly, closing a pool releases
+     * its housekeeping timer, and a live timer would keep the worker's reactor from
+     * draining until Swoole force-kills it.
+     */
+    public static function shutdown(): void
+    {
+        foreach (self::$pools as $pool) {
+            $pool->close();
+        }
+        foreach (self::$static as $connection) {
+            $connection->close();
+        }
+        self::$pools = [];
+        self::$static = [];
+        self::$configs = [];
+    }
+
+    public static function reset(): void
+    {
+        // Abandon (never close) each pool first: a housekeeping Timer::tick callback
+        // holds a reference to its pool, so a pool that is merely dereferenced would
+        // stay alive and keep maintaining connections this process no longer owns.
+        // abandon() clears that timer without touching the inherited sockets.
+        foreach (self::$pools as $pool) {
+            $pool->abandon();
+        }
+        self::$pools = [];
+        self::$static = [];
+        self::$configs = [];
+
+        // The child inherited the parent's publishing identity along with everything
+        // else; keeping it would let the child overwrite the parent's telemetry record.
+        PoolTelemetry::forget();
+    }
+
     // -------------------------------------------------------------------------
     // Internals
     // -------------------------------------------------------------------------
 
     /**
-     * FPM path: singleton CDO per config class for the process lifetime.
+     * FPM / non-coroutine path: one {@see SingleConnection} per config class for the
+     * process lifetime. For a short FPM request the connection is freshly opened, so
+     * the liveness checks are near no-ops; for a long-running non-coroutine process
+     * (e.g. a Sync daemon querying the DB) the same idle-gate + maxLifetime that the
+     * coroutine pool applies keep the connection healthy across a DB outage.
      */
     private static function staticDb(string $configClass): CDO
     {
         $key = base64_encode($configClass);
         if (!isset(self::$static[$key])) {
-            self::$static[$key] = self::getConfigDb($configClass)->connection();
+            // Register the config for diagnostics (showDbConfigs) and future static knobs.
+            self::getConfigDb($configClass);
+            self::$static[$key] = new SingleConnection(
+                new CdoConnectionFactory($configClass, self::logger()),
+                new PoolPolicy(),
+            );
             self::logger()->debug("FPM connection opened: {$configClass}");
         }
-        return self::$static[$key];
+
+        /** @var DbConfigInterface $config */
+        $config = self::$static[$key]->get();
+        return $config->connection();
     }
 
     /**
-     * Swoole path: borrow from Swoole\ConnectionPool on first call in this coroutine,
-     * cache in coroutine context, auto-release via defer on coroutine end.
+     * Swoole path: borrow one connection from the {@see ConnectionPool} on the first
+     * call in this coroutine, cache the {@see PoolEntry} in coroutine context, and
+     * auto-release via defer when the coroutine ends. The pool validates idle
+     * connections and rotates aged ones on borrow (see the class docblock).
      */
     private static function coroutineDb(string $configClass): CDO
     {
@@ -156,83 +336,118 @@ final class PpaConnectionPool
         $ctx    = \Swoole\Coroutine::getContext();
 
         if (!isset($ctx[$ctxKey])) {
-            $swPool  = self::swPool($configClass);
-            $config  = self::getConfigDb($configClass);
-            $timeout = $config instanceof PpaPoolConfigInterface
-                ? $config->getPoolWaitTimeout()
-                : 3.0;
-
-            $cid = \Swoole\Coroutine::getCid();
+            $pool = self::pool($configClass);
+            $cid  = \Swoole\Coroutine::getCid();
             self::logger()->debug("cid={$cid} borrow: {$configClass}");
 
             try {
-                /** @var CDO|false $cdo */
-                $cdo = $swPool->get($timeout);
-            } catch (\Throwable $e) {
-                self::logger()->error("cid={$cid} connect failed: {$configClass} — {$e->getMessage()}");
+                $entry = $pool->borrow();
+            } catch (PoolException $e) {
+                self::logger()->error("cid={$cid} borrow failed: {$configClass} — {$e->getMessage()}");
                 throw new PpaPoolException(
                     "PpaConnectionPool: connection failed for [{$configClass}] — {$e->getMessage()}",
                     previous: $e
                 );
             }
 
-            if ($cdo === false) {
-                self::logger()->error("cid={$cid} exhausted: {$configClass} (timeout={$timeout}s)");
-                throw new PpaPoolException(
-                    "PpaConnectionPool: no free connection for [{$configClass}] "
-                    . "within {$timeout}s — increase poolMaxConnections or poolWaitTimeout"
-                );
-            }
-
-            $ctx[$ctxKey] = $cdo;
+            $held = new BorrowedConnection($entry);
+            $ctx[$ctxKey] = $held;
 
             // Auto-return when the coroutine finishes (normal exit OR exception).
-            // $cdo is captured directly — safer than reading from $ctx during teardown.
-            \Swoole\Coroutine::defer(static function () use ($swPool, $cdo, $cid, $configClass): void {
+            // $held is captured directly — safer than reading from $ctx during teardown —
+            // and carries the verdict {@see reportFailure()} may have left on it.
+            \Swoole\Coroutine::defer(static function () use ($pool, $held, $cid, $configClass): void {
+                if ($held->dead) {
+                    self::logger()->warning("cid={$cid} evict: {$configClass} (connection lost in use)");
+                    $pool->evict($held->entry);
+                    return;
+                }
                 self::logger()->debug("cid={$cid} release: {$configClass}");
-                $swPool->put($cdo);
+                $pool->release($held->entry);
             });
         }
 
-        $driver = $ctx[$ctxKey]->getAttribute(\PDO::ATTR_DRIVER_NAME);
-        if (!empty($driver)) {
-            $ctx[$ctxKey]->applyDatabaseTimezone($driver, date_default_timezone_get());
-        }
+        /** @var BorrowedConnection $held */
+        $held = $ctx[$ctxKey];
+        /** @var DbConfigInterface $config */
+        $config = $held->entry->resource;
+        $cdo    = $config->connection();
 
-        return $ctx[$ctxKey];
+        self::syncTimezone($config, $cdo);
+
+        return $cdo;
     }
 
     /**
-     * Returns (and lazily creates) the Swoole\ConnectionPool for the given config class.
+     * Makes the connection's session timezone match the request's.
      *
-     * The factory callable passed to Swoole\ConnectionPool creates a fresh CDO
-     * from a dedicated config instance per slot — guaranteeing independent sockets.
-     * Swoole\ConnectionPool itself is lazy: it calls the factory only when a slot
-     * is needed (up to `poolMaxConnections`).
+     * This runs on **every** `db()` call, not once per borrow, and that is deliberate:
+     * a pooled connection passes from one user to the next, so the previous user's
+     * timezone must never be left in place — a client in London would receive dates in
+     * Tashkent's zone. See {@see \Flytachi\Winter\Kernel\Http\Middleware\ClientTimezoneMiddleware}.
+     *
+     * The zone comes from {@see Timezone}, which is coroutine-local. Reading PHP's
+     * `date_default_timezone_get()` here — as this did — meant reading an engine global
+     * shared by every request in the worker: a request that yielded on I/O could resume
+     * after a concurrent request had overwritten it, and then hand *that* zone to its
+     * own database session. Measured, not theorised.
+     *
+     * The command itself is skipped when the connection already carries the right zone.
+     * That is not the same as hoisting it out of the hot path: the check is per
+     * connection, so a connection arriving from a user in another timezone is still
+     * corrected, including mid-request. It removes two round-trips per request in the
+     * ordinary case where everyone shares one zone.
      */
-    private static function swPool(string $configClass): \Swoole\ConnectionPool
+    private static function syncTimezone(object $config, CDO $cdo): void
+    {
+        $driver = $cdo->getAttribute(\PDO::ATTR_DRIVER_NAME);
+        if (empty($driver)) {
+            return;
+        }
+
+        $applied = self::$appliedTimezone ??= new \WeakMap();
+        $tz      = Timezone::current();
+        if (($applied[$config] ?? null) === $tz) {
+            return;
+        }
+
+        $cdo->applyDatabaseTimezone($driver, $tz);
+        $applied[$config] = $tz;
+    }
+
+    /**
+     * Returns (and lazily creates) the {@see ConnectionPool} for the given config class.
+     *
+     * The {@see CdoConnectionFactory} opens one independent CDO per slot (own socket).
+     * The pool is lazy: it opens a connection only when a slot is needed (up to
+     * `maximumPoolSize`). Sizing/timeout come from {@see PpaPoolConfigInterface} when
+     * the config implements it; `maxLifetime`/`aliveBypassWindow` use the
+     * {@see PoolPolicy} defaults.
+     */
+    private static function pool(string $configClass): ConnectionPool
     {
         $key = base64_encode($configClass);
         if (!isset(self::$pools[$key])) {
-            $config  = self::getConfigDb($configClass);
-            $maxConn = $config instanceof PpaPoolConfigInterface
-                ? $config->getPoolMaxConnections()
-                : self::DEFAULT_POOL_SIZE;
+            $config = self::getConfigDb($configClass);
+            $policy = $config instanceof PpaPoolConfigInterface
+                ? new PoolPolicy(
+                    maximumPoolSize: $config->getPoolMaxConnections(),
+                    connectionTimeout: $config->getPoolWaitTimeout(),
+                    keepaliveTime: $config->getKeepaliveTime(),
+                    idleTimeout: $config->getIdleTimeout(),
+                    minimumIdle: $config->getMinimumIdle(),
+                )
+                : new PoolPolicy(maximumPoolSize: self::DEFAULT_POOL_SIZE, connectionTimeout: 3.0);
 
-            self::logger()->debug("pool created: {$configClass} maxConnections={$maxConn}");
+            self::logger()->debug("pool created: {$configClass} maxConnections={$policy->maximumPoolSize}");
 
-            // Factory: each call creates one independent CDO (own socket).
-            $factory = static function () use ($configClass): CDO {
-                /** @var DbConfigInterface $slotConfig */
-                $slotConfig = new $configClass();
-                $slotConfig->setUp();
-                $slotConfig->setLogger(self::logger());
-                $cdo = $slotConfig->connection();
-                self::logger()->debug("slot opened: {$configClass} dsn={$slotConfig->getDns()}");
-                return $cdo;
-            };
+            self::$pools[$key] = new ConnectionPool(
+                new CdoConnectionFactory($configClass, self::logger()),
+                $policy,
+            );
 
-            self::$pools[$key] = new \Swoole\ConnectionPool($factory, $maxConn);
+            // First pool in this worker — from here on there is something to report.
+            PoolTelemetry::arm();
         }
         return self::$pools[$key];
     }

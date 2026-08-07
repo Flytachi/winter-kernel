@@ -2,14 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Repository;
+namespace Flytachi\Winter\Kernel\Ppa\Repository;
 
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\Cdo\CDOBind;
 use Flytachi\Winter\Cdo\Connection\CDOStatement;
 use Flytachi\Winter\Cdo\Qb;
-use Flytachi\Winter\K2\Ppa\Entity\EntityException;
-use Flytachi\Winter\K2\Ppa\Entity\RepositoryViewInterface;
+use Flytachi\Winter\Kernel\Ppa\Entity\EntityException;
+use Flytachi\Winter\Kernel\Ppa\Entity\RepositoryViewInterface;
+use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
 use PDO;
 use Throwable;
 
@@ -60,6 +61,7 @@ trait RepositoryViewTrait
                 $entityClassName ?: $this->state()->entityClassName
             );
         } catch (Throwable $th) {
+            PpaConnectionPool::reportFailure($this->dbConfigClassName, $th);
             throw new RepositoryException($th->getMessage(), previous: $th);
         }
     }
@@ -85,6 +87,7 @@ trait RepositoryViewTrait
             $this->cleanCache();
             return $stmt->getStmt()->fetchObject($resolvedClass) ?: null;
         } catch (Throwable $th) {
+            PpaConnectionPool::reportFailure($this->dbConfigClassName, $th);
             throw new RepositoryException($th->getMessage(), previous: $th);
         }
     }
@@ -108,6 +111,7 @@ trait RepositoryViewTrait
             $this->cleanCache();
             return $stmt->getStmt()->fetchColumn($column);
         } catch (Throwable $th) {
+            PpaConnectionPool::reportFailure($this->dbConfigClassName, $th);
             throw new RepositoryException($th->getMessage(), previous: $th);
         }
     }
@@ -132,6 +136,7 @@ trait RepositoryViewTrait
             $this->cleanCache();
             return $stmt->getStmt()->fetchAll(PDO::FETCH_CLASS, $resolvedClass);
         } catch (Throwable $th) {
+            PpaConnectionPool::reportFailure($this->dbConfigClassName, $th);
             throw new RepositoryException($th->getMessage(), previous: $th);
         }
     }
@@ -156,6 +161,7 @@ trait RepositoryViewTrait
             $this->cleanCache();
             return (int) $stmt->getStmt()->fetchColumn();
         } catch (Throwable $th) {
+            PpaConnectionPool::reportFailure($this->dbConfigClassName, $th);
             throw new RepositoryException($th->getMessage(), previous: $th);
         }
     }
@@ -181,6 +187,7 @@ trait RepositoryViewTrait
             $this->cleanCache();
             return (bool) $stmt->getStmt()->fetchColumn();
         } catch (Throwable $th) {
+            PpaConnectionPool::reportFailure($this->dbConfigClassName, $th);
             throw new RepositoryException($th->getMessage(), previous: $th);
         }
     }

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Mapping\Attributes\Config;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Mapping\Attributes\Config;
 
 use Attribute;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\AttributeDbConfig;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Config\Extension;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\AttributeDbConfig;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Config\Extension;
 use PHPUnit\Framework\TestCase;
 use ReflectionAttribute;
 use ReflectionClass;

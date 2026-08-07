@@ -2,13 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Health;
+namespace Flytachi\Winter\Kernel\Http\Health;
 
 use Composer\InstalledVersions;
 use Flytachi\Winter\Base\Runtime;
-use Flytachi\Winter\DI\Scanner;
-use Flytachi\Winter\K2\Collector\ImplementorCollector;
-use Flytachi\Winter\K2\Http\Header;
+use Flytachi\Winter\DI\Container;
+use Flytachi\Winter\Kernel\Core\ClassScanner;
+use Flytachi\Winter\Kernel\Collector\ImplementorCollector;
+use Flytachi\Winter\Kernel\Http\Header;
+use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
 
 class HealthIndicator implements HealthIndicatorInterface
 {
@@ -24,8 +26,13 @@ class HealthIndicator implements HealthIndicatorInterface
             'cache'  => $this->cacheHealth($rootDir),
             'disk'   => $this->diskHealth(),
             'memory' => $this->memoryHealth(),
-            'custom' => $this->customHealth(),
         ];
+
+        // Merge every discovered HealthContributor, keyed by its name(). A contributor
+        // may override a built-in component by reusing its key.
+        foreach ($this->contributors() as $name => $status) {
+            $components[$name] = $status;
+        }
 
         $statuses = array_column($components, 'status');
         $overall  = 'up';
@@ -110,7 +117,7 @@ class HealthIndicator implements HealthIndicatorInterface
         $globalFormat = env('LOG_FORMAT', 'line');
 
         $channels = [];
-        foreach (['sys', 'http', 'cli'] as $name) {
+        foreach (['sys', 'http'] as $name) {
             $prefix   = 'LOG_' . strtoupper($name) . '_';
             $level    = env($prefix . 'LEVEL')  ?? $globalLevel;
             $output   = env($prefix . 'OUTPUT') ?? $globalOutput;
@@ -125,8 +132,8 @@ class HealthIndicator implements HealthIndicatorInterface
             ];
 
             if ($output === 'file' || $file) {
-                $root   = \Flytachi\Winter\K2\Kernel::$pathRoot;
-                $logDir = \Flytachi\Winter\K2\Kernel::$pathStorageLog;
+                $root   = \Flytachi\Winter\Kernel\Kernel::$pathRoot;
+                $logDir = \Flytachi\Winter\Kernel\Kernel::$pathStorageLog;
                 $entry['file'] = [
                     'path'     => $file ?? (str_starts_with($logDir, $root)
                         ? ltrim(substr($logDir, strlen($root)), DIRECTORY_SEPARATOR)
@@ -151,56 +158,98 @@ class HealthIndicator implements HealthIndicatorInterface
     final protected function dbHealth(string $rootDir): array
     {
         $interface = 'Flytachi\Winter\Cdo\Config\Common\DbConfigInterface';
-        if ($rootDir === '' || !interface_exists($interface)) {
-            return ['status' => 'up', 'details' => []];
-        }
+        $details   = [];
 
-        $collector = new ImplementorCollector($interface);
-        Scanner::run($rootDir)->collect($collector)->execute();
-        $details     = [];
-        $worstStatus = 'up';
+        if ($rootDir !== '' && interface_exists($interface)) {
+            $collector = new ImplementorCollector($interface);
+            ClassScanner::scanner($rootDir)->collect($collector)->execute();
 
-        foreach ($collector->getResult() as $ref) {
-            /** @var \Flytachi\Winter\Cdo\Config\Common\DbConfigInterface $config */
-            $config = $ref->newInstance();
-            $config->setUp();
+            foreach ($collector->getResult() as $ref) {
+                /** @var \Flytachi\Winter\Cdo\Config\Common\DbConfigInterface $config */
+                $config = $ref->newInstance();
+                $config->setUp();
 
-            try {
-                $result  = $config->pingDetail();
-                $latency = $result['latency'] ?? null;
+                try {
+                    $result  = $config->pingDetail();
+                    $latency = $result['latency'] ?? null;
 
-                if (!$result['status']) {
-                    $status = 'down';
-                } elseif ($latency !== null && $latency >= self::DEGRADED_LATENCY_MS) {
-                    $status = 'degraded';
-                } else {
-                    $status = 'up';
+                    if (!$result['status']) {
+                        $status = 'down';
+                    } elseif ($latency !== null && $latency >= self::DEGRADED_LATENCY_MS) {
+                        $status = 'degraded';
+                    } else {
+                        $status = 'up';
+                    }
+
+                    $details[$ref->getName()] = [
+                        'status'  => $status,
+                        'driver'  => $config->getDriver(),
+                        'latency' => $latency,
+                        'error'   => $result['error'] ?? null,
+                    ];
+                } catch (\Throwable $e) {
+                    $details[$ref->getName()] = [
+                        'status'  => 'down',
+                        'driver'  => $config->getDriver(),
+                        'latency' => null,
+                        'error'   => $e->getMessage(),
+                    ];
                 }
-
-                if ($status === 'down') {
-                    $worstStatus = 'down';
-                } elseif ($status === 'degraded' && $worstStatus !== 'down') {
-                    $worstStatus = 'degraded';
-                }
-
-                $details[$ref->getName()] = [
-                    'status'  => $status,
-                    'driver'  => $config->getDriver(),
-                    'latency' => $latency,
-                    'error'   => $result['error'] ?? null,
-                ];
-            } catch (\Throwable $e) {
-                $details[$ref->getName()] = [
-                    'status'  => 'down',
-                    'driver'  => $config->getDriver(),
-                    'latency' => null,
-                    'error'   => $e->getMessage(),
-                ];
-                $worstStatus = 'down';
             }
         }
 
-        return ['status' => $worstStatus, 'details' => $details];
+        $details  = $this->mergePoolUtilisation($details);
+        $statuses = array_column($details, 'status');
+
+        return [
+            'status'  => match (true) {
+                in_array('down', $statuses, true)     => 'down',
+                in_array('degraded', $statuses, true) => 'degraded',
+                default                                => 'up',
+            },
+            'details' => $details,
+        ];
+    }
+
+    /**
+     * Folds live pool utilisation ({@see PpaConnectionPool::stats()}) into the per
+     * datasource entries, so one entry carries both reachability (fresh ping) and
+     * how loaded its pool is — they are keyed by the same config FQCN.
+     *
+     * A saturated pool (every connection handed out — `active >= maximum`, none idle)
+     * degrades that datasource: it is the signal that borrows are starting to queue.
+     * A datasource with no pool in this worker reports `pool: null` — the FPM path,
+     * or simply a config not used yet. Numbers are per worker (see
+     * {@see PpaConnectionPool::stats()}); a pool whose config the scan did not reach
+     * still gets an entry, so a live pool is never invisible.
+     *
+     * @param array<string, array<string, mixed>> $details
+     * @return array<string, array<string, mixed>>
+     */
+    private function mergePoolUtilisation(array $details): array
+    {
+        foreach (PpaConnectionPool::stats() as $config => $stat) {
+            $details[$config] ??= [
+                'status'  => 'up',
+                'driver'  => null,
+                'latency' => null,
+                'error'   => null,
+            ];
+
+            if ($stat['maximum'] > 0 && $stat['active'] >= $stat['maximum']
+                && $details[$config]['status'] === 'up'
+            ) {
+                $details[$config]['status'] = 'degraded';
+            }
+
+            $details[$config]['pool'] = $stat;
+        }
+
+        foreach ($details as $config => $entry) {
+            $details[$config]['pool'] = $entry['pool'] ?? null;
+        }
+
+        return $details;
     }
 
     // ── Cache health (requires flytachi/winter-cache) ─────────────────────────
@@ -213,7 +262,7 @@ class HealthIndicator implements HealthIndicatorInterface
         }
 
         $collector = new ImplementorCollector($interface);
-        Scanner::run($rootDir)->collect($collector)->execute();
+        ClassScanner::scanner($rootDir)->collect($collector)->execute();
         $details     = [];
         $worstStatus = 'up';
 
@@ -296,10 +345,24 @@ class HealthIndicator implements HealthIndicatorInterface
         return ['up', null];
     }
 
-    // ── Override to add custom health checks ──────────────────────────────────
+    // ── Custom health checks (discovered HealthContributor implementations) ────
 
-    protected function customHealth(): array
+    /**
+     * Resolves every registered {@see HealthContributor} from the container and runs
+     * it live. Keyed by {@see HealthContributor::name()}.
+     *
+     * @return array<string, array{status: string, details: array<string, mixed>}>
+     */
+    private function contributors(): array
     {
-        return ['status' => 'up', 'details' => []];
+        $container = Container::getInstance();
+        $out       = [];
+        foreach (Health::getContributors() as $class) {
+            /** @var HealthContributor $contributor */
+            $contributor = $container->make($class);
+            $out[$contributor->name()] = $contributor->check()->toArray();
+        }
+
+        return $out;
     }
 }

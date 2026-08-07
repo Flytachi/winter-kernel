@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Mapping\Structure;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Mapping\Structure;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\IndexMethod;
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\IndexType;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\Index;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\StructureInterface;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\IndexMethod;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\IndexType;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Index;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\StructureInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -227,8 +227,37 @@ final class IndexTest extends TestCase
 
     public function test_unsupported_dialect_throws(): void
     {
+        // sqlite used to stand in for "unsupported" here; it is a supported dialect now,
+        // so the guard is proven with one the mapper genuinely does not know.
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Unsupported dialect: sqlite');
-        (new Index(columns: ['id']))->toSql('users', 'sqlite');
+        $this->expectExceptionMessage('Unsupported dialect: oci');
+        (new Index(columns: ['id']))->toSql('users', 'oci');
+    }
+
+    // ── SQLite ───────────────────────────────────────────────────────────────
+
+    public function test_sqlite_index_has_no_using_clause(): void
+    {
+        // SQLite has a single index implementation, so USING would be a syntax error.
+        $sql = (new Index(columns: ['email'], type: IndexType::UNIQUE))->toSql('users', 'sqlite');
+
+        self::assertStringContainsString('CREATE UNIQUE INDEX', $sql);
+        self::assertStringContainsString('ON users (email)', $sql);
+        self::assertStringNotContainsString('USING', $sql);
+    }
+
+    public function test_sqlite_primary_key_is_a_table_constraint(): void
+    {
+        $sql = (new Index(columns: ['id'], type: IndexType::PRIMARY))->toSql('users', 'sqlite');
+
+        self::assertSame('PRIMARY KEY (id)', $sql);
+    }
+
+    public function test_sqlite_supports_a_partial_index(): void
+    {
+        $sql = (new Index(columns: ['email'], type: IndexType::INDEX, where: 'deleted_at IS NULL'))
+            ->toSql('users', 'sqlite');
+
+        self::assertStringContainsString('WHERE deleted_at IS NULL', $sql);
     }
 }

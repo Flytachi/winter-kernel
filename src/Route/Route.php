@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Route;
+namespace Flytachi\Winter\Kernel\Route;
 
-readonly class Route
+final readonly class Route
 {
     public string $regex;
     /** @var list<string> */

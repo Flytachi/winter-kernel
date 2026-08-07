@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Contracts;
+namespace Flytachi\Winter\Kernel\Http\Contracts;
 
 /**
  * Unified HTTP request abstraction.
@@ -11,7 +11,7 @@ namespace Flytachi\Winter\K2\Http\Contracts;
  *   - SwooleRequest  — wraps Swoole\Http\Request (coroutine-safe)
  *   - FpmRequest     — wraps $_SERVER / $_GET / $_POST / php://input
  *
- * All K2 internals (Router, ParameterResolver, Middleware)
+ * All kernel internals (Router, ParameterResolver, Middleware)
  * depend only on this interface — never on a concrete transport.
  */
 interface HttpRequest
@@ -46,8 +46,16 @@ interface HttpRequest
     /** Uploaded files ($_FILES equivalent). */
     public function getUploadedFiles(): array;
 
-    /** Server / environment variable (e.g. 'remote_addr', 'request_method'). */
-    public function getServerParam(string $key): ?string;
+    /**
+     * Server / environment variable (e.g. 'remote_addr', 'request_method').
+     *
+     * Not every one of them is a string, which is why the return type is not `?string`:
+     * Swoole stores `server_port`, `remote_port`, `request_time` and `master_time` as
+     * integers and `request_time_float` as a float, and PHP does the same for
+     * `REQUEST_TIME` and `REQUEST_TIME_FLOAT` under FPM. Asking for a port used to fail
+     * with a `TypeError` under `strict_types` rather than answer.
+     */
+    public function getServerParam(string $key): string|int|float|null;
 
     /** Resolved client IP address (respects X-Forwarded-For / Forwarded). */
     public function getClientIp(): string;

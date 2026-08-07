@@ -143,11 +143,11 @@ $user = UserRepository::findByOrThrow(
 ## EntityException
 
 `findByIdOrThrow()` and `findByOrThrow()` throw
-`Flytachi\Winter\K2\Ppa\Entity\EntityException` on miss.
+`Flytachi\Winter\Kernel\Ppa\Entity\EntityException` on miss.
 It extends the Winter framework exception and is logged at `WARNING` level.
 
 ```php
-use Flytachi\Winter\K2\Ppa\Entity\EntityException;
+use Flytachi\Winter\Kernel\Ppa\Entity\EntityException;
 
 try {
     $user = UserRepository::findByIdOrThrow($id);

@@ -2,11 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2;
+namespace Flytachi\Winter\Kernel;
 
-use Flytachi\Winter\Base\Runtime;
-use Flytachi\Winter\K2\Core\KernelStore;
-use Flytachi\Winter\Thread\Launch\CliLauncher;
+use Flytachi\Winter\Kernel\Core\KernelStore;
+use Flytachi\Winter\Kernel\Process\ForkReset;
+use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Thread\Launch\AdaptiveLauncher;
 use Flytachi\Winter\Thread\Thread;
 use Flytachi\Winter\Logger\Context\ProcessContext;
 use Flytachi\Winter\Logger\LoggerFactory;
@@ -24,7 +25,6 @@ final class Kernel extends KernelStore
     public static function init(
         ?string $pathRoot = null,
         ?string $pathEnv = null,
-        ?string $pathPublic = null,
         ?string $pathResource = null,
         ?string $pathStorage = null,
         ?string $pathStorageLog = null,
@@ -36,7 +36,6 @@ final class Kernel extends KernelStore
         parent::init(
             $pathRoot,
             $pathEnv,
-            $pathPublic,
             $pathResource,
             $pathStorage,
             $pathStorageLog,
@@ -62,11 +61,19 @@ final class Kernel extends KernelStore
 
         self::bootLogger();
 
-        // thread
-        Thread::bindLauncher(CliLauncher::adaptive(
+        // thread — both backends spawn the same `php <runnerPath>` child; only the way
+        // the shell is invoked differs. Inside a coroutine proc_open corrupts the
+        // reactor's descriptors and Swoole\Process is refused while its async-io
+        // threads are up, so the launcher shells out via Coroutine\System::exec();
+        // everywhere else proc_open is used unchanged.
+        Thread::bindLauncher(AdaptiveLauncher::adaptive(
             secret: env('WINTER_KEY', ''),
             runnerPath: self::threadRunnerPath(),
         ));
+
+        // fork-safety — a forked daemon worker inherits the parent's DB sockets;
+        // reset the pool in the child (Process::afterFork) so it reconnects fresh.
+        ForkReset::register(static fn() => PpaConnectionPool::reset());
     }
 
     private static function bootLogger(): void
@@ -85,8 +92,9 @@ final class Kernel extends KernelStore
         if (empty($levelStr)) {
             LoggerFactory::setManager(new LoggerManager(
                 contextStorage: new ProcessContext(),
-                channels: ['sys' => $null, 'http' => $null, 'cli' => $null],
+                channels: ['sys' => $null, 'http' => $null],
             ));
+            LoggerFactory::setDefaultChannel('sys');
             return;
         }
 
@@ -95,7 +103,6 @@ final class Kernel extends KernelStore
             channels: [
                 'sys'  => self::buildChannelConfig('sys'),
                 'http' => self::buildChannelConfig('http'),
-                'cli'  => self::buildChannelConfig('cli'),
             ],
         ));
 
@@ -120,31 +127,50 @@ final class Kernel extends KernelStore
 
         $rawOutput = (string) (env($prefix . 'OUTPUT') ?? env('LOG_OUTPUT', 'auto'));
         $output    = self::resolveOutput($rawOutput);
+        $format    = (string) (env($prefix . 'FORMAT') ?? env('LOG_FORMAT', 'line'));
 
         $filePath = env($prefix . 'FILE') ?? env('LOG_FILE');
         if ($output === 'file' && empty($filePath)) {
             $filePath = self::$pathStorageLog . '/' . $channel . '.log';
         }
 
+        // ANSI colour — line format only, never JSON. LOG_COLOR = auto|always|never
+        // (auto = colour only when the output is an interactive terminal, mirroring
+        // Spring's `detect` / Postgres' PG_COLOR).
+        $colorMode = strtolower((string) (env($prefix . 'COLOR') ?? env('LOG_COLOR', 'auto')));
+        $color = $format === 'line' && match ($colorMode) {
+            'always' => true,
+            'never'  => false,
+            default  => self::outputIsTty($output),
+        };
+
         return [
             'level'        => $levelStr,
-            'format'       => (string) (env($prefix . 'FORMAT') ?? env('LOG_FORMAT', 'line')),
+            'format'       => $format,
             'output'       => $output,
+            'color'        => $color,
             'file_path'    => $filePath ? (string) $filePath : null,
             'file_max'     => (int) (env($prefix . 'FILE_MAX') ?? env('LOG_FILE_MAX', 30)),
-            'syslog_ident' => (string) (env($prefix . 'SYSLOG_IDENT') ?? env('LOG_SYSLOG_IDENT', 'winter')),
+            // Fixed syslog program tag — winter-logger requires the key; not a knob.
+            'syslog_ident' => 'winter',
         ];
     }
 
     private static function resolveOutput(string $raw): string
     {
-        if ($raw !== 'auto') {
-            return $raw;
-        }
-        if (getenv('KUBERNETES_SERVICE_HOST') !== false || file_exists('/.dockerenv')) {
-            return 'syslog';
-        }
-        return Runtime::isSwoole() ? 'stdout' : 'stderr';
+        // `auto` → stdout everywhere; whatever runs the process (orchestrator,
+        // supervisor, terminal) captures stdout. Explicit values pass through.
+        return $raw === 'auto' ? 'stdout' : $raw;
+    }
+
+    /** True when the resolved log output is an interactive terminal (for LOG_COLOR=auto). */
+    private static function outputIsTty(string $output): bool
+    {
+        return match ($output) {
+            'stdout' => defined('STDOUT') && stream_isatty(STDOUT),
+            'stderr' => defined('STDERR') && stream_isatty(STDERR),
+            default  => false,
+        };
     }
 
     private static function threadRunnerPath(): string

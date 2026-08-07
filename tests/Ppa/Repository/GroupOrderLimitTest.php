@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Repository;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Repository;
 
 use Dotenv\Parser\Value;
-use Flytachi\Winter\K2\Tests\Ppa\Repository\Fixtures\UsersRepo;
+use Flytachi\Winter\Kernel\Tests\Ppa\Repository\Fixtures\UsersRepo;
 use PHPUnit\Framework\TestCase;
 use TypeError;
 use ValueError;

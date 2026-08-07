@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Http\Request\Validation;
+namespace Flytachi\Winter\Kernel\Tests\Http\Request\Validation;
 
-use Flytachi\Winter\K2\Http\Request\Validation\ValidationException;
+use Flytachi\Winter\Kernel\Http\Request\Validation\ValidationException;
 use PHPUnit\Framework\TestCase;
 
 class ValidationExceptionTest extends TestCase
@@ -44,6 +44,6 @@ class ValidationExceptionTest extends TestCase
     public function testIsInstanceOfResponseException(): void
     {
         $ex = new ValidationException([]);
-        self::assertInstanceOf(\Flytachi\Winter\K2\Http\Response\ResponseException::class, $ex);
+        self::assertInstanceOf(\Flytachi\Winter\Kernel\Http\Response\ResponseException::class, $ex);
     }
 }

@@ -8,6 +8,7 @@
     <testsuites>
         <testsuite name="Http">
             <directory>tests/Http</directory>
+            <exclude>tests/Http/Fixtures</exclude>
         </testsuite>
         <testsuite name="Localization">
             <directory>tests/Localization</directory>
@@ -25,6 +26,42 @@
         <testsuite name="Integration">
             <directory>tests/Integration</directory>
             <exclude>tests/Integration/Fixtures</exclude>
+        </testsuite>
+        <testsuite name="Process">
+            <directory>tests/Process</directory>
+            <exclude>tests/Process/Fixtures</exclude>
+        </testsuite>
+        <testsuite name="Schedule">
+            <directory>tests/Schedule</directory>
+            <exclude>tests/Schedule/Fixtures</exclude>
+        </testsuite>
+        <testsuite name="Concurrent">
+            <directory>tests/Concurrent</directory>
+        </testsuite>
+        <testsuite name="App">
+            <directory>tests/App</directory>
+        </testsuite>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="ConnectionPool">
+            <directory>tests/ConnectionPool</directory>
+        </testsuite>
+        <testsuite name="Route">
+            <directory>tests/Route</directory>
+            <exclude>tests/Route/Fixtures</exclude>
+        </testsuite>
+        <testsuite name="Architecture">
+            <directory>tests/Architecture</directory>
+        </testsuite>
+        <testsuite name="Collector">
+            <directory>tests/Collector</directory>
+        </testsuite>
+        <testsuite name="Core">
+            <directory>tests/Core</directory>
+        </testsuite>
+        <testsuite name="Console">
+            <directory>tests/Console</directory>
         </testsuite>
     </testsuites>
 

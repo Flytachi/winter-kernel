@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Hybrid;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Hybrid;
 
 use Attribute;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Additive\NullableIs;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Idx\Primary;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Primal\Integer;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Sub\AutoIncrement;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Additive\NullableIs;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Idx\Primary;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Integer;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Sub\AutoIncrement;
 
 #[Attribute(Attribute::TARGET_PROPERTY)]
-readonly class Id implements AttributeDbHybrid
+final readonly class Id implements AttributeDbHybrid
 {
     /**
      * AutoIncrement attribute for marking a property as an auto-incrementing column.

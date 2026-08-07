@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Response;
+namespace Flytachi\Winter\Kernel\Http\Response;
 
-use Flytachi\Winter\K2\Http\Contracts\HttpRequest;
-use Flytachi\Winter\K2\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
+use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
 
 /**
- * Common contract for all K2 response objects.
+ * Common contract for all kernel response objects.
  *
  * Any value returned from a controller method that implements this interface
  * will be serialized to the HttpResponse by the Router automatically.

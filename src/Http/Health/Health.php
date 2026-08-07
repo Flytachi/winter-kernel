@@ -2,15 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Health;
+namespace Flytachi\Winter\Kernel\Http\Health;
 
-use Flytachi\Winter\K2\Stereotype\Middleware;
+use Flytachi\Winter\Kernel\Http\Stereotype\Middleware;
 
 final class Health
 {
     private static ?array $config   = null;
     private static string $rootDir  = '';
     private static array $mappings = [];
+    /** @var list<class-string<HealthContributor>> */
+    private static array $contributors = [];
 
     private function __construct()
     {
@@ -52,6 +54,25 @@ final class Health
     public static function getMappings(): array
     {
         return self::$mappings;
+    }
+
+    /**
+     * The discovered {@see HealthContributor} classes, merged into `/actuator/health`
+     * by the aggregator. Resolved from the container per request.
+     *
+     * @param list<class-string<HealthContributor>> $contributors
+     */
+    public static function setContributors(array $contributors): void
+    {
+        self::$contributors = $contributors;
+    }
+
+    /**
+     * @return list<class-string<HealthContributor>>
+     */
+    public static function getContributors(): array
+    {
+        return self::$contributors;
     }
 
     // ── System info helpers (used by HealthIndicator) ─────────────────────────

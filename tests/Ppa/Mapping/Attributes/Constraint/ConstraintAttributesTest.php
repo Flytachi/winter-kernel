@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Mapping\Attributes\Constraint;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Mapping\Attributes\Constraint;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Constraint\Check;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Constraint\CheckEnum;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Constraint\ForeignKey;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Constraint\ForeignRepo;
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\FKAction;
-use Flytachi\Winter\K2\Ppa\Mapping\RepositoryMappingInterface;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\CheckConstraint;
-use Flytachi\Winter\K2\Ppa\Mapping\Structure\ForeignKey as ForeignKeyStructure;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Constraint\Check;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Constraint\CheckEnum;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Constraint\ForeignKey;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Constraint\ForeignRepo;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\FKAction;
+use Flytachi\Winter\Kernel\Ppa\Mapping\RepositoryMappingInterface;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\CheckConstraint;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\ForeignKey as ForeignKeyStructure;
 use PHPUnit\Framework\TestCase;
 
 // ── Enums used by CheckEnum tests ────────────────────────────────────────────

@@ -6,14 +6,13 @@ namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Core;
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\Console\Inc\CmdCustom;
-use Flytachi\Winter\K2\Collector\ImplementorCollector;
-use Flytachi\Winter\K2\Collector\SubclassCollector;
-use Flytachi\Winter\K2\Core\ClassScanner;
-use Flytachi\Winter\K2\Process\Core\Dispatchable;
-use Flytachi\Winter\K2\Process\ThreadDaemon;
+use Flytachi\Winter\Console\Stereotype\CmdCustom;
+use Flytachi\Winter\Kernel\Collector\SubclassCollector;
+use Flytachi\Winter\Kernel\Core\ClassScanner;
+use Flytachi\Winter\Kernel\Process\Stereotype\Daemon as DaemonUnit;
+use Flytachi\Winter\Kernel\Process\Stereotype\Process as ProcessUnit;
 
-class Complete extends Cmd
+final class Complete extends Cmd
 {
     public static string $title = "shell completion endpoint (internal)";
 
@@ -31,11 +30,8 @@ class Complete extends Cmd
             '-e:Entity — ORM entity / model',
             '-d:Dto — Data Transfer Object',
             '-q:Request — validated request object',
-            '-p:Response — custom HTTP response',
-            '-J:Job — async queue job',
             '-P:Process — long-running process',
             '-N:Daemon — background daemon',
-            '-W:WebSocket — WebSocket handler',
             '-D:DbConfig — database configuration',
             '-R:RedisConfig — Redis configuration',
             '-n:Cmd — custom console command',
@@ -52,7 +48,7 @@ class Complete extends Cmd
         ],
         'cfg key'        => ['-g:generate WINTER_KEY', '-s:show current key'],
         'cfg env'        => ['-i:create .env from template', '-s:show loaded env vars', '--file:show raw .env file'],
-        'cfg docker'     => ['--fpm:PHP-FPM + Nginx mode (default)', '--swoole:Swoole HTTP server mode'],
+        'cfg docker'     => [],
         'cfg completion' => ['-i:install globally (once per machine)', '-if:force reinstall', '-f:force flag'],
 
         // --- run ---
@@ -64,7 +60,7 @@ class Complete extends Cmd
             '--tasks=:number of Swoole task workers',
             '--max_request=:max requests per worker',
             '--max_request_grace=:graceful drain count',
-            '-w:enable MemoryWatcher',
+            '-w:enable DevWatcher (memory + hot-reload)',
         ],
         'run dev' => [
             '--host=:bind host (default: 0.0.0.0)',
@@ -81,11 +77,13 @@ class Complete extends Cmd
 
         // --- di ---
         'di' => [
-            'build:scan project and write the DI cache file',
-            'clean:delete the DI cache file',
+            'build:scan project once — write the DI cache and generate #[Async] proxies',
+            'clean:delete the DI cache and every generated proxy',
             'show:list classes in the DI cache (or a live scan if absent)',
+            'async:list #[Async] methods and whether their proxy is built',
         ],
         'di show' => [],   // takes optional FQCN substring as argument
+        'di async' => [],  // takes optional FQCN substring as argument
 
         // --- storage ---
         'storage' => [
@@ -95,19 +93,34 @@ class Complete extends Cmd
         'storage init'  => ['-s:storage', '-c:storage/cache', '-l:storage/logs'],
         'storage clean' => ['-s:storage', '-c:storage/cache', '-l:storage/logs'],
 
-        // --- thread / th ---
-        'thread' => [
-            'list:list all Dispatchable classes',
-            'daemons:list daemons with live status',
+        // --- process / proc ---
+        'process' => [
+            'list:list all processes with live state',
         ],
+
+        // --- daemon / dmn ---
+        'daemon' => [
+            'list:list all daemons with live state',
+        ],
+
+        // --- schedule / sch ---
+        'schedule' => [
+            'list:list all #[Scheduled] tasks and cadence',
+            'start:run the scheduler (foreground; -d for background)',
+            'stop:send graceful stop (SIGTERM)',
+            'status:scheduler run state + task count',
+        ],
+        'schedule start' => ['-d:run detached in background'],
 
         // --- db ---
         'db' => [
             'ping:check DB connection and latency',
             'migrate:run migrations against connected databases',
             'sql:preview generated SQL without executing',
+            'pool:show connection-pool utilisation of the running server',
         ],
         'db ping'    => [],   // auto-scans project + all plugins
+        'db pool'    => [],   // reads what the running workers publish
         'db migrate' => [
             '-s:schemes only', '-t:tables only', '-i:indexes only', '-c:constraints only',
             '--plugin=:target a single plugin', '--plugins:target all plugins',
@@ -175,28 +188,46 @@ class Complete extends Cmd
             $base = array_merge($base, $this->getScriptClasses());
         }
 
-        // thread: list + classes at top level; once a class is selected,
-        // suggestions depend on the action level:
-        //   no action yet  → lifecycle commands + -d (no-command/toggle flag)
-        //   after `status` → -v (detailed status flag)
-        if ($resolved === 'thread' && $sub !== null && !in_array($sub, ['list', 'daemons'], true)) {
-            $isDaemon = in_array($sub, array_map('strtolower', $this->getDaemonClasses()));
+        // process: list + classes at top level; once a class is selected,
+        // suggest lifecycle actions, then flags per action.
+        if ($resolved === 'process' && $sub !== null && $sub !== 'list') {
             if ($act === null) {
-                $base = $isDaemon
-                    ? [
-                        'start:start daemon in background',
-                        'stop:stop running daemon',
-                        'status:show daemon status (-v for detail)',
-                        '-d:toggle start in background',
-                    ]
-                    : ['-d:dispatch as background process'];
-            } elseif ($isDaemon && $act === 'status') {
-                $base = ['-v:detailed status (resources + forks)'];
+                $base = [
+                    'start:start (foreground; -d for background)',
+                    'stop:send graceful stop (SIGTERM)',
+                    'status:show status (-v for detail)',
+                    '-d:start detached in background',
+                ];
+            } elseif ($act === 'status') {
+                $base = ['-v:detailed status (resources + workers)'];
+            } elseif ($act === 'start') {
+                $base = ['-d:start detached in background'];
             } else {
                 $base = [];
             }
-        } elseif ($resolved === 'thread' && $sub === null) {
-            $base = array_merge($this->getDispatchableClasses(), $base);
+        } elseif ($resolved === 'process' && $sub === null) {
+            $base = array_merge($this->getProcessClasses(), $base);
+        }
+
+        // daemon: list + classes at top level; once a class is selected,
+        // suggest lifecycle actions, then flags per action.
+        if ($resolved === 'daemon' && $sub !== null && $sub !== 'list') {
+            if ($act === null) {
+                $base = [
+                    'start:supervise (foreground; -d for background)',
+                    'stop:graceful stop (drains the fleet)',
+                    'status:show status + worker fleet',
+                    '-d:supervise detached in background',
+                ];
+            } elseif ($act === 'status') {
+                $base = ['-v:also master resource usage'];
+            } elseif ($act === 'start') {
+                $base = ['-d:supervise detached in background'];
+            } else {
+                $base = [];
+            }
+        } elseif ($resolved === 'daemon' && $sub === null) {
+            $base = array_merge($this->getDaemonUnitClasses(), $base);
         }
 
         // help: suggest command names
@@ -212,9 +243,10 @@ class Complete extends Cmd
         if ($current === '') {
             return $items;
         }
-        return array_values(array_filter($items, function (string $s) use ($current): bool {
+        $needle = strtolower($current);
+        return array_values(array_filter($items, function (string $s) use ($needle): bool {
             $word = strstr($s, ':', true) ?: $s;
-            return str_starts_with($word, $current);
+            return str_starts_with(strtolower($word), $needle);
         }));
     }
 
@@ -247,20 +279,25 @@ class Complete extends Cmd
         );
     }
 
-    private function getDispatchableClasses(): array
+    private function getProcessClasses(): array
     {
-        $collector = new ImplementorCollector(Dispatchable::class);
+        $collector = new SubclassCollector(ProcessUnit::class);
         ClassScanner::scan($collector);
+
+        $bare = array_filter(
+            $collector->getResult(),
+            static fn(\ReflectionClass $ref) => !$ref->isSubclassOf(DaemonUnit::class)
+        );
 
         return array_map(
             fn(\ReflectionClass $ref) => str_replace('\\', '.', $ref->getName()),
-            $collector->getResult()
+            $bare
         );
     }
 
-    private function getDaemonClasses(): array
+    private function getDaemonUnitClasses(): array
     {
-        $collector = new SubclassCollector(ThreadDaemon::class);
+        $collector = new SubclassCollector(DaemonUnit::class);
         ClassScanner::scan($collector);
 
         return array_map(

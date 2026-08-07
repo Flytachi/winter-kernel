@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Attributes\Constraint;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Constraint;
 
 use Attribute;
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\FKAction;
-use Flytachi\Winter\K2\Ppa\Mapping\RepositoryMappingInterface;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\FKAction;
+use Flytachi\Winter\Kernel\Ppa\Mapping\RepositoryMappingInterface;
 
 #[Attribute(Attribute::TARGET_PROPERTY)]
-readonly class ForeignRepo implements AttributeDbConstraintForeign
+final readonly class ForeignRepo implements AttributeDbConstraintForeign
 {
     /**
      * @param class-string<RepositoryMappingInterface> $referencedRepoClass
@@ -28,7 +28,7 @@ readonly class ForeignRepo implements AttributeDbConstraintForeign
     public function toObject(
         string $columnName,
         string $dialect = 'mysql'
-    ): \Flytachi\Winter\K2\Ppa\Mapping\Structure\ForeignKey {
+    ): \Flytachi\Winter\Kernel\Ppa\Mapping\Structure\ForeignKey {
         $referencedRepoInstance = new $this->referencedRepoClass();
 
         if (!($referencedRepoInstance instanceof RepositoryMappingInterface)) {
@@ -38,7 +38,7 @@ readonly class ForeignRepo implements AttributeDbConstraintForeign
             ));
         }
 
-        return new \Flytachi\Winter\K2\Ppa\Mapping\Structure\ForeignKey(
+        return new \Flytachi\Winter\Kernel\Ppa\Mapping\Structure\ForeignKey(
             referencedTable: $referencedRepoInstance->originTable(),
             referencedColumn: $referencedRepoInstance->mapIdentifierColumnName(),
             onUpdate: $this->onUpdate,

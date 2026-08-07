@@ -2,18 +2,23 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Repository;
+namespace Flytachi\Winter\Kernel\Ppa\Repository;
 
 use Flytachi\Winter\Cdo\CDOBind;
 use Flytachi\Winter\Cdo\Connection\CDO;
 use Flytachi\Winter\Cdo\Connection\CDOStatement;
 use Flytachi\Winter\Cdo\Qb;
-use Flytachi\Winter\K2\Ppa\Entity\EntityInterface;
-use Flytachi\Winter\K2\Ppa\Entity\RepositoryInterface;
-use Flytachi\Winter\K2\Ppa\Mapping\RepositoryMappingInterface;
-use Flytachi\Winter\K2\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\DI\Attribute\Autowired;
+use Flytachi\Winter\DI\Attribute\Inject;
+use Flytachi\Winter\DI\Container;
+use Flytachi\Winter\Kernel\Ppa\Entity\EntityInterface;
+use Flytachi\Winter\Kernel\Ppa\Entity\RepositoryInterface;
+use Flytachi\Winter\Kernel\Ppa\Mapping\RepositoryMappingInterface;
+use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
 use Flytachi\Winter\Base\Runtime;
 use PDOStatement;
+use ReflectionClass;
+use ReflectionProperty;
 use stdClass;
 use Swoole\Coroutine;
 use Throwable;
@@ -49,7 +54,7 @@ use ValueError;
  *
  * `TEntity` is the entity class declared by a concrete repository via
  * {@see $entityClassName}. Subclasses bind it through an `@extends` PHPDoc tag
- * pinning the template parameter — see {@see \Flytachi\Winter\K2\Ppa\Stereotype\Repository}
+ * pinning the template parameter — see {@see \Flytachi\Winter\Kernel\Ppa\Stereotype\Repository}
  * for details. When unbound, `TEntity` defaults to {@see stdClass}.
  *
  * @template TEntity of object
@@ -87,16 +92,53 @@ abstract class RepositoryCore implements RepositoryInterface, RepositoryMappingI
     /**
      * Creates and returns a new repository instance, optionally with a table alias.
      *
+     * Deliberately a fresh object rather than a container lookup: the alias lives in
+     * per-object state, so joining one table twice needs two distinct handles. Resolving
+     * this through the container would return the shared instance for a `#[Singleton]`
+     * repository, and the second alias would silently overwrite the first.
+     *
+     * The container still fills `#[Autowired]` / `#[Inject]` properties, so a repository
+     * with dependencies behaves the same however it was obtained. Injection is skipped
+     * when no container exists — PPA is usable from a bare script, and that path simply
+     * has nothing to inject, exactly as before this was added.
+     *
      * @param string|null $as Optional table alias — calls {@see as()} before returning
      * @return static
      */
     public static function instance(?string $as = null): static
     {
         $repository = new static();
+
+        if (self::hasInjectableProperties(static::class) && Container::isInitialized()) {
+            Container::getInstance()->inject($repository);
+        }
+
         if (!empty($as)) {
             $repository->as($as);
         }
         return $repository;
+    }
+
+    /**
+     * Whether a repository class declares anything for the container to fill.
+     *
+     * Answered once per class and remembered, because {@see instance()} runs on every
+     * join of every request while the answer is almost always no — a repository normally
+     * carries a config class name and nothing else. Asking the container regardless cost
+     * roughly 2 µs per call, which is the wrong price for a rarely used capability.
+     *
+     * @param class-string $class
+     */
+    private static function hasInjectableProperties(string $class): bool
+    {
+        static $known = [];
+
+        return $known[$class] ??= array_any(
+            new ReflectionClass($class)->getProperties(),
+            static fn(ReflectionProperty $property): bool =>
+                $property->getAttributes(Autowired::class) !== []
+                || $property->getAttributes(Inject::class) !== [],
+        );
     }
 
     // -------------------------------------------------------------------------

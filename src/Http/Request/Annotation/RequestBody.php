@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Request\Annotation;
+namespace Flytachi\Winter\Kernel\Http\Request\Annotation;
 
 use Attribute;
 
@@ -40,7 +40,7 @@ use Attribute;
  * ```
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-readonly class RequestBody
+final readonly class RequestBody
 {
     /**
      * @param string|null $field Extract a single value from the parsed body by key

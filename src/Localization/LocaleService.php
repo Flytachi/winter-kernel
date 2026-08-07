@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Localization;
+namespace Flytachi\Winter\Kernel\Localization;
 
 use Flytachi\Winter\Base\Tool;
 
@@ -23,7 +23,7 @@ use Flytachi\Winter\Base\Tool;
  *   $svc->translate('user.greet', ['name' => 'Alice'])         → ':name' placeholder via strtr (assoc params)
  *   $svc->translate('unknown.key')                             → 'unknown.key'
  */
-class LocaleService
+final class LocaleService
 {
     private array $dictionary = [];
     private bool $loaded     = false;

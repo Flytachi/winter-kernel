@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Structure;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Structure;
 
-class NameValidator
+final class NameValidator
 {
     public static function validate(string $name, int $maxLength = 63): void
     {

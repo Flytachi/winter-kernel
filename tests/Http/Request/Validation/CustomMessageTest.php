@@ -2,32 +2,32 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Http\Request\Validation;
+namespace Flytachi\Winter\Kernel\Tests\Http\Request\Validation;
 
-use Flytachi\Winter\K2\Http\Request\Validation\Constraint;
-use Flytachi\Winter\K2\Http\Request\Validation\Date;
-use Flytachi\Winter\K2\Http\Request\Validation\Datetime;
-use Flytachi\Winter\K2\Http\Request\Validation\Digits;
-use Flytachi\Winter\K2\Http\Request\Validation\Email;
-use Flytachi\Winter\K2\Http\Request\Validation\In;
-use Flytachi\Winter\K2\Http\Request\Validation\Ip;
-use Flytachi\Winter\K2\Http\Request\Validation\Ipv4;
-use Flytachi\Winter\K2\Http\Request\Validation\Ipv6;
-use Flytachi\Winter\K2\Http\Request\Validation\Max;
-use Flytachi\Winter\K2\Http\Request\Validation\Min;
-use Flytachi\Winter\K2\Http\Request\Validation\Msisdn;
-use Flytachi\Winter\K2\Http\Request\Validation\Negative;
-use Flytachi\Winter\K2\Http\Request\Validation\NegativeOrZero;
-use Flytachi\Winter\K2\Http\Request\Validation\NotBlank;
-use Flytachi\Winter\K2\Http\Request\Validation\Phone;
-use Flytachi\Winter\K2\Http\Request\Validation\Positive;
-use Flytachi\Winter\K2\Http\Request\Validation\PositiveOrZero;
-use Flytachi\Winter\K2\Http\Request\Validation\Regex;
-use Flytachi\Winter\K2\Http\Request\Validation\Required;
-use Flytachi\Winter\K2\Http\Request\Validation\Size;
-use Flytachi\Winter\K2\Http\Request\Validation\Time;
-use Flytachi\Winter\K2\Http\Request\Validation\Url;
-use Flytachi\Winter\K2\Http\Request\Validation\Uuid;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Constraint;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Date;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Datetime;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Digits;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Email;
+use Flytachi\Winter\Kernel\Http\Request\Validation\In;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Ip;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Ipv4;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Ipv6;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Max;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Min;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Msisdn;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Negative;
+use Flytachi\Winter\Kernel\Http\Request\Validation\NegativeOrZero;
+use Flytachi\Winter\Kernel\Http\Request\Validation\NotBlank;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Phone;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Positive;
+use Flytachi\Winter\Kernel\Http\Request\Validation\PositiveOrZero;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Regex;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Required;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Size;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Time;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Url;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Uuid;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Unit\Pagination;
+namespace Flytachi\Winter\Kernel\Unit\Pagination;
 
 use JsonException;
 
@@ -76,6 +76,18 @@ final class CursorToken
             throw new InvalidCursorException(
                 'Cursor signature mismatch — the cursor was issued under a different key shape.'
             );
+        }
+
+        // The token is client-supplied and JSON allows arrays and objects, while a
+        // cursor position is always scalar. Rejecting them here keeps a forged cursor a
+        // 400 through InvalidCursorException; left through, it reaches the query builder
+        // and surfaces as an uncaught TypeError — a 500 for bad input.
+        foreach ($payload['v'] as $value) {
+            if ($value !== null && !is_scalar($value)) {
+                throw new InvalidCursorException(
+                    'Cursor holds a non-scalar position value of type ' . get_debug_type($value) . '.'
+                );
+            }
         }
 
         $direction = CursorDirection::tryFrom($payload['d']);

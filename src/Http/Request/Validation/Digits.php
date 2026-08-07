@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Http\Request\Validation;
+namespace Flytachi\Winter\Kernel\Http\Request\Validation;
 
 use Attribute;
 
@@ -22,7 +22,7 @@ use Attribute;
  * ```
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
-readonly class Digits implements Constraint
+final readonly class Digits implements Constraint
 {
     /**
      * @param int $integer Max allowed digits in the integer part (before decimal point).

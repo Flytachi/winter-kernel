@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Http\Request\Validation;
+namespace Flytachi\Winter\Kernel\Tests\Http\Request\Validation;
 
-use Flytachi\Winter\K2\Http\Request\Validation\Msisdn;
-use Flytachi\Winter\K2\Http\Request\Validation\Phone;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Msisdn;
+use Flytachi\Winter\Kernel\Http\Request\Validation\Phone;
 use PHPUnit\Framework\TestCase;
 
 class MsisdnPhoneTest extends TestCase

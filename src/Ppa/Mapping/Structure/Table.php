@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Ppa\Mapping\Structure;
+namespace Flytachi\Winter\Kernel\Ppa\Mapping\Structure;
 
-class Table implements StructureInterface
+final class Table implements StructureInterface
 {
     /** @var Column[] */
     public array $columns;

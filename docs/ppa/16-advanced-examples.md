@@ -204,7 +204,7 @@ try {
 // Sync stock levels — accumulate quantity, always overwrite cost.
 
 $repo = new ProductRepository();
-$repo->upsertGroup(
+$repo->upsertBatch(
     $incomingStock,         // array of ['sku', 'quantity', 'cost']
     ['sku'],
     [
@@ -220,7 +220,7 @@ $repo->upsertGroup(
 ## 9. Ad-hoc query with CteRepo
 
 ```php
-use Flytachi\Winter\K2\Ppa\Stereotype\CteRepo;
+use Flytachi\Winter\Kernel\Ppa\Stereotype\CteRepo;
 
 // Raw aggregation across multiple tables — no dedicated repository needed.
 $stats = (new CteRepo(AppDbConfig::class))

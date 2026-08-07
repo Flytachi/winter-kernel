@@ -61,7 +61,7 @@ migration scan silently.
    under `Kernel::$pathRoot` (or under a registered plugin's root).
    The scanner only walks paths it's been pointed at.
 2. **The entity class must carry `#[Table]`** — the marker attribute
-   from `Flytachi\Winter\K2\Ppa\Mapping\Attributes\Entity\Table`. Without
+   from `Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Entity\Table`. Without
    it `PPAMapping::scanDeclarationFilter()` short-circuits and the
    repo is ignored.
 3. **The DbConfig class must carry `#[Migratable]`** — without it
@@ -69,9 +69,9 @@ migration scan silently.
    filters the item out before any SQL is emitted.
 
 ```php
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Config\Migratable;
-use Flytachi\Winter\K2\Ppa\Mapping\Attributes\Entity\Table;
-use Flytachi\Winter\K2\Ppa\Stereotype\Repository;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Config\Migratable;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Entity\Table;
+use Flytachi\Winter\Kernel\Ppa\Stereotype\Repository;
 
 // (1) discoverable — lives under your app's pathRoot
 
@@ -95,7 +95,7 @@ final class UserRepository extends Repository
 
 ## `#[Migratable]` — opting a DbConfig into migration
 
-`Flytachi\Winter\K2\Ppa\Mapping\Attributes\Config\Migratable`
+`Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Config\Migratable`
 
 | Parameter | Type | Default | Effect |
 |---|---|---|---|
@@ -132,7 +132,7 @@ Within the same priority, items run in the order returned by
 
 ## `#[Extension]` — PostgreSQL extension declarations
 
-`Flytachi\Winter\K2\Ppa\Mapping\Attributes\Config\Extension`
+`Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Config\Extension`
 
 PostgreSQL-only. Stack the attribute multiple times on the same config:
 

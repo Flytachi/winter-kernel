@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Integration\View;
+namespace Flytachi\Winter\Kernel\Tests\Integration\View;
 
 use Flytachi\Winter\Cdo\CDOBind;
 use Flytachi\Winter\Cdo\Qb;
-use Flytachi\Winter\K2\Ppa\Entity\EntityException;
-use Flytachi\Winter\K2\Tests\Integration\Crud\ProductsTableTestCase;
-use Flytachi\Winter\K2\Tests\Integration\Fixtures\ProductEntity;
+use Flytachi\Winter\Kernel\Ppa\Entity\EntityException;
+use Flytachi\Winter\Kernel\Tests\Integration\Crud\ProductsTableTestCase;
+use Flytachi\Winter\Kernel\Tests\Integration\Fixtures\ProductEntity;
 
 /**
  * Shared base for read-side integration tests across pgsql / mysql / mariadb.
@@ -22,7 +22,7 @@ use Flytachi\Winter\K2\Tests\Integration\Fixtures\ProductEntity;
  *      3 | gamma   | NULL
  *      4 | delta   | 4.00
  *
- * Tests exercise the full {@see \Flytachi\Winter\K2\Ppa\Repository\RepositoryViewTrait}
+ * Tests exercise the full {@see \Flytachi\Winter\Kernel\Ppa\Repository\RepositoryViewTrait}
  * surface — find / findAll / findColumn / count / exists / static finders
  * / rawFetch / hydration.
  */

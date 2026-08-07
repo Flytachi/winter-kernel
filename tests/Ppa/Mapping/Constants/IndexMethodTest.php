@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\K2\Tests\Ppa\Mapping\Constants;
+namespace Flytachi\Winter\Kernel\Tests\Ppa\Mapping\Constants;
 
-use Flytachi\Winter\K2\Ppa\Mapping\Constants\IndexMethod;
+use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\IndexMethod;
 use PHPUnit\Framework\TestCase;
 
 final class IndexMethodTest extends TestCase

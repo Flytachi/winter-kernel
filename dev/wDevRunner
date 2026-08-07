@@ -3,18 +3,44 @@
 
 declare(strict_types=1);
 
-if (PHP_VERSION_ID < 80300) {
-    fwrite(STDERR, "Please use PHP version 8.3 or higher.\n");
+/*
+    wDevRunner — the playground's thread runner.
+    --------------------------------------------
+    Same job as the kernel's `vendor/bin/wKernelRunner`: the child side of
+    Process::dispatch(). It exists separately here only because `dev/` is not a real
+    composer installation of the kernel (vendor/ holds a symlink to the repository),
+    so `.env` points WINTER_THREAD_RUNNER at this file instead.
+
+    Detaching cannot be a fork, so the launcher spawns a fresh PHP process running
+    this script; the application is booted again from scratch before the staged
+    payload runs.
+*/
+
+use Flytachi\Winter\Kernel\WinterApplication;
+
+if (PHP_VERSION_ID < 80400) {
+    fwrite(STDERR, "Please use PHP version 8.4 or higher.\n");
     exit(1);
 }
 
-$fileAutoloader = __DIR__ . '/bootstrap.php';
+$bootstrap = __DIR__ . '/bootstrap.php';
 
-if (!file_exists($fileAutoloader)) {
-    fwrite(STDERR, "Error: bootstrap.php not found at {$fileAutoloader}\n");
+if (!file_exists($bootstrap)) {
+    fwrite(STDERR, "Error: bootstrap.php not found at {$bootstrap}\n");
     exit(1);
 }
 
-require_once $fileAutoloader;
+require_once $bootstrap;
 
-Boot::executor($argv);
+set_time_limit(0);
+ob_implicit_flush();
+ignore_user_abort(true);
+
+try {
+    $appClass = WinterApplication::discoverAppClass();
+} catch (Throwable $e) {
+    fwrite(STDERR, 'Error: ' . $e->getMessage() . "\n");
+    exit(1);
+}
+
+$appClass::executor($argv);
