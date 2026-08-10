@@ -69,9 +69,6 @@ COPY . /var/www/html
 RUN chown -R winter:winter /var/www/html \
     && chmod -R 775 /var/www/html/storage
 
-# Warm shell completion (best-effort; never fails the build)
-RUN php call cfg completion -if || true
-
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
