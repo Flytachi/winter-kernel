@@ -10,7 +10,7 @@ use Flytachi\Winter\Kernel\Route\Router;
 
 final class Mapping extends Cmd
 {
-    public static string $title = "manage and inspect route mapping cache (build, clean, show)";
+    public static string $title = "list the routes the application exposes";
 
     public function handle(): void
     {
@@ -19,8 +19,6 @@ final class Mapping extends Cmd
         $sub = $this->args['arguments'][1] ?? '';
 
         match ($sub) {
-            'build' => $this->buildArg(),
-            'clean' => $this->cleanArg(),
             'show'  => $this->showArg($this->args['arguments'][2] ?? ''),
             ''      => self::help(),
             default => $this->showArg($sub),
@@ -32,12 +30,7 @@ final class Mapping extends Cmd
     private function showArg(string $pattern): void
     {
         try {
-            $cachePath = Router::cachePath();
-            $router    = is_file($cachePath)
-                ? Router::fromCache($cachePath)
-                : Router::fromScan(Kernel::$pathRoot);
-
-            $routes  = $router->getRoutesSummary();
+            $routes  = Router::fromScan(Kernel::$pathRoot)->getRoutesSummary();
             $pattern = trim($pattern, '/');
 
             $matched = $pattern === ''
@@ -69,37 +62,7 @@ final class Mapping extends Cmd
         }
     }
 
-    private function buildArg(): void
-    {
-        try {
-            $cachePath = Router::cachePath();
-            Router::fromScan(Kernel::$pathRoot)->dumpCache($cachePath);
-            self::printBadge("mapping cache", 'BUILT', 34, 32);
-            self::printInfo($cachePath);
-        } catch (\Throwable $e) {
-            self::printWarning("Build failed: " . $e->getMessage());
-            if (env('DEBUG', false)) {
-                self::printTitle($e->getMessage(), 31);
-                self::printSplit($e->getTraceAsString(), 31);
-                self::printTitle($e->getMessage(), 31);
-            }
-        }
-    }
 
-    private function cleanArg(): void
-    {
-        try {
-            $cachePath = Router::cachePath();
-            if (file_exists($cachePath)) {
-                unlink($cachePath);
-                self::printBadge("mapping cache", 'CLEANED', 34, 32);
-            } else {
-                self::printBadge("mapping cache", 'NOT FOUND', 34, 33);
-            }
-        } catch (\Throwable $e) {
-            self::printWarning("Clean failed: " . $e->getMessage());
-        }
-    }
 
     public static function help(): void
     {
@@ -107,21 +70,18 @@ final class Mapping extends Cmd
         self::printTitle("Mapping Help", $cl);
 
         self::printLabel("Usage", $cl);
-        self::print("call mapping <command> [pattern]", $cl);
+        self::print("call mapping [show] [pattern]", $cl);
         self::printLabel("Usage", $cl);
 
         self::printLabel("Commands", $cl);
-        self::printBadge('build', 'scan controllers and write the route cache file', $cl, 36);
-        self::printBadge('clean', 'delete the route cache file', $cl, 36);
-        self::printBadge('show', 'list all registered routes', $cl, 36);
+        self::printBadge('show', 'list all registered routes (default)', $cl, 36);
         self::printBadge('show <pattern>', 'filter routes by URL fragment', $cl, 36);
         self::printLabel("Commands", $cl);
 
         self::printDivider($cl);
 
         self::printLabel("Examples", $cl);
-        self::printInfo("call mapping build");
-        self::printInfo("call mapping clean");
+        self::printInfo("call mapping");
         self::printInfo("call mapping show");
         self::printInfo("call mapping show api/user");
         self::printLabel("Examples", $cl);

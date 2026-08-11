@@ -234,7 +234,7 @@ final class ParameterResolver
                 $type,
                 $typeName,
                 $field,
-                self::parseBodyAsArray($ct, $raw),
+                self::parseBodyAsArray($ct, $raw, $request),
                 'Body field',
                 $withConstraints,
             );
@@ -244,10 +244,10 @@ final class ParameterResolver
             return $raw;
         }
         if ($typeName === 'array') {
-            return self::parseBodyAsArray($ct, $raw);
+            return self::parseBodyAsArray($ct, $raw, $request);
         }
         if ($typeName === null || $typeName === 'object' || $typeName === stdClass::class) {
-            return self::parseBodyAsObject($ct, $raw);
+            return self::parseBodyAsObject($ct, $raw, $request);
         }
         if (!class_exists($typeName)) {
             throw new LogicException(sprintf(
@@ -260,7 +260,7 @@ final class ParameterResolver
             return self::resolveVariadicBody($raw, $typeName, $withConstraints);
         }
 
-        return self::hydrateFromArray(self::parseBodyAsArray($ct, $raw), $typeName, '', $withConstraints);
+        return self::hydrateFromArray(self::parseBodyAsArray($ct, $raw, $request), $typeName, '', $withConstraints);
     }
 
     private static function resolveVariadicBody(string $raw, string $typeName, bool $withConstraints): array
@@ -997,22 +997,46 @@ final class ParameterResolver
 
     // ── Body parsing helpers ──────────────────────────────────────────────────
 
-    private static function parseBodyAsArray(string $ct, string $raw): array
+    /**
+     * Body of an auto-detected request as an array.
+     *
+     * A form is read from {@see HttpRequest::getParsedBody()} rather than from the raw
+     * bytes: `multipart/form-data` cannot be parsed back out of them at all — PHP has
+     * already consumed the stream into the parsed body — and doing it by hand for
+     * `x-www-form-urlencoded` alone would make the two form encodings behave
+     * differently. Without this branch a form fell through to `json_decode()` and became
+     * an empty array, so every DTO field came back "is required" with nothing naming the
+     * cause.
+     */
+    private static function parseBodyAsArray(string $ct, string $raw, HttpRequest $request): array
     {
         if (str_contains($ct, 'application/xml') || str_contains($ct, 'text/xml')) {
             $xml = @simplexml_load_string($raw);
             return $xml ? (json_decode(json_encode($xml), true) ?: []) : [];
         }
+        if (self::isFormContentType($ct)) {
+            return $request->getParsedBody();
+        }
         return json_decode($raw, true) ?? [];
     }
 
-    private static function parseBodyAsObject(string $ct, string $raw): stdClass
+    private static function parseBodyAsObject(string $ct, string $raw, HttpRequest $request): stdClass
     {
         if (str_contains($ct, 'application/xml') || str_contains($ct, 'text/xml')) {
             $xml = @simplexml_load_string($raw);
             return $xml ? json_decode(json_encode($xml)) : new stdClass();
         }
+        if (self::isFormContentType($ct)) {
+            return (object) $request->getParsedBody();
+        }
         return json_decode($raw) ?? new stdClass();
+    }
+
+    /** Both form encodings PHP populates the parsed body from. */
+    private static function isFormContentType(string $ct): bool
+    {
+        return str_contains($ct, 'application/x-www-form-urlencoded')
+            || str_contains($ct, 'multipart/form-data');
     }
 
     // ── Misc helpers ──────────────────────────────────────────────────────────

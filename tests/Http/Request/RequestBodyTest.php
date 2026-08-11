@@ -147,6 +147,17 @@ class RequestBodyTest extends TestCase
         return $req;
     }
 
+    /** A form request: PHP has already parsed the body, the raw bytes are irrelevant. */
+    private function makeFormRequest(array $parsedBody, string $contentType): HttpRequest
+    {
+        $req = $this->createStub(HttpRequest::class);
+        $req->method('getRawBody')->willReturn('');
+        $req->method('getHeader')->willReturn($contentType);
+        $req->method('getParsedBody')->willReturn($parsedBody);
+        $req->method('getQueryParams')->willReturn([]);
+        return $req;
+    }
+
     private function resolve(string $method, HttpRequest $request): array
     {
         return ParameterResolver::resolve(
@@ -191,6 +202,68 @@ class RequestBodyTest extends TestCase
         [$body] = $this->resolve('asXmlArray', $this->makeRequest($xml, 'application/xml'));
         $this->assertSame('Moscow', $body['city']);
         $this->assertSame('12345', $body['zip']);
+    }
+
+    // ── form content types ────────────────────────────────────────────────────
+
+    public function test_array_urlencoded_content_type(): void
+    {
+        $request = $this->makeFormRequest(
+            ['title' => 'Report', 'amount' => '7'],
+            'application/x-www-form-urlencoded',
+        );
+
+        [$body] = $this->resolve('asArray', $request);
+
+        $this->assertSame(['title' => 'Report', 'amount' => '7'], $body);
+    }
+
+    public function test_array_multipart_content_type(): void
+    {
+        $request = $this->makeFormRequest(['title' => 'Report'], 'multipart/form-data; boundary=x');
+
+        [$body] = $this->resolve('asArray', $request);
+
+        $this->assertSame(['title' => 'Report'], $body);
+    }
+
+    public function test_dto_hydrated_from_a_form(): void
+    {
+        $request = $this->makeFormRequest(
+            ['title' => 'Report', 'amount' => '7'],
+            'application/x-www-form-urlencoded',
+        );
+
+        [$body] = $this->resolve('asDto', $request);
+
+        $this->assertInstanceOf(Body_SimpleDto::class, $body);
+        $this->assertSame('Report', $body->title);
+        $this->assertSame(7, $body->amount, 'scalars are cast to the constructor type');
+    }
+
+    public function test_stdclass_from_a_form(): void
+    {
+        $request = $this->makeFormRequest(['name' => 'Alice'], 'application/x-www-form-urlencoded');
+
+        [$body] = $this->resolve('asStdClass', $request);
+
+        $this->assertSame('Alice', $body->name);
+    }
+
+    public function test_field_mode_reads_a_form(): void
+    {
+        $request = $this->makeFormRequest(['age' => '30'], 'application/x-www-form-urlencoded');
+
+        [$age] = $this->resolve('fieldInt', $request);
+
+        $this->assertSame(30, $age);
+    }
+
+    public function test_json_body_is_unaffected_by_the_form_branch(): void
+    {
+        [$body] = $this->resolve('asArray', $this->makeRequest('{"a":1}'));
+
+        $this->assertSame(['a' => 1], $body);
     }
 
     // ── stdClass / object type ────────────────────────────────────────────────

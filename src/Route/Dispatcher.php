@@ -36,10 +36,35 @@ final class Dispatcher
         $this->dynamicChunks = self::buildChunks(self::groupByUri($dynamicRoutes));
     }
 
+    /**
+     * Resolve a request to a handler.
+     *
+     * `HEAD` falls back to the `GET` route when it matched nothing of its own, because
+     * RFC 9110 §9.3.2 defines it as `GET` without a body: a resource answering `GET`
+     * has to answer `HEAD` too, and the response adapters already drop the body while
+     * keeping the headers. The fallback runs only after an explicit `HEAD` route has
+     * missed, so registering one still wins; and only on a miss, so no other method is
+     * touched. A path that exists under neither still reports the same
+     * `METHOD_NOT_ALLOWED`/`NOT_FOUND` it did before.
+     */
     public function dispatch(string $method, string $uri): RouteResult
     {
         $method = strtoupper($method);
+        $result = $this->match($method, $uri);
 
+        if ($method === 'HEAD' && $result->status !== RouteResult::FOUND) {
+            $viaGet = $this->match('GET', $uri);
+            if ($viaGet->status === RouteResult::FOUND) {
+                return $viaGet;
+            }
+        }
+
+        return $result;
+    }
+
+    /** Exact method + URI resolution, with no fallback of any kind. */
+    private function match(string $method, string $uri): RouteResult
+    {
         // ── 1. Static lookup ─────────────────────────────────────────────────
         if (isset($this->staticMap[$method][$uri])) {
             return new RouteResult(RouteResult::FOUND, $this->staticMap[$method][$uri]);

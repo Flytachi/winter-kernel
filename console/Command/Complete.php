@@ -69,8 +69,6 @@ final class Complete extends Cmd
 
         // --- mapping ---
         'mapping' => [
-            'build:scan controllers and write the route cache file',
-            'clean:delete the route cache file',
             'show:list all registered routes',
         ],
         'mapping show' => [],   // takes optional URL pattern as argument

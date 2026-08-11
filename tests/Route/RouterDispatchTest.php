@@ -109,6 +109,70 @@ final class RouterDispatchTest extends TestCase
 
     // ── Registration guards ────────────────────────────────────────────────────
 
+    // ── HEAD ───────────────────────────────────────────────────────────────────
+
+    public function test_head_is_served_by_the_get_route(): void
+    {
+        $router = new Router()->get('/ping', static fn(): string => 'pong');
+
+        $response = $this->send($router, 'HEAD', '/ping');
+
+        self::assertSame(200, $response->status, 'HEAD must reach the GET handler');
+    }
+
+    public function test_head_is_served_by_a_dynamic_get_route(): void
+    {
+        $router = new Router()->get('/users/{id:\\d+}', static fn($req, $res, array $p): array => $p);
+
+        $response = $this->send($router, 'HEAD', '/users/42');
+
+        self::assertSame(200, $response->status);
+    }
+
+    public function test_an_explicit_head_route_wins_over_the_get_fallback(): void
+    {
+        $router = new Router()
+            ->get('/ping', static fn(): string => 'from-get')
+            ->add('HEAD', '/ping', static fn(): string => 'from-head');
+
+        $response = $this->send($router, 'HEAD', '/ping');
+
+        self::assertSame(200, $response->status);
+        self::assertSame('from-head', $response->body, 'a registered HEAD route must not be shadowed');
+    }
+
+    public function test_head_on_a_path_without_get_still_reports_what_is_allowed(): void
+    {
+        $router = new Router()->post('/users', static fn(): string => 'never');
+
+        $response = $this->send($router, 'HEAD', '/users');
+
+        self::assertSame(405, $response->status);
+        self::assertSame('POST', $response->headers['Allow'] ?? null);
+    }
+
+    public function test_head_on_an_unknown_path_is_still_not_found(): void
+    {
+        $router = new Router()->get('/ping', static fn(): string => 'pong');
+
+        $response = $this->send($router, 'HEAD', '/nope');
+
+        self::assertSame(404, $response->status);
+    }
+
+    public function test_the_fallback_touches_no_other_method(): void
+    {
+        $router = new Router()->get('/ping', static fn(): string => 'pong');
+
+        foreach (['POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
+            self::assertSame(
+                405,
+                $this->send($router, $method, '/ping')->status,
+                "$method must not inherit the GET route",
+            );
+        }
+    }
+
     public function test_a_duplicate_static_route_is_rejected(): void
     {
         $router = new Router()->get('/ping', static fn(): string => 'a');

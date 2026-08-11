@@ -11,7 +11,6 @@ use Flytachi\Winter\DI\ReflectionCache;
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\Kernel\Core\ClassScanner;
-use Flytachi\Winter\Kernel\Core\KernelStore;
 use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
@@ -42,12 +41,10 @@ use Flytachi\Winter\Base\HttpCode;
  *   $router->add('GET', '/ping',    fn($req, $res, $p) => ResponseEntity::ok('pong'));
  *
  * ── Attribute-based (preferred) ─────────────────────────────────────────────
- *   $router = Router::resolve(Kernel::$pathRoot);   // auto scan + cache
- *   $router = Router::fromScan(Kernel::$pathRoot);  // always scan
- *   $router = Router::fromCache($path);             // load from cache file
+ *   $router = Router::fromScan(Kernel::$pathRoot);  // scan the project for controllers
  *
  * ── Global CORS ──────────────────────────────────────────────────────────────
- *   Cors::configure([...]);   // call once in bootstrap.php before resolve()
+ *   Cors::configure([...]);   // via a WebConfigurer, before the scan
  *   // Per-route override: #[CrossOrigin] attribute on controller class or method
  *
  * ── Static files ─────────────────────────────────────────────────────────────
@@ -164,15 +161,27 @@ final class Router
     /**
      * Scan $rootDir for controllers and exception handlers via a unified Scanner pass.
      *
-     * @param string[] $exclude  Directories to skip (vendor/ is always excluded)
+     * `$cache` is the project's class-list cache — the same file the boot scan already
+     * built, not a route cache. Routes are still compiled from attributes on every
+     * start; what the cache removes is the second walk of the tree, which is where the
+     * cost was: measured on 304 files, the walk is ~21 ms and ~2 MB, the attribute pass
+     * over an already-loaded tree is 0.2 ms. Those 2 MB are paid by every forked worker,
+     * so the saving is not only at boot.
+     *
+     * The cache is ignored when `$exclude` is given: the cached list was built with the
+     * scan's own exclusions, so honouring extra ones would need the walk anyway — and
+     * silently skipping them would be worse than being slow.
+     *
+     * @param string[]    $exclude Directories to skip (vendor/ is always excluded)
+     * @param string|null $cache   Class-list cache path; null always walks the filesystem
      */
-    public static function fromScan(string $rootDir, array $exclude = []): static
+    public static function fromScan(string $rootDir, array $exclude = [], ?string $cache = null): static
     {
         $router             = new static();
         $mappingCollector   = new MappingCollector($router);
         $exceptionCollector = new ExceptionCollector();
 
-        ClassScanner::scanner($rootDir)
+        ClassScanner::scanner($rootDir, $exclude === [] ? $cache : null)
             ->exclude($exclude)
             ->collect($mappingCollector)
             ->collect($exceptionCollector)
@@ -207,135 +216,10 @@ final class Router
         return $this;
     }
 
-    /**
-     * Unified entry point — automatically chooses scan or cache.
-     *
-     * DEBUG=true  → always scans, cache is never read or written (dev mode).
-     * DEBUG=false → loads from Kernel::$pathStorageVolatile/mapping.php when it
-     *               exists; otherwise scans and writes the cache for subsequent
-     *               requests (first boot after a clean or a deployment).
-     */
-    public static function cachePath(): string
-    {
-        return Kernel::$pathStorageVolatile . '/mapping.php';
-    }
 
-    public static function resolve(string $rootDir, array $exclude = []): static
-    {
-        $cachePath = static::cachePath();
 
-        if (!env('DEBUG', false) && is_file($cachePath)) {
-            return static::fromCache($cachePath);
-        }
 
-        $router = static::fromScan($rootDir, $exclude);
 
-        if (!env('DEBUG', false)) {
-            try {
-                $router->dumpCache($cachePath);
-            } catch (\RuntimeException $e) {
-                LoggerFactory::getLogger(self::class)->warning(
-                    'Route cache write failed — running without cache: ' . $e->getMessage()
-                );
-            }
-        }
-
-        return $router;
-    }
-
-    /**
-     * Load compiled routes from a cache file produced by dumpCache().
-     * Skips all filesystem scanning and reflection — routes are restored
-     * directly from the serialised PHP array.
-     *
-     * Closure-based handlers (e.g. Health actuator routes) are excluded from
-     * the cache and are re-registered here from the current Health config.
-     * ExceptionWrapper is re-configured so #[AdviceException] scanning still
-     * happens lazily on the first error (same behaviour as fromScan).
-     *
-     * @param string $path  Absolute path to the cache file (mapping.php).
-     */
-    public static function fromCache(string $path): static
-    {
-        $router = new static();
-        $data   = require $path;
-
-        $router->staticRoutes  = $data['static'];
-        $router->dynamicRoutes = array_map(
-            static fn($r) => new Route($r['method'], $r['path'], $r['handler']),
-            $data['dynamic']
-        );
-
-        if ($health = Health::getConfig()) {
-            Health::setRootDir(Kernel::$pathRoot);
-            Health::setMappings($router->getRoutesSummary());
-            $router->registerHealth($health['indicator'], $health['middleware']);
-        }
-
-        ExceptionWrapper::configure(Kernel::$pathRoot);
-
-        return $router;
-    }
-
-    /**
-     * Serialise compiled routes to a PHP cache file and invalidate OPcache.
-     * Closure handlers (Health actuator routes) are intentionally excluded
-     * because closures are not serialisable — they are re-registered by
-     * fromCache() at load time.
-     *
-     * @param string $path  Absolute path where the cache file will be written.
-     */
-    public function dumpCache(string $path): static
-    {
-        $static  = [];
-        $dynamic = [];
-
-        foreach ($this->staticRoutes as $method => $paths) {
-            foreach ($paths as $uri => $handler) {
-                if ($this->isSerializableHandler($handler)) {
-                    $static[$method][$uri] = $handler;
-                }
-            }
-        }
-
-        foreach ($this->dynamicRoutes as $route) {
-            if ($this->isSerializableHandler($route->handler)) {
-                $dynamic[] = [
-                    'method'  => $route->method,
-                    'path'    => $route->path,
-                    'handler' => $route->handler,
-                ];
-            }
-        }
-
-        KernelStore::ensureDirectory(dirname($path));
-
-        $exported = var_export(['static' => $static, 'dynamic' => $dynamic], true);
-        $content  = "<?php\n\n// Generated by Router::dumpCache() on " . date(DATE_RFC822)
-            . "\n\nreturn " . $exported . ";\n";
-
-        if (file_put_contents($path, $content) === false) {
-            throw new \RuntimeException("Router::dumpCache() failed to write cache file: $path");
-        }
-
-        if (function_exists('opcache_invalidate')) {
-            opcache_invalidate($path, true);
-        }
-
-        return $this;
-    }
-
-    /** Returns false for any handler that contains a Closure (not serialisable). */
-    private function isSerializableHandler(mixed $handler): bool
-    {
-        if ($handler instanceof \Closure) {
-            return false;
-        }
-        if (is_array($handler) && isset($handler['__handler']) && $handler['__handler'] instanceof \Closure) {
-            return false;
-        }
-        return true;
-    }
 
     // ── Health / Actuator ─────────────────────────────────────────────────────
 

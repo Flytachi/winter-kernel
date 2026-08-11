@@ -133,4 +133,46 @@ final class ApplicationBootTest extends TestCase
     {
         self::assertSame(404, $this->send('GET', '/demo/nothing-here')->status);
     }
+
+    // ── Class-list cache ───────────────────────────────────────────────────────
+
+    public function test_a_cached_scan_finds_the_same_routes(): void
+    {
+        $appDir = __DIR__ . '/Fixtures/App';
+        $cache  = sys_get_temp_dir() . '/winter-boot-scan-' . getmypid() . '.php';
+        @unlink($cache);
+
+        try {
+            $walked = Router::fromScan($appDir)->getRoutesSummary();
+            Router::fromScan($appDir, cache: $cache);              // builds the cache
+            $cached = Router::fromScan($appDir, cache: $cache)->getRoutesSummary();
+
+            self::assertNotSame([], $walked, 'the fixture app must expose routes');
+            self::assertSame(
+                $walked,
+                $cached,
+                'reading the class list from cache must not change the route table',
+            );
+        } finally {
+            @unlink($cache);
+        }
+    }
+
+    public function test_the_cache_is_skipped_when_directories_are_excluded(): void
+    {
+        $appDir = __DIR__ . '/Fixtures/App';
+        $cache  = sys_get_temp_dir() . '/winter-boot-excl-' . getmypid() . '.php';
+        @unlink($cache);
+
+        try {
+            Router::fromScan($appDir, ['nowhere'], $cache);
+
+            self::assertFileDoesNotExist(
+                $cache,
+                'exclusions must force a real walk — a cached list was built without them',
+            );
+        } finally {
+            @unlink($cache);
+        }
+    }
 }

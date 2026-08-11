@@ -430,7 +430,13 @@ abstract class WinterApplication
         $host = $settings->getHost();
         $port = $settings->getPort();
 
-        $router = Router::fromScan(Kernel::$pathRoot);
+        // The same class-list cache the boot scan built a moment ago: without it this
+        // walks the whole tree a second time, `require_once`-ing every file again — and
+        // the master's memory is what every worker forks from.
+        $router = Router::fromScan(
+            Kernel::$pathRoot,
+            cache: env('DEBUG', false) ? null : Kernel::$pathStorageVolatile . '/di.php',
+        );
 
         \Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL);
         Runtime::boot(RuntimeMode::Swoole);
