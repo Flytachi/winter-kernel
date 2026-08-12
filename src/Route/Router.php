@@ -395,15 +395,6 @@ final class Router
                         throw new ResponseException('Not Found', HttpCode::NOT_FOUND);
                     }
             }
-
-            match ($result->status) {
-                RouteResult::FOUND => $this->invoke($result->handler, $request, $response, $result->params),
-                RouteResult::METHOD_NOT_ALLOWED => throw new ResponseException(
-                    'Method Not Allowed',
-                    HttpCode::METHOD_NOT_ALLOWED
-                )->withHeader('Allow', implode(', ', $result->allowedMethods)),
-                default => throw new ResponseException('Not Found', HttpCode::NOT_FOUND),
-            };
         } catch (\Throwable $e) {
             $this->sendError($e, $response);
         }

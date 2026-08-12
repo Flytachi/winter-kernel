@@ -210,7 +210,7 @@ final class Cfg extends Cmd
         self::printBadge('.dockerignore', 'CREATED', 34, 32);
         self::printBadge('docker-compose.yml', 'CREATED', 34, 32);
         self::printBadge('Dockerfile', 'CREATED', 34, 32);
-        self::printInfo("Run:  docker compose up  (dev, hot-reload)  |  DEV=false docker compose up  (prod)");
+        self::printInfo("Run:  docker compose up  (prod)  |  DEV=true docker compose up  (dev, hot-reload)");
         self::printInfo("DB drivers / extensions: keep or remove docker/dependencies/*.sh");
     }
 
@@ -317,7 +317,7 @@ final class Cfg extends Cmd
         self::printBadge('init', 'initialize project: composer.json extras + .env', $cl, 36);
         self::printBadge('key', 'manage WINTER_KEY (project security key)', $cl, 36);
         self::printBadge('env', 'manage .env environment file', $cl, 36);
-        self::printBadge('docker', 'scaffold Docker configuration files (default: fpm)', $cl, 36);
+        self::printBadge('docker', 'scaffold Docker configuration files (Swoole)', $cl, 36);
         self::printBadge('completion', 'install shell tab completion (bash/zsh)', $cl, 36);
         self::printLabel("Commands", $cl);
 
@@ -338,8 +338,8 @@ final class Cfg extends Cmd
         // docker
         self::printLabel("docker — scaffold Docker files", $cl);
         self::print("Swoole image. dev vs prod = DEV in docker-compose.yml:", $cl);
-        self::print("  docker compose up            dev (hot-reload, opcache off)", $cl);
-        self::print("  DEV=false docker compose up  prod (opcache on, no watcher)", $cl);
+        self::print("  docker compose up            prod (opcache on, no watcher)", $cl);
+        self::print("  DEV=true docker compose up   dev (hot-reload, opcache off)", $cl);
         self::print("DB drivers / extensions / cron → docker/dependencies/*.sh", $cl);
         self::print("  (keep or remove; bcmath, pgsql, mysql, redis shipped)", $cl);
         self::printLabel("docker — scaffold Docker files", $cl);
