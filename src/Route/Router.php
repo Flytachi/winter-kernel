@@ -11,7 +11,6 @@ use Flytachi\Winter\DI\ReflectionCache;
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\Kernel\Core\ClassScanner;
-use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
 use Flytachi\Winter\Kernel\Http\Header;
@@ -216,11 +215,6 @@ final class Router
         return $this;
     }
 
-
-
-
-
-
     // ── Health / Actuator ─────────────────────────────────────────────────────
 
     private function registerHealth(string $indicatorClass, ?string $middlewareClass): void
@@ -377,6 +371,31 @@ final class Router
                 }
             }
 
+            switch ($result->status) {
+                case RouteResult::FOUND:
+                    $this->invoke($result->handler, $request, $response, $result->params);
+                    break;
+                case RouteResult::METHOD_NOT_ALLOWED:
+                    LoggerFactory::contextStorage()->set('method', $request->getMethod());
+                    LoggerFactory::contextStorage()->set('path', $request->getUri());
+                    throw new ResponseException(
+                        'Method Not Allowed',
+                        HttpCode::METHOD_NOT_ALLOWED
+                    )->withHeader('Allow', implode(', ', $result->allowedMethods));
+                default:
+                    LoggerFactory::contextStorage()->set('method', $request->getMethod());
+                    LoggerFactory::contextStorage()->set('path', $request->getUri());
+                    if (env('DEBUG', false)) {
+                        throw new ResponseException('Not Found [ '
+                            . $request->getMethod() . ' '
+                            . $request->getUri() . ' ]',
+                            HttpCode::NOT_FOUND
+                        );
+                    } else {
+                        throw new ResponseException('Not Found', HttpCode::NOT_FOUND);
+                    }
+            }
+
             match ($result->status) {
                 RouteResult::FOUND => $this->invoke($result->handler, $request, $response, $result->params),
                 RouteResult::METHOD_NOT_ALLOWED => throw new ResponseException(
@@ -477,25 +496,23 @@ final class Router
     private function logException(\Throwable $e): void
     {
         $code   = (int) $e->getCode();
-        $logger = LoggerFactory::getLogger(self::class);
+        $logger = LoggerFactory::getLogger('Router');
 
         // Exception carries its own declared log level — highest priority
         if ($e instanceof ExceptionLogLevel) {
             $logger->log($e->getLogLevel(), $e->getMessage(), [
-                'exception' => $e::class,
                 'code'      => $code,
-                'file'      => $e->getFile(),
-                'line'      => $e->getLine(),
+                'exception' => $e::class,
+                'file'      => $e->getFile() . ':' . $e->getLine()
             ]);
             return;
         }
 
         // 5xx and infrastructure failures — error with location
         $logger->error($e->getMessage(), [
-            'exception' => $e::class,
             'code'      => $code,
-            'file'      => $e->getFile(),
-            'line'      => $e->getLine(),
+            'exception' => $e::class,
+            'file'      => $e->getFile() . ':' . $e->getLine()
         ]);
     }
 
