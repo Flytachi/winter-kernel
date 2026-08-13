@@ -495,6 +495,7 @@ abstract class WinterApplication
             \Swoole\Http\Server $server,
             int $workerId
         ) use ($memoryLimit, $requestTimeout): void {
+            cli_set_process_title("winter-web: Worker $workerId");
             // Per worker, because the limit is a property of this process — and a no-op
             // when nothing was configured, so PHP's own value stands.
             WorkerMemory::apply($memoryLimit);
