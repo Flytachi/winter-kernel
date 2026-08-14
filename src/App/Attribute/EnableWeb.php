@@ -18,6 +18,8 @@ namespace Flytachi\Winter\Kernel\App\Attribute;
  * #[EnableWeb]
  * final class App extends WinterApplication { ... }
  * ```
+ *
+ * @link https://winterframe.net/docs/components What the web component runs, and headless mode
  */
 #[\Attribute(\Attribute::TARGET_CLASS)]
 final class EnableWeb

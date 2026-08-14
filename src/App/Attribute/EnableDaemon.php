@@ -16,6 +16,8 @@ use Flytachi\Winter\Kernel\Process\Stereotype\Daemon;
  * #[EnableDaemon(Webhooks::class)]
  * final class App extends WinterApplication { ... }
  * ```
+ *
+ * @link https://winterframe.net/docs/components Attaching a supervised daemon fleet
  */
 #[\Attribute(\Attribute::TARGET_CLASS | \Attribute::IS_REPEATABLE)]
 final class EnableDaemon

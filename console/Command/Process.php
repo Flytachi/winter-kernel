@@ -290,6 +290,11 @@ final class Process extends Cmd
         self::printInfo("Daemons (supervised fleets) are managed by 'call daemon'.");
         self::printInfo("Row tags: [P] process | ● running, ○ stopped | [BUSY]/[idle]");
 
+        self::printDivider($cl);
+
+        self::printInfo("Docs: https://winterframe.net/docs/cmd-process");
+
+
         self::printTitle("Process Help", $cl);
     }
 }

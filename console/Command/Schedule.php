@@ -185,6 +185,11 @@ final class Schedule extends Cmd
         self::printDivider($cl);
         self::printInfo("The scheduler fires one process per host (singleton lock).");
 
+        self::printDivider($cl);
+
+        self::printInfo("Docs: https://winterframe.net/docs/cmd-schedule");
+
+
         self::printTitle("Schedule Help", $cl);
     }
 }

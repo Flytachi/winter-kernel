@@ -17,6 +17,8 @@ use Flytachi\Winter\Kernel\Schedule\Stereotype\Scheduler;
  * #[EnableScheduler(MyScheduler::class)] // a subclass overriding discovery
  * final class App extends WinterApplication { ... }
  * ```
+ *
+ * @link https://winterframe.net/docs/components Running the #[Scheduled] scheduler with the app
  */
 #[\Attribute(\Attribute::TARGET_CLASS)]
 final class EnableScheduler

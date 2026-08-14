@@ -87,7 +87,7 @@ final class Mapping extends Cmd
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net/docs/3.0.0/cmd-mapping");
+        self::printInfo("Docs: https://winterframe.net/docs/cmd-mapping");
 
         self::printTitle("Mapping Help", $cl);
     }

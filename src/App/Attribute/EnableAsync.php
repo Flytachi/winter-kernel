@@ -19,6 +19,8 @@ namespace Flytachi\Winter\Kernel\App\Attribute;
  * #[EnableAsync]
  * final class App extends WinterApplication { ... }
  * ```
+ *
+ * @link https://winterframe.net/docs/async Enabling #[Async] proxying
  */
 #[\Attribute(\Attribute::TARGET_CLASS)]
 final class EnableAsync

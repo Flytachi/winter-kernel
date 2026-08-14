@@ -16,6 +16,8 @@ use Flytachi\Winter\Kernel\Process\Stereotype\Process;
  * #[EnableProcess(HeartbeatProc::class)]
  * final class App extends WinterApplication { ... }
  * ```
+ *
+ * @link https://winterframe.net/docs/components Attaching a process to the application lifecycle
  */
 #[\Attribute(\Attribute::TARGET_CLASS | \Attribute::IS_REPEATABLE)]
 final class EnableProcess

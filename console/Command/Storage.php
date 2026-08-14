@@ -235,7 +235,7 @@ final class Storage extends Cmd
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net");
+        self::printInfo("Docs: https://winterframe.net/docs/cmd-storage");
 
         self::printTitle("Storage Help", $cl);
     }

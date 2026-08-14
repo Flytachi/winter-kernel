@@ -318,6 +318,10 @@ final class Daemon extends Cmd
         self::printInfo("Worker states: running / starting / retiring / killing / restarting");
         self::printInfo("Bare processes are managed by 'call process'.");
 
+        self::printDivider($cl);
+
+        self::printInfo("Docs: https://winterframe.net/docs/cmd-daemon");
+
         self::printTitle("Daemon Help", $cl);
     }
 }

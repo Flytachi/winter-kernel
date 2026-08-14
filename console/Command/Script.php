@@ -116,7 +116,7 @@ final class Script extends Cmd
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net/docs/3.0.0/cmd-script");
+        self::printInfo("Docs: https://winterframe.net/docs/cmd-script");
 
         self::printTitle("Script Help", $cl);
     }

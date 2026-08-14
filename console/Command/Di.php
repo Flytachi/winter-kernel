@@ -510,6 +510,11 @@ final class Di extends Cmd
         self::printInfo("It also warns when an #[Async] service is built with new (skips vendor/ and tests/).");
         self::printInfo("That check is textual: it cannot see 'new \$class' or factories, so it never fails a build.");
 
+        self::printDivider($cl);
+
+        self::printInfo("Docs: https://winterframe.net/docs/cmd-di");
+
+
         self::printTitle("Di Help", $cl);
     }
 }

@@ -514,7 +514,7 @@ final class Db extends Cmd
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net/docs/3.0.0/cmd-db");
+        self::printInfo("Docs: https://winterframe.net/docs/cmd-db");
 
         self::printTitle("Db Help", $cl);
     }

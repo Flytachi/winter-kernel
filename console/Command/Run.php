@@ -60,7 +60,7 @@ final class Run extends Cmd
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net/docs/2.0.0/cmd-run");
+        self::printInfo("Docs: https://winterframe.net/docs/cmd-run");
 
         self::printTitle("Run Help", $cl);
     }

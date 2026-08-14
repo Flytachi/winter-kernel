@@ -468,7 +468,7 @@ final class Make extends Cmd
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net/docs/3.0.0/cmd-make");
+        self::printInfo("Docs: https://winterframe.net/docs/cmd-make");
 
         self::printTitle("Make Help", $cl);
     }

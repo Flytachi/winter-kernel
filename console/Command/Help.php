@@ -56,7 +56,7 @@ final class Help extends Cmd
         self::printDivider($cl);
 
         self::printInfo("Run 'call help <command>' for detailed usage.");
-        self::printInfo("Docs: https://winterframe.net/docs/3.0.0/cmd");
+        self::printInfo("Docs: https://winterframe.net/docs/console-overview");
 
         self::printTitle("Winter Framework", $cl);
     }
@@ -77,7 +77,7 @@ final class Help extends Cmd
         self::printInfo("call help run");
 
         self::printDivider($cl);
-        self::printInfo("Docs: https://winterframe.net/docs/3.0.0/cmd-help");
+        self::printInfo("Docs: https://winterframe.net/docs/console-overview");
 
         self::printTitle("Help", $cl);
     }
