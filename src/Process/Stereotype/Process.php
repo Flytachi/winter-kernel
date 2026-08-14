@@ -50,6 +50,8 @@ use Psr\Log\LoggerInterface;
  *     }
  * }
  * ```
+ *
+ * @link https://winterframe.net/docs/processes Process body, lifecycle and control
  */
 abstract class Process
 {

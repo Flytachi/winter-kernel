@@ -48,6 +48,8 @@ use Attribute;
  * ```
  *
  * Repeatable, so one method may carry several triggers.
+ *
+ * @link https://winterframe.net/docs/scheduler Triggers, cron syntax and execution rules
  */
 #[Attribute(Attribute::TARGET_METHOD | Attribute::IS_REPEATABLE)]
 final class Scheduled

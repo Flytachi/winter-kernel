@@ -17,6 +17,8 @@ namespace Flytachi\Winter\Kernel\Process\Daemon;
  *     return new RestartPolicy(mode: RestartMode::ALWAYS, backoff: 2.0);
  * }
  * ```
+ *
+ * @link https://winterframe.net/docs/daemons Restart policy and backoff
  */
 readonly class RestartPolicy
 {

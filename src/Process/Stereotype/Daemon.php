@@ -49,6 +49,8 @@ use Flytachi\Winter\Logger\LoggerFactory;
  * The whole process tree, forking/reaping, restart, drain and singleton lock are
  * handled by the fleet supervision ({@see SupervisesFleet}); you write only
  * config + body (+ optional autoscaling and hooks).
+ *
+ * @link https://winterframe.net/docs/daemons Fleets, restart and scaling policies
  */
 abstract class Daemon extends Process
 {

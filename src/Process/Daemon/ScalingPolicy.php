@@ -19,6 +19,8 @@ namespace Flytachi\Winter\Kernel\Process\Daemon;
  * - {@see $scaleDownStabilization} — *whether* to shrink (is low demand sustained);
  * - {@see $scaleStep} — *how many* workers to change per action;
  * - {@see $cooldown} — *how often* an action may happen.
+ *
+ * @link https://winterframe.net/docs/daemons Scaling the fleet and why it lags on purpose
  */
 readonly class ScalingPolicy
 {

@@ -22,6 +22,8 @@ namespace Flytachi\Winter\Kernel\Process\Daemon;
  *                              ▼
  *                          KILLING ─reaped─► EMPTY
  * ```
+ *
+ * @link https://winterframe.net/docs/daemons Worker states in the fleet table
  */
 enum SlotState: string
 {

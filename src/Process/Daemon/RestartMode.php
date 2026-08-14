@@ -10,6 +10,8 @@ namespace Flytachi\Winter\Kernel\Process\Daemon;
  * The naming follows the common convention (Kubernetes / systemd): a clean exit
  * means "the work is done", a non-zero exit or crash means "failure". Carried
  * inside a {@see RestartPolicy} together with the restart limit and back-off.
+ *
+ * @link https://winterframe.net/docs/daemons When a dead worker is brought back
  */
 enum RestartMode
 {

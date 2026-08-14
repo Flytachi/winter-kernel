@@ -14,6 +14,8 @@ namespace Flytachi\Winter\Kernel\Process;
  * decision — never stop a BUSY worker.
  *
  * Backed by a string so it serialises cleanly to JSON and logs.
+ *
+ * @link https://winterframe.net/docs/processes Marking units of work: markBusy / markIdle
  */
 enum Activity: string
 {
