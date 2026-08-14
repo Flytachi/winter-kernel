@@ -9,7 +9,9 @@ use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\Kernel\Core\ClassScanner;
 use Flytachi\Winter\Kernel\Collector\ImplementorCollector;
+use Flytachi\Winter\DI\Scanner;
 use Flytachi\Winter\Kernel\Http\Header;
+use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
 
 class HealthIndicator implements HealthIndicatorInterface
@@ -155,6 +157,29 @@ class HealthIndicator implements HealthIndicatorInterface
 
     // ── DB health (requires flytachi/winter-cdo) ──────────────────────────────
 
+    /**
+     * The project scanner used by the component checks, sharing the boot-time class
+     * list instead of walking the tree again.
+     *
+     * Unlike the boot scan, this one runs **per request**: a probe hits the endpoint
+     * every few seconds, and every hit used to re-read every `.php` in the project —
+     * twice, once per component. Measured on 304 files that is ~25 ms per walk even
+     * when everything is already in memory, which is why `health` was an order of
+     * magnitude slower than the other endpoints.
+     *
+     * The cache is the one the application boots from, so a hit costs a `require` of
+     * a class-name list and no filesystem work at all. `DEBUG=true` keeps the live
+     * walk, exactly as it does everywhere else — a new datasource must show up in the
+     * report without a rebuild.
+     */
+    private static function scanner(string $rootDir): Scanner
+    {
+        return ClassScanner::scanner(
+            rootDir: $rootDir,
+            cache: env('DEBUG', false) ? null : Kernel::$pathStorageVolatile . '/di.php',
+        );
+    }
+
     final protected function dbHealth(string $rootDir): array
     {
         $interface = 'Flytachi\Winter\Cdo\Config\Common\DbConfigInterface';
@@ -162,7 +187,7 @@ class HealthIndicator implements HealthIndicatorInterface
 
         if ($rootDir !== '' && interface_exists($interface)) {
             $collector = new ImplementorCollector($interface);
-            ClassScanner::scanner($rootDir)->collect($collector)->execute();
+            self::scanner($rootDir)->collect($collector)->execute();
 
             foreach ($collector->getResult() as $ref) {
                 /** @var \Flytachi\Winter\Cdo\Config\Common\DbConfigInterface $config */
@@ -257,7 +282,7 @@ class HealthIndicator implements HealthIndicatorInterface
         }
 
         $collector = new ImplementorCollector($interface);
-        ClassScanner::scanner($rootDir)->collect($collector)->execute();
+        self::scanner($rootDir)->collect($collector)->execute();
         $details     = [];
         $worstStatus = 'up';
 
