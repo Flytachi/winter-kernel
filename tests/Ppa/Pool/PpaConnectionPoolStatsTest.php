@@ -15,8 +15,9 @@ use ReflectionProperty;
 
 /**
  * Pool observability: PpaConnectionPool::stats() surfaces live per-config utilisation,
- * and HealthIndicator's `pool` component turns it into the actuator report (flagging
- * saturated pools as degraded). Pools are injected via reflection so the checks are
+ * and HealthIndicator::pools() turns it into the `/actuator/pools` report (flagging
+ * saturated pools). The `db` component of `/actuator/health` deliberately knows
+ * nothing about pools. Pools are injected via reflection so the checks are
  * deterministic without a live database — a ConnectionPool allocates its Channel
  * eagerly, so it can be built (and read) outside a coroutine as long as it is never
  * borrowed from.
@@ -62,31 +63,28 @@ final class PpaConnectionPoolStatsTest extends TestCase
         });
     }
 
-    /** Runs the `db` component with the scan skipped, so only the pool merge is exercised. */
+    /** Runs the `db` component with the scan skipped, so nothing but the shape is exercised. */
     private static function dbComponent(): array
     {
         return (new ReflectionMethod(HealthIndicator::class, 'dbHealth'))
             ->invoke(new HealthIndicator(), '');
     }
 
-    public function test_db_component_nests_pool_utilisation(): void
+    public function test_pools_endpoint_reports_utilisation(): void
     {
         $pool = new ConnectionPool(new MockFactory(), new PoolPolicy(maximumPoolSize: 5));
         $this->withPools([base64_encode('App\\Config\\MainDb') => $pool], function (): void {
-            $component = self::dbComponent();
+            $report = new HealthIndicator()->pools();
 
-            self::assertSame('up', $component['status']);
-            $entry = $component['details']['App\\Config\\MainDb'];
-            self::assertSame('up', $entry['status']);
+            self::assertSame('up', $report['status']);
             self::assertSame(
-                ['total' => 0, 'idle' => 0, 'active' => 0, 'maximum' => 5],
-                $entry['pool'],
-                'utilisation lives under the datasource it belongs to',
+                ['total' => 0, 'idle' => 0, 'active' => 0, 'maximum' => 5, 'saturated' => false],
+                $report['pools']['App\\Config\\MainDb'],
             );
         });
     }
 
-    public function test_saturated_pool_degrades_its_datasource(): void
+    public function test_saturated_pool_is_flagged(): void
     {
         $this->withPools(
             [
@@ -94,23 +92,39 @@ final class PpaConnectionPoolStatsTest extends TestCase
                 base64_encode('App\\Config\\OtherDb') => new ConnectionPool(new MockFactory(), new PoolPolicy(maximumPoolSize: 5)),
             ],
             function (): void {
-                $component = self::dbComponent();
+                $report = new HealthIndicator()->pools();
 
-                self::assertSame('degraded', $component['status'], 'a saturated pool degrades the db component');
-                self::assertSame('degraded', $component['details']['App\\Config\\MainDb']['status']);
-                self::assertSame(2, $component['details']['App\\Config\\MainDb']['pool']['active']);
-                self::assertSame('up', $component['details']['App\\Config\\OtherDb']['status']);
+                self::assertSame('degraded', $report['status'], 'a saturated pool degrades the pools report');
+                self::assertTrue($report['pools']['App\\Config\\MainDb']['saturated']);
+                self::assertSame(2, $report['pools']['App\\Config\\MainDb']['active']);
+                self::assertFalse($report['pools']['App\\Config\\OtherDb']['saturated']);
             },
         );
     }
 
-    public function test_db_component_is_up_when_no_pools(): void
+    public function test_pools_report_is_empty_when_no_pools(): void
     {
         $this->withPools([], function (): void {
-            $component = self::dbComponent();
-
-            self::assertSame('up', $component['status']);
-            self::assertSame([], $component['details']);
+            self::assertSame(['status' => 'up', 'pools' => []], new HealthIndicator()->pools());
         });
     }
+
+    /**
+     * Saturation is a pools concern, not a health one: a busy-but-reachable
+     * application must not report `degraded` to a probe that decides whether to keep
+     * sending it traffic.
+     */
+    public function test_db_component_ignores_pools_entirely(): void
+    {
+        $this->withPools(
+            [base64_encode('App\\Config\\MainDb') => self::fullPool(2)],
+            function (): void {
+                $component = self::dbComponent();
+
+                self::assertSame('up', $component['status']);
+                self::assertSame([], $component['details'], 'no pool leaks into the db component');
+            },
+        );
+    }
+
 }

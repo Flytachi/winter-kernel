@@ -52,6 +52,7 @@ final class HealthTest extends TestCase
     {
         $indicator = new class implements HealthIndicatorInterface {
             public function health(): array { return []; }
+            public function pools(): array { return []; }
             public function info(): array { return []; }
             public function metrics(): array { return []; }
             public function env(): array { return []; }

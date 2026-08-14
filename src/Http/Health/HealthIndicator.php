@@ -198,7 +198,6 @@ class HealthIndicator implements HealthIndicatorInterface
             }
         }
 
-        $details  = $this->mergePoolUtilisation($details);
         $statuses = array_column($details, 'status');
 
         return [
@@ -212,44 +211,40 @@ class HealthIndicator implements HealthIndicatorInterface
     }
 
     /**
-     * Folds live pool utilisation ({@see PpaConnectionPool::stats()}) into the per
-     * datasource entries, so one entry carries both reachability (fresh ping) and
-     * how loaded its pool is — they are keyed by the same config FQCN.
+     * Live connection-pool utilisation — the `/actuator/pools` endpoint.
      *
-     * A saturated pool (every connection handed out — `active >= maximum`, none idle)
-     * degrades that datasource: it is the signal that borrows are starting to queue.
-     * A datasource with no pool in this worker reports `pool: null` — the FPM path,
-     * or simply a config not used yet. Numbers are per worker (see
-     * {@see PpaConnectionPool::stats()}); a pool whose config the scan did not reach
-     * still gets an entry, so a live pool is never invisible.
+     * Kept apart from {@see health()} on purpose. Reachability and saturation answer
+     * different questions and change on different timescales: a datasource is either
+     * there or not, while its pool fills and drains inside a single second. Folding
+     * the two together made a busy-but-healthy application report `degraded`, which
+     * is the wrong signal for a probe that decides whether to keep serving traffic.
      *
-     * @param array<string, array<string, mixed>> $details
-     * @return array<string, array<string, mixed>>
+     * Numbers are **per worker** — each worker owns its pools, and a borrow queues on
+     * its own worker's pool. One saturated worker is a real stall even when the fleet
+     * total looks roomy, so read the entries, not their sum. Only pools opened in
+     * *this* worker appear: a datasource never used here has nothing to report.
+     *
+     * `saturated` means every connection is handed out (`active >= maximum`) and the
+     * next borrow will wait for `poolWaitTimeout` before failing.
+     *
+     * @return array{status: string, pools: array<string, array<string, mixed>>}
      */
-    private function mergePoolUtilisation(array $details): array
+    public function pools(): array
     {
+        $pools = [];
+
         foreach (PpaConnectionPool::stats() as $config => $stat) {
-            $details[$config] ??= [
-                'status'  => 'up',
-                'driver'  => null,
-                'latency' => null,
-                'error'   => null,
+            $pools[$config] = $stat + [
+                'saturated' => $stat['maximum'] > 0 && $stat['active'] >= $stat['maximum'],
             ];
-
-            if ($stat['maximum'] > 0 && $stat['active'] >= $stat['maximum']
-                && $details[$config]['status'] === 'up'
-            ) {
-                $details[$config]['status'] = 'degraded';
-            }
-
-            $details[$config]['pool'] = $stat;
         }
 
-        foreach ($details as $config => $entry) {
-            $details[$config]['pool'] = $entry['pool'] ?? null;
-        }
-
-        return $details;
+        return [
+            'status' => array_any($pools, static fn(array $p): bool => $p['saturated'])
+                ? 'degraded'
+                : 'up',
+            'pools'  => $pools,
+        ];
     }
 
     // ── Cache health (requires flytachi/winter-cache) ─────────────────────────

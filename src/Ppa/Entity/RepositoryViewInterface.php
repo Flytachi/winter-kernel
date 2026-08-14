@@ -108,7 +108,7 @@ interface RepositoryViewInterface extends RepositoryInterface
      * @return ($entityClassName is null ? TEntity|null : TOverride|null) Matching entity, or `null`.
      * @throws RepositoryException
      */
-    public static function findById(int|string $id, ?string $entityClassName = null): ?object;
+    public function findById(int|string $id, ?string $entityClassName = null): ?object;
 
     /**
      * Finds a single record matching the given condition.
@@ -119,7 +119,7 @@ interface RepositoryViewInterface extends RepositoryInterface
      * @return ($entityClassName is null ? TEntity|null : TOverride|null) Matching entity, or `null`.
      * @throws RepositoryException
      */
-    public static function findBy(Qb $qb, ?string $entityClassName = null): ?object;
+    public function findBy(Qb $qb, ?string $entityClassName = null): ?object;
 
     /**
      * Finds all records matching the given condition, or all rows when `$qb` is `null`.
@@ -130,7 +130,7 @@ interface RepositoryViewInterface extends RepositoryInterface
      * @return ($entityClassName is null ? list<TEntity> : list<TOverride>) Matching entities.
      * @throws RepositoryException
      */
-    public static function findAllBy(?Qb $qb = null, ?string $entityClassName = null): array;
+    public function findAllBy(?Qb $qb = null, ?string $entityClassName = null): array;
 
     /**
      * Finds a record by its primary key, or throws if not found.
@@ -144,7 +144,7 @@ interface RepositoryViewInterface extends RepositoryInterface
      * @throws EntityException When the record is not found.
      * @throws RepositoryException
      */
-    public static function findByIdOrThrow(
+    public function findByIdOrThrow(
         int|string $id,
         ?string $entityClassName = null,
         string $message = 'Entity not found',
@@ -163,7 +163,7 @@ interface RepositoryViewInterface extends RepositoryInterface
      * @throws EntityException When no record matches the condition.
      * @throws RepositoryException
      */
-    public static function findByOrThrow(
+    public function findByOrThrow(
         Qb $qb,
         ?string $entityClassName = null,
         string $message = 'Entity not found',

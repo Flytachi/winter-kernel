@@ -203,11 +203,9 @@ trait RepositoryViewTrait
      * @return ($entityClassName is null ? TEntity|null : TOverride|null) Matching entity, or `null`.
      * @throws RepositoryException
      */
-    final public static function findById(int|string $id, ?string $entityClassName = null): ?object
+    final public function findById(int|string $id, ?string $entityClassName = null): ?object
     {
-        $instance = new static();
-        return $instance
-            ->where(Qb::eq($instance->mapIdentifierColumnName(), $id))
+        return $this->where(Qb::eq($this->mapIdentifierColumnName(), $id))
             ->find($entityClassName);
     }
 
@@ -220,9 +218,9 @@ trait RepositoryViewTrait
      * @return ($entityClassName is null ? TEntity|null : TOverride|null) Matching entity, or `null`.
      * @throws RepositoryException
      */
-    final public static function findBy(Qb $qb, ?string $entityClassName = null): ?object
+    final public function findBy(Qb $qb, ?string $entityClassName = null): ?object
     {
-        return new static()->where($qb)->find($entityClassName);
+        return $this->where($qb)->find($entityClassName);
     }
 
     /**
@@ -234,11 +232,9 @@ trait RepositoryViewTrait
      * @return ($entityClassName is null ? list<TEntity> : list<TOverride>) Matching entities.
      * @throws RepositoryException
      */
-    final public static function findAllBy(?Qb $qb = null, ?string $entityClassName = null): array
+    final public function findAllBy(?Qb $qb = null, ?string $entityClassName = null): array
     {
-        return new static()
-            ->where($qb)
-            ->findAll($entityClassName);
+        return $this->where($qb)->findAll($entityClassName);
     }
 
     /**
@@ -253,13 +249,13 @@ trait RepositoryViewTrait
      * @throws EntityException When the record is not found.
      * @throws RepositoryException
      */
-    final public static function findByIdOrThrow(
+    final public function findByIdOrThrow(
         int|string $id,
         ?string $entityClassName = null,
         string $message = 'Entity not found',
         HttpCode $httpCode = HttpCode::NOT_FOUND
     ): object {
-        $obj = static::findById($id, $entityClassName);
+        $obj = $this->findById($id, $entityClassName);
         if (!$obj) {
             throw new EntityException($message, $httpCode->value);
         }
@@ -278,13 +274,13 @@ trait RepositoryViewTrait
      * @throws EntityException When no record matches the condition.
      * @throws RepositoryException
      */
-    final public static function findByOrThrow(
+    final public function findByOrThrow(
         Qb $qb,
         ?string $entityClassName = null,
         string $message = 'Entity not found',
         HttpCode $httpCode = HttpCode::NOT_FOUND
     ): object {
-        $obj = static::findBy($qb, $entityClassName);
+        $obj = $this->findBy($qb, $entityClassName);
         if (!$obj) {
             throw new EntityException($message, $httpCode->value);
         }

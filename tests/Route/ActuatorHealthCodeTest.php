@@ -117,6 +117,11 @@ final class StubIndicator implements HealthIndicatorInterface
         return self::$report;
     }
 
+    public function pools(): array
+    {
+        return ['status' => 'up', 'pools' => []];
+    }
+
     /** Carries a `status` of its own — the bait for the health-only check. */
     public function info(): array
     {

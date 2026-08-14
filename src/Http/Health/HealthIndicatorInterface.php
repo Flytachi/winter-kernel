@@ -7,6 +7,7 @@ namespace Flytachi\Winter\Kernel\Http\Health;
 interface HealthIndicatorInterface
 {
     public function health(): array;
+    public function pools(): array;
     public function info(): array;
     public function metrics(): array;
     public function env(): array;
