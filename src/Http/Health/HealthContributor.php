@@ -29,6 +29,8 @@ namespace Flytachi\Winter\Kernel\Http\Health;
  *     }
  * }
  * ```
+ *
+ * @link https://winterframe.net/docs/actuator Writing your own checks
  */
 interface HealthContributor
 {

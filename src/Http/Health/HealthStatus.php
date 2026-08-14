@@ -13,6 +13,8 @@ namespace Flytachi\Winter\Kernel\Http\Health;
  *     ? HealthStatus::up()->withDetail('latency_ms', $this->db->latency())
  *     : HealthStatus::down()->withDetail('reason', 'connection failed');
  * ```
+ *
+ * @link https://winterframe.net/docs/actuator Choosing a status and adding details
  */
 final class HealthStatus
 {

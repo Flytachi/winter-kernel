@@ -21,6 +21,8 @@ use Flytachi\Winter\Kernel\Http\Stereotype\Middleware;
  * #[EnableActuator(indicator: MyIndicator::class)]    // replace the whole report
  * final class App extends WinterApplication { ... }
  * ```
+ *
+ * @link https://winterframe.net/docs/actuator Endpoints, response codes and custom checks
  */
 #[\Attribute(\Attribute::TARGET_CLASS)]
 final class EnableActuator

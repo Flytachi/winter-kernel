@@ -14,6 +14,18 @@ use Flytachi\Winter\Kernel\Http\Header;
 use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
 
+/**
+ * The built-in `/actuator/*` report.
+ *
+ * `health()` aggregates four components — database, cache, disk and memory — plus
+ * every discovered {@see HealthContributor}; the worst component decides the overall
+ * status. The remaining methods are plain reads of runtime state.
+ *
+ * Extend it to change one endpoint and inherit the rest: a public method's name is
+ * its endpoint, so adding `queues()` publishes `/actuator/queues`.
+ *
+ * @link https://winterframe.net/docs/actuator Endpoints, thresholds and response codes
+ */
 class HealthIndicator implements HealthIndicatorInterface
 {
     private const int DEGRADED_THRESHOLD_PERCENT = 80;
