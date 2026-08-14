@@ -27,6 +27,8 @@ use Flytachi\Winter\Base\Runtime;
  *   Locale::translate('auth.welcome', ['Alice'])   → 'Welcome, Alice!'
  *   Locale::lang()                                 → 'ru'
  *   Locale::set('kk')                              → override for current request
+ *
+ * @link https://winterframe.net/docs/localization Dictionaries, language negotiation and interpolation
  */
 final class Locale
 {

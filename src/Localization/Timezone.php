@@ -29,6 +29,8 @@ use Flytachi\Winter\Kernel\Core\RequestLocal;
  * global** — no library can change that, it is how PHP works. They remain safe only
  * while concurrent requests share one timezone. Pass {@see current()} explicitly where
  * the answer must belong to the requesting user.
+ *
+ * @link https://winterframe.net/docs/localization Request timezone and why `date()` is unsafe here
  */
 final class Timezone
 {
