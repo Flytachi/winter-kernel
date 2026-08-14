@@ -22,6 +22,8 @@ namespace Flytachi\Winter\Kernel\App\Attribute;
  *     }
  * }
  * ```
+ *
+ * @link https://winterframe.net/docs/dependency-injection Declaring beans in a configuration class
  */
 #[\Attribute(\Attribute::TARGET_CLASS)]
 final class Configuration

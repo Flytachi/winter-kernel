@@ -18,6 +18,8 @@ namespace Flytachi\Winter\Kernel\App\Attribute;
  *     return new SmtpMailer($host);
  * }
  * ```
+ *
+ * @link https://winterframe.net/docs/dependency-injection Injecting a value from .env into a bean
  */
 #[\Attribute(\Attribute::TARGET_PARAMETER)]
 final class Value

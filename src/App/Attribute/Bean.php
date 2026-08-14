@@ -28,6 +28,8 @@ use Flytachi\Winter\Kernel\App\Scope;
  *     return new QueryBuilder();
  * }
  * ```
+ *
+ * @link https://winterframe.net/docs/dependency-injection Factory methods, binding keys and scopes
  */
 #[\Attribute(\Attribute::TARGET_METHOD)]
 final class Bean
