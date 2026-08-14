@@ -29,6 +29,8 @@ use Attribute;
  *       }
  *   }
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Writing a check of your own
  */
 #[Attribute(Attribute::TARGET_PARAMETER | Attribute::IS_REPEATABLE)]
 final readonly class Assert implements Constraint

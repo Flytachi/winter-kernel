@@ -29,6 +29,8 @@ use Attribute;
  *   public function search(#[RequestForm] array $params): ResponseEntity { ... }
  *   public function rename(#[RequestForm(field: 'name'), Size(5, 40)] string $name): ResponseEntity { ... }
  * ```
+ *
+ * @link https://winterframe.net/docs/requests Binding a form body
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class RequestForm

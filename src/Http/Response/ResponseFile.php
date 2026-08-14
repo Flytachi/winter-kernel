@@ -25,6 +25,8 @@ use SimpleXMLElement;
  *   ->attachment()          — force Content-Disposition: attachment (download dialog)
  *   ->inline()              — Content-Disposition: inline (render in browser)
  *   ->maxAge(3600)          — Cache-Control: public, max-age=3600
+ *
+ * @link https://winterframe.net/docs/responses Building a file in memory and sending it
  */
 final class ResponseFile implements Sendable
 {

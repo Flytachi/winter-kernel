@@ -16,6 +16,8 @@ use Attribute;
  * ```
  *   public function secure(#[RequestHeader('authorization')] string $token): ResponseEntity { ... }
  * ```
+ *
+ * @link https://winterframe.net/docs/requests Binding a header value
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class RequestHeader

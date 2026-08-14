@@ -36,6 +36,8 @@ use Attribute;
  *   public function data(#[RequestJson] array $raw): ResponseEntity { ... }
  *   public function rename(#[RequestJson(field: 'name'), Size(5, 40)] string $name): ResponseEntity { ... }
  * ```
+ *
+ * @link https://winterframe.net/docs/requests Binding a JSON body, whole or by field
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class RequestJson

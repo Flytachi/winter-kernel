@@ -47,6 +47,8 @@ use Attribute;
  * so no further I/O of that request can complete, and the framework discards whatever
  * the handler eventually returns in favour of the 504. It would otherwise answer 200
  * with a report built from queries that never ran.
+ *
+ * @link https://winterframe.net/docs/routing Per-route deadline
  */
 #[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_METHOD)]
 final readonly class Timeout

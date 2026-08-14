@@ -18,6 +18,8 @@ use Attribute;
  *   #[Regex('/^[a-z]+$/', 'only lowercase')]    // custom message
  *   #[Regex('/^\+?\d{7,15}$/')] string $phone
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Regex implements Constraint

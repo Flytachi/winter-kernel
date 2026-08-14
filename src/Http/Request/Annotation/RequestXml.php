@@ -33,6 +33,8 @@ use Attribute;
  *   public function bulk(#[Valid] #[RequestXml] ItemDto ...$items): ResponseEntity { ... }
  *   public function lat(#[RequestXml(field: 'coords.lat')] float $lat): ResponseEntity { ... }
  * ```
+ *
+ * @link https://winterframe.net/docs/requests Binding an XML body
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class RequestXml

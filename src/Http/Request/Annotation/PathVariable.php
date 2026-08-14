@@ -16,6 +16,8 @@ use Attribute;
  * ```
  *
  * If $name is omitted the PHP parameter name is used.
+ *
+ * @link https://winterframe.net/docs/requests Binding a URI segment
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class PathVariable

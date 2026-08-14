@@ -23,6 +23,8 @@ use Flytachi\Winter\Kernel\App\ApplicationArguments;
  *
  * Implement this interface directly to handle both, or extend
  * {@see WebConfigurerAdapter} to override only the one you need.
+ *
+ * @link https://winterframe.net/docs/web-configuration The web-layer configuration contract
  */
 interface WebConfigurer
 {

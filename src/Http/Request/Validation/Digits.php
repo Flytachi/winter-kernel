@@ -20,6 +20,8 @@ use Attribute;
  *   // 9.999     → fail  (3 fraction digits)
  *   // -99.50    → pass  (sign ignored)
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Digits implements Constraint

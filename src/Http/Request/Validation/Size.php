@@ -22,6 +22,8 @@ use Attribute;
  *   #[Size(2, 255)] // range 2..255 (inclusive)
  *   #[Size(3, message: 'Имя должно быть длиной 3 символа')] // custom error text
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Size implements Constraint

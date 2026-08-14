@@ -17,6 +17,8 @@ use Attribute;
  *   #[Datetime('Y-m-d H:i:s')]    string $dt  // "2024-01-31 14:30:00" → pass
  *   #[Datetime]                   string $dt  // "not-a-date" → fail
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Datetime implements Constraint

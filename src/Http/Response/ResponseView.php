@@ -25,6 +25,8 @@ use Flytachi\Winter\Kernel\Kernel;
  * the page, and it receives the $data keys. Both are resolved under the same root, so
  * the directory is named after neither — `views` covers both, with layouts
  * conventionally under `views/layouts`.
+ *
+ * @link https://winterframe.net/docs/views Layouts, resources and template helpers
  */
 final class ResponseView implements Sendable
 {

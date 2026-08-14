@@ -15,6 +15,8 @@ use Attribute;
  *   #[In([1, 2, 3])]                        int    $priority
  *   #[In(['yes', 'no'], strict: false)]      string $flag  // loose comparison
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class In implements Constraint

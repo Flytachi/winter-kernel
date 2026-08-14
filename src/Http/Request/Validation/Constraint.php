@@ -13,6 +13,8 @@ namespace Flytachi\Winter\Kernel\Http\Request\Validation;
  *
  * Return null  → value is valid.
  * Return string → validation failed; the string is the error message.
+ *
+ * @link https://winterframe.net/docs/validation Writing a constraint attribute of your own
  */
 interface Constraint
 {

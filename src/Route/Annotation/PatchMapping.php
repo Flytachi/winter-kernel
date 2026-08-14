@@ -6,6 +6,11 @@ namespace Flytachi\Winter\Kernel\Route\Annotation;
 
 use Attribute;
 
+/**
+ * Maps a `PATCH` route onto the method. Repeatable — one method can answer several paths.
+ *
+ * @link https://winterframe.net/docs/routing PATCH route on a controller method
+ */
 #[Attribute(Attribute::TARGET_METHOD | Attribute::IS_REPEATABLE)]
 final class PatchMapping extends AbstractMapping
 {

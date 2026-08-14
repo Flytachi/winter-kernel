@@ -15,6 +15,8 @@ use Attribute;
  *   #[NotBlank] ?string $slug      // null → pass, "" → fail
  *   #[Required] #[NotBlank] ?string $name  // null → fail, "" → fail
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class NotBlank implements Constraint

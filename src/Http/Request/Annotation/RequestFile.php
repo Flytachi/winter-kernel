@@ -37,6 +37,8 @@ use Attribute;
  *   #[RequestFile('avatar', maxSize: '5MB', accept: ['image/jpeg', 'image/png'])]
  *   #[RequestFile('images', multiple: true, maxSize: '2MB', accept: ['image/*'])]
  * ```
+ *
+ * @link https://winterframe.net/docs/requests Binding an uploaded file
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class RequestFile

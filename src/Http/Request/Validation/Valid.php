@@ -32,6 +32,8 @@ use Attribute;
  *       ) {}
  *   }
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and nested objects
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Valid

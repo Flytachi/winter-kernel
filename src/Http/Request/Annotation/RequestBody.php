@@ -38,6 +38,8 @@ use Attribute;
  *   public function webhook(#[RequestBody] string $raw): ResponseEntity { ... }
  *   public function rename(#[RequestBody(field: 'name'), Size(5, 40)] string $name): ResponseEntity { ... }
  * ```
+ *
+ * @link https://winterframe.net/docs/requests Binding the body whatever its content type
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class RequestBody

@@ -16,6 +16,8 @@ use Flytachi\Winter\Kernel\Http\Middleware\MiddlewareInterface;
  *   #[AuthMiddleware]
  *   class UserController extends Controller { ... }
  * ```
+ *
+ * @link https://winterframe.net/docs/middleware before / after, ordering and short-circuiting
  */
 abstract class Middleware implements MiddlewareInterface
 {

@@ -14,6 +14,8 @@ use Attribute;
  *   #[Email] string  $email   // "bad" → fail, "user@mail.com" → pass
  *   #[Email] ?string $email   // null → pass, "bad" → fail
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Email implements Constraint

@@ -19,6 +19,8 @@ use Attribute;
  *   #[Required] ?string $name      // must be sent; null is allowed if sent explicitly
  *   #[Required] array   $tags = [] // must be present in body; default ignored
  * ```
+ *
+ * @link https://winterframe.net/docs/validation When a field is required and when it is not
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Required implements Constraint

@@ -20,6 +20,8 @@ use Flytachi\Winter\Kernel\App\ApplicationArguments;
  *     }
  * }
  * ```
+ *
+ * @link https://winterframe.net/docs/web-configuration Overriding only what you need: CORS or server settings
  */
 abstract class WebConfigurerAdapter implements WebConfigurer
 {

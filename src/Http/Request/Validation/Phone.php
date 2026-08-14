@@ -14,6 +14,8 @@ use Attribute;
  * ```
  *   #[Phone] string $phone  // "+7 (900) 123-45-67" → pass, "abc" → fail
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Phone implements Constraint

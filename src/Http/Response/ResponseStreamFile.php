@@ -21,6 +21,8 @@ use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
  * Builder flags (via FileResponseHeaders):
  *   ->attachment() / ->inline() / ->maxAge(3600) / ->header($name, $value)
  *   ->acceptRanges(false)   — force atomic full-file delivery, disable Range
+ *
+ * @link https://winterframe.net/docs/responses Streaming, Range requests and conditional 304
  */
 final class ResponseStreamFile implements Sendable
 {

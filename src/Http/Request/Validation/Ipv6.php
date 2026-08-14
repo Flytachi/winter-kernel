@@ -13,6 +13,8 @@ use Attribute;
  * ```
  *   #[Ipv6] string $address  // "::1" → pass, "192.168.1.1" → fail, "bad" → fail
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Ipv6 implements Constraint

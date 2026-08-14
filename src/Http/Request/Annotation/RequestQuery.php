@@ -33,6 +33,8 @@ use Attribute;
  *   public function list(#[RequestQuery] OrderFilter $filter): ResponseEntity { ... }
  *   public function validated(#[RequestQuery, Valid] OrderFilter $filter): ResponseEntity { ... }
  * ```
+ *
+ * @link https://winterframe.net/docs/requests Binding the query string as an object
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class RequestQuery

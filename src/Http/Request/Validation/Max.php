@@ -16,6 +16,8 @@ use Attribute;
  *   #[Max(999.99)] float $price     // 1000.0 → fail, 999.99 → pass
  *   #[Max(1000)]  Number $amount    // BcMath\Number("1001") → fail
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Max implements Constraint

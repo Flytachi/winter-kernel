@@ -33,6 +33,8 @@ namespace Flytachi\Winter\Kernel\App\Config;
  * Everything a profile decides is a **default**, resolved when the value is read. An
  * explicit `maxConcurrency()`, `maxRequest()` or `SERVER_*` variable always wins, whatever
  * order it was set in.
+ *
+ * @link https://winterframe.net/docs/web-configuration Memory profiles: stable, balance, performance, stress
  */
 enum Profile: string
 {

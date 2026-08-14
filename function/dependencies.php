@@ -32,8 +32,12 @@ if (!function_exists('wrImport')) {
 }
 
 if (!function_exists('wrIsActiveLink')) {
+    /**
+     * @param array<string>|string $link One URI, or several that all mark the item active
+     *   — a section whose sub-pages should keep the same menu entry highlighted.
+     */
     function wrIsActiveLink(
-        string $link,
+        array|string $link,
         string $classNameSuccess = 'active',
         string $classNameNone = ''
     ): string {

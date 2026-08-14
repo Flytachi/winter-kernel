@@ -16,6 +16,8 @@ use Attribute;
  *   #[Min(0.01)] float  $price      // 0.0 → fail, 0.01 → pass
  *   #[Min(1)]    Number $amount     // BcMath\Number("0") → fail
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Min implements Constraint

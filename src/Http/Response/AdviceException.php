@@ -26,6 +26,8 @@ use Throwable;
  * Example — catch all:
  *   #[AdviceException]
  *   class GlobalErrorResponse extends ExceptionResponseBase { ... }
+ *
+ * @link https://winterframe.net/docs/error-handling Turning exceptions into responses
  */
 #[Attribute(Attribute::TARGET_CLASS)]
 final readonly class AdviceException

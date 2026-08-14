@@ -30,6 +30,8 @@ use Flytachi\Winter\Kernel\Http\Header;
  *
  * Custom headers:
  *   ResponseEntity::ok($data)->header('X-Request-Id', $id)
+ *
+ * @link https://winterframe.net/docs/responses Status, headers and body
  */
 final class ResponseEntity implements Sendable
 {

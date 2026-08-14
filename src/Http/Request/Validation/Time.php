@@ -16,6 +16,8 @@ use Attribute;
  *   #[Time('H:i')]   string $time  // "14:30" → pass, "14:30:00" → fail
  *   #[Time('H:i:s')] string $time  // "14:30:00" → pass, "14:30" → fail
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Time implements Constraint

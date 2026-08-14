@@ -19,6 +19,8 @@ use Attribute;
  *       #[RequestParam('per_page')] int $perPage = 20,
  *   ): ResponseEntity { ... }
  * ```
+ *
+ * @link https://winterframe.net/docs/requests Binding a query or form field
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class RequestParam

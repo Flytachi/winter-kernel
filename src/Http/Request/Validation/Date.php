@@ -15,6 +15,8 @@ use Attribute;
  *   #[Date('d.m.Y')]   string $date  // "31.01.2024" → pass
  *   #[Date]            string $date  // "2024-13-01" → fail  (invalid month)
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Date implements Constraint

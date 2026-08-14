@@ -21,6 +21,8 @@ use Attribute;
  *   #[CrossOrigin(origins: ['https://admin.example.com'], maxAge: 3600)]
  *   #[GetMapping('stats')]
  *   public function stats(): ResponseEntity { ... }
+ *
+ * @link https://winterframe.net/docs/web-configuration Per-route CORS on top of the global policy
  */
 #[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_METHOD)]
 final readonly class CrossOrigin

@@ -15,6 +15,8 @@ use Attribute;
  *   #[Positive] int   $quantity  // 0 → fail, -1 → fail, 1 → pass
  *   #[Positive] float $price     // 0.0 → fail, 0.01 → pass
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Positive implements Constraint

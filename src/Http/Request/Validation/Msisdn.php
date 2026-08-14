@@ -14,6 +14,8 @@ use Attribute;
  * ```
  *   #[Msisdn] string $msisdn  // "79001234567" → pass, "+7900..." → fail, "123" → fail
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Msisdn implements Constraint

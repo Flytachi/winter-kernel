@@ -16,6 +16,8 @@ use Attribute;
  *   #[Uuid(4)] string $id  // v4 only    — "550e8400-e29b-41d4-..." → pass
  *   #[Uuid]    string $id  // "not-uuid" → fail, "550e8400e29b..." → fail (no dashes)
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Uuid implements Constraint

@@ -14,6 +14,8 @@ use Attribute;
  *   #[Url] string  $website   // "bad" → fail, "https://example.com" → pass
  *   #[Url] ?string $website   // null → pass, "bad" → fail
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Url implements Constraint

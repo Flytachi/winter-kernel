@@ -22,6 +22,8 @@ use Attribute;
  *     ) {}
  * }
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Validating a collection of objects
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class ListOf

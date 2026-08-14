@@ -15,6 +15,8 @@ use Attribute;
  *   #[Negative] int   $delta   // 0 → fail, 1 → fail, -1 → pass
  *   #[Negative] float $offset  // 0.0 → fail, -0.01 → pass
  * ```
+ *
+ * @link https://winterframe.net/docs/validation Constraints, error shape and messages
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 final readonly class Negative implements Constraint

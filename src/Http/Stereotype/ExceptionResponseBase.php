@@ -21,6 +21,8 @@ use Flytachi\Winter\Kernel\Http\Response\ResponseTrait;
  *
  * Extend this class and add #[AdviceException] to create custom exception handlers
  * (Spring's @ControllerAdvice pattern). ExceptionWrapper will discover them automatically.
+ *
+ * @link https://winterframe.net/docs/error-handling Custom handlers and the client payload
  */
 class ExceptionResponseBase implements ResponseExceptionInterface
 {

@@ -17,6 +17,8 @@ use Flytachi\Winter\Kernel\Http\Cors;
  *      ->allowCredentials(true)
  *      ->maxAge(3600);
  * ```
+ *
+ * @link https://winterframe.net/docs/web-configuration Declaring the global CORS policy
  */
 final class CorsRegistry
 {

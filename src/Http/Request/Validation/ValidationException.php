@@ -22,6 +22,8 @@ use Flytachi\Winter\Kernel\Http\Response\ResponseException;
  *     }
  *   }
  * ```
+ *
+ * @link https://winterframe.net/docs/validation The 422 payload and its error shape
  */
 class ValidationException extends ResponseException
 {

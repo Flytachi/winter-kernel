@@ -18,6 +18,8 @@ use Flytachi\Winter\Kernel\Kernel;
  *        ->maxRequest(5000)
  *        ->set('ssl_cert_file', '/etc/ssl/app.pem');
  * ```
+ *
+ * @link https://winterframe.net/docs/web-configuration Workers, timeouts, limits and memory
  */
 final class ServerSettings
 {
