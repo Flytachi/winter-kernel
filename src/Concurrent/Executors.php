@@ -32,6 +32,8 @@ use Flytachi\Winter\Kernel\Concurrent\Executor\FixedExecutorService;
  * ```
  *
  * @see ExecutorService
+ *
+ * @link https://winterframe.net/docs/async Dedicated pools, limits and queues
  */
 final class Executors
 {

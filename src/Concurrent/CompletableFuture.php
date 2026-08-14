@@ -33,6 +33,8 @@ namespace Flytachi\Winter\Kernel\Concurrent;
  *
  * @see Future
  * @see ExecutorService
+ *
+ * @link https://winterframe.net/docs/async Completing a promise by hand
  */
 final class CompletableFuture implements Future
 {

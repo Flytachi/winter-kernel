@@ -12,6 +12,8 @@ namespace Flytachi\Winter\Kernel\Concurrent;
  * is chosen per pool at construction ({@see Executors::newFixedExecutor()}); it
  * only applies when a bounded queue (`queue > 0`) is actually full — an unbounded
  * pool never rejects.
+ *
+ * @link https://winterframe.net/docs/async Choosing a policy when a pool overflows
  */
 enum RejectPolicy
 {

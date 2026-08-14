@@ -62,6 +62,8 @@ namespace Flytachi\Winter\Kernel\Concurrent\Async;
  * purely computational bodies.
  *
  * @see \Flytachi\Winter\Kernel\Concurrent\Future
+ *
+ * @link https://winterframe.net/docs/async Marking a method async, executors and pitfalls
  */
 #[\Attribute(\Attribute::TARGET_METHOD)]
 final class Async

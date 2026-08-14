@@ -25,6 +25,8 @@ namespace Flytachi\Winter\Kernel\Concurrent;
  *
  * @see CompletableFuture
  * @see ExecutorService
+ *
+ * @link https://winterframe.net/docs/async Collecting results from async calls
  */
 interface Future
 {
