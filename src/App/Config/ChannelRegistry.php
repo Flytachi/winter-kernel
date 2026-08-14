@@ -14,6 +14,8 @@ use Flytachi\Winter\Kernel\Kernel;
  * ```
  * $channels->add('job')->add('audit');
  * ```
+ *
+ * @link https://winterframe.net/docs/logging Declaring a channel and its LOG_{NAME}_* variables
  */
 final class ChannelRegistry
 {

@@ -18,6 +18,8 @@ namespace Flytachi\Winter\Kernel\App\Config;
  *     }
  * }
  * ```
+ *
+ * @link https://winterframe.net/docs/logging Channels, levels and LOG_* variables
  */
 interface LoggingConfigurer
 {
