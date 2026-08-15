@@ -71,8 +71,8 @@ final class Cfg extends Cmd
             if (isset($projectData['keywords'])) {
                 unset($projectData['keywords']);
             }
-            if (isset($projectData['scripts']['post-create-project-cmd'])) {
-                unset($projectData['scripts']['post-create-project-cmd']);
+            if (isset($projectData['scripts'])) {
+                unset($projectData['scripts']);
             }
             if (isset($projectData['authors'])) {
                 $projectData['authors'] = [];
