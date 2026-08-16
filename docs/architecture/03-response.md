@@ -256,11 +256,12 @@ return ResponseView::render('layouts/main', 'user/profile', ['user' => $user]);
 All `$data` keys are `extract()`-ed into the template scope as variables.
 `ResponseView` sends `Content-Type: text/html; charset=utf-8`.
 
-In DEBUG mode a debug overlay is appended to the rendered HTML by `RenderContext`.
-
 ### Template helper functions
 
-Inside any `.php` template or resource the following global helpers are available:
+Inside any `.php` template or resource the following global helpers are available. They
+read the current render through `RenderContext`, which `ResponseView` keeps in
+`RequestLocal` for the duration of one render — per coroutine under Swoole, per process
+under FPM.
 
 | Function | Description |
 |---|---|

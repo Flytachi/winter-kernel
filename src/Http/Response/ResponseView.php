@@ -21,10 +21,10 @@ use Flytachi\Winter\Kernel\Kernel;
  *   ResponseView::render('layouts/main', 'user/profile', ['user' => $user])
  *
  * The two names are not interchangeable: the **template** is the layout, and it
- * receives all $data keys plus $content (the rendered resource); the **resource** is
- * the page, and it receives the $data keys. Both are resolved under the same root, so
- * the directory is named after neither — `views` covers both, with layouts
- * conventionally under `views/layouts`.
+ * receives all $data keys, with the rendered resource emitted by wrContent(); the
+ * **resource** is the page, and it receives the $data keys. Both are resolved under the
+ * same root, so the directory is named after neither — `views` covers both, with
+ * layouts conventionally under `views/layouts`.
  *
  * @link https://winterframe.net/docs/views Layouts, resources and template helpers
  */
@@ -90,7 +90,7 @@ final class ResponseView implements Sendable
 
     /**
      * Render a resource wrapped inside a layout template.
-     * Inside the template, $content holds the already-rendered resource HTML.
+     * Inside the template, wrContent() emits the already-rendered resource HTML.
      */
     public static function render(
         string $templateName,
@@ -120,14 +120,17 @@ final class ResponseView implements Sendable
             $response->header($name, $value);
         }
 
-        $response->end($this->renderContent());
+        $response->end($this->renderContent($request->getUri()));
     }
 
     // ── Internals ─────────────────────────────────────────────────────────────
 
-    private function renderContent(): string
+    /**
+     * @param string $requestUri URI of the request being answered, for wrIsActiveLink().
+     */
+    private function renderContent(string $requestUri): string
     {
-        RenderContext::push(self::$basePath, $this->data, $this->templateName, $this->resourceName);
+        RenderContext::push(self::$basePath, $this->data, $requestUri);
         try {
             $resource = $this->capture($this->resourcePath(), $this->data);
             RenderContext::current()?->setResourceContent($resource);
@@ -144,10 +147,35 @@ final class ResponseView implements Sendable
 
     private function capture(string $filePath, array $data): string
     {
-        extract($data, EXTR_SKIP);
+        $level = ob_get_level();
         ob_start();
-        include $filePath;
-        return (string) ob_get_clean();
+        try {
+            $this->includeTemplate($filePath, $data);
+            return (string) ob_get_clean();
+        } catch (\Throwable $e) {
+            // A template that throws halfway leaves its buffer — and any it opened
+            // itself — unclosed. Drop them, so the half-rendered page cannot end up
+            // prepended to whatever response the error is turned into.
+            while (ob_get_level() > $level) {
+                ob_end_clean();
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * Includes a view with only the render data in scope.
+     *
+     * An include inherits every local of the method it sits in, and EXTR_SKIP then keeps
+     * a $data key of the same name from ever reaching the template — so the locals left
+     * visible here are named `$__path` / `$__data`, which no application would use.
+     * `$data` (the whole array) is offered on top, matching what a partial sees.
+     */
+    private function includeTemplate(string $__path, array $__data): void
+    {
+        $data = $__data;
+        extract($__data, EXTR_SKIP);
+        include $__path;
     }
 
     private function resourcePath(): string

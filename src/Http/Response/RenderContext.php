@@ -4,86 +4,71 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Http\Response;
 
-use Flytachi\Winter\Base\Runtime;
+use Flytachi\Winter\Kernel\Core\RequestLocal;
 
 /**
- * Per-request render context for PHP template helpers.
+ * Per-request render state behind the `wr*` template helpers.
  *
- * FPM  — stored in a static stack (one request per process, no concurrency).
- * Swoole — stored in Coroutine::getContext() (isolated per coroutine = per request).
+ * Templates are plain PHP includes, and the helpers that read them — `wrContent()`,
+ * `wrData()`, `wrImport()`, `wrIsActiveLink()` — are free functions with no parameter
+ * through which the current render could be handed in. This class is that missing
+ * parameter. It is kept in {@see RequestLocal}, so it is isolated per coroutine under
+ * Swoole and per process under FPM without the caller knowing which runtime it is on.
  *
  * Lifecycle (managed by ResponseView::renderContent()):
  *   RenderContext::push(...)   — before rendering begins
  *   RenderContext::current()   — inside any template or partial
  *   RenderContext::pop()       — after rendering finishes (via finally)
+ *
+ * A stack rather than a single slot: a render nested inside another one must not leave
+ * the outer template reading the inner one's data once it finishes.
  */
 final class RenderContext
 {
-    // ── Static stack (FPM) ────────────────────────────────────────────────────
-    private static array $stack = [];
+    /** Key the render stack is stored under in {@see RequestLocal}. */
+    private const string STACK_KEY = '__render_stack';
 
-    private array $resourceAdditional = [];
+    private ?string $resourceContent = null;
 
     private function __construct(
         private readonly string $basePath,
         private readonly array $data,
-        private readonly ?string $templateName,
-        private readonly string $resourceName,
+        private readonly string $requestUri,
     ) {
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-    public static function push(
-        string $basePath,
-        array $data,
-        ?string $templateName,
-        string $resourceName,
-    ): void {
-        $ctx = new self($basePath, $data, $templateName, $resourceName);
-
-        if (Runtime::isSwooleCoroutine()) {
-            $co = \Swoole\Coroutine::getContext();
-            $co['__render_stack'] ??= [];
-            $co['__render_stack'][] = $ctx;
-        } else {
-            self::$stack[] = $ctx;
-        }
+    public static function push(string $basePath, array $data, string $requestUri): void
+    {
+        $stack   = RequestLocal::get(self::STACK_KEY, []);
+        $stack[] = new self($basePath, $data, $requestUri);
+        RequestLocal::set(self::STACK_KEY, $stack);
     }
 
     public static function pop(): void
     {
-        if (Runtime::isSwooleCoroutine()) {
-            $co = \Swoole\Coroutine::getContext();
-            if (!empty($co['__render_stack'])) {
-                array_pop($co['__render_stack']);
-            }
-        } else {
-            array_pop(self::$stack);
-        }
+        $stack = RequestLocal::get(self::STACK_KEY, []);
+        array_pop($stack);
+        RequestLocal::set(self::STACK_KEY, $stack);
     }
 
     public static function current(): ?self
     {
-        if (Runtime::isSwooleCoroutine()) {
-            $stack = \Swoole\Coroutine::getContext()['__render_stack'] ?? [];
-            return !empty($stack) ? end($stack) : null;
-        }
-        return !empty(self::$stack) ? end(self::$stack) : null;
+        $stack = RequestLocal::get(self::STACK_KEY, []);
+        return $stack === [] ? null : end($stack);
     }
 
     // ── Template API ──────────────────────────────────────────────────────────
 
-    private ?string $wrContent = null;
-
     public function setResourceContent(string $content): void
     {
-        $this->wrContent = $content;
+        $this->resourceContent = $content;
     }
 
     public function getResourceContent(): string
     {
-        return $this->wrContent ?: '';
+        return $this->resourceContent ?: '';
     }
 
     public function getData(?string $key = null): mixed
@@ -99,25 +84,41 @@ final class RenderContext
             throw new \RuntimeException("View import not found: $path");
         }
 
-        $this->resourceAdditional[] = $path;
-
-        extract($this->data, EXTR_SKIP);
-        include $path;
+        // $path and $resourceName stay behind: an include inherits every local of the
+        // method it sits in, and EXTR_SKIP would then keep a $data key of the same name
+        // from ever reaching the partial.
+        $this->includeTemplate($path);
     }
 
+    /**
+     * Includes a partial with only the render data in scope.
+     *
+     * The one local this leaves visible is deliberately named `$__path`: anything an
+     * application would plausibly put in $data — `path`, `title`, `content` — must reach
+     * the template intact. `$data` (the whole array) is offered on top, as in a page.
+     */
+    private function includeTemplate(string $__path): void
+    {
+        // extract() takes its array by reference, so it cannot be handed $this->data
+        // directly — the property is readonly and PHP rejects the indirect modification.
+        $data = $this->data;
+        extract($data, EXTR_SKIP);
+        include $__path;
+    }
+
+    /**
+     * @param array<string>|string $link One URI, or several that all mark the item active
+     *   — a section whose sub-pages should keep the same menu entry highlighted.
+     */
     public function isActiveLink(
         array|string $link,
         string $classNameSuccess = 'active',
         string $classNameNone = '',
     ): string {
-        $uri = Runtime::isSwooleCoroutine()
-            ? (\Swoole\Coroutine::getContext()['__request_uri'] ?? '/')
-            : ($_SERVER['REQUEST_URI'] ?? '/');
-
         if (is_array($link)) {
-            return in_array($uri, $link, true) ? $classNameSuccess : $classNameNone;
+            return in_array($this->requestUri, $link, true) ? $classNameSuccess : $classNameNone;
         }
 
-        return $uri === $link ? $classNameSuccess : $classNameNone;
+        return $this->requestUri === $link ? $classNameSuccess : $classNameNone;
     }
 }
