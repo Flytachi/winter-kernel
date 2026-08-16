@@ -135,6 +135,20 @@ final class ResponseViewRenderTest extends TestCase
     }
 
     /**
+     * FPM reports $_SERVER['REQUEST_URI'] with the query string attached, Swoole reports
+     * request_uri without it — so a menu entry used to light up under one runtime and stay
+     * dark under the other the moment a `?page=2` showed up.
+     */
+    public function test_wr_is_active_link_ignores_the_query_string(): void
+    {
+        $view = ResponseView::render('layouts/main', 'user/profile', ['name' => 'Ada']);
+
+        $response = $this->send($view, '/user/7?tab=orders&page=2');
+
+        self::assertStringContainsString('class="active"', (string) $response->body);
+    }
+
+    /**
      * An include inherits every local of the method it sits in, and EXTR_SKIP refuses to
      * overwrite what is already there — so a $data key colliding with one of those locals
      * used to be replaced, silently, by a filesystem path. Which keys were unusable also

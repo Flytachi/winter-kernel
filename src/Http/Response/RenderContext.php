@@ -41,8 +41,14 @@ final class RenderContext
 
     public static function push(string $basePath, array $data, string $requestUri): void
     {
+        // Link matching sees the path only. FPM hands over $_SERVER['REQUEST_URI'], which
+        // carries the query string, while Swoole's request_uri does not — left as is, the
+        // same menu entry would light up on one runtime and stay dark on the other as soon
+        // as a `?page=2` appeared. Router::dispatch() trims it the same way.
+        $path = ($pos = strpos($requestUri, '?')) !== false ? substr($requestUri, 0, $pos) : $requestUri;
+
         $stack   = RequestLocal::get(self::STACK_KEY, []);
-        $stack[] = new self($basePath, $data, $requestUri);
+        $stack[] = new self($basePath, $data, $path);
         RequestLocal::set(self::STACK_KEY, $stack);
     }
 
