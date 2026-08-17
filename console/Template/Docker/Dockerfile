@@ -49,11 +49,16 @@ COPY docker/php-memory.ini /usr/local/etc/php/conf.d/20-memory.ini
 # User hook: DB drivers / PHP extensions / cron. Modular scripts in
 # docker/dependencies/ — delete what you don't need; they run in filename order
 # (numeric prefixes). Placed BEFORE the app code copy so this rarely-changing
-# layer stays cached across code edits.
+# layer stays cached across code edits. Each script is self-contained: it installs
+# its own build dependencies and drops them again.
+#
+# `|| exit 1` is what fails the build on a broken script. Without it the loop keeps
+# going and RUN reports the status of the last iteration, so an image can come out
+# green with the extension missing — found out at runtime instead.
 COPY docker/dependencies/ /tmp/dependencies/
 RUN for f in /tmp/dependencies/*.sh; do \
         [ -e "$f" ] || continue; \
-        echo "→ deps: $f"; sh "$f"; \
+        echo "→ deps: $f"; sh "$f" || exit 1; \
     done \
     && rm -rf /tmp/dependencies /var/cache/apk/* /tmp/pear
 
