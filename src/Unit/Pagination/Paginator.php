@@ -6,8 +6,8 @@ namespace Flytachi\Winter\Kernel\Unit\Pagination;
 
 use Flytachi\Winter\Cdo\Connection\CDOStatement;
 use Flytachi\Winter\Cdo\Qb;
-use Flytachi\Winter\Kernel\Ppa\Entity\RepositoryInterface;
-use Flytachi\Winter\Kernel\Ppa\Entity\RepositoryViewInterface;
+use Flytachi\Winter\Ppa\Entity\RepositoryInterface;
+use Flytachi\Winter\Ppa\Entity\RepositoryViewInterface;
 use LogicException;
 use ValueError;
 

@@ -2,9 +2,9 @@
 
 namespace __namespace__;
 
-use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Entity\Table;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Hybrid\Id;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Varchar;
+use Flytachi\Winter\Ppa\Mapping\Attributes\Entity\Table;
+use Flytachi\Winter\Ppa\Mapping\Attributes\Hybrid\Id;
+use Flytachi\Winter\Ppa\Mapping\Attributes\Primal\Varchar;
 
 #[Table]
 class __className__

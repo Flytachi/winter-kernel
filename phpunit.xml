@@ -44,9 +44,6 @@
         <testsuite name="Unit">
             <directory>tests/Unit</directory>
         </testsuite>
-        <testsuite name="ConnectionPool">
-            <directory>tests/ConnectionPool</directory>
-        </testsuite>
         <testsuite name="Route">
             <directory>tests/Route</directory>
             <exclude>tests/Route/Fixtures</exclude>

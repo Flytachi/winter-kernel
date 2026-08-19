@@ -3,7 +3,7 @@
 namespace __namespace__;
 
 use Flytachi\Winter\DI\Attribute\Singleton;
-use Flytachi\Winter\Kernel\Ppa\Stereotype\Repository;
+use Flytachi\Winter\Ppa\Stereotype\Repository;
 
 #[Singleton]
 class __className__ extends Repository

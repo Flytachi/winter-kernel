@@ -6,7 +6,7 @@ namespace Flytachi\Winter\Kernel\Tests\Integration\View;
 
 use Flytachi\Winter\Cdo\CDOBind;
 use Flytachi\Winter\Cdo\Qb;
-use Flytachi\Winter\Kernel\Ppa\Entity\EntityException;
+use Flytachi\Winter\Ppa\Entity\EntityException;
 use Flytachi\Winter\Kernel\Tests\Integration\Crud\ProductsTableTestCase;
 use Flytachi\Winter\Kernel\Tests\Integration\Fixtures\ProductEntity;
 
@@ -22,7 +22,7 @@ use Flytachi\Winter\Kernel\Tests\Integration\Fixtures\ProductEntity;
  *      3 | gamma   | NULL
  *      4 | delta   | 4.00
  *
- * Tests exercise the full {@see \Flytachi\Winter\Kernel\Ppa\Repository\RepositoryViewTrait}
+ * Tests exercise the full {@see \Flytachi\Winter\Ppa\Repository\RepositoryViewTrait}
  * surface — find / findAll / findColumn / count / exists / static finders
  * / rawFetch / hydration.
  */

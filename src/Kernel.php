@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel;
 
+use Flytachi\Winter\Kernel\Core\Dep;
+use Flytachi\Winter\Kernel\Core\DepSupport;
 use Flytachi\Winter\Kernel\Core\KernelStore;
+use Flytachi\Winter\Kernel\Localization\Timezone;
 use Flytachi\Winter\Kernel\Process\ForkReset;
-use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Ppa\Pool\PoolTelemetry;
+use Flytachi\Winter\Ppa\Pool\PpaConnectionPool;
 use Flytachi\Winter\Thread\Launch\AdaptiveLauncher;
 use Flytachi\Winter\Thread\Thread;
 use Flytachi\Winter\Logger\Context\ProcessContext;
@@ -70,6 +74,33 @@ final class Kernel extends KernelStore
             secret: env('WINTER_KEY', ''),
             runnerPath: self::threadRunnerPath(),
         ));
+
+        // PPA is an optional package: an application without a database never installs
+        // it, and the kernel must boot the same either way. Everything below is wiring
+        // the package cannot do for itself — it reaches for none of the framework's
+        // globals, which is what lets it be used (and tested) without one.
+        if (DepSupport::has(Dep::Ppa)) {
+            self::wirePpa();
+        }
+    }
+
+    /**
+     * Hands PPA the three things it deliberately does not fetch on its own.
+     *
+     * Called only when the package is installed; see {@see DepSupport}.
+     */
+    private static function wirePpa(): void
+    {
+        PpaConnectionPool::setLogger(LoggerFactory::getLogger('PPA'));
+        // The session timezone must follow the request, and the request's zone is
+        // coroutine-local — reading PHP's engine global instead would let a request that
+        // yielded on I/O pick up a concurrent request's zone.
+        PpaConnectionPool::setTimezoneProvider(static fn(): string => Timezone::current());
+        // Per-worker pool stats land in the runtime store so /actuator/health can read
+        // across workers. Unhashed keys: the reader lists them and reads them back. A
+        // provider, not a store: building one creates its directory, and an application
+        // that never opens a pool must not end up with an empty runnable/ppa.pool/.
+        PoolTelemetry::setStoreProvider(static fn() => KernelStore::runnable('ppa.pool', false));
 
         // fork-safety — a forked daemon worker inherits the parent's DB sockets;
         // reset the pool in the child (Process::afterFork) so it reconnects fresh.

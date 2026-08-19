@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel;
 
+use Flytachi\Winter\Kernel\Core\Dep;
+use Flytachi\Winter\Kernel\Core\DepSupport;
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\Base\RuntimeMode;
 use Flytachi\Winter\Console\Core;
@@ -38,8 +40,8 @@ use Flytachi\Winter\Kernel\Http\Health\HealthIndicator;
 use Flytachi\Winter\DI\Collector\DICollector;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleResponse;
-use Flytachi\Winter\Kernel\Ppa\Pool\PoolTelemetry;
-use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Ppa\Pool\PoolTelemetry;
+use Flytachi\Winter\Ppa\Pool\PpaConnectionPool;
 use Flytachi\Winter\Kernel\Process\ForkReset;
 use Flytachi\Winter\Kernel\Route\DevWatcher;
 use Flytachi\Winter\Kernel\Route\RequestWatchdog;
@@ -504,7 +506,9 @@ abstract class WinterApplication
             RequestWatchdog::enable($requestTimeout);
             LoggerFactory::setContextStorage(new CoroutineContext());
             LoggerFactory::setDefaultChannel('http');
-            PoolTelemetry::enable($workerId);
+            if (DepSupport::has(Dep::Ppa)) {
+                PoolTelemetry::enable($workerId);
+            }
         };
 
         // A worker cannot leave while its reactor still holds a repeating timer, so a
@@ -513,8 +517,10 @@ abstract class WinterApplication
         // where those timers have to be released.
         $workerExit = static function (\Swoole\Http\Server $server, int $workerId): void {
             RequestWatchdog::disable();
-            PoolTelemetry::stop($workerId);
-            PpaConnectionPool::shutdown();
+            if (DepSupport::has(Dep::Ppa)) {
+                PoolTelemetry::stop($workerId);
+                PpaConnectionPool::shutdown();
+            }
         };
 
         $dev = $watch ? new DevWatcher([Kernel::$pathRoot]) : null;

@@ -7,7 +7,7 @@ namespace Flytachi\Winter\Kernel\Tests\Ppa\Pool;
 use Flytachi\Winter\Cdo\Connection\CDO;
 use Flytachi\Winter\Kernel\Core\RequestLocal;
 use Flytachi\Winter\Kernel\Localization\Timezone;
-use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Ppa\Pool\PpaConnectionPool;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
@@ -37,6 +37,9 @@ final class PoolTimezoneTest extends TestCase
     {
         $this->originalEnv = $_ENV['TIME_ZONE'] ?? null;
         RequestLocal::clear();
+        // The pool asks whoever wired it where the zone comes from; the kernel points it
+        // at Timezone at boot, and this is that same wiring.
+        PpaConnectionPool::setTimezoneProvider(static fn(): string => Timezone::current());
         new ReflectionProperty(PpaConnectionPool::class, 'appliedTimezone')->setValue(null, null);
     }
 
@@ -48,6 +51,7 @@ final class PoolTimezoneTest extends TestCase
             $_ENV['TIME_ZONE'] = $this->originalEnv;
         }
         RequestLocal::clear();
+        PpaConnectionPool::setTimezoneProvider(null);
         new ReflectionProperty(PpaConnectionPool::class, 'appliedTimezone')->setValue(null, null);
     }
 

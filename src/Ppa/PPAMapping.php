@@ -4,83 +4,62 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Ppa;
 
+use Flytachi\Winter\Kernel\Core\Dep;
+use Flytachi\Winter\Kernel\Core\DepSupport;
 use Flytachi\Winter\Cdo\Config\Common\DbConfigInterface;
-use Flytachi\Winter\Kernel\Core\ClassScanner;
 use Flytachi\Winter\Kernel\Collector\ImplementorCollector;
+use Flytachi\Winter\Kernel\Core\ClassScanner;
 use Flytachi\Winter\Kernel\Kernel;
-use Flytachi\Winter\Kernel\Ppa\Entity\RepositoryInterface;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Entity\Table as EntityTable;
-use Flytachi\Winter\Kernel\Ppa\Mapping\ColumnMapping;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Table;
-use ReflectionAttribute;
-use ReflectionClass;
-use ReflectionException;
+use Flytachi\Winter\Ppa\Declaration;
+use Flytachi\Winter\Ppa\Entity\RepositoryInterface;
+use Flytachi\Winter\Ppa\PPAMapping as Mapping;
 
+/**
+ * Finds the project's database classes and hands them to the PPA package.
+ *
+ * The mapping itself — reflection to {@see Declaration} — lives in
+ * {@see \Flytachi\Winter\Ppa\PPAMapping}, which knows nothing about projects. What is
+ * left here is the half that does: where the source tree is, and how to walk it. That
+ * split is why the package can be used without the framework, and why the framework can
+ * keep discovering classes the way it does everywhere else.
+ *
+ * The signatures are unchanged from when both halves lived here, so console commands and
+ * applications calling this need no edit.
+ */
 final class PPAMapping
 {
     /**
+     * Every database config declared in the project, instantiated.
+     *
      * @return DbConfigInterface[]
      */
     public static function scanningConfigs(?string $rootDir = null): array
     {
-        $collector = new ImplementorCollector(DbConfigInterface::class);
-        ClassScanner::scanner($rootDir ?? Kernel::$pathRoot)->collect($collector)->execute();
-
-        $configs = [];
-        foreach ($collector->getResult() as $ref) {
-            try {
-                $configs[] = $ref->newInstance();
-            } catch (ReflectionException) {
-            }
-        }
-        return $configs;
-    }
-
-    public static function scanningDeclaration(?string $rootDir = null): Declaration
-    {
-        $collector = new ImplementorCollector(RepositoryInterface::class);
-        ClassScanner::scanner($rootDir ?? Kernel::$pathRoot)->collect($collector)->execute();
-
-        return self::scanDeclarationFilter($collector->getResult());
+        return Mapping::configsFrom(self::scan(DbConfigInterface::class, $rootDir));
     }
 
     /**
-     * @param array<ReflectionClass> $reflectionClasses
-     * @return Declaration
+     * The declaration built from every repository in the project — the tables it expects
+     * a database to have.
      */
-    private static function scanDeclarationFilter(array $reflectionClasses): Declaration
+    public static function scanningDeclaration(?string $rootDir = null): Declaration
     {
-        $declaration = new Declaration();
+        return Mapping::declarationFrom(self::scan(RepositoryInterface::class, $rootDir));
+    }
 
-        foreach ($reflectionClasses as $reflectionClass) {
-            try {
-                /** @var RepositoryInterface $repository */
-                $repository = $reflectionClass->newInstance();
-                /** @var DbConfigInterface $config */
-                $config = new ReflectionClass($repository->getDbConfigClassName())->newInstance();
-                $config->setUp();
+    /**
+     * @param class-string $contract
+     * @return array<\ReflectionClass>
+     */
+    private static function scan(string $contract, ?string $rootDir): array
+    {
+        // Applications call this directly too, and the return type alone is enough to
+        // fatal without the package. Better to say which package is missing.
+        DepSupport::demand(Dep::Ppa, 'Scanning database classes');
 
-                $reflectionClassEntity = new ReflectionClass($repository->getEntityClassName());
-                $columnMap = new ColumnMapping($config->getDriver());
+        $collector = new ImplementorCollector($contract);
+        ClassScanner::scanner($rootDir ?? Kernel::$pathRoot)->collect($collector)->execute();
 
-                $annotationClassEntity = $reflectionClassEntity
-                    ->getAttributes(EntityTable::class, ReflectionAttribute::IS_INSTANCEOF);
-                if (empty($annotationClassEntity)) {
-                    continue;
-                }
-
-                foreach ($reflectionClassEntity->getProperties() as $property) {
-                    $columnMap->push($property);
-                }
-                $declaration->push($config, new Table(
-                    name: $repository::$table,
-                    columns: $columnMap->getColumns(),
-                    schema: $repository->getSchema(),
-                ));
-            } catch (ReflectionException $ex) {
-            }
-        }
-
-        return $declaration;
+        return $collector->getResult();
     }
 }

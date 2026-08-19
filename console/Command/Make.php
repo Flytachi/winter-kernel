@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Console\Command;
 
+use Flytachi\Winter\Kernel\Core\Dep;
+use Flytachi\Winter\Kernel\Core\DepSupport;
+use RuntimeException;
 use Composer\Autoload\ClassLoader;
 use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\Kernel\Kernel;
@@ -133,8 +136,30 @@ final class Make extends Cmd
         $this->createFile($info['className'], $info['path'], $code, 'middleware');
     }
 
+    /**
+     * Reports the missing package instead of generating a file that cannot load.
+     *
+     * @return bool Whether generation may proceed.
+     */
+    private function requireDep(Dep $dep, string $what): bool
+    {
+        try {
+            DepSupport::demand($dep, $what);
+            return true;
+        } catch (RuntimeException $e) {
+            self::printError($e->getMessage());
+            return false;
+        }
+    }
+
     private function createRepository(string $name): void
     {
+        // The generated class imports the database package; without it the file
+        // would be written and then refuse to load.
+        if (!$this->requireDep(Dep::Ppa, 'Generating a repository')) {
+            return;
+        }
+
         $info = $this->getInfo($name, 'Repository', 'RepositoryTemplate');
         $this->smartInfo($info, 'Repositories', 'Repository');
         $tName = strtolower(str_replace('Repository', '', $info['className']));
@@ -152,16 +177,31 @@ final class Make extends Cmd
 
     private function createStore(string $name): void
     {
+        // The generated class extends RedisStore; without the package the file would be
+        // written and then refuse to load.
+        if (!$this->requireDep(Dep::Redis, 'Generating a Redis store')) {
+            return;
+        }
+
         $info = $this->getInfo($name, 'Store', 'StoreRedisTemplate');
         $this->smartInfo($info, 'Stores', 'Store');
         $code = file_get_contents($info['template']);
         $code = str_replace("__namespace__", $info['namespace'], $code);
         $code = str_replace("__className__", $info['className'], $code);
+        // A prefix keeps stores on one database apart; the store's own name is the
+        // obvious default and is easier to change than to invent later.
+        $code = str_replace("__prefix__", strtolower(str_replace('Store', '', $info['className'])) . ':', $code);
         $this->createFile($info['className'], $info['path'], $code, 'store');
     }
 
     private function createEntity(string $name): void
     {
+        // The generated class imports the database package; without it the file
+        // would be written and then refuse to load.
+        if (!$this->requireDep(Dep::Ppa, 'Generating an entity')) {
+            return;
+        }
+
         $info = $this->getInfo($name, '', 'EntityTemplate');
         $this->smartInfo(
             $info,
@@ -222,6 +262,12 @@ final class Make extends Cmd
 
     private function createConfig(string $name): void
     {
+        // The generated class imports the database package; without it the file
+        // would be written and then refuse to load.
+        if (!$this->requireDep(Dep::Ppa, 'Generating a database config')) {
+            return;
+        }
+
         $info = $this->getInfo($name, 'DbConfig', 'DbConfigTemplate');
         $this->smartInfo(
             $info,
@@ -238,6 +284,10 @@ final class Make extends Cmd
 
     private function createRedisConfig(string $name): void
     {
+        if (!$this->requireDep(Dep::Redis, 'Generating a Redis config')) {
+            return;
+        }
+
         $info = $this->getInfo($name, 'RedisConfig', 'RedisConfigTemplate');
         $this->smartInfo($info, 'Configs/Redis', 'Configs', 'Config');
         $code = file_get_contents($info['template']);

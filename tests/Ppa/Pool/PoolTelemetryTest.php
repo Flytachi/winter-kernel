@@ -7,7 +7,7 @@ namespace Flytachi\Winter\Kernel\Tests\Ppa\Pool;
 use Flytachi\Winter\Kernel\Core\KernelConfig;
 use Flytachi\Winter\Kernel\Core\KernelStore;
 use Flytachi\Winter\Kernel\Kernel;
-use Flytachi\Winter\Kernel\Ppa\Pool\PoolTelemetry;
+use Flytachi\Winter\Ppa\Pool\PoolTelemetry;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use ReflectionProperty;
@@ -36,6 +36,9 @@ final class PoolTelemetryTest extends TestCase
 
         // Kernel caches FileStorage by name against the path it was first built with.
         $this->clearRunnableCache();
+        // PPA is a package and owns no storage; the kernel hands it one at boot, and so
+        // does this test — with the same call, so the wiring stays honest.
+        PoolTelemetry::setStoreProvider(static fn() => KernelStore::runnable('ppa.pool', false));
         PoolTelemetry::forget();
     }
 

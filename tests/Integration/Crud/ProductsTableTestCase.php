@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\Integration\Crud;
 
-use Flytachi\Winter\Kernel\Ppa\Stereotype\Repository;
+use Flytachi\Winter\Ppa\Stereotype\Repository;
 use Flytachi\Winter\Kernel\Tests\Integration\Fixtures\IntegrationTestCase;
 
 /**

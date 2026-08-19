@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\Ppa\Pool;
 
-use Flytachi\Winter\Kernel\ConnectionPool\ConnectionPool;
-use Flytachi\Winter\Kernel\ConnectionPool\PoolPolicy;
+use Flytachi\Winter\CPool\ConnectionPool;
+use Flytachi\Winter\CPool\PoolPolicy;
 use Flytachi\Winter\Kernel\Http\Health\HealthIndicator;
-use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
-use Flytachi\Winter\Kernel\Tests\ConnectionPool\MockFactory;
+use Flytachi\Winter\Ppa\Pool\PpaConnectionPool;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use ReflectionProperty;
@@ -78,7 +77,13 @@ final class PpaConnectionPoolStatsTest extends TestCase
 
             self::assertSame('up', $report['status']);
             self::assertSame(
-                ['total' => 0, 'idle' => 0, 'active' => 0, 'maximum' => 5, 'saturated' => false],
+                [
+                    'total' => 0, 'idle' => 0, 'active' => 0, 'maximum' => 5,
+                    'saturated' => false,
+                    // Redis pools report the same shape into the same list, so each entry
+                    // says which layer it came from.
+                    'source' => 'ppa',
+                ],
                 $report['pools']['App\\Config\\MainDb'],
             );
         });

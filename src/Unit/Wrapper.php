@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Unit;
 
-use Flytachi\Winter\Kernel\Ppa\Entity\RepositoryViewInterface;
+use Flytachi\Winter\Ppa\Entity\RepositoryViewInterface;
 use Flytachi\Winter\Kernel\Unit\Pagination\Paginator;
 use Flytachi\Winter\Kernel\Unit\Pagination\WrapMeta;
 use Flytachi\Winter\Kernel\Unit\Pagination\WrapResult;

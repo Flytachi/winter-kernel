@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Tests\Integration\Fixtures;
 
 use Flytachi\Winter\Cdo\Config\PgDbConfig;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Config\Extension;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Config\Migratable;
+use Flytachi\Winter\Ppa\Mapping\Attributes\Config\Extension;
+use Flytachi\Winter\Ppa\Mapping\Attributes\Config\Migratable;
 
 /**
  * PostgreSQL configuration driven entirely by env vars.

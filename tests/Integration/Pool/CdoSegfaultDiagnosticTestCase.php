@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\Integration\Pool;
 
-use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Ppa\Pool\PpaConnectionPool;
 use Flytachi\Winter\Kernel\Tests\Integration\Fixtures\IntegrationTestCase;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunInSeparateProcess;

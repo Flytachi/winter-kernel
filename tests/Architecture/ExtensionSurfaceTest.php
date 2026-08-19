@@ -42,9 +42,9 @@ final class ExtensionSurfaceTest extends TestCase
             => 'stereotype: #[AdviceException] handlers extend it',
         'Flytachi\Winter\Kernel\Process\ProcessStatus'
             => 'extended by DaemonStatus inside the kernel',
-        'Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\DateTime'
+        'Flytachi\Winter\Ppa\Mapping\Attributes\Primal\DateTime'
             => 'extended by Date, Time and Timestamp inside PPA',
-        'Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\FloatType'
+        'Flytachi\Winter\Ppa\Mapping\Attributes\Primal\FloatType'
             => 'extended by Double and Decimal inside PPA',
         'Flytachi\Winter\Kernel\Http\Health\HealthIndicator'
             => 'replaceable through #[EnableActuator(indicator: ...)]',

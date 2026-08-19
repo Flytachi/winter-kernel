@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\Integration\Migration;
 
-use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\FKAction;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Constants\IndexType;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\CheckConstraint;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Column;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\ForeignKey;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Index;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Table;
+use Flytachi\Winter\Ppa\Mapping\Constants\FKAction;
+use Flytachi\Winter\Ppa\Mapping\Constants\IndexType;
+use Flytachi\Winter\Ppa\Mapping\Structure\CheckConstraint;
+use Flytachi\Winter\Ppa\Mapping\Structure\Column;
+use Flytachi\Winter\Ppa\Mapping\Structure\ForeignKey;
+use Flytachi\Winter\Ppa\Mapping\Structure\Index;
+use Flytachi\Winter\Ppa\Mapping\Structure\Table;
 use Flytachi\Winter\Kernel\Tests\Integration\Fixtures\IntegrationTestCase;
 use PHPUnit\Framework\Attributes\Group;
 

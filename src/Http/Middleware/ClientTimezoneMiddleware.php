@@ -19,7 +19,7 @@ use Flytachi\Winter\Kernel\Localization\Timezone;
  * - {@see Timezone} — **the source of truth.** Coroutine-local, so concurrent requests
  *   cannot overwrite each other. Everything the framework does on the request's behalf
  *   reads this, including the timezone of the database session
- *   ({@see \Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool}).
+ *   ({@see \Flytachi\Winter\Ppa\Pool\PpaConnectionPool}).
  * - `date_default_timezone_set()` — **a convenience, safe under one condition only.**
  *   It is a PHP engine global shared by every coroutine in the worker, so a bare
  *   `date()` or `new DateTime()` reflects whichever request wrote last. That is correct

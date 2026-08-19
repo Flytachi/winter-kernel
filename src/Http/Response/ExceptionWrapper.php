@@ -7,7 +7,6 @@ namespace Flytachi\Winter\Kernel\Http\Response;
 use Composer\Autoload\ClassLoader;
 use Flytachi\Winter\DI\ReflectionCache;
 use Flytachi\Winter\Kernel\Http\Stereotype\ExceptionResponseBase;
-use Flytachi\Winter\Kernel\Ppa\Repository\RepositoryException;
 use ReflectionClass;
 use ReflectionException;
 

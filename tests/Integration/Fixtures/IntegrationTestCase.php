@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\Integration\Fixtures;
 
-use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Ppa\Pool\PpaConnectionPool;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 

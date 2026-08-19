@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Console\Command;
 
+use Flytachi\Winter\Kernel\Core\Dep;
+use Flytachi\Winter\Kernel\Core\DepSupport;
 use Flytachi\Winter\Console\Inc\Cmd;
-use Flytachi\Winter\Kernel\Ppa\DeclarationItem;
+use Flytachi\Winter\Ppa\DeclarationItem;
 use Flytachi\Winter\Kernel\Ppa\PPAMapping;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Structure\Table;
-use Flytachi\Winter\Kernel\Ppa\Pool\PoolTelemetry;
+use RuntimeException;
+use Flytachi\Winter\Ppa\Mapping\Structure\Table;
+use Flytachi\Winter\Ppa\Pool\PoolTelemetry;
 use Flytachi\Winter\Kernel\Plugin;
 
 final class Db extends Cmd
@@ -30,6 +33,17 @@ final class Db extends Cmd
 
     private function resolution(): void
     {
+        // Every subcommand here reads configs, builds declarations or reports pools —
+        // all of it lives in the database package, which an application without a
+        // database does not install. Saying so once, here, keeps the four branches below
+        // free of the question and turns a "class not found" into an instruction.
+        try {
+            DepSupport::demand(Dep::Ppa, "The 'db' command");
+        } catch (RuntimeException $e) {
+            self::printError($e->getMessage());
+            return;
+        }
+
         if (empty($this->args['flags'])) {
             $this->args['flags'] = ['e', 's', 't', 'i', 'c'];
         }

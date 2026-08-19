@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Http\Health;
 
+use Flytachi\Winter\Kernel\Core\Dep;
+use Flytachi\Winter\Kernel\Core\DepSupport;
 use Composer\InstalledVersions;
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\DI\Container;
@@ -12,7 +14,8 @@ use Flytachi\Winter\Kernel\Collector\ImplementorCollector;
 use Flytachi\Winter\DI\Scanner;
 use Flytachi\Winter\Kernel\Http\Header;
 use Flytachi\Winter\Kernel\Kernel;
-use Flytachi\Winter\Kernel\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Redis\RedisPool;
 
 /**
  * The built-in `/actuator/*` report.
@@ -37,7 +40,7 @@ class HealthIndicator implements HealthIndicatorInterface
         $rootDir    = Health::getRootDir();
         $components = [
             'db'     => $this->dbHealth($rootDir),
-            'cache'  => $this->cacheHealth($rootDir),
+            'redis'  => $this->redisHealth($rootDir),
             'disk'   => $this->diskHealth(),
             'memory' => $this->memoryHealth(),
         ];
@@ -270,10 +273,25 @@ class HealthIndicator implements HealthIndicatorInterface
     {
         $pools = [];
 
-        foreach (PpaConnectionPool::stats() as $config => $stat) {
-            $pools[$config] = $stat + [
-                'saturated' => $stat['maximum'] > 0 && $stat['active'] >= $stat['maximum'],
-            ];
+        // Both layers are optional and both report the same shape, keyed by the config
+        // class — which is unique, so the two merge without collision. `source` is kept
+        // so a reader can tell a database pool from a Redis one without knowing the
+        // application's class names.
+        $sources = [];
+        if (DepSupport::has(Dep::Ppa)) {
+            $sources['ppa'] = PpaConnectionPool::stats();
+        }
+        if (DepSupport::has(Dep::Redis)) {
+            $sources['redis'] = RedisPool::stats();
+        }
+
+        foreach ($sources as $source => $stats) {
+            foreach ($stats as $config => $stat) {
+                $pools[$config] = $stat + [
+                    'saturated' => $stat['maximum'] > 0 && $stat['active'] >= $stat['maximum'],
+                    'source'    => $source,
+                ];
+            }
         }
 
         return [
@@ -284,14 +302,15 @@ class HealthIndicator implements HealthIndicatorInterface
         ];
     }
 
-    // ── Cache health (requires flytachi/winter-cache) ─────────────────────────
+    // ── Redis health (requires flytachi/winter-redis) ─────────────────────────
 
-    final protected function cacheHealth(string $rootDir): array
+    final protected function redisHealth(string $rootDir): array
     {
-        $interface = 'Flytachi\Winter\Cache\Config\Common\RedisConfigInterface';
-        if ($rootDir === '' || !interface_exists($interface)) {
+        if ($rootDir === '' || !DepSupport::has(Dep::Redis)) {
             return ['status' => 'up', 'details' => []];
         }
+
+        $interface = 'Flytachi\Winter\Redis\Config\Common\RedisConfigInterface';
 
         $collector = new ImplementorCollector($interface);
         self::scanner($rootDir)->collect($collector)->execute();
@@ -299,7 +318,7 @@ class HealthIndicator implements HealthIndicatorInterface
         $worstStatus = 'up';
 
         foreach ($collector->getResult() as $ref) {
-            /** @var \Flytachi\Winter\Cache\Config\Common\RedisConfigInterface $config */
+            /** @var \Flytachi\Winter\Redis\Config\Common\RedisConfigInterface $config */
             $config = $ref->newInstance();
             $config->setUp();
 

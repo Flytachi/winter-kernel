@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\Integration\Cli\Fixtures;
 
-use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Additive\NullableIs;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Entity\Table;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Hybrid\Id;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Idx\Unique;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Boolean;
-use Flytachi\Winter\Kernel\Ppa\Mapping\Attributes\Primal\Varchar;
+use Flytachi\Winter\Ppa\Mapping\Attributes\Additive\NullableIs;
+use Flytachi\Winter\Ppa\Mapping\Attributes\Entity\Table;
+use Flytachi\Winter\Ppa\Mapping\Attributes\Hybrid\Id;
+use Flytachi\Winter\Ppa\Mapping\Attributes\Idx\Unique;
+use Flytachi\Winter\Ppa\Mapping\Attributes\Primal\Boolean;
+use Flytachi\Winter\Ppa\Mapping\Attributes\Primal\Varchar;
 
 /**
  * Shared entity for Phase C.5 (Cli `db migrate` E2E tests).

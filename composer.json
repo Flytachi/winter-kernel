@@ -1,7 +1,12 @@
 {
     "name": "flytachi/winter-kernel",
     "description": "Winter framework kernel",
-    "keywords": ["Winter Kernel", "winter kernel", "framework kernel", "kernel"],
+    "keywords": [
+        "Winter Kernel",
+        "winter kernel",
+        "framework kernel",
+        "kernel"
+    ],
     "type": "library",
     "license": "MIT",
     "scripts": {
@@ -26,7 +31,9 @@
             "Flytachi\\Winter\\Kernel\\Tests\\": "tests"
         }
     },
-    "bin": ["wKernelRunner"],
+    "bin": [
+        "wKernelRunner"
+    ],
     "require": {
         "php": ">=8.4",
         "flytachi/winter-di": "^2.0",
@@ -37,18 +44,21 @@
         "flytachi/winter-cache": "^1.0",
         "flytachi/file-store": "^2.0",
         "vlucas/phpdotenv": "^5.6",
-
         "ext-pcntl": "*",
         "ext-posix": "*",
         "ext-fileinfo": "*"
     },
     "require-dev": {
+        "flytachi/winter-ppa": "^1.0",
+        "flytachi/winter-redis": "^1.0",
         "phpunit/phpunit": "@stable",
         "squizlabs/php_codesniffer": "@stable",
         "swoole/ide-helper": "^6.0",
         "monolog/monolog": "@stable"
     },
     "suggest": {
+        "flytachi/winter-ppa": "The database layer: repositories, entity mapping, migrations and a coroutine connection pool.",
+        "flytachi/winter-redis": "Pooled Redis: prefixed stores, hashes, lists and streams, with a coroutine-safe connection pool.",
         "ext-pdo": "Required for database access",
         "ext-simplexml": "Required for XML file operations and XML body parsing in HTTP parameter resolution",
         "ext-bcmath": "Optional for BcMath\\Number type casting in HTTP parameter resolution",
