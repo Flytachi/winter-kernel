@@ -41,9 +41,6 @@
         <testsuite name="App">
             <directory>tests/App</directory>
         </testsuite>
-        <testsuite name="Unit">
-            <directory>tests/Unit</directory>
-        </testsuite>
         <testsuite name="Route">
             <directory>tests/Route</directory>
             <exclude>tests/Route/Fixtures</exclude>

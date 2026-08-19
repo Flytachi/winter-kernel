@@ -41,7 +41,6 @@
         "flytachi/winter-logger": "^1.0",
         "flytachi/winter-thread": "^3.0",
         "flytachi/winter-cdo": "^4.0",
-        "flytachi/winter-cache": "^1.0",
         "flytachi/file-store": "^2.0",
         "vlucas/phpdotenv": "^5.6",
         "ext-pcntl": "*",

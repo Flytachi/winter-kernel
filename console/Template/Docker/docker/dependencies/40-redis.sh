@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-# phpredis (\Redis) — the framework's Redis client (winter-cache).
+# phpredis (\Redis) — the extension flytachi/winter-redis is built on.
 if php -m | grep -qi '^redis$'; then
     echo "redis already present — skip"
 else
