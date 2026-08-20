@@ -291,24 +291,46 @@ final class ResponseStreamFile implements Sendable
         if (str_contains($set, ',')) {
             return null;
         }
-        [$startRaw, $endRaw] = array_pad(explode('-', $set, 2), 2, '');
+        // RFC 9110 draws a line the two return values follow: a spec that is *invalid*
+        // is ignored, so the request reads as if no Range had been sent (§14.1.1: "the
+        // recipient MUST ignore an invalid byte-range-spec"); a spec that is well-formed
+        // but falls outside the file is *unsatisfiable*, and only that earns a 416
+        // (§15.5.17). Collapsing the two answered 416 to a client whose header was merely
+        // malformed — a refusal where the whole file was owed — and, worse, turned
+        // `bytes=abc` into `0-` and served a 206 covering the entire representation.
+        if (preg_match('/^(\d*)-(\d*)$/', $set, $m) !== 1) {
+            return null; // not a byte-range-spec at all
+        }
 
-        if ($startRaw === '') {
-            // bytes=-N → last N bytes
-            $n = (int) $endRaw;
-            if ($n <= 0) {
+        [, $firstPos, $lastPos] = $m;
+        if ($firstPos === '' && $lastPos === '') {
+            return null; // a bare "-" specifies nothing
+        }
+
+        if ($firstPos === '') {
+            // bytes=-N → the last N bytes. Well-formed; N = 0 asks for nothing, which is
+            // the one suffix that cannot be satisfied.
+            $suffix = (int) $lastPos;
+            if ($suffix === 0) {
                 return false;
             }
-            $start = max(0, $size - $n);
+            $start = max(0, $size - $suffix);
             $end   = $size - 1;
         } else {
-            $start = (int) $startRaw;
-            $end   = $endRaw === '' ? $size - 1 : (int) $endRaw;
+            $start = (int) $firstPos;
+            if ($lastPos === '') {
+                $end = $size - 1;
+            } else {
+                $end = (int) $lastPos;
+                if ($end < $start) {
+                    return null; // invalid, not unsatisfiable
+                }
+            }
         }
 
         $end = min($end, $size - 1);
         if ($start > $end || $start >= $size) {
-            return false; // unsatisfiable range → 416
+            return false; // well-formed, but outside the file → 416
         }
 
         return [$start, $end];

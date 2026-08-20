@@ -9,6 +9,7 @@ use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
 use Flytachi\Winter\Kernel\Http\Cookie\SetCookie;
 use Flytachi\Winter\Kernel\Http\Response\ResponseStreamFile;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 // ── Spy HttpResponse — records everything send() does ─────────────────────────
@@ -376,6 +377,68 @@ final class ResponseStreamFileTest extends TestCase
 
         self::assertNull($res->sentFile, 'nothing was streamed');
         self::assertArrayNotHasKey('Content-Length', $res->headers, 'no body header was written');
+    }
+
+    // ── Invalid Range is ignored; unsatisfiable Range is refused ──────────────
+
+    /**
+     * RFC 9110 keeps these two apart, and so must the response. §14.1.1: "the recipient
+     * MUST ignore an invalid byte-range-spec" — the request then reads as if no Range had
+     * been sent, so the whole file is owed. §15.5.17 reserves 416 for a spec that is
+     * well-formed and simply falls outside the file.
+     *
+     * Collapsing them answered 416 to a client whose header was only malformed, and — for
+     * `bytes=abc`, parsed as `0-` — served a 206 covering the entire representation.
+     *
+     * @param string $range A Range header no parser should accept.
+     */
+    #[DataProvider('malformedRanges')]
+    public function test_a_malformed_range_is_ignored_and_the_whole_file_is_sent(string $range): void
+    {
+        $res = $this->send(ResponseStreamFile::open($this->path), new StubRequest('GET', ['Range' => $range]));
+
+        self::assertSame(HttpCode::OK->value, $res->statusCode, 'a malformed Range is not a refusal');
+        self::assertArrayNotHasKey('Content-Range', $res->headers);
+        self::assertSame((string) self::SIZE, $res->headers['Content-Length']);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function malformedRanges(): iterable
+    {
+        yield 'end before start' => ['bytes=5-2'];
+        yield 'empty range-set'  => ['bytes='];
+        yield 'a bare dash'      => ['bytes=-'];
+        yield 'not a number'     => ['bytes=abc'];
+        yield 'trailing junk'    => ['bytes=0-99x'];
+        yield 'negative start'   => ['bytes=-5-9'];
+    }
+
+    /**
+     * @param string $range A Range that parses but cannot be met.
+     */
+    #[DataProvider('unsatisfiableRanges')]
+    public function test_a_well_formed_range_outside_the_file_is_refused(string $range): void
+    {
+        $res = $this->send(ResponseStreamFile::open($this->path), new StubRequest('GET', ['Range' => $range]));
+
+        self::assertSame(HttpCode::REQUESTED_RANGE_NOT_SATISFIABLE->value, $res->statusCode);
+        self::assertSame('bytes */' . self::SIZE, $res->headers['Content-Range']);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function unsatisfiableRanges(): iterable
+    {
+        yield 'starts past the end' => ['bytes=99999-'];
+        yield 'a suffix of nothing' => ['bytes=-0'];
+    }
+
+    /** An unknown unit is not ours to interpret, so the Range is ignored. */
+    public function test_an_unknown_range_unit_is_ignored(): void
+    {
+        $res = $this->send(ResponseStreamFile::open($this->path), new StubRequest('GET', ['Range' => 'items=0-99']));
+
+        self::assertSame(HttpCode::OK->value, $res->statusCode);
+        self::assertArrayNotHasKey('Content-Range', $res->headers);
     }
 
     // ── Resource headers survive 304 and 416 ──────────────────────────────────
