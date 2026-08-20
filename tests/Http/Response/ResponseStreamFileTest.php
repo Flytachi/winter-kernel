@@ -174,6 +174,209 @@ final class ResponseStreamFileTest extends TestCase
         return $res;
     }
 
+    // ── Content-Disposition, RFC 6266 §4.3 ───────────────────────────────────
+
+    /**
+     * The name is rarely ours: open() takes basename() of a path, and in most
+     * applications that path came from an upload. Interpolated straight into a
+     * quoted-string, the first quote closes it early and the browser reads the rest as
+     * malformed parameters.
+     */
+    public function test_a_quote_in_the_name_cannot_break_the_header(): void
+    {
+        $res = $this->send(
+            ResponseStreamFile::open($this->path)->fileName('report "Q3"; rm -rf.pdf')->attachment(),
+            new StubRequest(),
+        );
+
+        $header = $res->headers['Content-Disposition'];
+
+        self::assertSame(
+            1,
+            preg_match('/filename="([^"]*)"/', $header, $m),
+            'the quoted-string has to parse',
+        );
+        // The name's own semicolon lives inside the quotes, which is legal; a quote does
+        // not, and that is what used to end the string early.
+        self::assertSame('report _Q3_; rm -rf.pdf', $m[1]);
+        self::assertStringContainsString("filename*=UTF-8''", $header, 'the real name still travels');
+    }
+
+    public function test_a_non_ascii_name_travels_in_filename_star(): void
+    {
+        $res = $this->send(
+            ResponseStreamFile::open($this->path)->fileName('отчёт.pdf')->attachment(),
+            new StubRequest(),
+        );
+
+        $header = $res->headers['Content-Disposition'];
+
+        self::assertStringContainsString("filename*=UTF-8''" . rawurlencode('отчёт.pdf'), $header);
+        self::assertStringContainsString('filename="', $header, 'an ASCII fallback stays for old clients');
+        self::assertSame(
+            $header,
+            preg_replace('/[^\x20-\x7E]/', '', $header),
+            'no raw non-ASCII byte reaches the header field',
+        );
+    }
+
+    /** A newline in the name would otherwise let it inject a header of its own. */
+    public function test_a_control_character_in_the_name_is_neutralised(): void
+    {
+        $res = $this->send(
+            ResponseStreamFile::open($this->path)->fileName("a\r\nX-Injected: 1")->attachment(),
+            new StubRequest(),
+        );
+
+        $header = $res->headers['Content-Disposition'];
+
+        // The property that matters is that no line break survives: the text may well
+        // remain inside the quoted filename, where it is just a name.
+        self::assertSame($header, str_replace(["\r", "\n"], '', $header), 'no line break reaches the field');
+        self::assertMatchesRegularExpression('/filename="a__X-Injected: 1"/', $header);
+    }
+
+    public function test_a_name_of_only_non_ascii_still_leaves_a_usable_fallback(): void
+    {
+        $res = $this->send(
+            ResponseStreamFile::open($this->path)->fileName('отчёт')->attachment(),
+            new StubRequest(),
+        );
+
+        self::assertStringContainsString('filename="file"', $res->headers['Content-Disposition']);
+    }
+
+    // ── Content sniffing ──────────────────────────────────────────────────────
+
+    /** The class serves user uploads and always states a type, so sniffing can only hurt. */
+    public function test_sniffing_is_refused_by_default(): void
+    {
+        $res = $this->send(ResponseStreamFile::open($this->path), new StubRequest());
+
+        self::assertSame('nosniff', $res->headers['X-Content-Type-Options']);
+    }
+
+    public function test_sniffing_can_be_allowed_explicitly(): void
+    {
+        $res = $this->send(ResponseStreamFile::open($this->path)->sniffable(), new StubRequest());
+
+        self::assertArrayNotHasKey('X-Content-Type-Options', $res->headers);
+    }
+
+    // ── Name and type stated by the caller ────────────────────────────────────
+
+    /** Content-addressed storage: a hash on disk, a real name in the database. */
+    public function test_the_caller_can_state_name_and_type(): void
+    {
+        $res = $this->send(
+            ResponseStreamFile::open($this->path)->fileName('invoice.pdf')->contentType('application/pdf'),
+            new StubRequest(),
+        );
+
+        self::assertSame('application/pdf', $res->headers['Content-Type']);
+        self::assertStringContainsString('filename="invoice.pdf"', $res->headers['Content-Disposition']);
+    }
+
+    public function test_without_a_stated_type_it_is_detected(): void
+    {
+        $res = $this->send(ResponseStreamFile::open($this->path), new StubRequest());
+
+        self::assertNotSame('', $res->headers['Content-Type']);
+    }
+
+    // ── beforeSend ────────────────────────────────────────────────────────────
+
+    public function test_the_hook_reports_the_full_size(): void
+    {
+        $seen = [];
+        $this->send(
+            ResponseStreamFile::open($this->path)->beforeSend(function (int $b) use (&$seen): void {
+                $seen[] = $b;
+            }),
+            new StubRequest(),
+        );
+
+        self::assertSame([self::SIZE], $seen);
+    }
+
+    /** For a 206 the number is the size of the part, not of the file. */
+    public function test_the_hook_reports_the_length_of_a_range(): void
+    {
+        $seen = [];
+        $this->send(
+            ResponseStreamFile::open($this->path)->beforeSend(function (int $b) use (&$seen): void {
+                $seen[] = $b;
+            }),
+            new StubRequest('GET', ['Range' => 'bytes=0-9']),
+        );
+
+        self::assertSame([10], $seen);
+    }
+
+    public function test_the_hook_is_silent_on_304(): void
+    {
+        $called = false;
+        $res = $this->send(
+            ResponseStreamFile::open($this->path)->beforeSend(function () use (&$called): void {
+                $called = true;
+            }),
+            new StubRequest('GET', ['If-None-Match' => $this->etag]),
+        );
+
+        self::assertSame(HttpCode::NOT_MODIFIED->value, $res->statusCode);
+        self::assertFalse($called, 'revalidation transfers nothing');
+    }
+
+    public function test_the_hook_is_silent_on_416(): void
+    {
+        $called = false;
+        $res = $this->send(
+            ResponseStreamFile::open($this->path)->beforeSend(function () use (&$called): void {
+                $called = true;
+            }),
+            new StubRequest('GET', ['Range' => 'bytes=999999-']),
+        );
+
+        self::assertSame(HttpCode::REQUESTED_RANGE_NOT_SATISFIABLE->value, $res->statusCode);
+        self::assertFalse($called);
+    }
+
+    /**
+     * The trap this hook exists to keep people out of: the router runs HEAD through the
+     * GET handler and the adapter drops the body afterwards, so a counter written by hand
+     * would count a request the client never received a byte of.
+     */
+    public function test_the_hook_is_silent_on_head(): void
+    {
+        $called = false;
+        $this->send(
+            ResponseStreamFile::open($this->path)->beforeSend(function () use (&$called): void {
+                $called = true;
+            }),
+            new StubRequest('HEAD'),
+        );
+
+        self::assertFalse($called);
+    }
+
+    /** If the download could not be recorded, the file must not go out. */
+    public function test_an_exception_from_the_hook_cancels_delivery(): void
+    {
+        $res = new SpyResponse();
+
+        try {
+            ResponseStreamFile::open($this->path)
+                ->beforeSend(fn() => throw new \RuntimeException('quota exhausted'))
+                ->send($res, new StubRequest());
+            self::fail('delivery should have been cancelled');
+        } catch (\RuntimeException $e) {
+            self::assertSame('quota exhausted', $e->getMessage());
+        }
+
+        self::assertNull($res->sentFile, 'nothing was streamed');
+        self::assertArrayNotHasKey('Content-Length', $res->headers, 'no body header was written');
+    }
+
     // ── open() ────────────────────────────────────────────────────────────────
 
     public function testOpenThrowsOnMissingFile(): void

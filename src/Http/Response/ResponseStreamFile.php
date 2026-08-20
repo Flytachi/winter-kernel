@@ -31,21 +31,36 @@ final class ResponseStreamFile implements Sendable
     /** Range support is enabled by default — opt-out via acceptRanges(false). */
     private bool $acceptRanges = true;
 
+    /** Resolved on first use when the caller did not state one; see {@see contentType()}. */
+    private ?string $mimeType = null;
+
+    /** @var (\Closure(int): void)|null Called before a representation is written. */
+    private ?\Closure $beforeSend = null;
+
     private function __construct(
         private string $filePath,
         private string $fileName,
-        private string $mimeType,
+        ?string $mimeType,
         bool $isAttachment,
         private HttpCode $httpCode,
         int $maxAge,
     ) {
+        $this->mimeType     = $mimeType;
         $this->isAttachment = $isAttachment;
         $this->maxAge       = $maxAge;
     }
 
     /**
      * Build a streaming response from an existing file path.
-     * Detects MIME type automatically.
+     *
+     * The name shown to the client defaults to the file's own, and the content type is
+     * detected from its contents — but only when {@see contentType()} was not used, and
+     * only at send time. `mime_content_type()` opens the file and reads its magic header,
+     * which costs about 0.9 ms on a 2 MB file and is pure waste when the caller already
+     * knows the type.
+     *
+     * The existence check stays here: failing while the response is being built is a
+     * better place than failing halfway through writing it.
      */
     public static function open(
         string $filePath,
@@ -57,10 +72,63 @@ final class ResponseStreamFile implements Sendable
             throw new \RuntimeException("File not found: {$filePath}");
         }
 
-        $fileName = basename($filePath);
-        $mime     = mime_content_type($filePath) ?: 'application/octet-stream';
+        return new self($filePath, basename($filePath), null, $isAttachment, $httpCode, $maxAge);
+    }
 
-        return new self($filePath, $fileName, $mime, $isAttachment, $httpCode, $maxAge);
+    /**
+     * The name offered to the client, when it differs from the name on disk.
+     *
+     * Content-addressed storage is the case this exists for: the file is a hash with no
+     * extension, and the name worth showing lives in a database.
+     *
+     * @param string $name Sent as-is; encoding for the header is handled downstream.
+     */
+    public function fileName(string $name): static
+    {
+        $this->fileName = $name;
+
+        return $this;
+    }
+
+    /**
+     * The content type, when the caller already knows it.
+     *
+     * Skips detection entirely — see {@see open()} for what that saves.
+     *
+     * @param string $mime A media type, e.g. `application/pdf`.
+     */
+    public function contentType(string $mime): static
+    {
+        $this->mimeType = $mime;
+
+        return $this;
+    }
+
+    /**
+     * Runs just before a representation is written to the response.
+     *
+     * Not called on 304 (revalidation transfers nothing), on 416 (the range was refused)
+     * or on HEAD (the adapter drops the body, so the client sees no bytes). The argument
+     * is the length the `Content-Length` will announce — for a 206 that is the size of
+     * the part, not of the file.
+     *
+     * It runs after the 304/416 decisions and before any body header is written, so an
+     * exception thrown from it cancels delivery. That is deliberate: if the download
+     * could not be recorded, the file should not go out.
+     *
+     * **It reports an intent to send, not a delivery.** `sendfile()` hands the file to
+     * the reactor and the client can still disappear mid-transfer, with nothing reported
+     * back to PHP. A counter built on this counts downloads *started*. There is no honest
+     * way to count the other thing from here, which is worth knowing before a one-shot
+     * link or an egress bill is built on it.
+     *
+     * @param (\Closure(int $bytes): void)|null $hook Null removes a previously set hook.
+     */
+    public function beforeSend(?\Closure $hook): static
+    {
+        $this->beforeSend = $hook;
+
+        return $this;
     }
 
     /**
@@ -78,8 +146,19 @@ final class ResponseStreamFile implements Sendable
 
     public function send(HttpResponse $response, HttpRequest $request): void
     {
-        $size  = (int) filesize($this->filePath);
-        $mtime = (int) filemtime($this->filePath);
+        // PHP's stat cache lives for the life of the process, not of the request. A Swoole
+        // worker serves for hours, so a file replaced from outside would still report its
+        // former size here — and sendfile() would then send the new bytes, leaving the
+        // response shorter or longer than the Content-Length announced. The validators
+        // would go stale the same way, answering 304 for content that had changed.
+        // Verified: without the reset, filesize() kept returning 1000 for a file another
+        // process had grown to 5000.
+        clearstatcache(true, $this->filePath);
+
+        // One syscall for both values rather than two.
+        $stat  = stat($this->filePath);
+        $size  = (int) ($stat['size'] ?? 0);
+        $mtime = (int) ($stat['mtime'] ?? 0);
         $etag  = sprintf('"%x-%x"', $mtime, $size); // strong validator, like nginx
 
         // Validators — useful for caching too, always set.
@@ -113,10 +192,14 @@ final class ResponseStreamFile implements Sendable
             return;
         }
 
+        // Everything below writes a representation, so this is where the hook belongs:
+        // past 304 and 416, before a single body header.
+        $this->announce($request, $range === null ? $size : $range[1] - $range[0] + 1);
+
         if ($range === null) {
             // Full response.
             $response->status($this->httpCode->value);
-            $this->writeFileHeaders($response, $this->mimeType, $this->fileName, $size);
+            $this->writeFileHeaders($response, $this->contentTypeOf(), $this->fileName, $size);
             $response->sendfile($this->filePath);
             return;
         }
@@ -125,9 +208,33 @@ final class ResponseStreamFile implements Sendable
         [$start, $end] = $range;
         $length = $end - $start + 1;
         $response->status(HttpCode::PARTIAL_CONTENT->value);
-        $this->writeFileHeaders($response, $this->mimeType, $this->fileName, $length);
+        $this->writeFileHeaders($response, $this->contentTypeOf(), $this->fileName, $length);
         $response->header('Content-Range', "bytes {$start}-{$end}/{$size}");
         $response->sendfile($this->filePath, $start, $length);
+    }
+
+    /**
+     * Calls the hook, unless this request will carry no bytes.
+     *
+     * HEAD is the trap worth naming: the router runs it through the GET handler and the
+     * adapter drops the body afterwards, so a counter written here would happily count a
+     * request the client never received a byte of.
+     *
+     * @param int $bytes Length the response will announce.
+     */
+    private function announce(HttpRequest $request, int $bytes): void
+    {
+        if ($this->beforeSend === null || strtoupper($request->getMethod()) === 'HEAD') {
+            return;
+        }
+
+        ($this->beforeSend)($bytes);
+    }
+
+    /** The declared type, or one read from the file's contents on first use. */
+    private function contentTypeOf(): string
+    {
+        return $this->mimeType ??= mime_content_type($this->filePath) ?: 'application/octet-stream';
     }
 
     /**
