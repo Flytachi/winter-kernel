@@ -41,7 +41,7 @@ final class Db extends Cmd
         try {
             DepSupport::demand(Dep::Ppa, "The 'db' command");
         } catch (RuntimeException $e) {
-            self::printError($e->getMessage());
+            self::printMissingDependency($e->getMessage());
             return;
         }
 

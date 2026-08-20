@@ -147,7 +147,7 @@ final class Make extends Cmd
             DepSupport::demand($dep, $what);
             return true;
         } catch (RuntimeException $e) {
-            self::printError($e->getMessage());
+            self::printMissingDependency($e->getMessage());
             return false;
         }
     }

@@ -69,6 +69,29 @@ abstract class Printer
         echo "\033[0m";
     }
 
+    /**
+     * A refusal that names what is missing and how to get it.
+     *
+     * {@see \Flytachi\Winter\Kernel\Core\DepSupport::demand()} throws a two-line
+     * message: what needs the package, and the `composer require` that installs it.
+     * Handing that whole string to {@see printError()} is a TypeError — it takes a
+     * Throwable — so the instruction never reached the operator and a stack trace
+     * arrived instead. Each line gets the marker that fits it: the problem as a
+     * warning, the command to run as info.
+     */
+    public static function printMissingDependency(string $message): void
+    {
+        $lines = preg_split('/\R/', trim($message)) ?: [];
+
+        foreach ($lines as $i => $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            $i === 0 ? self::printWarning($line) : self::printInfo($line);
+        }
+    }
+
     public static function printInfo(string $message): void
     {
         echo "\033[36m" . " | [i] $message \n";
