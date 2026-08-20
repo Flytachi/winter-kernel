@@ -377,6 +377,31 @@ final class ResponseStreamFileTest extends TestCase
         self::assertArrayNotHasKey('Content-Length', $res->headers, 'no body header was written');
     }
 
+    // ── The file can vanish between building and sending ──────────────────────
+
+    /**
+     * `open()` proves the file exists when the response is built; nothing keeps it there
+     * until it is written, and a blob cleaner runs on its own schedule. Swallowing the
+     * failed stat sent 200 with `Content-Length: 0`, an `ETag` of `"0-0"` and — with
+     * `maxAge()` set — a `Cache-Control` telling the client to remember that emptiness
+     * for a path that still exists.
+     */
+    public function test_a_file_that_disappeared_is_not_served_as_empty(): void
+    {
+        $response = ResponseStreamFile::open($this->path)->maxAge(3600);
+        unlink($this->path);
+
+        try {
+            $res = $this->send($response, new StubRequest());
+            self::fail('an empty 200 should never leave here');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('disappeared', $e->getMessage());
+            self::assertStringContainsString($this->path, $e->getMessage(), 'name the path');
+        } finally {
+            file_put_contents($this->path, str_repeat('A', self::SIZE)); // tearDown unlinks it
+        }
+    }
+
     // ── open() ────────────────────────────────────────────────────────────────
 
     public function testOpenThrowsOnMissingFile(): void

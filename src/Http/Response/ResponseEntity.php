@@ -15,11 +15,18 @@ use Flytachi\Winter\Kernel\Http\Header;
  * Controller methods return a ResponseEntity; the Router serializes it to
  * the HttpResponse — controllers never call $response->end() themselves.
  *
- * Serialization respects the client's Accept header (content negotiation):
- *   Accept: application/json  → JSON
+ * A structured body (array or object) is serialised according to the client's Accept
+ * header, read through {@see \Flytachi\Winter\Kernel\Http\Header}:
  *   Accept: application/xml   → XML
- *   Accept: text/html         → HTML (print_r fallback)
- *   Accept: *\/* or absent   → JSON (default)
+ *   Accept: application/json  → JSON
+ *   anything else, or absent  → JSON
+ *
+ * `text/html` deliberately lands on JSON as well: a browser asking for HTML from an
+ * endpoint that returns an array is asking for something the endpoint does not have, and
+ * dumping a structure into markup would answer with neither. Render HTML through
+ * {@see ResponseView} instead.
+ *
+ * A scalar body skips negotiation entirely and goes out as `text/plain`.
  *
  * Static factory shortcuts:
  *   ResponseEntity::ok($data)
@@ -31,7 +38,8 @@ use Flytachi\Winter\Kernel\Http\Header;
  * Custom headers:
  *   ResponseEntity::ok($data)->header('X-Request-Id', $id)
  *
- * @link https://winterframe.net/docs/responses Status, headers and body
+ * @link https://winterframe.net/docs/responses#responseentity Status codes, headers and negotiation
+ * @link https://winterframe.net/docs/cookies Attaching cookies to a response
  */
 final class ResponseEntity implements Sendable
 {

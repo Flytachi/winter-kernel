@@ -18,11 +18,17 @@ use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
  *
  *   ResponseStreamFile::open('/abs/path/video.mp4');
  *
- * Builder flags (via FileResponseHeaders):
+ * Builder:
+ *   ->fileName('invoice.pdf')      — the name for the client, when it differs from disk
+ *   ->contentType('application/pdf') — skip detection when the type is already known
+ *   ->acceptRanges(false)          — force atomic full-file delivery, disable Range
+ *   ->beforeSend($hook)            — runs when a representation is about to be written
  *   ->attachment() / ->inline() / ->maxAge(3600) / ->header($name, $value)
- *   ->acceptRanges(false)   — force atomic full-file delivery, disable Range
+ *   ->sniffable()                  — allow content sniffing (nosniff is the default)
+ *   ->cookie($cookie)              — send a cookie along with the file
  *
- * @link https://winterframe.net/docs/responses Streaming, Range requests and conditional 304
+ * @link https://winterframe.net/docs/responses#responsestreamfile Streaming, Range requests and conditional 304
+ * @link https://winterframe.net/docs/cookies Attaching cookies to a response
  */
 final class ResponseStreamFile implements Sendable
 {
@@ -156,9 +162,19 @@ final class ResponseStreamFile implements Sendable
         clearstatcache(true, $this->filePath);
 
         // One syscall for both values rather than two.
-        $stat  = stat($this->filePath);
-        $size  = (int) ($stat['size'] ?? 0);
-        $mtime = (int) ($stat['mtime'] ?? 0);
+        $stat = @stat($this->filePath);
+
+        // The file can be gone by now — open() only proved it existed when the response
+        // was built, and a blob cleaner runs on its own schedule. Swallowing the false
+        // would send 200 with Content-Length: 0, an ETag of "0-0" and, with maxAge() set,
+        // a Cache-Control telling the client to remember that emptiness for a path that
+        // still exists.
+        if ($stat === false) {
+            throw new \RuntimeException("File disappeared before it could be sent: {$this->filePath}");
+        }
+
+        $size  = (int) $stat['size'];
+        $mtime = (int) $stat['mtime'];
         $etag  = sprintf('"%x-%x"', $mtime, $size); // strong validator, like nginx
 
         // Validators — useful for caching too, always set.

@@ -27,6 +27,7 @@ use Flytachi\Winter\Kernel\Kernel;
  * layouts conventionally under `views/layouts`.
  *
  * @link https://winterframe.net/docs/views Layouts, resources and template helpers
+ * @link https://winterframe.net/docs/responses#responseview Where it sits among the response types
  */
 final class ResponseView implements Sendable
 {

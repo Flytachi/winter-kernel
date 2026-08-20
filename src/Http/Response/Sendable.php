@@ -18,6 +18,8 @@ use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
  * may simply ignore the argument.
  *
  * Implementations: ResponseEntity, ResponseFile, ResponseStreamFile, ResponseView
+ *
+ * @link https://winterframe.net/docs/responses#sendable Writing your own response type
  */
 interface Sendable
 {

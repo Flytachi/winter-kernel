@@ -26,7 +26,8 @@ use SimpleXMLElement;
  *   ->inline()              — Content-Disposition: inline (render in browser)
  *   ->maxAge(3600)          — Cache-Control: public, max-age=3600
  *
- * @link https://winterframe.net/docs/responses Building a file in memory and sending it
+ * @link https://winterframe.net/docs/responses#responsefile Building a file in memory and sending it
+ * @link https://winterframe.net/docs/cookies Attaching cookies to a response
  */
 final class ResponseFile implements Sendable
 {

@@ -51,9 +51,6 @@ trait FileResponseHeaders
     }
 
     /**
-     * Write the common file-response headers (disposition, cache, length).
-     */
-    /**
      * Lets the browser sniff the content type instead of trusting the declared one.
      *
      * Off by default, and the default is the safe one. Turn it on only for content you
@@ -104,6 +101,9 @@ trait FileResponseHeaders
         );
     }
 
+    /**
+     * Write the common file-response headers (disposition, cache, length).
+     */
     private function writeFileHeaders(
         HttpResponse $response,
         string $mimeType,
