@@ -10,10 +10,10 @@ use PHPUnit\Framework\TestCase;
 /**
  * The wiring that packages cannot do for themselves.
  *
- * PPA is a package now, and a package must not reach for the framework's globals: it
- * takes a logger, a timezone provider and a telemetry store from whoever boots it. That
- * makes it usable — and testable — outside the kernel, and it moves the responsibility
- * for installing all three into `Kernel::init()`.
+ * PPA and winter-redis are packages, and a package must not reach for the framework's
+ * globals: it takes a logger, a timezone provider, a telemetry store and a fork reset
+ * from whoever boots it. That makes them usable — and testable — outside the kernel, and
+ * it moves the responsibility for installing all of it into `Kernel::init()`.
  *
  * Nothing else would notice if that wiring were deleted. The tests of each behaviour
  * install it themselves, exactly as the kernel does, so they would keep passing while a
@@ -43,6 +43,19 @@ final class PackageWiringTest extends TestCase
         yield 'pool statistics reach /actuator/health' => [
             'PoolTelemetry::setStoreProvider(',
             'without it telemetry has nowhere to publish and health reports no pools',
+        ];
+        yield 'a forked child reconnects to the database' => [
+            'PpaConnectionPool::reset()',
+            'without it a forked worker writes into a socket it shares with its parent',
+        ];
+        yield 'the Redis pool logs through the framework logger' => [
+            'RedisPool::setLogger(',
+            'without it the pool is silent: winter-redis defaults to a NullLogger',
+        ];
+        yield 'a forked child reconnects to Redis' => [
+            'RedisPool::reset()',
+            'without it a forked worker shares a Redis socket with its parent and both '
+            . 'corrupt the protocol',
         ];
     }
 
@@ -96,6 +109,8 @@ final class PackageWiringTest extends TestCase
     {
         yield 'boot' => ['src/Kernel.php', 'DepSupport::has(Dep::Ppa)'];
         yield 'worker start and exit' => ['src/WinterApplication.php', 'DepSupport::has(Dep::Ppa)'];
+        yield 'worker exit, Redis' => ['src/WinterApplication.php', 'DepSupport::has(Dep::Redis)'];
+        yield 'boot, Redis' => ['src/Kernel.php', 'DepSupport::has(Dep::Redis)'];
         yield 'health probe' => ['src/Http/Health/HealthIndicator.php', 'DepSupport::has(Dep::Ppa)'];
         yield 'health probe, Redis' => ['src/Http/Health/HealthIndicator.php', 'DepSupport::has(Dep::Redis)'];
     }
@@ -113,6 +128,34 @@ final class PackageWiringTest extends TestCase
      * creates its directory, so an eager call would leave an empty `runnable/ppa.pool/`
      * in every application, including those that never open a database connection.
      */
+    /**
+     * Both pools must be closed when a worker leaves, not just the database one.
+     *
+     * A worker cannot drain while its reactor holds a repeating timer, and background
+     * housekeeping arms one per pool. Closing PPA and leaving Redis open would turn a
+     * restart into "worker exit timeout" on exactly the applications that enabled
+     * `keepaliveTime` — the ones already tuning for long uptime.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function shutdownCalls(): iterable
+    {
+        yield 'the database pool' => ['PpaConnectionPool::shutdown()'];
+        yield 'the Redis pool' => ['RedisPool::shutdown()'];
+    }
+
+    #[DataProvider('shutdownCalls')]
+    public function test_the_worker_closes_it_on_exit(string $call): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 2) . '/src/WinterApplication.php');
+
+        self::assertStringContainsString(
+            $call,
+            $source,
+            "workerExit must call {$call} or the worker cannot drain",
+        );
+    }
+
     public function test_the_telemetry_store_is_installed_lazily(): void
     {
         $source = file_get_contents(dirname(__DIR__, 2) . '/src/Kernel.php');

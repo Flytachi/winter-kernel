@@ -11,6 +11,7 @@ use Flytachi\Winter\Kernel\Localization\Timezone;
 use Flytachi\Winter\Kernel\Process\ForkReset;
 use Flytachi\Winter\Ppa\Pool\PoolTelemetry;
 use Flytachi\Winter\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Redis\RedisPool;
 use Flytachi\Winter\Thread\Launch\AdaptiveLauncher;
 use Flytachi\Winter\Thread\Thread;
 use Flytachi\Winter\Logger\Context\ProcessContext;
@@ -82,6 +83,10 @@ final class Kernel extends KernelStore
         if (DepSupport::has(Dep::Ppa)) {
             self::wirePpa();
         }
+
+        if (DepSupport::has(Dep::Redis)) {
+            self::wireRedis();
+        }
     }
 
     /**
@@ -105,6 +110,30 @@ final class Kernel extends KernelStore
         // fork-safety — a forked daemon worker inherits the parent's DB sockets;
         // reset the pool in the child (Process::afterFork) so it reconnects fresh.
         ForkReset::register(static fn() => PpaConnectionPool::reset());
+    }
+
+    /**
+     * Hands winter-redis the two things it deliberately does not fetch on its own.
+     *
+     * Called only when the package is installed; see {@see DepSupport}.
+     *
+     * Shorter than {@see wirePpa()} because Redis needs less: there is no session
+     * timezone to follow, and the pool publishes no cross-worker telemetry — its
+     * numbers reach `/actuator/pools` through the health indicator, which reads
+     * {@see RedisPool::stats()} from the worker that served the request.
+     */
+    private static function wireRedis(): void
+    {
+        RedisPool::setLogger(LoggerFactory::getLogger('Redis'));
+
+        // fork-safety — the same hazard as for the DB pool, and worse to diagnose: a
+        // fork copies descriptors, so a socket opened before it is physically shared
+        // with the parent. Two processes writing commands into one socket corrupt the
+        // protocol for both, and the symptom (`packets out of order`, a reply for
+        // somebody else's request) points nowhere near the fork. `reset()` forgets the
+        // inherited connections **without closing** them — closing would tear down the
+        // parent's socket — and the child reopens lazily.
+        ForkReset::register(static fn() => RedisPool::reset());
     }
 
     private static function bootLogger(): void

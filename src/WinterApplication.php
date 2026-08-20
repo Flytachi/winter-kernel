@@ -54,6 +54,7 @@ use Flytachi\Winter\Logger\Context\ProcessContext;
 use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\Ppa\Pool\PoolTelemetry;
 use Flytachi\Winter\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Redis\RedisPool;
 use Flytachi\Winter\Thread\Runner\AdaptiveRunner;
 use Psr\Log\LoggerInterface;
 
@@ -771,6 +772,9 @@ abstract class WinterApplication
             if (DepSupport::has(Dep::Ppa)) {
                 PoolTelemetry::stop($workerId);
                 PpaConnectionPool::shutdown();
+            }
+            if (DepSupport::has(Dep::Redis)) {
+                RedisPool::shutdown();
             }
         };
 
