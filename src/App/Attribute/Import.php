@@ -14,22 +14,29 @@ namespace Flytachi\Winter\Kernel\App\Attribute;
  * hook.
  *
  * ```
- * #[Import('acme/auth-plugin', '/auth')]
+ * #[Import('acme/auth-plugin', '/auth')]   // scanned, controllers mount under /auth
+ * #[Import('acme/toolkit')]                // scanned, mounts no routes
  * #[Import('acme/billing', '/billing', required: false)]
  * final class App extends WinterApplication { ... }
  * ```
+ *
+ * @link https://winterframe.net/docs/packages Packages
  */
 #[\Attribute(\Attribute::TARGET_CLASS | \Attribute::IS_REPEATABLE)]
 final class Import
 {
     /**
      * @param string $package Composer package name (e.g. 'acme/billing').
-     * @param string $prefix URL prefix the package mounts under (e.g. '/billing').
+     * @param string|null $prefix URL prefix the package's controllers mount under
+     *                            (e.g. '/billing'). Null scans the package without
+     *                            mounting any of its routes — what a package of
+     *                            services, commands or entities wants, and what spares
+     *                            it inventing a URL it has no use for.
      * @param bool $required Throw if the package is not installed (default: true).
      */
     public function __construct(
         public string $package,
-        public string $prefix,
+        public ?string $prefix = null,
         public bool $required = true,
     ) {
     }

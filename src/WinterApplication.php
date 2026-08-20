@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel;
 
-use Flytachi\Winter\Kernel\Core\Dep;
-use Flytachi\Winter\Kernel\Core\DepSupport;
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\Base\RuntimeMode;
 use Flytachi\Winter\Console\Core;
+use Flytachi\Winter\DI\Collector\DICollector;
 use Flytachi\Winter\DI\Container;
-use Flytachi\Winter\Kernel\Core\ClassScanner;
+use Flytachi\Winter\DI\Scanner;
 use Flytachi\Winter\Kernel\App\ApplicationArguments;
 use Flytachi\Winter\Kernel\App\ApplicationConfigException;
 use Flytachi\Winter\Kernel\App\Attribute\EnableActuator;
@@ -26,22 +25,25 @@ use Flytachi\Winter\Kernel\App\ComponentKind;
 use Flytachi\Winter\Kernel\App\Config\ChannelRegistry;
 use Flytachi\Winter\Kernel\App\Config\CorsRegistry;
 use Flytachi\Winter\Kernel\App\Config\LoggingConfigurer;
+use Flytachi\Winter\Kernel\App\Config\ServerConfigurer;
 use Flytachi\Winter\Kernel\App\Config\ServerSettings;
 use Flytachi\Winter\Kernel\App\Config\WebConfigurer;
 use Flytachi\Winter\Kernel\App\Config\WorkerMemory;
+use Flytachi\Winter\Kernel\App\PluginPackage;
 use Flytachi\Winter\Kernel\Collector\ConfigurationCollector;
 use Flytachi\Winter\Kernel\Collector\ImplementorCollector;
 use Flytachi\Winter\Kernel\Collector\ScopeGraphCollector;
 use Flytachi\Winter\Kernel\Concurrent\Async\AsyncCollector;
 use Flytachi\Winter\Kernel\Concurrent\Async\Proxy\ProxyFactory;
+use Flytachi\Winter\Kernel\Core\ClassScanner;
+use Flytachi\Winter\Kernel\Core\Dep;
+use Flytachi\Winter\Kernel\Core\DepSupport;
+use Flytachi\Winter\Kernel\Http\Adapter\SwooleRequest;
+use Flytachi\Winter\Kernel\Http\Adapter\SwooleResponse;
 use Flytachi\Winter\Kernel\Http\Health\Health;
 use Flytachi\Winter\Kernel\Http\Health\HealthContributor;
 use Flytachi\Winter\Kernel\Http\Health\HealthIndicator;
-use Flytachi\Winter\DI\Collector\DICollector;
-use Flytachi\Winter\Kernel\Http\Adapter\SwooleRequest;
-use Flytachi\Winter\Kernel\Http\Adapter\SwooleResponse;
-use Flytachi\Winter\Ppa\Pool\PoolTelemetry;
-use Flytachi\Winter\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Kernel\Plugin;
 use Flytachi\Winter\Kernel\Process\ForkReset;
 use Flytachi\Winter\Kernel\Route\DevWatcher;
 use Flytachi\Winter\Kernel\Route\RequestWatchdog;
@@ -49,6 +51,8 @@ use Flytachi\Winter\Kernel\Route\Router;
 use Flytachi\Winter\Logger\Context\CoroutineContext;
 use Flytachi\Winter\Logger\Context\ProcessContext;
 use Flytachi\Winter\Logger\LoggerFactory;
+use Flytachi\Winter\Ppa\Pool\PoolTelemetry;
+use Flytachi\Winter\Ppa\Pool\PpaConnectionPool;
 use Flytachi\Winter\Thread\Runner\AdaptiveRunner;
 use Psr\Log\LoggerInterface;
 
@@ -102,6 +106,9 @@ abstract class WinterApplication
     private static int $bootStartedAt = 0;
     /** @var list<class-string<WebConfigurer>> */
     private static array $webConfigurers = [];
+
+    /** The single ServerConfigurer of the application, if it declared one. */
+    private static ?string $serverConfigurer = null;
 
     /** Returns the concrete application class name set during boot. */
     public static function getAppClass(): string
@@ -237,10 +244,19 @@ abstract class WinterApplication
         self::$container = $c;
         $debug = (bool) env('DEBUG', false);
 
+        static::assertManifestIsNotInherited();
+
+        // Imports come first: the boot scan has to cover the packages, and until this
+        // has run the registry is empty. It used to sit at the end of this method, which
+        // is why a package's #[Bean], #[Async] and HealthContributor were invisible while
+        // its routes and commands worked — one #[Import] meaning two different things.
+        static::applyImports();
+
         $config = new ConfigurationCollector($c);
         $webCollector = new ImplementorCollector(WebConfigurer::class);
         $logCollector = new ImplementorCollector(LoggingConfigurer::class);
         $actuatorCollector = new ImplementorCollector(HealthContributor::class);
+        $serverCollector = new ImplementorCollector(ServerConfigurer::class);
         $scopeGraph = new ScopeGraphCollector();
 
         // #[Async] proxying is opt-in, like Spring's @EnableAsync: the collector is
@@ -256,21 +272,46 @@ abstract class WinterApplication
             )
             : null;
 
-        $scan = ClassScanner::scanner(
+        // Everything an imported package may contribute. The application adds
+        // ServerConfigurer to this on its own pass; a package may not.
+        $shared = static function (Scanner $scanner) use (
+            $c,
+            $config,
+            $webCollector,
+            $logCollector,
+            $actuatorCollector,
+            $scopeGraph,
+            $async,
+        ): Scanner {
+            $scanner
+                ->collect(new DICollector($c))
+                ->collect($config)
+                ->collect($webCollector)
+                ->collect($logCollector)
+                ->collect($actuatorCollector)
+                ->collect($scopeGraph);
+
+            if ($async !== null) {
+                $scanner->collect($async);
+            }
+
+            return $scanner;
+        };
+
+        // Packages first, the application last: contributions that overwrite rather than
+        // add up must end with the application's value, whatever the filesystem order.
+        foreach (Plugin::all() as $plugin) {
+            $intruders = new ImplementorCollector(ServerConfigurer::class);
+            foreach ($plugin->roots as $root) {
+                $shared(ClassScanner::scanner($root))->collect($intruders)->execute();
+            }
+            static::refuseServerConfigurer($plugin, $intruders->getResult());
+        }
+
+        $shared(ClassScanner::scanner(
             rootDir: Kernel::$pathRoot,
             cache: $debug ? null : Kernel::$pathStorageVolatile . '/di.php',
-        )
-            ->collect(new DICollector($c))
-            ->collect($config)
-            ->collect($webCollector)
-            ->collect($logCollector)
-            ->collect($actuatorCollector)
-            ->collect($scopeGraph);
-
-        if ($async !== null) {
-            $scan->collect($async);
-        }
-        $scan->execute();
+        ))->collect($serverCollector)->execute();
 
         // Before anything is resolved: a #[Singleton] holding a #[Request] bean would
         // freeze the first request's instance for the worker's lifetime, and say nothing.
@@ -288,7 +329,97 @@ abstract class WinterApplication
         static::applyLogging($c, $logCollector->getResult());
         static::applyCors($c, $webCollector->getResult());
         static::applyActuator($actuatorCollector->getResult());
-        static::applyImports();
+        static::applyServerConfigurer($serverCollector->getResult());
+    }
+
+    /**
+     * Refuses a manifest attribute left on an ancestor of the application class.
+     *
+     * PHP does not inherit attributes — a `#[EnableWeb]` on an abstract base reads as
+     * zero attributes on the class that extends it. The manifest is deliberately not
+     * made inheritable: its value is that one class tells you everything the process
+     * will start, and walking a hierarchy to find a `#[EnableProcess]` two levels up
+     * would spend exactly that.
+     *
+     * What has to go is the silence. A missing manifest is caught only by `serve`, and
+     * a partial loss — the base carrying `#[EnableActuator]` while the child carries
+     * `#[EnableWeb]` — is caught nowhere: the application starts, the actuator does not,
+     * and nothing says why.
+     *
+     * @throws ApplicationConfigException
+     */
+    private static function assertManifestIsNotInherited(): void
+    {
+        $manifest = [
+            EnableWeb::class,
+            EnableScheduler::class,
+            EnableProcess::class,
+            EnableDaemon::class,
+            EnableActuator::class,
+            EnableAsync::class,
+            Import::class,
+        ];
+
+        for (
+            $ref = new \ReflectionClass(static::class)->getParentClass();
+            $ref !== false;
+            $ref = $ref->getParentClass()
+        ) {
+            foreach ($manifest as $attribute) {
+                if ($ref->getAttributes($attribute) === []) {
+                    continue;
+                }
+
+                throw new ApplicationConfigException(sprintf(
+                    '#[%s] is declared on %s, but PHP does not inherit attributes — '
+                    . 'it has no effect on %s. Declare it on the application class itself.',
+                    new \ReflectionClass($attribute)->getShortName(),
+                    $ref->getName(),
+                    static::class,
+                ));
+            }
+        }
+    }
+
+    /**
+     * A package may not decide where the server binds.
+     *
+     * Refused by name rather than ignored: overwriting the application's own tuning is
+     * the kind of thing that shows up as "the port is wrong in production" and is traced
+     * back through the scanner's walk order, if at all.
+     *
+     * @param list<\ReflectionClass> $found
+     */
+    private static function refuseServerConfigurer(PluginPackage $plugin, array $found): void
+    {
+        if ($found === []) {
+            return;
+        }
+
+        throw new ApplicationConfigException(
+            'Only the application may configure the server; found '
+            . $found[0]->getName() . ' in ' . $plugin->package . '. '
+            . 'A package may implement WebConfigurer (CORS) but not ServerConfigurer.'
+        );
+    }
+
+    /**
+     * @param list<\ReflectionClass> $configurers
+     */
+    private static function applyServerConfigurer(array $configurers): void
+    {
+        if (count($configurers) > 1) {
+            throw new ApplicationConfigException(
+                'More than one ServerConfigurer in the application: '
+                . implode(', ', array_map(
+                    static fn(\ReflectionClass $ref): string => $ref->getName(),
+                    $configurers,
+                ))
+                . '. The server is one, so its configuration has one owner.'
+            );
+        }
+
+        self::$serverConfigurer = $configurers === [] ? null : $configurers[0]->getName();
     }
 
     /**
@@ -649,12 +780,10 @@ abstract class WinterApplication
             $args->int('port', 8000),
         );
         $c = self::$container;
-        if ($c !== null) {
-            foreach (self::$webConfigurers as $class) {
-                /** @var WebConfigurer $configurer */
-                $configurer = $c->make($class);
-                $configurer->configureServer($settings, $args);
-            }
+        if ($c !== null && self::$serverConfigurer !== null) {
+            /** @var ServerConfigurer $configurer */
+            $configurer = $c->make(self::$serverConfigurer);
+            $configurer->configureServer($settings, $args);
         }
         return $settings;
     }

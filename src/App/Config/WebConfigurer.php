@@ -4,31 +4,30 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\App\Config;
 
-use Flytachi\Winter\Kernel\App\ApplicationArguments;
-
 /**
  * Web-tier configuration contract — the winter analogue of Spring's
  * `WebMvcConfigurer`. Any class implementing it is discovered on scan and invoked
  * at boot; there is no registration.
  *
- * It carries two concerns of the web tier:
- *   - {@see configureCors()} — the global CORS policy (request-time);
- *   - {@see configureServer()} — the bind address (host/port) and Swoole server
- *     tuning (master, before workers fork).
+ * It carries the request-time policy of the web tier — today the global CORS rules.
+ * Every implementation found is applied, and the contributions add up into one registry,
+ * so an imported package may bring its own rules alongside the application's.
  *
- * {@see configureServer()} receives the parsed CLI arguments so the coder decides
- * where the bind address comes from — a `--port` flag, a custom flag, .env, or a
- * literal. The handle is pre-seeded with the framework default (`--host`/`--port`,
- * fallback `0.0.0.0:8000`), so leaving it untouched keeps that default.
+ * The order is defined rather than incidental: imported packages are applied first, in
+ * the order they were imported, and the application last. Where two contributors touch
+ * the same setting, the application therefore wins — it owns the process, and a package
+ * should never be able to overrule it by virtue of being scanned earlier.
  *
- * Implement this interface directly to handle both, or extend
- * {@see WebConfigurerAdapter} to override only the one you need.
+ * The bind address and Swoole tuning are NOT here: they are one object rather than a set,
+ * so they cannot be composed. See {@see ServerConfigurer}, which only the application may
+ * implement.
  *
  * @link https://winterframe.net/docs/web-configuration The web-layer configuration contract
  */
 interface WebConfigurer
 {
+    /**
+     * @param CorsRegistry $cors Shared registry; add rules, do not assume it is empty.
+     */
     public function configureCors(CorsRegistry $cors): void;
-
-    public function configureServer(ServerSettings $server, ApplicationArguments $args): void;
 }

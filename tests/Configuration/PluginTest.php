@@ -7,118 +7,242 @@ namespace Flytachi\Winter\Kernel\Tests\Configuration;
 use Flytachi\Winter\Kernel\Exception\Error;
 use Flytachi\Winter\Kernel\Plugin;
 use PHPUnit\Framework\TestCase;
-use ReflectionClass;
 
+/**
+ * The registry of imported packages.
+ *
+ * The interesting part is what a package's "code" is taken to be. It used to be guessed
+ * — `src/` if present, the whole install directory otherwise — and both branches were
+ * wrong for a package laid out any other way: one caller skipped it entirely, the other
+ * handed `require_once` the package's `resources/` templates and its `bootstrap.php`.
+ * The answer is in the package's own composer.json, which is what these tests pin.
+ */
 final class PluginTest extends TestCase
 {
-    /**
-     * Use a real installed Composer package as the "happy path" candidate —
-     * winter-base is a hard dependency of winter-kernel so it is always present.
-     */
-    private const REAL_PACKAGE = 'flytachi/winter-base';
-    private const FAKE_PACKAGE = 'acme/non-existent-test-pkg';
+    /** A real dependency of the kernel, so it is always installed. */
+    private const string REAL_PACKAGE = 'flytachi/winter-base';
+    private const string FAKE_PACKAGE = 'acme/non-existent-test-pkg';
 
     protected function setUp(): void
     {
-        self::resetState();
+        Plugin::forget();
     }
 
     protected function tearDown(): void
     {
-        self::resetState();
+        Plugin::forget();
     }
 
-    private static function resetState(): void
+    // ── Default state ─────────────────────────────────────────────────────────
+
+    public function test_nothing_is_registered_before_an_import(): void
     {
-        (new ReflectionClass(Plugin::class))->getProperty('plugins')->setValue(null, []);
+        self::assertSame([], Plugin::all());
+        self::assertSame([], Plugin::roots());
+        self::assertSame([], Plugin::routed());
     }
 
-    // ── default state ────────────────────────────────────────────────────────
+    // ── Registration ──────────────────────────────────────────────────────────
 
-    public function test_get_plugins_is_empty_before_any_registration(): void
+    public function test_a_package_is_recorded_with_its_name_and_path(): void
     {
-        self::assertSame([], Plugin::getPlugins());
+        Plugin::registry(self::REAL_PACKAGE, '/base');
+
+        $plugin = Plugin::all()[0];
+
+        self::assertSame(self::REAL_PACKAGE, $plugin->package);
+        self::assertSame('/base', $plugin->prefix);
+        self::assertDirectoryExists($plugin->path);
+        self::assertSame(rtrim($plugin->path, '/\\'), $plugin->path, 'no trailing separator');
     }
 
-    // ── happy path ───────────────────────────────────────────────────────────
-
-    public function test_registry_records_real_package_under_normalised_prefix(): void
+    /**
+     * @param string $given A prefix written the way a developer might write it.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('sloppyPrefixes')]
+    public function test_a_prefix_is_normalised(string $given): void
     {
-        Plugin::registry(self::REAL_PACKAGE, '/billing');
+        Plugin::registry(self::REAL_PACKAGE, $given);
 
-        $registered = Plugin::getPlugins();
-        self::assertArrayHasKey('/billing', $registered);
-        self::assertNotSame('', $registered['/billing']);
-        self::assertDirectoryExists($registered['/billing']);
+        self::assertSame('/billing', Plugin::all()[0]->prefix);
     }
 
-    public function test_registry_normalises_prefix_with_no_leading_slash(): void
+    /** @return iterable<string, array{string}> */
+    public static function sloppyPrefixes(): iterable
     {
-        Plugin::registry(self::REAL_PACKAGE, 'billing');
-        self::assertArrayHasKey('/billing', Plugin::getPlugins());
+        yield 'no leading slash'  => ['billing'];
+        yield 'trailing slash'    => ['/billing/'];
+        yield 'both'              => ['billing/'];
     }
 
-    public function test_registry_normalises_prefix_with_trailing_slash(): void
+    public function test_import_order_is_preserved(): void
     {
-        Plugin::registry(self::REAL_PACKAGE, '/billing/');
-        self::assertArrayHasKey('/billing', Plugin::getPlugins());
+        Plugin::registry(self::REAL_PACKAGE, '/base');
+        Plugin::registry('flytachi/winter-di', '/di');
+
+        self::assertSame(
+            [self::REAL_PACKAGE, 'flytachi/winter-di'],
+            array_map(static fn($p): string => $p->package, Plugin::all()),
+            'the scan applies packages in this order, so it has to be the declared one',
+        );
     }
 
-    public function test_registry_normalises_prefix_with_both_slashes(): void
-    {
-        Plugin::registry(self::REAL_PACKAGE, 'billing/');
-        self::assertArrayHasKey('/billing', Plugin::getPlugins());
-    }
-
-    public function test_registry_records_install_path_without_trailing_slash(): void
-    {
-        Plugin::registry(self::REAL_PACKAGE, '/billing');
-        $path = Plugin::getPlugins()['/billing'];
-        self::assertSame(rtrim($path, '/\\'), $path);
-    }
-
-    public function test_registry_supports_multiple_distinct_prefixes(): void
-    {
-        Plugin::registry(self::REAL_PACKAGE, '/a');
-        Plugin::registry(self::REAL_PACKAGE, '/b');
-
-        $registered = Plugin::getPlugins();
-        self::assertArrayHasKey('/a', $registered);
-        self::assertArrayHasKey('/b', $registered);
-        self::assertCount(2, $registered);
-    }
-
-    // ── failure modes ────────────────────────────────────────────────────────
-
-    public function test_registry_throws_when_required_package_is_missing(): void
-    {
-        $this->expectException(Error::class);
-        $this->expectExceptionMessage("Plugin '" . self::FAKE_PACKAGE . "' has no install path");
-        Plugin::registry(self::FAKE_PACKAGE, '/x');
-    }
-
-    public function test_registry_silently_skips_missing_optional_package(): void
-    {
-        Plugin::registry(self::FAKE_PACKAGE, '/x', required: false);
-        self::assertSame([], Plugin::getPlugins());
-    }
-
-    public function test_registry_throws_when_prefix_already_registered(): void
+    public function test_two_packages_cannot_claim_one_prefix(): void
     {
         Plugin::registry(self::REAL_PACKAGE, '/billing');
 
         $this->expectException(Error::class);
-        $this->expectExceptionMessage("Plugin prefix '/billing' already registered");
-        Plugin::registry(self::REAL_PACKAGE, '/billing');
+        Plugin::registry('flytachi/winter-di', '/billing');
     }
 
-    public function test_registry_throws_on_duplicate_prefix_even_when_normalised(): void
-    {
-        Plugin::registry(self::REAL_PACKAGE, '/billing');
+    // ── Routes are optional ───────────────────────────────────────────────────
 
-        // 'billing/' normalises to '/billing' → still a duplicate
+    /** A package of services or commands has no URL to invent. */
+    public function test_a_package_may_be_imported_without_a_prefix(): void
+    {
+        Plugin::registry(self::REAL_PACKAGE);
+
+        $plugin = Plugin::all()[0];
+
+        self::assertNull($plugin->prefix);
+        self::assertFalse($plugin->mountsRoutes());
+        self::assertSame([], Plugin::routed(), 'nothing to mount');
+        self::assertNotSame([], $plugin->roots, 'but its code is still scanned');
+    }
+
+    public function test_only_prefixed_packages_are_routed(): void
+    {
+        Plugin::registry(self::REAL_PACKAGE, '/base');
+        Plugin::registry('flytachi/winter-di');
+
+        self::assertSame(
+            [self::REAL_PACKAGE],
+            array_map(static fn($p): string => $p->package, Plugin::routed()),
+        );
+    }
+
+    /** Two packages with no prefix do not collide — there is no prefix to collide over. */
+    public function test_several_packages_without_a_prefix_coexist(): void
+    {
+        Plugin::registry(self::REAL_PACKAGE);
+        Plugin::registry('flytachi/winter-di');
+
+        self::assertCount(2, Plugin::all());
+    }
+
+    // ── Scan roots ────────────────────────────────────────────────────────────
+
+    public function test_roots_come_from_the_packages_own_autoload(): void
+    {
+        Plugin::registry(self::REAL_PACKAGE);
+
+        $plugin = Plugin::all()[0];
+        $manifest = json_decode((string) file_get_contents($plugin->path . '/composer.json'), true);
+        $declared = array_values($manifest['autoload']['psr-4']);
+
+        self::assertCount(count($declared), $plugin->roots);
+        foreach ($plugin->roots as $root) {
+            self::assertDirectoryExists($root);
+            self::assertStringStartsWith($plugin->path, $root);
+        }
+    }
+
+    /** The whole point: the install directory itself is never a scan root. */
+    public function test_the_package_root_is_not_scanned(): void
+    {
+        Plugin::registry(self::REAL_PACKAGE);
+
+        $plugin = Plugin::all()[0];
+
+        self::assertNotContains(
+            $plugin->path,
+            $plugin->roots,
+            'scanning the install directory would require_once its templates and bootstrap',
+        );
+    }
+
+    public function test_roots_of_every_package_are_gathered_in_import_order(): void
+    {
+        Plugin::registry(self::REAL_PACKAGE);
+        Plugin::registry('flytachi/winter-di');
+
+        $roots = Plugin::roots();
+
+        self::assertSame(
+            array_merge(Plugin::all()[0]->roots, Plugin::all()[1]->roots),
+            $roots,
+        );
+    }
+
+    /**
+     * The layout that used to fall between the two guesses: a package keeping its code
+     * in `main/` was skipped by the router (no `src/`) and scanned from its root by the
+     * boot scan — which meant handing `require_once` its `bootstrap.php`, whose
+     * `Application` class collides with the host's.
+     */
+    public function test_a_package_that_keeps_its_code_outside_src_is_resolved(): void
+    {
+        $dir = sys_get_temp_dir() . '/wk_pkg_' . bin2hex(random_bytes(4));
+        mkdir($dir . '/main', 0777, true);
+        file_put_contents($dir . '/composer.json', json_encode([
+            'name' => 'test/dep',
+            'autoload' => ['psr-4' => ['Dep\\Main\\' => 'main/']],
+        ]));
+        // The two files that must never be scanned.
+        file_put_contents($dir . '/bootstrap.php', '<?php final class Application {}');
+        mkdir($dir . '/resources');
+
+        try {
+            $roots = new \ReflectionMethod(Plugin::class, 'rootsOf')->invoke(null, 'test/dep', $dir);
+
+            self::assertSame([$dir . '/main'], $roots);
+        } finally {
+            @unlink($dir . '/bootstrap.php');
+            @unlink($dir . '/composer.json');
+            @rmdir($dir . '/resources');
+            @rmdir($dir . '/main');
+            @rmdir($dir);
+        }
+    }
+
+    public function test_a_package_declaring_no_psr4_is_refused_with_a_reason(): void
+    {
+        $dir = sys_get_temp_dir() . '/wk_pkg_' . bin2hex(random_bytes(4));
+        mkdir($dir, 0777, true);
+        file_put_contents($dir . '/composer.json', json_encode(['name' => 'test/plain']));
+
+        try {
+            $this->expectException(Error::class);
+            $this->expectExceptionMessage('declares no autoload.psr-4');
+
+            new \ReflectionMethod(Plugin::class, 'rootsOf')->invoke(null, 'test/plain', $dir);
+        } finally {
+            @unlink($dir . '/composer.json');
+            @rmdir($dir);
+        }
+    }
+
+    // ── Missing packages ──────────────────────────────────────────────────────
+
+    public function test_a_missing_required_package_is_an_error(): void
+    {
         $this->expectException(Error::class);
-        $this->expectExceptionMessage("Plugin prefix '/billing' already registered");
-        Plugin::registry(self::REAL_PACKAGE, 'billing/');
+
+        Plugin::registry(self::FAKE_PACKAGE, '/nope');
+    }
+
+    public function test_a_missing_optional_package_is_skipped(): void
+    {
+        Plugin::registry(self::FAKE_PACKAGE, '/nope', required: false);
+
+        self::assertSame([], Plugin::all());
+    }
+
+    public function test_forget_empties_the_registry(): void
+    {
+        Plugin::registry(self::REAL_PACKAGE, '/base');
+        Plugin::forget();
+
+        self::assertSame([], Plugin::all());
     }
 }

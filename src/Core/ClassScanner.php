@@ -29,16 +29,23 @@ final class ClassScanner
     }
 
     /**
-     * Scan the project root and all plugins, feeding every collector.
+     * Scan every imported package and then the project, feeding each collector.
+     *
+     * The order is the point. Contributions that add up do not care, but anything where
+     * a later contributor overwrites an earlier one does — and the application must be
+     * the one that wins. It owns the process; a package should not overrule it by virtue
+     * of having been walked first.
+     *
+     * Package roots come from each package's own `composer.json`; see
+     * {@see Plugin::roots()} for why they are not guessed.
      */
     public static function scan(CollectorInterface ...$collectors): void
     {
-        self::run(Kernel::$pathRoot, $collectors);
-
-        foreach (Plugin::getPlugins() as $path) {
-            $src = is_dir($path . '/src') ? $path . '/src' : $path;
-            self::run($src, $collectors);
+        foreach (Plugin::roots() as $root) {
+            self::run($root, $collectors);
         }
+
+        self::run(Kernel::$pathRoot, $collectors);
     }
 
     /**

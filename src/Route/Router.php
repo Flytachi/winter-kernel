@@ -187,11 +187,12 @@ final class Router
             ->collect($exceptionCollector)
             ->execute();
 
-        foreach (Plugin::getPlugins() as $prefix => $path) {
-            $pluginSrc = $path . '/src';
-            if (is_dir($pluginSrc)) {
-                ClassScanner::scanner($pluginSrc)
-                    ->collect(new MappingCollector($router, $prefix))
+        // Only packages that were given a prefix mount routes; one imported for its
+        // services or commands has nothing to mount and is not asked to invent a URL.
+        foreach (Plugin::routed() as $plugin) {
+            foreach ($plugin->roots as $root) {
+                ClassScanner::scanner($root)
+                    ->collect(new MappingCollector($router, $plugin->prefix))
                     ->execute();
             }
         }

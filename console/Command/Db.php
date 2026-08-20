@@ -12,6 +12,7 @@ use Flytachi\Winter\Kernel\Ppa\PPAMapping;
 use RuntimeException;
 use Flytachi\Winter\Ppa\Mapping\Structure\Table;
 use Flytachi\Winter\Ppa\Pool\PoolTelemetry;
+use Flytachi\Winter\Kernel\App\PluginPackage;
 use Flytachi\Winter\Kernel\Plugin;
 
 final class Db extends Cmd
@@ -70,40 +71,57 @@ final class Db extends Cmd
     // --- Plugin resolution ---
 
     /**
-     * @return array<string, string|null>  prefix => rootDir (null = app)
+     * What to scan, as label + root. A package declaring several PSR-4 roots yields one
+     * entry per root, so the label repeats — which is why this is a list of pairs and
+     * not a map.
+     *
+     * @return list<array{label: string, root: string|null}>  root null = the project
      */
     private function resolveTargets(): array
     {
         $options = $this->args['options'];
 
         if (isset($options['plugin'])) {
-            $prefix = $options['plugin'];
-            $plugins = Plugin::getPlugins();
-            if (!isset($plugins[$prefix])) {
-                self::printWarning("Plugin '$prefix' is not registered.");
-                return [];
+            $name = $options['plugin'];
+            foreach (Plugin::all() as $plugin) {
+                if ($plugin->package === $name) {
+                    return self::targetsOf($plugin);
+                }
             }
-            return [$prefix => $plugins[$prefix]];
+            self::printWarning("Plugin '$name' is not imported.");
+            return [];
         }
 
         if (isset($options['plugins'])) {
-            $plugins = Plugin::getPlugins();
-            if (empty($plugins)) {
-                self::printWarning("No plugins are registered.");
+            $plugins = Plugin::all();
+            if ($plugins === []) {
+                self::printWarning('No packages are imported.');
                 return [];
             }
-            return $plugins;
+            return array_merge(...array_map(self::targetsOf(...), $plugins));
         }
 
-        return ['Project' => null];
+        return [['label' => 'Project', 'root' => null]];
+    }
+
+    /** @return list<array{label: string, root: string}> */
+    private static function targetsOf(PluginPackage $plugin): array
+    {
+        return array_map(
+            static fn(string $root): array => ['label' => $plugin->package, 'root' => $root],
+            $plugin->roots,
+        );
     }
 
     // --- Commands ---
 
     private function ping(): void
     {
-        $targets = ['Project' => null] + Plugin::getPlugins();
-        foreach ($targets as $label => $rootDir) {
+        $targets = array_merge(
+            [['label' => 'Project', 'root' => null]],
+            ...array_map(self::targetsOf(...), Plugin::all()),
+        );
+        foreach ($targets as ['label' => $label, 'root' => $rootDir]) {
             $configs = PPAMapping::scanningConfigs($rootDir);
 
             if (empty($configs)) {
@@ -197,7 +215,7 @@ final class Db extends Cmd
 
     private function showSql(): void
     {
-        foreach ($this->resolveTargets() as $label => $rootDir) {
+        foreach ($this->resolveTargets() as ['label' => $label, 'root' => $rootDir]) {
             $declaration = PPAMapping::scanningDeclaration($rootDir);
 
             $rawItems = $declaration->getItems();
@@ -262,7 +280,7 @@ final class Db extends Cmd
 
     private function migrate(): void
     {
-        foreach ($this->resolveTargets() as $label => $rootDir) {
+        foreach ($this->resolveTargets() as ['label' => $label, 'root' => $rootDir]) {
             $declaration = PPAMapping::scanningDeclaration($rootDir);
 
             $rawItems = $declaration->getItems();
@@ -510,8 +528,8 @@ final class Db extends Cmd
         self::printLabel("Flags", $cl);
 
         self::printLabel("Options", $cl);
-        self::printKeyValue("--plugin=<name>", "target a single registered plugin", 20, $cl, 36);
-        self::printKeyValue("--plugins", "target all registered plugins", 20, $cl, 36);
+        self::printKeyValue("--plugin=<name>", "target one imported package (composer name)", 20, $cl, 36);
+        self::printKeyValue("--plugins", "target every imported package", 20, $cl, 36);
         self::printInfo("(no option = app)");
         self::printLabel("Options", $cl);
 
@@ -522,9 +540,9 @@ final class Db extends Cmd
         self::printInfo("call db ping --plugins");
         self::printInfo("call db migrate");
         self::printInfo("call db migrate -t -i");
-        self::printInfo("call db migrate --plugin=bill");
+        self::printInfo("call db migrate --plugin=acme/billing");
         self::printInfo("call db migrate --plugins");
-        self::printInfo("call db sql --plugin=bill -s");
+        self::printInfo("call db sql --plugin=acme/billing -s");
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);
