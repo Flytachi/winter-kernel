@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Http\Contracts;
 
+use Flytachi\Winter\Kernel\Http\Cookie\SetCookie;
+
 /**
  * Unified HTTP response abstraction.
  *
@@ -20,6 +22,17 @@ interface HttpResponse
 
     /** Add or replace a response header. */
     public function header(string $name, string $value): void;
+
+    /**
+     * Add a cookie to the response.
+     *
+     * Separate from {@see header()} because `Set-Cookie` is the one header that
+     * legitimately repeats, and header() replaces by name in both runtimes — a second
+     * cookie written through it destroys the first without a warning.
+     *
+     * @param SetCookie $cookie Cookie to send; serialised by the implementation.
+     */
+    public function cookie(SetCookie $cookie): void;
 
     /** Flush the body and finish the response. */
     public function end(string $body = ''): void;

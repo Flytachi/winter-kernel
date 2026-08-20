@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Tests\Route\Fixtures;
 
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
+use Flytachi\Winter\Kernel\Http\Cookie\CookieParser;
 
 /**
  * A request the router can dispatch without a live SAPI. Only method, URI and headers
@@ -61,6 +62,17 @@ final class FakeRequest implements HttpRequest
     public function getHeaders(): array
     {
         return $this->headers;
+    }
+
+    /** Parsed from the `Cookie` header, exactly as the real adapters do. */
+    public function getCookie(string $name): ?string
+    {
+        return $this->getCookies()[$name] ?? null;
+    }
+
+    public function getCookies(): array
+    {
+        return CookieParser::parse($this->getHeader('Cookie') ?? '');
     }
 
     public function getUploadedFiles(): array

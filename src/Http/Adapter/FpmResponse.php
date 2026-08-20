@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Http\Adapter;
 
 use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\Cookie\SetCookie;
 
 /**
  * HttpResponse adapter for PHP-FPM / Apache (CGI model).
@@ -29,6 +30,18 @@ final class FpmResponse implements HttpResponse
     public function header(string $name, string $value): void
     {
         header("{$name}: {$value}");
+    }
+
+    /**
+     * `false` as the replace argument is the whole point: header() replaces by name by
+     * default, so a second cookie written the ordinary way would silently drop the first.
+     *
+     * setcookie() is not used — it applies its own encoding and attribute spelling, and
+     * the bytes would then differ from Swoole's.
+     */
+    public function cookie(SetCookie $cookie): void
+    {
+        header('Set-Cookie: ' . $cookie->toHeader(), false);
     }
 
     public function end(string $body = ''): void

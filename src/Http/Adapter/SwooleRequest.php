@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Http\Adapter;
 
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
+use Flytachi\Winter\Kernel\Http\Cookie\CookieParser;
 use Swoole\Http\Request;
 
 /**
@@ -17,6 +18,9 @@ use Swoole\Http\Request;
  */
 final class SwooleRequest implements HttpRequest
 {
+    /** @var array<string, string>|null Parsed on first use. */
+    private ?array $cookies = null;
+
     public function __construct(private readonly Request $request)
     {
     }
@@ -54,6 +58,23 @@ final class SwooleRequest implements HttpRequest
     public function getHeaders(): array
     {
         return $this->request->header ?? [];
+    }
+
+    public function getCookie(string $name): ?string
+    {
+        return $this->getCookies()[$name] ?? null;
+    }
+
+    /**
+     * Parsed from the raw header rather than from Swoole's own `$request->cookie`, so
+     * the map matches FPM's byte for byte. See {@see CookieParser}.
+     *
+     * Memoised: the header does not change during a request, and getCookie() would
+     * otherwise re-parse it on every lookup.
+     */
+    public function getCookies(): array
+    {
+        return $this->cookies ??= CookieParser::parse($this->request->header['cookie'] ?? '');
     }
 
     public function getUploadedFiles(): array

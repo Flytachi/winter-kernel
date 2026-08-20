@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Http\Adapter;
 
 use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\Cookie\SetCookie;
 use Swoole\Http\Response;
 
 /**
@@ -23,6 +24,9 @@ final class SwooleResponse implements HttpResponse
     ) {
     }
 
+    /** @var list<string> Every Set-Cookie written so far, in order. */
+    private array $cookies = [];
+
     public function status(int $code): void
     {
         $this->response->status($code);
@@ -31,6 +35,20 @@ final class SwooleResponse implements HttpResponse
     public function header(string $name, string $value): void
     {
         $this->response->header($name, $value);
+    }
+
+    /**
+     * Swoole's own cookie() is not used here: it writes `expires=`, `path=` and `secure`
+     * in lower case and encodes the value with `+`, none of which FPM would match. The
+     * header is built by {@see SetCookie} instead and handed over verbatim.
+     *
+     * Swoole accepts an array for a repeated header, and a later call replaces the whole
+     * set — so the full list is re-sent each time rather than appended to.
+     */
+    public function cookie(SetCookie $cookie): void
+    {
+        $this->cookies[] = $cookie->toHeader();
+        $this->response->header('Set-Cookie', $this->cookies);
     }
 
     public function end(string $body = ''): void

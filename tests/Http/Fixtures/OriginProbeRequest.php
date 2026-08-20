@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Tests\Http\Fixtures;
 
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
+use Flytachi\Winter\Kernel\Http\Cookie\CookieParser;
 
 /**
  * A request that reports a fixed origin and counts how often it is asked for one.
@@ -84,6 +85,17 @@ final class OriginProbeRequest implements HttpRequest
     public function getRawBody(): string
     {
         return '';
+    }
+
+    /** Parsed from the `Cookie` header, exactly as the real adapters do. */
+    public function getCookie(string $name): ?string
+    {
+        return $this->getCookies()[$name] ?? null;
+    }
+
+    public function getCookies(): array
+    {
+        return CookieParser::parse($this->getHeader('Cookie') ?? '');
     }
 
     public function getUploadedFiles(): array

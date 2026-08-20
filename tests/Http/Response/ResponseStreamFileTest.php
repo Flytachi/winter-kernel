@@ -14,6 +14,9 @@ use PHPUnit\Framework\TestCase;
 
 final class SpyResponse implements HttpResponse
 {
+    /** @var list<string> */
+    public array $cookies = [];
+
     public ?int $statusCode = null;
     public array $headers = [];
     public ?string $endBody = null;
@@ -23,6 +26,11 @@ final class SpyResponse implements HttpResponse
     public function status(int $code): void
     {
         $this->statusCode = $code;
+    }
+
+    public function cookie(\Flytachi\Winter\Kernel\Http\Cookie\SetCookie $cookie): void
+    {
+        $this->cookies[] = $cookie->toHeader();
     }
 
     public function header(string $name, string $value): void
@@ -85,6 +93,16 @@ final class StubRequest implements HttpRequest
     public function getHeaders(): array
     {
         return $this->headers;
+    }
+
+    public function getCookie(string $name): ?string
+    {
+        return null;
+    }
+
+    public function getCookies(): array
+    {
+        return [];
     }
 
     public function getUploadedFiles(): array

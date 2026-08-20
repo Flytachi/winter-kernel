@@ -13,6 +13,7 @@ use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\Kernel\Core\ClassScanner;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\Cookie\Cookie;
 use Flytachi\Winter\Kernel\Http\Header;
 use Flytachi\Winter\Kernel\Http\ParameterResolver;
 use Flytachi\Winter\Kernel\Http\Response\Collector\ExceptionCollector;
@@ -294,7 +295,7 @@ final class Router
      * Handle an HTTP request end-to-end. Works identically in Swoole and FPM.
      *
      * Pipeline:
-     *   1. Header::init()            — snapshot request headers into the static bag
+     *   1. Header::init() / Cookie::init() — snapshot request headers and cookies
      *   2. Locale::initFromRequest() — detect Accept-Language / locale cookie
      *   3. Swoole context            — stamp start time, method, uri in coroutine ctx
      *   4. Global CORS headers       — applied before dispatch (covers 404 / 500 too)
@@ -310,6 +311,7 @@ final class Router
     public function handle(HttpRequest $request, HttpResponse $response): void
     {
         Header::init($request);
+        Cookie::init($request, $response);
         Locale::initFromRequest();
 
         if (Runtime::isSwooleCoroutine()) {

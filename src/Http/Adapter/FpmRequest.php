@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Http\Adapter;
 
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
+use Flytachi\Winter\Kernel\Http\Cookie\CookieParser;
 
 /**
  * HttpRequest adapter for PHP-FPM / Apache (CGI model).
@@ -16,6 +17,9 @@ use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
 final class FpmRequest implements HttpRequest
 {
     private readonly array $headers;
+
+    /** @var array<string, string>|null Parsed on first use. */
+    private ?array $cookies = null;
     private ?string $rawBody = null;
 
     public function __construct()
@@ -56,6 +60,24 @@ final class FpmRequest implements HttpRequest
     public function getHeaders(): array
     {
         return $this->headers;
+    }
+
+    public function getCookie(string $name): ?string
+    {
+        return $this->getCookies()[$name] ?? null;
+    }
+
+    /**
+     * Parsed from the raw header, not taken from `$_COOKIE`: PHP rewrites cookie names
+     * there — `my.sid` becomes `my_sid`, and a name with a space disappears — which
+     * Swoole does not do. See {@see CookieParser}.
+     *
+     * Memoised: the header does not change during a request, and getCookie() would
+     * otherwise re-parse it on every lookup.
+     */
+    public function getCookies(): array
+    {
+        return $this->cookies ??= CookieParser::parse($this->headers['cookie'] ?? '');
     }
 
     public function getUploadedFiles(): array

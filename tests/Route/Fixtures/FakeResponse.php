@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Tests\Route\Fixtures;
 
 use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\Cookie\SetCookie;
 
 /**
  * Captures what the router wrote instead of sending it, so a test can assert on the
@@ -18,6 +19,8 @@ final class FakeResponse implements HttpResponse
     public ?string $body = null;
     public bool $ended = false;
     public ?string $sentFile = null;
+    /** @var list<string> Set-Cookie values, in the order they were written. */
+    public array $cookies = [];
 
     public function status(int $code): void
     {
@@ -27,6 +30,11 @@ final class FakeResponse implements HttpResponse
     public function header(string $name, string $value): void
     {
         $this->headers[$name] = $value;
+    }
+
+    public function cookie(SetCookie $cookie): void
+    {
+        $this->cookies[] = $cookie->toHeader();
     }
 
     public function end(string $body = ''): void

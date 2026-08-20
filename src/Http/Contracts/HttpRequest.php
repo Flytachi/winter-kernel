@@ -43,6 +43,28 @@ interface HttpRequest
      */
     public function getHeaders(): array;
 
+    /**
+     * Single cookie value by name, or null when the client sent no such cookie.
+     *
+     * Named to match {@see getHeader()}: a cookie is read the same way a header is.
+     */
+    public function getCookie(string $name): ?string;
+
+    /**
+     * All cookies sent by the client, as a name => value map.
+     *
+     * Parsed from the raw `Cookie` header rather than taken from the runtime, so both
+     * modes report the same names: PHP's `$_COOKIE` rewrites `my.sid` to `my_sid` and
+     * drops names containing a space, while Swoole keeps them.
+     *
+     * A map of strings rather than objects: a request carries only name=value pairs, so
+     * there is no Path, Domain or Max-Age to hand back, and pretending otherwise invites
+     * code that reads attributes which were never sent.
+     *
+     * @return array<string, string> Decoded values; empty when no cookies were sent.
+     */
+    public function getCookies(): array;
+
     /** Uploaded files ($_FILES equivalent). */
     public function getUploadedFiles(): array;
 
