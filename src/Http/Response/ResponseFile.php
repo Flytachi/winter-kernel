@@ -138,6 +138,7 @@ final class ResponseFile implements Sendable
     public function send(HttpResponse $response, HttpRequest $request): void
     {
         $response->status($this->httpCode->value);
+        $this->writeResourceHeaders($response);
         $this->writeFileHeaders($response, $this->mimeType, $this->fileName, mb_strlen($this->body, '8bit'));
         $response->end($this->body);
     }

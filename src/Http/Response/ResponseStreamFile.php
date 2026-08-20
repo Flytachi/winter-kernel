@@ -183,6 +183,10 @@ final class ResponseStreamFile implements Sendable
         // Advertise range support per the caller's policy.
         $response->header('Accept-Ranges', $this->acceptRanges ? 'bytes' : 'none');
 
+        // Cache policy, the caller's own headers and cookies — before the 304/416
+        // branches, because they hold for any status. See writeResourceHeaders().
+        $this->writeResourceHeaders($response);
+
         // Conditional GET (RFC 9110 §13.2.2): If-None-Match precedes
         // If-Modified-Since; evaluated BEFORE Range. Match → 304 with no body.
         if ($this->httpCode === HttpCode::OK && $this->isNotModified($request, $mtime, $etag)) {

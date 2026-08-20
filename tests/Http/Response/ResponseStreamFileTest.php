@@ -7,6 +7,7 @@ namespace Flytachi\Winter\Kernel\Tests\Http\Response;
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\Cookie\SetCookie;
 use Flytachi\Winter\Kernel\Http\Response\ResponseStreamFile;
 use PHPUnit\Framework\TestCase;
 
@@ -375,6 +376,85 @@ final class ResponseStreamFileTest extends TestCase
 
         self::assertNull($res->sentFile, 'nothing was streamed');
         self::assertArrayNotHasKey('Content-Length', $res->headers, 'no body header was written');
+    }
+
+    // ── Resource headers survive 304 and 416 ──────────────────────────────────
+
+    /**
+     * A 304 that omits `Cache-Control` leaves the client on the one it stored: RFC 9111
+     * §4.3.4 has a cache update its copy from the fields the 304 carries, and an absent
+     * field simply keeps its old value.
+     *
+     * So a policy changed from `public` to `no-store` would never reach anyone who
+     * already held a copy, and a link whose `max-age` counts down from its remaining
+     * lifetime would freeze at the first value the client ever saw — outliving the link.
+     */
+    public function test_cache_policy_reaches_a_revalidating_client(): void
+    {
+        $res = $this->send(
+            ResponseStreamFile::open($this->path)->maxAge(600),
+            new StubRequest('GET', ['If-None-Match' => $this->etag]),
+        );
+
+        self::assertSame(HttpCode::NOT_MODIFIED->value, $res->statusCode);
+        self::assertStringContainsString('max-age=600', $res->headers['Cache-Control']);
+    }
+
+    public function test_the_callers_own_headers_reach_a_revalidating_client(): void
+    {
+        $res = $this->send(
+            ResponseStreamFile::open($this->path)->header('X-Bucket-Policy', 'private'),
+            new StubRequest('GET', ['If-None-Match' => $this->etag]),
+        );
+
+        self::assertSame('private', $res->headers['X-Bucket-Policy']);
+    }
+
+    /** The caller asked for the cookie; revalidation is no reason to eat it. */
+    public function test_a_cookie_survives_a_304(): void
+    {
+        $res = $this->send(
+            ResponseStreamFile::open($this->path)->cookie(SetCookie::make('seen', '1')),
+            new StubRequest('GET', ['If-None-Match' => $this->etag]),
+        );
+
+        self::assertCount(1, $res->cookies);
+    }
+
+    public function test_resource_headers_reach_a_refused_range_too(): void
+    {
+        $res = $this->send(
+            ResponseStreamFile::open($this->path)->maxAge(600)->cookie(SetCookie::make('seen', '1')),
+            new StubRequest('GET', ['Range' => 'bytes=999999-']),
+        );
+
+        self::assertSame(HttpCode::REQUESTED_RANGE_NOT_SATISFIABLE->value, $res->statusCode);
+        self::assertStringContainsString('max-age=600', $res->headers['Cache-Control']);
+        self::assertCount(1, $res->cookies);
+    }
+
+    /** Representation headers stay where they belong — none of them mean anything here. */
+    public function test_representation_headers_stay_off_a_304(): void
+    {
+        $res = $this->send(
+            ResponseStreamFile::open($this->path),
+            new StubRequest('GET', ['If-None-Match' => $this->etag]),
+        );
+
+        foreach (['Content-Type', 'Content-Disposition', 'Content-Length', 'Content-Encoding'] as $header) {
+            self::assertArrayNotHasKey($header, $res->headers);
+        }
+    }
+
+    /** ->header() still reads as an override of what the class would otherwise set. */
+    public function test_a_caller_header_still_overrides_a_content_header(): void
+    {
+        $res = $this->send(
+            ResponseStreamFile::open($this->path)->header('Content-Type', 'application/x-custom'),
+            new StubRequest(),
+        );
+
+        self::assertSame('application/x-custom', $res->headers['Content-Type']);
     }
 
     // ── The file can vanish between building and sending ──────────────────────

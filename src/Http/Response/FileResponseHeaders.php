@@ -102,7 +102,34 @@ trait FileResponseHeaders
     }
 
     /**
-     * Write the common file-response headers (disposition, cache, length).
+     * Headers that describe the resource and the caller's policy, not the bytes.
+     *
+     * Written before the 304 and 416 decisions, because they are true whatever the status
+     * turns out to be — and because a 304 that omits them silently keeps the client on
+     * stale ones. RFC 9111 §4.3.4: a cache updates its stored response with the fields a
+     * 304 carries, and a field that is absent simply keeps its old value. So a policy
+     * changed from `public` to `no-store` would never reach a client that already holds a
+     * copy, and a link whose `max-age` counts down from the remaining lifetime would have
+     * the client keep the first value it ever saw — outliving the link itself.
+     *
+     * Cookies belong here for a plainer reason: the caller asked for one. Dropping it on
+     * revalidation, where nothing announces the loss, is the kind of behaviour that gets
+     * found months later.
+     */
+    private function writeResourceHeaders(HttpResponse $response): void
+    {
+        $response->header('Cache-Control', 'public, max-age=' . $this->maxAge . ', must-revalidate');
+
+        foreach ($this->extraHeaders as $name => $value) {
+            $response->header($name, $value);
+        }
+
+        $this->writeCookies($response);
+    }
+
+    /**
+     * Headers that describe the representation being sent — written only when a body
+     * follows, since none of them mean anything on a 304 or a 416.
      */
     private function writeFileHeaders(
         HttpResponse $response,
@@ -120,15 +147,15 @@ trait FileResponseHeaders
             // and plenty it could get wrong: a "text" upload read as HTML is an XSS.
             $response->header('X-Content-Type-Options', 'nosniff');
         }
-        $response->header('Cache-Control', 'public, max-age=' . $this->maxAge . ', must-revalidate');
         // Disable compression (Swoole/nginx): Content-Length must match the real body size.
         $response->header('Content-Encoding', 'identity');
         $response->header('Content-Length', (string) $contentLength);
 
+        // Applied a second time on purpose: the map is idempotent, and re-applying it
+        // after the content headers keeps ->header('Content-Type', …) working as the
+        // override it reads as.
         foreach ($this->extraHeaders as $name => $value) {
             $response->header($name, $value);
         }
-
-        $this->writeCookies($response);
     }
 }
