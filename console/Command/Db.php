@@ -507,6 +507,19 @@ final class Db extends Cmd
         $cl = 34;
         self::printTitle("Db Help", $cl);
 
+        // Said before the menu rather than after it. Help is printed by isHelp(), which
+        // runs before handle() and exits — so this page is reachable without the package
+        // and would otherwise offer four subcommands, five flags and seven examples, none
+        // of which can run. The requirement is a permanent property of the command, so it
+        // is stated whether or not the package happens to be present.
+        self::printLabel("Requires", $cl);
+        self::print('the database layer — ' . Dep::Ppa->package(), $cl);
+        if (!DepSupport::has(Dep::Ppa)) {
+            self::printWarning('Not installed: every command below will refuse to run.');
+            self::printInfo('composer require ' . Dep::Ppa->package());
+        }
+        self::printLabel("Requires", $cl);
+
         self::printLabel("Usage", $cl);
         self::print("call db [command] -[flags] --[options]", $cl);
         self::printLabel("Usage", $cl);

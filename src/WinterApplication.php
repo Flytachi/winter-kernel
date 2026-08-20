@@ -21,6 +21,7 @@ use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
 use Flytachi\Winter\Kernel\App\Attribute\Import;
 use Flytachi\Winter\Kernel\App\Banner;
 use Flytachi\Winter\Kernel\App\Component;
+use Flytachi\Winter\Kernel\App\ContributionCollector;
 use Flytachi\Winter\Kernel\App\ComponentKind;
 use Flytachi\Winter\Kernel\App\Config\ChannelRegistry;
 use Flytachi\Winter\Kernel\App\Config\CorsRegistry;
@@ -251,6 +252,8 @@ abstract class WinterApplication
         // is why a package's #[Bean], #[Async] and HealthContributor were invisible while
         // its routes and commands worked — one #[Import] meaning two different things.
         $imports = static::applyImports();
+        /** @var array<string, ContributionCollector> $contributed */
+        $contributed = [];
 
         $config = new ConfigurationCollector($c);
         $webCollector = new ImplementorCollector(WebConfigurer::class);
@@ -301,11 +304,16 @@ abstract class WinterApplication
         // Packages first, the application last: contributions that overwrite rather than
         // add up must end with the application's value, whatever the filesystem order.
         foreach (Plugin::all() as $plugin) {
-            $intruders = new ImplementorCollector(ServerConfigurer::class);
+            $intruders     = new ImplementorCollector(ServerConfigurer::class);
+            $contributions = new ContributionCollector();
             foreach ($plugin->roots as $root) {
-                $shared(ClassScanner::scanner($root))->collect($intruders)->execute();
+                $shared(ClassScanner::scanner($root))
+                    ->collect($intruders)
+                    ->collect($contributions)
+                    ->execute();
             }
             static::refuseServerConfigurer($plugin, $intruders->getResult());
+            $contributed[$plugin->package] = $contributions;
         }
 
         $shared(ClassScanner::scanner(
@@ -327,7 +335,7 @@ abstract class WinterApplication
         );
 
         static::applyLogging($c, $logCollector->getResult());
-        static::reportImports($imports);
+        static::reportImports($imports, $contributed);
         static::applyCors($c, $webCollector->getResult());
         static::applyActuator($actuatorCollector->getResult());
         static::applyServerConfigurer($serverCollector->getResult());
@@ -497,8 +505,9 @@ abstract class WinterApplication
      * having it — the same silent start, minus a feature nobody mentioned.
      *
      * @param list<array{package: string, prefix: string|null, imported: bool}> $outcomes
+     * @param array<string, ContributionCollector> $contributed What each package brought.
      */
-    private static function reportImports(array $outcomes): void
+    private static function reportImports(array $outcomes, array $contributed = []): void
     {
         if ($outcomes === []) {
             return;
@@ -525,6 +534,57 @@ abstract class WinterApplication
                     ),
                 ['package' => $outcome['package'], 'prefix' => $outcome['prefix']],
             );
+
+            $contribution = $contributed[$outcome['package']] ?? null;
+            if ($contribution !== null) {
+                static::warnAboutIdleContributions($logger, $outcome, $contribution);
+            }
+        }
+    }
+
+    /**
+     * Names a contribution that arrived but will never run.
+     *
+     * Each of these is a dead end that costs nothing at boot and shows up much later as
+     * "the package does not work": routes that are collected and never served, tasks
+     * collected and never triggered. The switch belongs to the application either way —
+     * this only says which switch is missing, so the search does not start in the
+     * package.
+     *
+     * @param array{package: string, prefix: string|null, imported: bool} $outcome
+     */
+    private static function warnAboutIdleContributions(
+        LoggerInterface $logger,
+        array $outcome,
+        ContributionCollector $contribution,
+    ): void {
+        $package = $outcome['package'];
+
+        if ($contribution->controllers() > 0) {
+            if ($outcome['prefix'] === null) {
+                $logger->warning(sprintf(
+                    'Package %s brings %d controller(s) but was imported without a prefix, '
+                    . 'so none of its routes are mounted. Pass a prefix to #[Import] to mount them.',
+                    $package,
+                    $contribution->controllers(),
+                ), ['package' => $package, 'controllers' => $contribution->controllers()]);
+            } elseif (!static::hasAttribute(EnableWeb::class)) {
+                $logger->warning(sprintf(
+                    'Package %s brings %d controller(s), but the application declares no '
+                    . '#[EnableWeb], so nothing is served.',
+                    $package,
+                    $contribution->controllers(),
+                ), ['package' => $package, 'controllers' => $contribution->controllers()]);
+            }
+        }
+
+        if ($contribution->scheduledMethods() > 0 && !static::hasAttribute(EnableScheduler::class)) {
+            $logger->warning(sprintf(
+                'Package %s brings %d #[Scheduled] method(s), but the application declares no '
+                . '#[EnableScheduler], so none of them run.',
+                $package,
+                $contribution->scheduledMethods(),
+            ), ['package' => $package, 'scheduled' => $contribution->scheduledMethods()]);
         }
     }
 

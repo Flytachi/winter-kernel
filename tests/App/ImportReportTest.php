@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\App;
 
+use Flytachi\Winter\Kernel\App\Attribute\EnableScheduler;
+use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
 use Flytachi\Winter\Kernel\App\Attribute\Import;
+use Flytachi\Winter\Kernel\App\ContributionCollector;
 use Flytachi\Winter\Kernel\Plugin;
 use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\Kernel\WinterApplication;
@@ -52,21 +55,31 @@ final class ImportReportTest extends TestCase
      *
      * @param list<array{package: string, prefix: string|null, imported: bool}> $outcomes
      */
-    private function report(array $outcomes): ImportReportLogger
+    private function report(array $outcomes, array $contributed = [], string $app = ReportingApp::class): ImportReportLogger
     {
         $logger  = new ImportReportLogger();
         $cache   = new \ReflectionProperty(LoggerFactory::class, 'cache');
         $channel = new \ReflectionProperty(LoggerFactory::class, 'defaultChannel')->getValue();
         $original = $cache->getValue();
 
-        $cache->setValue(null, [$channel . ':' . ReportingApp::class => $logger] + $original);
+        $cache->setValue(null, [$channel . ':' . $app => $logger] + $original);
         try {
-            new ReflectionMethod(ReportingApp::class, 'reportImports')->invoke(null, $outcomes);
+            new ReflectionMethod($app, 'reportImports')->invoke(null, $outcomes, $contributed);
         } finally {
             $cache->setValue(null, $original);
         }
 
         return $logger;
+    }
+
+    /** A counter pre-loaded with what a package supposedly brought. */
+    private function brought(int $controllers = 0, int $scheduled = 0): ContributionCollector
+    {
+        $collector = new ContributionCollector();
+        new \ReflectionProperty(ContributionCollector::class, 'controllers')->setValue($collector, $controllers);
+        new \ReflectionProperty(ContributionCollector::class, 'scheduled')->setValue($collector, $scheduled);
+
+        return $collector;
     }
 
     // ── What applyImports() reports ───────────────────────────────────────────
@@ -156,6 +169,90 @@ final class ImportReportTest extends TestCase
         self::assertSame([], $this->report([])->records);
     }
 
+    // ── Contributions that will never run ─────────────────────────────────────
+
+    /** @return array{package: string, prefix: string|null, imported: bool} */
+    private static function imported(?string $prefix): array
+    {
+        return ['package' => 'acme/billing', 'prefix' => $prefix, 'imported' => true];
+    }
+
+    public function test_controllers_without_a_prefix_are_named(): void
+    {
+        $logger = $this->report([self::imported(null)], ['acme/billing' => $this->brought(controllers: 3)]);
+
+        self::assertSame('warning', $logger->records[1]['level']);
+        self::assertStringContainsString('3 controller(s)', $logger->records[1]['message']);
+        self::assertStringContainsString('without a prefix', $logger->records[1]['message']);
+    }
+
+    public function test_controllers_with_a_prefix_but_no_web_are_named(): void
+    {
+        $logger = $this->report(
+            [self::imported('/billing')],
+            ['acme/billing' => $this->brought(controllers: 2)],
+            ReportHeadlessApp::class,
+        );
+
+        self::assertStringContainsString('#[EnableWeb]', $logger->records[1]['message']);
+    }
+
+    /** The application serves HTTP, so mounted routes are not a problem worth mentioning. */
+    public function test_controllers_are_silent_when_the_application_serves_them(): void
+    {
+        $logger = $this->report(
+            [self::imported('/billing')],
+            ['acme/billing' => $this->brought(controllers: 2)],
+            ReportWebApp::class,
+        );
+
+        self::assertCount(1, $logger->records, 'only the import notice');
+    }
+
+    public function test_scheduled_methods_without_a_scheduler_are_named(): void
+    {
+        $logger = $this->report(
+            [self::imported('/billing')],
+            ['acme/billing' => $this->brought(scheduled: 4)],
+            ReportWebApp::class,
+        );
+
+        self::assertSame('warning', $logger->records[1]['level']);
+        self::assertStringContainsString('4 #[Scheduled] method(s)', $logger->records[1]['message']);
+        self::assertStringContainsString('#[EnableScheduler]', $logger->records[1]['message']);
+    }
+
+    public function test_scheduled_methods_are_silent_when_the_scheduler_is_on(): void
+    {
+        $logger = $this->report(
+            [self::imported('/billing')],
+            ['acme/billing' => $this->brought(scheduled: 4)],
+            ReportSchedulerApp::class,
+        );
+
+        self::assertCount(1, $logger->records);
+    }
+
+    public function test_a_package_that_brought_nothing_switchable_is_silent(): void
+    {
+        $logger = $this->report([self::imported('/billing')], ['acme/billing' => $this->brought()]);
+
+        self::assertCount(1, $logger->records);
+    }
+
+    /** Two dead ends in one package produce two lines, not one vague sentence. */
+    public function test_both_kinds_are_reported_separately(): void
+    {
+        $logger = $this->report(
+            [self::imported(null)],
+            ['acme/billing' => $this->brought(controllers: 1, scheduled: 1)],
+            ReportHeadlessApp::class,
+        );
+
+        self::assertCount(3, $logger->records);
+        self::assertSame(['notice', 'warning', 'warning'], array_column($logger->records, 'level'));
+    }
+
     public function test_every_outcome_gets_its_own_line(): void
     {
         $logger = $this->report([
@@ -192,6 +289,21 @@ final class TwoImportsApp extends WinterApplication
 }
 
 final class NoImportsApp extends WinterApplication
+{
+}
+
+final class ReportHeadlessApp extends WinterApplication
+{
+}
+
+#[EnableWeb]
+final class ReportWebApp extends WinterApplication
+{
+}
+
+#[EnableWeb]
+#[EnableScheduler]
+final class ReportSchedulerApp extends WinterApplication
 {
 }
 
