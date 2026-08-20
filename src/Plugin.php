@@ -32,9 +32,15 @@ final class Plugin
      * @param string $package Composer name, e.g. `acme/billing`.
      * @param string|null $prefix URL prefix for its controllers; null mounts no routes.
      * @param bool $required Fail when the package is not installed.
+     * @return PluginPackage|null The registered package, or null when an optional one
+     *                            was absent — so the caller can say which of the two
+     *                            happened instead of guessing.
      */
-    public static function registry(string $package, ?string $prefix = null, bool $required = true): void
-    {
+    public static function registry(
+        string $package,
+        ?string $prefix = null,
+        bool $required = true,
+    ): ?PluginPackage {
         try {
             $path = InstalledVersions::getInstallPath($package);
         } catch (\OutOfBoundsException) {
@@ -45,13 +51,29 @@ final class Plugin
             if ($required) {
                 Error::throw("Plugin '$package' has no install path");
             }
-            return;
+            return null;
         }
 
         $path = rtrim($path, '/\\');
 
         if ($prefix !== null) {
-            $prefix = '/' . trim($prefix, '/');
+            // Whitespace is stripped alongside the slashes: a prefix of spaces normalises
+            // to nothing useful either, and reaches the router as '/%20'.
+            $trimmed = trim($prefix, "/ \t\n\r\0\x0B");
+
+            // '' and '/' both normalise to '/', and a route built on it comes out as
+            // `//users` — a path no request matches, mounted silently. Since null already
+            // says "import without routes", these values have no meaning left to carry.
+            if ($trimmed === '') {
+                Error::throw(
+                    "Plugin '$package': prefix '$prefix' is not a mount point — every "
+                    . "route would start with '//' and never match a request. Pass a real "
+                    . "prefix such as '/billing', or omit it to import the package "
+                    . 'without mounting its routes.'
+                );
+            }
+
+            $prefix = '/' . $trimmed;
             foreach (self::$plugins as $registered) {
                 if ($registered->prefix === $prefix) {
                     Error::throw("Plugin prefix '$prefix' already registered");
@@ -59,7 +81,12 @@ final class Plugin
             }
         }
 
-        self::$plugins[] = new PluginPackage($package, $path, $prefix, self::rootsOf($package, $path));
+        return self::$plugins[] = new PluginPackage(
+            $package,
+            $path,
+            $prefix,
+            self::rootsOf($package, $path),
+        );
     }
 
     /** @return list<PluginPackage> */

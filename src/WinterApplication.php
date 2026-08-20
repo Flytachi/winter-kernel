@@ -250,7 +250,7 @@ abstract class WinterApplication
         // has run the registry is empty. It used to sit at the end of this method, which
         // is why a package's #[Bean], #[Async] and HealthContributor were invisible while
         // its routes and commands worked — one #[Import] meaning two different things.
-        static::applyImports();
+        $imports = static::applyImports();
 
         $config = new ConfigurationCollector($c);
         $webCollector = new ImplementorCollector(WebConfigurer::class);
@@ -327,6 +327,7 @@ abstract class WinterApplication
         );
 
         static::applyLogging($c, $logCollector->getResult());
+        static::reportImports($imports);
         static::applyCors($c, $webCollector->getResult());
         static::applyActuator($actuatorCollector->getResult());
         static::applyServerConfigurer($serverCollector->getResult());
@@ -459,12 +460,71 @@ abstract class WinterApplication
         }
     }
 
-    private static function applyImports(): void
+    /**
+     * Resolves every #[Import] on the application class, in declaration order.
+     *
+     * The outcome of each is handed back rather than logged here: this runs before the
+     * scan, and therefore before {@see applyLogging()} has had a chance to apply the
+     * application's own channels and levels. Reporting from here would mean an
+     * application that asked for `warning` and above still got these notices.
+     *
+     * @return list<array{package: string, prefix: string|null, imported: bool}>
+     */
+    private static function applyImports(): array
     {
+        $outcomes = [];
+
         foreach (new \ReflectionClass(static::class)->getAttributes(Import::class) as $attribute) {
             /** @var Import $import */
             $import = $attribute->newInstance();
-            Plugin::registry($import->package, $import->prefix, $import->required);
+            $plugin = Plugin::registry($import->package, $import->prefix, $import->required);
+
+            $outcomes[] = [
+                'package'  => $import->package,
+                'prefix'   => $plugin?->prefix,
+                'imported' => $plugin !== null,
+            ];
+        }
+
+        return $outcomes;
+    }
+
+    /**
+     * Says which packages came in and which did not.
+     *
+     * A missing optional package is the interesting half: `required: false` is a
+     * deliberate "carry on without it", and until now carrying on looked exactly like
+     * having it — the same silent start, minus a feature nobody mentioned.
+     *
+     * @param list<array{package: string, prefix: string|null, imported: bool}> $outcomes
+     */
+    private static function reportImports(array $outcomes): void
+    {
+        if ($outcomes === []) {
+            return;
+        }
+
+        $logger = LoggerFactory::getLogger(static::class);
+
+        foreach ($outcomes as $outcome) {
+            if (!$outcome['imported']) {
+                $logger->warning(sprintf(
+                    'Optional package %s is not installed — import skipped.',
+                    $outcome['package'],
+                ), ['package' => $outcome['package']]);
+                continue;
+            }
+
+            $logger->notice(
+                $outcome['prefix'] === null
+                    ? sprintf('Package %s imported — no routes mounted.', $outcome['package'])
+                    : sprintf(
+                        'Package %s imported — routes mounted under %s.',
+                        $outcome['package'],
+                        $outcome['prefix'],
+                    ),
+                ['package' => $outcome['package'], 'prefix' => $outcome['prefix']],
+            );
         }
     }
 

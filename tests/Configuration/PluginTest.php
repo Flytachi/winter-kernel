@@ -87,6 +87,43 @@ final class PluginTest extends TestCase
         );
     }
 
+    /**
+     * `''` and `'/'` both normalise to `'/'`, and `MappingCollector` then builds
+     * `'/' . '/' . 'users'` — `//users`, a path no request matches. It used to mount
+     * silently. Since null already means "import without routes", nothing of value is
+     * being refused here.
+     *
+     * @param string $prefix A prefix that cannot be addressed.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('unaddressablePrefixes')]
+    public function test_a_prefix_that_resolves_to_root_is_refused(string $prefix): void
+    {
+        $this->expectException(Error::class);
+        $this->expectExceptionMessage('is not a mount point');
+
+        Plugin::registry(self::REAL_PACKAGE, $prefix);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function unaddressablePrefixes(): iterable
+    {
+        yield 'empty'        => [''];
+        yield 'single slash' => ['/'];
+        yield 'only slashes' => ['///'];
+        yield 'whitespace'   => [' '];
+    }
+
+    public function test_the_refusal_points_at_the_two_ways_out(): void
+    {
+        try {
+            Plugin::registry(self::REAL_PACKAGE, '/');
+            self::fail('should have been refused');
+        } catch (Error $e) {
+            self::assertStringContainsString('/billing', $e->getMessage(), 'a real prefix');
+            self::assertStringContainsString('without mounting', $e->getMessage(), 'or none at all');
+        }
+    }
+
     public function test_two_packages_cannot_claim_one_prefix(): void
     {
         Plugin::registry(self::REAL_PACKAGE, '/billing');
