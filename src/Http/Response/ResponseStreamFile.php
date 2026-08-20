@@ -191,6 +191,7 @@ final class ResponseStreamFile implements Sendable
         // If-Modified-Since; evaluated BEFORE Range. Match → 304 with no body.
         if ($this->httpCode === HttpCode::OK && $this->isNotModified($request, $mtime, $etag)) {
             $response->status(HttpCode::NOT_MODIFIED->value); // validators already set
+            $this->declareContentType($response);
             $response->end('');
             return;
         }
@@ -208,6 +209,7 @@ final class ResponseStreamFile implements Sendable
             // Unsatisfiable range → 416.
             $response->status(HttpCode::REQUESTED_RANGE_NOT_SATISFIABLE->value);
             $response->header('Content-Range', "bytes */{$size}");
+            $this->declareContentType($response);
             $response->end('');
             return;
         }
@@ -249,6 +251,27 @@ final class ResponseStreamFile implements Sendable
         }
 
         ($this->beforeSend)($bytes);
+    }
+
+    /**
+     * States the content type on a response that carries no body.
+     *
+     * RFC 9110 §15.4.5 asks a sender not to put representation metadata on a 304, and
+     * nginx and Apache duly leave `Content-Type` off it. Staying silent is not an option
+     * here: Swoole fills an unset `Content-Type` with `text/html` of its own, and RFC 9111
+     * §4.3.4 has a cache replace its stored fields with the ones a 304 carries. A client
+     * holding `image/png` would come back from revalidation holding `text/html`.
+     *
+     * So the choice is not between following the recommendation and breaking it, but
+     * between a false value and a true one — and a true one that matches what the 200
+     * would have sent is the lesser deviation.
+     *
+     * The cost is that detecting the type now happens on revalidation too, which is the
+     * most frequent request a cached asset gets. {@see contentType()} removes it again.
+     */
+    private function declareContentType(HttpResponse $response): void
+    {
+        $response->header('Content-Type', $this->contentTypeOf());
     }
 
     /** The declared type, or one read from the file's contents on first use. */

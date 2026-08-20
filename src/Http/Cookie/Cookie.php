@@ -85,6 +85,8 @@ final class Cookie
      * scheme-derived `Secure`, so an application can still override that too.
      *
      * @param Closure(SetCookie): SetCookie|null $configure Null clears the defaults.
+     *
+     * @link https://winterframe.net/docs/cookies#cookiedefaults Application-wide defaults
      */
     public static function defaults(?Closure $configure): void
     {
@@ -103,6 +105,8 @@ final class Cookie
     /**
      * @param string $name Cookie name, case-sensitive as the client sent it.
      * @return string|null Decoded value, or null if the client sent no such cookie.
+     *
+     * @link https://winterframe.net/docs/cookies#cookieget Reading a cookie the client sent
      */
     public static function get(string $name): ?string
     {
@@ -112,13 +116,19 @@ final class Cookie
     /**
      * @param string $name Cookie name.
      * @return bool Whether the client sent it — true even when the value is empty.
+     *
+     * @link https://winterframe.net/docs/cookies#cookiehas Presence versus an empty value
      */
     public static function has(string $name): bool
     {
         return array_key_exists($name, self::storage());
     }
 
-    /** @return array<string, string> Every cookie the client sent. */
+    /**
+     * @return array<string, string> Every cookie the client sent.
+     *
+     * @link https://winterframe.net/docs/cookies#cookieall Every cookie of the request
+     */
     public static function all(): array
     {
         return self::storage();
@@ -135,6 +145,8 @@ final class Cookie
      *
      * @param string $name Cookie name.
      * @param string $value Value.
+     *
+     * @link https://winterframe.net/docs/cookies#cookiemake Building a cookie with request and application defaults
      */
     public static function make(string $name, string $value = ''): SetCookie
     {
@@ -150,6 +162,8 @@ final class Cookie
      * @throws LogicException If no response is bound — outside a request there is
      *                        nothing to write to, and silently dropping the cookie
      *                        would look like the browser ignored it.
+     *
+     * @link https://winterframe.net/docs/cookies#cookieadd Sending a cookie, and why it is written at once
      */
     public static function add(SetCookie $cookie): void
     {
@@ -174,6 +188,8 @@ final class Cookie
      * @param string $name Cookie to remove.
      * @param string $path Path it was set with.
      * @param string|null $domain Domain it was set with.
+     *
+     * @link https://winterframe.net/docs/cookies#cookieforget Deleting a cookie, and why path and domain must match
      */
     public static function forget(string $name, string $path = '/', ?string $domain = null): void
     {

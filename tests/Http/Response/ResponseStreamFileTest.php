@@ -496,7 +496,36 @@ final class ResponseStreamFileTest extends TestCase
         self::assertCount(1, $res->cookies);
     }
 
-    /** Representation headers stay where they belong — none of them mean anything here. */
+    /**
+     * Swoole fills an unset `Content-Type` with `text/html`, and RFC 9111 §4.3.4 has a
+     * cache replace its stored fields with the ones a 304 carries — so a client holding
+     * `image/png` would come back from revalidation holding `text/html`. Stating the true
+     * type is the lesser deviation from RFC 9110 §15.4.5, which would rather no
+     * representation metadata travelled on a 304 at all.
+     */
+    public function test_the_true_content_type_travels_on_a_304(): void
+    {
+        $res = $this->send(
+            ResponseStreamFile::open($this->path)->contentType('image/png'),
+            new StubRequest('GET', ['If-None-Match' => $this->etag]),
+        );
+
+        self::assertSame(HttpCode::NOT_MODIFIED->value, $res->statusCode);
+        self::assertSame('image/png', $res->headers['Content-Type']);
+    }
+
+    public function test_the_true_content_type_travels_on_a_416(): void
+    {
+        $res = $this->send(
+            ResponseStreamFile::open($this->path)->contentType('image/png'),
+            new StubRequest('GET', ['Range' => 'bytes=999999-']),
+        );
+
+        self::assertSame(HttpCode::REQUESTED_RANGE_NOT_SATISFIABLE->value, $res->statusCode);
+        self::assertSame('image/png', $res->headers['Content-Type']);
+    }
+
+    /** Everything else about a bodiless response stays absent. */
     public function test_representation_headers_stay_off_a_304(): void
     {
         $res = $this->send(
@@ -504,7 +533,7 @@ final class ResponseStreamFileTest extends TestCase
             new StubRequest('GET', ['If-None-Match' => $this->etag]),
         );
 
-        foreach (['Content-Type', 'Content-Disposition', 'Content-Length', 'Content-Encoding'] as $header) {
+        foreach (['Content-Disposition', 'Content-Length', 'Content-Encoding'] as $header) {
             self::assertArrayNotHasKey($header, $res->headers);
         }
     }

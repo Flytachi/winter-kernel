@@ -62,6 +62,8 @@ final class SetCookie
      * @param string $name Cookie name; must be an RFC 6265 token.
      * @param string $value Value; URL-encoded on the way out unless {@see raw()} is set.
      * @throws InvalidArgumentException If the name is not a valid token.
+     *
+     * @link https://winterframe.net/docs/cookies#setcookiemake Building a cookie without a request
      */
     public static function make(string $name, string $value = ''): self
     {
@@ -79,6 +81,8 @@ final class SetCookie
      * @param string $name Cookie to remove.
      * @param string $path Path it was set with.
      * @param string|null $domain Domain it was set with.
+     *
+     * @link https://winterframe.net/docs/cookies#setcookieforget A cookie that deletes another
      */
     public static function forget(string $name, string $path = '/', ?string $domain = null): self
     {
@@ -94,6 +98,8 @@ final class SetCookie
      * Absolute expiry.
      *
      * @param DateTimeInterface|int $moment Unix timestamp, or a date to take one from.
+     *
+     * @link https://winterframe.net/docs/cookies#expiresat Lifetime given as a moment
      */
     public function expiresAt(DateTimeInterface|int $moment): self
     {
@@ -111,6 +117,8 @@ final class SetCookie
      * relies on.
      *
      * @param int $seconds Lifetime from now.
+     *
+     * @link https://winterframe.net/docs/cookies#expiresin Lifetime given as a duration
      */
     public function expiresIn(int $seconds): self
     {
@@ -121,7 +129,11 @@ final class SetCookie
         return $clone;
     }
 
-    /** Drops any expiry: the cookie lives until the browser closes. */
+    /**
+     * Drops any expiry: the cookie lives until the browser closes.
+     *
+     * @link https://winterframe.net/docs/cookies#session A cookie that dies with the browser
+     */
     public function session(): self
     {
         $clone = clone $this;
@@ -137,6 +149,8 @@ final class SetCookie
      * URL prefix the cookie is sent for.
      *
      * @param string $path Defaults to `/` — the whole site.
+     *
+     * @link https://winterframe.net/docs/cookies#path The URL prefix the cookie is sent for
      */
     public function path(string $path): self
     {
@@ -154,6 +168,8 @@ final class SetCookie
      * `api.example.com`.
      *
      * @param string|null $domain Domain, or null for host-only.
+     *
+     * @link https://winterframe.net/docs/cookies#domain Host-only versus a domain with subdomains
      */
     public function domain(?string $domain): self
     {
@@ -169,6 +185,8 @@ final class SetCookie
      * `Secure` — send over HTTPS only.
      *
      * @param bool $secure Pass false to clear it.
+     *
+     * @link https://winterframe.net/docs/cookies#secure HTTPS-only delivery
      */
     public function secure(bool $secure = true): self
     {
@@ -185,6 +203,8 @@ final class SetCookie
      * a session token is never that value.
      *
      * @param bool $httpOnly Pass false to expose it to scripts.
+     *
+     * @link https://winterframe.net/docs/cookies#httponly Hiding a cookie from JavaScript
      */
     public function httpOnly(bool $httpOnly = true): self
     {
@@ -198,6 +218,8 @@ final class SetCookie
      * `SameSite` — cross-site behaviour. See {@see SameSite}.
      *
      * @param SameSite|null $sameSite Null omits the attribute and leaves it to the browser.
+     *
+     * @link https://winterframe.net/docs/cookies#samesite Cross-site behaviour and CSRF
      */
     public function sameSite(?SameSite $sameSite): self
     {
@@ -214,6 +236,8 @@ final class SetCookie
      * Requires `Secure`.
      *
      * @param bool $partitioned Pass false to clear it.
+     *
+     * @link https://winterframe.net/docs/cookies#partitioned A separate jar per embedding site
      */
     public function partitioned(bool $partitioned = true): self
     {
@@ -231,6 +255,8 @@ final class SetCookie
      * whitespace, quotes or control characters; {@see toHeader()} refuses it if it does.
      *
      * @param bool $raw Pass false to go back to encoding.
+     *
+     * @link https://winterframe.net/docs/cookies#raw Sending a value without encoding
      */
     public function raw(bool $raw = true): self
     {
@@ -244,6 +270,8 @@ final class SetCookie
      * Replaces the value, keeping every attribute — the prototype case.
      *
      * @param string $value New value.
+     *
+     * @link https://winterframe.net/docs/cookies#value Reusing a prototype
      */
     public function value(string $value): self
     {
@@ -324,6 +352,8 @@ final class SetCookie
      * @param int|null $now Reference time for the relative/absolute conversion.
      *                      Defaults to the current time; tests pass a fixed one.
      * @throws InvalidArgumentException If the combination cannot be sent as-is.
+     *
+     * @link https://winterframe.net/docs/cookies#toheader The Set-Cookie value, and when it is refused
      */
     public function toHeader(?int $now = null): string
     {
