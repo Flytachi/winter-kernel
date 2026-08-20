@@ -296,7 +296,7 @@ final class Router
      *
      * Pipeline:
      *   1. Header::init() / Cookie::init() — snapshot request headers and cookies
-     *   2. Locale::initFromRequest() — detect Accept-Language / locale cookie
+     *   2. Locale::initFromRequest() — locale cookie, else Accept-Language
      *   3. Swoole context            — stamp start time, method, uri in coroutine ctx
      *   4. Global CORS headers       — applied before dispatch (covers 404 / 500 too)
      *   5. OPTIONS preflight         — returns 204 before handler invocation

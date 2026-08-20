@@ -13,6 +13,8 @@ use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
  */
 trait FileResponseHeaders
 {
+    use CarriesCookies;
+
     private array $extraHeaders = [];
     private bool $isAttachment;
     private int $maxAge;
@@ -65,5 +67,7 @@ trait FileResponseHeaders
         foreach ($this->extraHeaders as $name => $value) {
             $response->header($name, $value);
         }
+
+        $this->writeCookies($response);
     }
 }

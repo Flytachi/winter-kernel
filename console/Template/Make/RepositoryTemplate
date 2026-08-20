@@ -6,6 +6,7 @@ use Flytachi\Winter\DI\Attribute\Singleton;
 use Flytachi\Winter\Ppa\Stereotype\Repository;
 
 #[Singleton]
+/** @extends Repository<object> */
 class __className__ extends Repository
 {
     protected string $dbConfigClassName;

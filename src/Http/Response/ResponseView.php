@@ -31,6 +31,8 @@ use Flytachi\Winter\Kernel\Kernel;
 final class ResponseView implements Sendable
 {
     /** Directory under {@see Kernel::$pathResource} holding the views. */
+    use CarriesCookies;
+
     private const string DEFAULT_DIR = 'views';
 
     private static string $basePath = '';
@@ -119,6 +121,8 @@ final class ResponseView implements Sendable
         foreach ($this->extraHeaders as $name => $value) {
             $response->header($name, $value);
         }
+
+        $this->writeCookies($response);
 
         $response->end($this->renderContent($request->getUri()));
     }

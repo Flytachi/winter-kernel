@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Localization;
 
+use Flytachi\Winter\Kernel\Http\Cookie\Cookie;
 use Flytachi\Winter\Kernel\Http\Header;
 use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Base\Runtime;
@@ -19,8 +20,8 @@ use Flytachi\Winter\Base\Runtime;
  *   Locale::setBasePath(Kernel::$pathRoot . '/translations');
  *   Locale::setDefault('ru');
  *
- * Per-request auto-init (called inside Router::handle via Header::init):
- *   Locale::initFromRequest();  // reads Accept-Language, picks best locale
+ * Per-request auto-init (called inside Router::handle):
+ *   Locale::initFromRequest();  // an explicit choice in a cookie, else Accept-Language
  *
  * Usage anywhere in the app:
  *   Locale::translate('auth.unauthorized')         → 'Access denied'
@@ -35,8 +36,12 @@ final class Locale
     /** Directory under `resources/` holding `<lang>.php` dictionaries. */
     private const string DEFAULT_DIR = 'lang';
 
+    /** Cookie carrying an explicit language choice; null turns the check off. */
+    private const string DEFAULT_COOKIE = 'locale';
+
     private static ?string $basePath = null;
     private static string $default  = 'en';
+    private static ?string $cookieName = self::DEFAULT_COOKIE;
 
     /** FPM fallback — used when not inside a Swoole coroutine. */
     private static ?LocaleService $static = null;
@@ -99,19 +104,71 @@ final class Locale
         self::$default = $locale;
     }
 
+    /**
+     * Which cookie carries the visitor's explicit language choice.
+     *
+     * `locale` by default. Pass null to ignore cookies entirely and negotiate from
+     * `Accept-Language` alone — for an application where the language is decided by the
+     * URL or the account, and a stale cookie would only fight it.
+     *
+     * ```
+     * Locale::setCookieName('lang');
+     * Locale::setCookieName(null);
+     * ```
+     *
+     * @param string|null $name Cookie name, or null to disable the check.
+     */
+    public static function setCookieName(?string $name): void
+    {
+        self::$cookieName = $name;
+    }
+
     // ── Per-request init ──────────────────────────────────────────────────────
 
     /**
-     * Auto-detect locale from Accept-Language header.
-     * Call once per request (e.g. in Router::handle after Header::init).
+     * Pick the locale for this request.
+     *
+     * An explicit choice wins: a visitor who clicked the language switcher gets the
+     * language they asked for, whatever their browser sends. The choice is carried by a
+     * cookie the application sets — the kernel only reads it, and reads it before
+     * negotiating, because `Accept-Language` describes a preference while the cookie
+     * records a decision.
+     *
+     * Falls back to negotiating `Accept-Language` against the dictionaries on disk, and
+     * to {@see setDefault()} when nothing matches.
+     *
+     * Call once per request; {@see \Flytachi\Winter\Kernel\Route\Router::handle()}
+     * does it after `Cookie::init()`.
      */
     public static function initFromRequest(): void
     {
-        $accept    = Header::get('Accept-Language') ?? '';
         $available = self::scanAvailable();
-        $lang      = LanguageNegotiator::negotiate($accept, $available, self::$default);
+
+        $lang = self::fromCookie($available)
+            ?? LanguageNegotiator::negotiate(Header::get('Accept-Language') ?? '', $available, self::$default);
 
         self::store(new LocaleService(self::basePath(), $lang));
+    }
+
+    /**
+     * The language named by the cookie, when it names one that exists.
+     *
+     * The value is client-controlled and ends up in the dictionary path
+     * (`<basePath>/<lang>.php`), so it is never trusted as a string: it is accepted only
+     * when it matches a dictionary already on disk. An unknown or hostile value simply
+     * falls through to negotiation.
+     *
+     * @param list<string> $available Dictionaries found on disk.
+     */
+    private static function fromCookie(array $available): ?string
+    {
+        if (self::$cookieName === null) {
+            return null;
+        }
+
+        $lang = Cookie::get(self::$cookieName);
+
+        return $lang !== null && in_array($lang, $available, true) ? $lang : null;
     }
 
     /**

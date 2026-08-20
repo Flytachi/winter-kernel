@@ -7,7 +7,6 @@ namespace Flytachi\Winter\Kernel\Http\Response;
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
-use Flytachi\Winter\Kernel\Http\Cookie\SetCookie;
 use Flytachi\Winter\Kernel\Http\Header;
 
 /**
@@ -36,10 +35,10 @@ use Flytachi\Winter\Kernel\Http\Header;
  */
 final class ResponseEntity implements Sendable
 {
+    use CarriesCookies;
+
     private mixed $body    = null;
     private array $headers = [];
-    /** @var list<SetCookie> */
-    private array $cookies = [];
 
     private function __construct(private HttpCode $code)
     {
@@ -121,19 +120,6 @@ final class ResponseEntity implements Sendable
         return $this;
     }
 
-    /**
-     * Attach a cookie to this response.
-     *
-     * Kept in its own list rather than in `$headers`, which is keyed by name and so can
-     * hold exactly one `Set-Cookie`. Call it as often as there are cookies.
-     *
-     * @param SetCookie $cookie Cookie to send with this response.
-     */
-    public function cookie(SetCookie $cookie): static
-    {
-        $this->cookies[] = $cookie;
-        return $this;
-    }
 
     // ── Accessors ─────────────────────────────────────────────────────────────
 
@@ -148,11 +134,6 @@ final class ResponseEntity implements Sendable
     public function getHeaders(): array
     {
         return $this->headers;
-    }
-    /** @return list<SetCookie> */
-    public function getCookies(): array
-    {
-        return $this->cookies;
     }
 
     // ── Serialization ─────────────────────────────────────────────────────────
@@ -170,9 +151,7 @@ final class ResponseEntity implements Sendable
             $response->header($name, $value);
         }
 
-        foreach ($this->cookies as $cookie) {
-            $response->cookie($cookie);
-        }
+        $this->writeCookies($response);
 
         if ($this->code === HttpCode::NO_CONTENT || $this->body === null) {
             $response->end();
