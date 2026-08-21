@@ -1,12 +1,6 @@
 {
     "name": "flytachi/winter-kernel",
-    "description": "Winter framework kernel",
-    "keywords": [
-        "Winter Kernel",
-        "winter kernel",
-        "framework kernel",
-        "kernel"
-    ],
+    "description": "The kernel of the Winter framework — a PHP 8.4 library that turns a directory of classes into a running application on a resident Swoole runtime.",
     "type": "library",
     "license": "MIT",
     "scripts": {
@@ -71,6 +65,22 @@
         "source": "https://github.com/flytachi/winter-kernel",
         "docs": "https://winterframe.net/docs"
     },
+    "keywords": [
+        "winter",
+        "winter framework",
+        "framework",
+        "kernel",
+        "php",
+        "swoole",
+        "coroutine",
+        "dependency injection",
+        "routing",
+        "attributes",
+        "http server",
+        "daemon",
+        "scheduler",
+        "console"
+    ],
     "authors": [
         {
             "name": "Flytachi",

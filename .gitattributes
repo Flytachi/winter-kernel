@@ -2,6 +2,7 @@
 /dev           export-ignore
 /docs          export-ignore
 /tests         export-ignore
+/.github       export-ignore
 .gitignore     export-ignore
 .gitattributes export-ignore
 phpcs.xml      export-ignore
