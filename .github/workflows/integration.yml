@@ -72,11 +72,32 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: pdo, pdo_pgsql, pdo_mysql, mbstring
+          # swoole is not optional here even though the framework treats it as such:
+          # without it roughly sixty tests — the coroutine adapters, the request-local
+          # store, the watchdog, the pool channel and its telemetry timer — skip instead
+          # of running, and a skip reads as a pass. Those are precisely the paths that
+          # only exist under the resident runtime, so a CI without swoole leaves the
+          # runtime the framework is built for untested.
+          # decimal and bcmath are the same story on a smaller scale: without them the
+          # exact-number binding cases skip, and money is exactly where a silent skip is
+          # worst. bcmath is guarded in twenty-four tests — the most of any optional
+          # extension here — so naming it explicitly is cheaper than trusting a default.
+          extensions: pdo, pdo_pgsql, pdo_mysql, mbstring, swoole, decimal, bcmath
           coverage: none
 
       - name: Install dependencies
         run: composer install --no-progress --prefer-dist
+
+      # A missing extension does not fail the run — it turns those tests into skips,
+      # which the summary reports as green. Fail here instead, where the reason is
+      # one line rather than sixty silent omissions.
+      - name: Verify the optional extensions are present
+        run: |
+          for ext in swoole decimal bcmath; do
+            php -r "exit(extension_loaded(\"$ext\") ? 0 : 1);" \
+              || { echo "::error::ext-$ext did not install — its suites would silently skip"; exit 1; }
+            php -r "printf(\"%s %s\n\", \"$ext\", phpversion(\"$ext\"));"
+          done
 
       - name: Run unit suites (sanity)
         run: vendor/bin/phpunit

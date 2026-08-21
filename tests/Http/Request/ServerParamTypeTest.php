@@ -21,11 +21,18 @@ use PHPUnit\Framework\TestCase;
  * Widening the return type is the compatible direction: an application that implements
  * {@see \Flytachi\Winter\Kernel\Http\Contracts\HttpRequest} with `?string` still satisfies
  * the wider contract, because return types may be narrowed by an implementation.
+ *
+ * The two Swoole cases build a real `Swoole\Http\Request`, so they skip without the
+ * extension; the FPM case needs nothing but `$_SERVER` and always runs.
  */
 final class ServerParamTypeTest extends TestCase
 {
     public function test_swoole_numeric_server_values_are_returned_not_thrown(): void
     {
+        if (!extension_loaded('swoole')) {
+            self::markTestSkipped('The Swoole adapter needs the extension.');
+        }
+
         $raw = new \Swoole\Http\Request();
         $raw->server = [
             'request_method'     => 'GET',
@@ -68,6 +75,10 @@ final class ServerParamTypeTest extends TestCase
      */
     public function test_the_arrival_stamp_keeps_its_precision(): void
     {
+        if (!extension_loaded('swoole')) {
+            self::markTestSkipped('The Swoole adapter needs the extension.');
+        }
+
         $raw = new \Swoole\Http\Request();
         $raw->server = ['request_time_float' => 1_754_500_000.123456];
 
