@@ -275,7 +275,6 @@ final class Process extends Cmd
 
         self::printLabel("Usage", $cl);
         self::print("call process <command> [action] -[flags]", $cl);
-        self::print("call proc    <command> [action] -[flags]    (alias)", $cl);
         self::printLabel("Usage", $cl);
 
         self::printLabel("Commands", $cl);

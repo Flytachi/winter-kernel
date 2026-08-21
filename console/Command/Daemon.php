@@ -302,7 +302,6 @@ final class Daemon extends Cmd
 
         self::printLabel("Usage", $cl);
         self::print("call daemon <command> [action] -[flags]", $cl);
-        self::print("call dmn    <command> [action] -[flags]    (alias)", $cl);
         self::printLabel("Usage", $cl);
 
         self::printLabel("Commands", $cl);

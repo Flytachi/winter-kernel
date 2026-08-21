@@ -14,10 +14,13 @@ use Flytachi\Winter\Kernel\Kernel;
  * passed to `\Swoole\Http\Server::set()`.
  *
  * ```
- * $server->workers(swoole_cpu_num() * 2)
- *        ->maxRequest(5000)
+ * $server->maxRequest(5000)
  *        ->set('ssl_cert_file', '/etc/ssl/app.pem');
  * ```
+ *
+ * The worker count is deliberately absent from that example — see {@see workers()}.
+ * One worker is the default and the right answer for almost every application, because
+ * concurrency here comes from coroutines inside a worker, not from more workers.
  *
  * @link https://winterframe.net/docs/web-configuration Workers, timeouts, limits and memory
  */
@@ -144,6 +147,48 @@ final class ServerSettings
         return $this->port;
     }
 
+    /**
+     * How many worker **processes** serve requests. Leave it alone unless a measurement
+     * says otherwise.
+     *
+     * The default is **one**, and that is not a conservative placeholder: `Swoole\Http\Server`
+     * runs in `SWOOLE_BASE` mode and the framework never sets `worker_num`, so one process
+     * starts. It is enough for almost everything, because concurrency in this runtime does
+     * not come from processes — a single worker serves hundreds of requests at once through
+     * coroutines, yielding on every I/O wait. Adding workers does not add that concurrency;
+     * it adds CPU parallelism, which only matters once one core is genuinely saturated by
+     * computation rather than by waiting.
+     *
+     * Scale is normally taken elsewhere. The application runs in a container, and load is
+     * met by another **instance** — a Kubernetes replica, a second service in compose,
+     * another machine behind the balancer — which also buys fault tolerance and zero-
+     * downtime deploys that a second worker in the same container cannot. One container,
+     * one worker is the shape this runtime is built for.
+     *
+     * Raising it belongs to specific applications: work that pins a core by **computing**
+     * rather than waiting — image processing, parsing large documents, encryption in the
+     * request handler. Such work never yields, so the other requests in that worker wait
+     * behind it. (Often the better answer is moving that work into a Process or a Daemon.)
+     *
+     * The price is paid per worker:
+     *
+     * - **Memory multiplies.** The limit is per worker — four workers at `256M` need a
+     *   gigabyte before opcache. {@see WorkerMemory} says this out loud at boot.
+     * - **Connection pools multiply.** Each worker holds its own database and Redis pool,
+     *   so `poolMaxConnections` is per worker: 4 workers × 10 connections is 40 sockets
+     *   against a server that may cap them.
+     * - **Per-worker state is duplicated.** Caches warm separately, telemetry is reported
+     *   per worker, and anything held in a process is no longer shared.
+     *
+     * Pass a literal number you can justify, never a formula derived from the host: how
+     * many cores a container may use is set by its limits, not by the machine, and a value
+     * computed at startup parts ways with them the first time the quota changes.
+     *
+     * @param int $count Worker processes, written by hand. `1` unless a measurement shows
+     *                   a core pinned by computation.
+     *
+     * @link https://winterframe.net/docs/web-configuration Why one worker is the default
+     */
     public function workers(int $count): self
     {
         return $this->set('worker_num', $count);

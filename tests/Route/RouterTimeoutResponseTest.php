@@ -9,6 +9,7 @@ use Flytachi\Winter\Kernel\Route\RequestWatchdog;
 use Flytachi\Winter\Kernel\Route\Router;
 use Flytachi\Winter\Kernel\Tests\Route\Fixtures\FakeRequest;
 use Flytachi\Winter\Kernel\Tests\Route\Fixtures\FakeResponse;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use Swoole\Coroutine;
 
@@ -23,7 +24,16 @@ use Swoole\Coroutine;
  *
  * The fix moved the translation to where the response is built, so there is one answer
  * and one reason for it. These tests hold that.
+ *
+ * Each test runs in its own process on purpose. Xdebug's function observers do not survive
+ * coroutine stacks: once a child coroutine has suspended and resumed, the interpreter
+ * segfaults in `xdebug_execute_user_code_end` at request shutdown — after the tests
+ * themselves have passed, so the report says OK and the exit code says 139. Every
+ * `xdebug.mode` does it, `coverage` included; the alternative is running the suite under
+ * `XDEBUG_MODE=off`, which nobody remembers to do. Here the crash lands in a child whose
+ * result is already out, and the run stays green wherever Xdebug happens to be loaded.
  */
+#[RunTestsInSeparateProcesses]
 final class RouterTimeoutResponseTest extends TestCase
 {
     protected function setUp(): void

@@ -149,38 +149,38 @@ abstract class ViewIntegrationTestCase extends ProductsTableTestCase
         );
     }
 
-    // ── Static finders ──────────────────────────────────────────────────────
+    // ── Finders through instance() ──────────────────────────────────────────
 
-    public function test_findById_static_returns_hydrated_entity(): void
+    public function test_findById_returns_hydrated_entity(): void
     {
-        $row = (static::repoClass())::findById(1);
+        $row = (static::repoClass())::instance()->findById(1);
         self::assertInstanceOf(ProductEntity::class, $row);
         self::assertSame('alpha', $row->name);
     }
 
-    public function test_findById_static_returns_null_when_missing(): void
+    public function test_findById_returns_null_when_missing(): void
     {
-        self::assertNull((static::repoClass())::findById(999));
+        self::assertNull((static::repoClass())::instance()->findById(999));
     }
 
-    public function test_findBy_static_uses_provided_condition(): void
+    public function test_findBy_uses_provided_condition(): void
     {
-        $row = (static::repoClass())::findBy(Qb::eq('name', new CDOBind('n', 'delta')));
+        $row = (static::repoClass())::instance()->findBy(Qb::eq('name', new CDOBind('n', 'delta')));
         self::assertNotNull($row);
         self::assertSame(4, $row->id);
     }
 
-    public function test_findAllBy_static_with_condition_returns_matching(): void
+    public function test_findAllBy_with_condition_returns_matching(): void
     {
-        $rows = (static::repoClass())::findAllBy(
+        $rows = (static::repoClass())::instance()->findAllBy(
             Qb::gte('id', new CDOBind('lo', 3)),
         );
         self::assertCount(2, $rows);
     }
 
-    public function test_findAllBy_static_with_null_qb_returns_every_row(): void
+    public function test_findAllBy_with_null_qb_returns_every_row(): void
     {
-        $rows = (static::repoClass())::findAllBy(null);
+        $rows = (static::repoClass())::instance()->findAllBy(null);
         self::assertCount(4, $rows);
     }
 
@@ -188,19 +188,19 @@ abstract class ViewIntegrationTestCase extends ProductsTableTestCase
 
     public function test_findByIdOrThrow_returns_when_found(): void
     {
-        $row = (static::repoClass())::findByIdOrThrow(1);
+        $row = (static::repoClass())::instance()->findByIdOrThrow(1);
         self::assertInstanceOf(ProductEntity::class, $row);
     }
 
     public function test_findByIdOrThrow_throws_EntityException_when_missing(): void
     {
         $this->expectException(EntityException::class);
-        (static::repoClass())::findByIdOrThrow(999);
+        (static::repoClass())::instance()->findByIdOrThrow(999);
     }
 
     public function test_findByOrThrow_returns_when_found(): void
     {
-        $row = (static::repoClass())::findByOrThrow(
+        $row = (static::repoClass())::instance()->findByOrThrow(
             Qb::eq('name', new CDOBind('n', 'alpha')),
         );
         self::assertSame(1, $row->id);
@@ -209,7 +209,7 @@ abstract class ViewIntegrationTestCase extends ProductsTableTestCase
     public function test_findByOrThrow_throws_when_no_match(): void
     {
         $this->expectException(EntityException::class);
-        (static::repoClass())::findByOrThrow(
+        (static::repoClass())::instance()->findByOrThrow(
             Qb::eq('name', new CDOBind('n', 'nonexistent')),
         );
     }
@@ -217,7 +217,7 @@ abstract class ViewIntegrationTestCase extends ProductsTableTestCase
     public function test_findByIdOrThrow_carries_custom_message(): void
     {
         try {
-            (static::repoClass())::findByIdOrThrow(999, message: 'Product not found');
+            (static::repoClass())::instance()->findByIdOrThrow(999, message: 'Product not found');
             self::fail('Expected EntityException');
         } catch (EntityException $e) {
             self::assertSame('Product not found', $e->getMessage());

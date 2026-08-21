@@ -10,6 +10,7 @@ use Flytachi\Winter\Kernel\Http\Cookie\SetCookie;
 use Flytachi\Winter\Kernel\Http\Header;
 use Flytachi\Winter\Kernel\Tests\Http\Fixtures\OriginProbeRequest;
 use Flytachi\Winter\Kernel\Tests\Route\Fixtures\FakeResponse;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
@@ -21,7 +22,16 @@ use ReflectionClass;
  * attributes its own way — `expires=`, `path=`, `secure` in lower case — and encodes the
  * value with `+`, none of which FPM would reproduce. The header is built by
  * {@see SetCookie} and handed over verbatim instead, which is what these assertions pin.
+ *
+ * Each test runs in its own process on purpose. Xdebug's function observers do not survive
+ * coroutine stacks: once a child coroutine has suspended and resumed, the interpreter
+ * segfaults in `xdebug_execute_user_code_end` at request shutdown — after the tests
+ * themselves have passed, so the report says OK and the exit code says 139. Every
+ * `xdebug.mode` does it, `coverage` included; the alternative is running the suite under
+ * `XDEBUG_MODE=off`, which nobody remembers to do. Here the crash lands in a child whose
+ * result is already out, and the run stays green wherever Xdebug happens to be loaded.
  */
+#[RunTestsInSeparateProcesses]
 final class CookieSwooleTest extends TestCase
 {
     protected function setUp(): void

@@ -91,17 +91,17 @@ final class Complete extends Cmd
         'storage init'  => ['-s:storage', '-c:storage/cache', '-l:storage/logs'],
         'storage clean' => ['-s:storage', '-c:storage/cache', '-l:storage/logs'],
 
-        // --- process / proc ---
+        // --- process ---
         'process' => [
             'list:list all processes with live state',
         ],
 
-        // --- daemon / dmn ---
+        // --- daemon ---
         'daemon' => [
             'list:list all daemons with live state',
         ],
 
-        // --- schedule / sch ---
+        // --- schedule ---
         'schedule' => [
             'list:list all #[Scheduled] tasks and cadence',
             'start:run the scheduler (foreground; -d for background)',

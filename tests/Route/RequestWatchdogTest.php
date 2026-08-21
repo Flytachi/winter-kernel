@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Tests\Route;
 
 use Flytachi\Winter\Kernel\Route\RequestWatchdog;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use Swoole\Coroutine;
 
@@ -25,7 +26,16 @@ use Swoole\Coroutine;
  *  - **A request burning CPU cannot be interrupted**, because the event loop is
  *    single-threaded: while a handler loops without yielding, the sweep itself cannot
  *    run. Nothing here can change that; the tests state it rather than hide it.
+ *
+ * Each test runs in its own process on purpose. Xdebug's function observers do not survive
+ * coroutine stacks: once a child coroutine has suspended and resumed, the interpreter
+ * segfaults in `xdebug_execute_user_code_end` at request shutdown — after the tests
+ * themselves have passed, so the report says OK and the exit code says 139. Every
+ * `xdebug.mode` does it, `coverage` included; the alternative is running the suite under
+ * `XDEBUG_MODE=off`, which nobody remembers to do. Here the crash lands in a child whose
+ * result is already out, and the run stays green wherever Xdebug happens to be loaded.
  */
+#[RunTestsInSeparateProcesses]
 final class RequestWatchdogTest extends TestCase
 {
     protected function setUp(): void

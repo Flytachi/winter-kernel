@@ -15,7 +15,7 @@ use Flytachi\Winter\Kernel\Tests\Integration\Fixtures\SpecimenEntity;
  *               → CDOStatement::bindTypedValue (per-type PDO::PARAM_*)
  *               → driver
  *               ← PDO::FETCH_CLASS into SpecimenEntity (typed properties)
- *               ← Repository::findById  → assertion
+ *               ← Repository::instance()->findById  → assertion
  *
  * We do NOT assert against raw PDO output — PDO's type behaviour is upstream
  * and out of scope. What the framework owns:
@@ -55,7 +55,7 @@ abstract class TypesIntegrationTestCase extends IntegrationTestCase
     protected function findOne(int $id): ?SpecimenEntity
     {
         /** @var SpecimenEntity|null */
-        return (static::repoClass())::findById($id);
+        return (static::repoClass())::instance()->findById($id);
     }
 
     protected static function createSpecimensTable(): void

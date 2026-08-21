@@ -16,7 +16,7 @@ use Flytachi\Winter\Kernel\App\ApplicationArguments;
  * {
  *     public function configureServer(ServerSettings $server, ApplicationArguments $args): void
  *     {
- *         $server->port($args->int('port', 8000))->workers(swoole_cpu_num() * 2);
+ *         $server->port($args->int('port', 8000))->staticPath('resources/static');
  *     }
  * }
  * ```
