@@ -8,11 +8,14 @@ namespace Flytachi\Winter\Kernel\Http\Cookie;
  * Turns a raw `Cookie:` request header into a name => value map.
  *
  * Both adapters go through this rather than through the runtime's own parsing, because
- * the two disagree in ways an application would eventually trip over. PHP's `$_COOKIE`
- * rewrites names — a request carrying `my.sid=1; my sid=2; ok=3` arrives as
- * `["my_sid", "ok"]`, the dot renamed and the second cookie gone — while Swoole parses
- * the header itself and keeps them. Reading the header directly is the only way the same
- * request yields the same names under both runtimes.
+ * every runtime parses differently and an application would eventually trip over it.
+ * PHP's `$_COOKIE` rewrites names — a request carrying `my.sid=1; my sid=2; ok=3` arrives
+ * as `["my_sid", "ok"]`, the dot renamed and the second cookie gone. Swoole (measured on
+ * 6.2) mangles the same way and then disagrees again on the tie-break: `my.sid=1; my.sid=2`
+ * leaves it holding `2`, the last, where PHP keeps `1`, the first. Reading the header
+ * directly is the only way the same request yields the same names under both runtimes —
+ * which is why the server is configured with `http_parse_cookie` off, so the header is
+ * still there to read.
  *
  * The rest of the behaviour deliberately matches `$_COOKIE`, so nothing surprises anyone
  * arriving from plain PHP: the first of two same-named cookies wins (browsers send the

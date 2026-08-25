@@ -18,6 +18,13 @@ use ReflectionClass;
  * adapters is that a request must not mean different things in the two runtimes, which is
  * exactly what taking `$_COOKIE` on one side and Swoole's parsing on the other would have
  * produced.
+ *
+ * What this file cannot show is that the header it hands the Swoole adapter is a header
+ * the runtime actually produces: `Swoole\Http\Request` has no constructor, so the fixture
+ * fills `header` by hand and is free to invent. It once invented a `cookie` key the
+ * extension drops before the application ever sees it, and these tests stayed green while
+ * no cookie under Swoole was readable at all. {@see CookieSwooleE2ETest} is what pins that
+ * half, through a live server; this file pins the parsing given the header.
  */
 final class RequestCookieTest extends TestCase
 {
@@ -125,6 +132,28 @@ final class RequestCookieTest extends TestCase
         self::assertSame($request->getCookies(), $request->getCookies());
         self::assertSame('1', $request->getCookie('a'));
         self::assertSame('2', $request->getCookie('b'));
+    }
+
+    /**
+     * The other shape the runtime produces: an application that switched `http_parse_cookie`
+     * back on gets no raw header and Swoole's own map instead. The adapter hands that over
+     * as it is — mangled names and last-duplicate-wins included, which is why the expected
+     * value here is spelled the way Swoole spells it and not the way the rest of this file
+     * does. Degraded on purpose; answering "no cookies" would be worse.
+     */
+    public function test_swoole_falls_back_to_its_own_map_when_the_header_was_consumed(): void
+    {
+        if (!extension_loaded('swoole')) {
+            self::markTestSkipped('The Swoole adapter needs the extension.');
+        }
+        $raw = new ReflectionClass(\Swoole\Http\Request::class)->newInstanceWithoutConstructor();
+        $raw->header = ['host' => 'localhost'];
+        $raw->cookie = ['sid' => 'abc', 'my_sid' => '2'];
+
+        $request = new SwooleRequest($raw);
+
+        self::assertSame(['sid' => 'abc', 'my_sid' => '2'], $request->getCookies());
+        self::assertSame('2', $request->getCookie('my_sid'));
     }
 
     /** The naming this rename was about: cookies read like headers. */

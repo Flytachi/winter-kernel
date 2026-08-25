@@ -47,6 +47,24 @@ final class ServerSettingsTest extends TestCase
         self::assertArrayNotHasKey('port', $options);
     }
 
+    /**
+     * Not a preference — the adapters read the raw `Cookie` header, and Swoole removes it
+     * from `$request->header` the moment it parses cookies itself. Left at Swoole's default
+     * every cookie under Swoole reads as absent.
+     */
+    public function test_swooles_own_cookie_parsing_is_off(): void
+    {
+        self::assertFalse(ServerSettings::fromEnv()->toArray()['http_parse_cookie']);
+    }
+
+    /** A raw option like any other: the application has the last word, and the adapter copes. */
+    public function test_an_application_may_switch_cookie_parsing_back_on(): void
+    {
+        $s = ServerSettings::fromEnv()->set('http_parse_cookie', true);
+
+        self::assertTrue($s->toArray()['http_parse_cookie']);
+    }
+
     public function test_env_seeds_tuning_options(): void
     {
         $_ENV['SERVER_WORKERS'] = '4';

@@ -83,6 +83,14 @@ final class ServerSettings
     {
         $options = [
             'package_max_length' => self::DEFAULT_MAX_REQUEST_SIZE,
+            // Swoole parses the `Cookie` header itself by default and, having parsed it,
+            // drops it from `$request->header` — the raw header the adapters read to give
+            // both runtimes the same cookie names is simply not there. Its own parsing is
+            // not FPM's either: `my.sid` arrives as `my_sid` and the last of two same-named
+            // cookies wins instead of the first. Off, so `$request->header['cookie']`
+            // survives and {@see \Flytachi\Winter\Kernel\Http\Cookie\CookieParser} decides.
+            // An application may switch it back on; the adapter degrades rather than breaks.
+            'http_parse_cookie' => false,
         ];
         $map = [
             'SERVER_WORKERS'           => 'worker_num',

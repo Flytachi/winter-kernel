@@ -69,12 +69,27 @@ final class SwooleRequest implements HttpRequest
      * Parsed from the raw header rather than from Swoole's own `$request->cookie`, so
      * the map matches FPM's byte for byte. See {@see CookieParser}.
      *
+     * The raw header is only there because `ServerSettings` turns `http_parse_cookie` off:
+     * with Swoole's own parsing on — its default — the extension consumes the header and
+     * never adds it to `$request->header`. An application is free to turn it back on, and
+     * then the header is gone inside the extension with no way to rebuild it, so Swoole's
+     * map is taken as-is: mangled names, last duplicate wins. A degraded answer on purpose
+     * — reporting no cookies at all is the worse one.
+     *
      * Memoised: the header does not change during a request, and getCookie() would
      * otherwise re-parse it on every lookup.
      */
     public function getCookies(): array
     {
-        return $this->cookies ??= CookieParser::parse($this->request->header['cookie'] ?? '');
+        if ($this->cookies !== null) {
+            return $this->cookies;
+        }
+
+        $header = $this->request->header['cookie'] ?? null;
+
+        return $this->cookies = $header !== null
+            ? CookieParser::parse($header)
+            : ($this->request->cookie ?? []);
     }
 
     public function getUploadedFiles(): array
