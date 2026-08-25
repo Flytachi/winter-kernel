@@ -66,7 +66,7 @@ final class Banner
         $out .= '   ' . self::META . ':: ' . self::RESET
               . self::VALUE . 'winter-kernel' . self::RESET
               . self::META . ' ::' . self::RESET
-              . '   ' . self::META . '(v' . self::version() . ')' . self::RESET
+              . '   ' . self::META . '(' . self::version() . ')' . self::RESET
               . '   ' . self::LABEL . implode(' · ', self::metaTail()) . self::RESET . "\n";
 
         $out .= '   ' . self::LABEL . str_repeat('─', 53) . self::RESET . "\n";
