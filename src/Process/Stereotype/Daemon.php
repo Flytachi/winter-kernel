@@ -372,7 +372,18 @@ abstract class Daemon extends Process
 
         $write();
         // Backstop the finally below against a forced/fatal exit that skips it.
-        register_shutdown_function(static fn() => $store->del($key));
+        //
+        // Guarded by pid: a forked worker inherits every shutdown function registered
+        // before the fork, so without this check each worker exit would delete the
+        // *master's* status record — leaving `status` and `stop` unable to see a
+        // supervisor that is still running.
+        $masterPid = $this->pid;
+        register_shutdown_function(static function () use ($store, $key, $masterPid): void {
+            if (getmypid() !== $masterPid) {
+                return;
+            }
+            $store->del($key);
+        });
 
         try {
             $final = $this->superviseFleet($write);

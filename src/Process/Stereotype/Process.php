@@ -429,7 +429,17 @@ abstract class Process
         $this->applyProcessTitle();
 
         // Fatal backstop for onShutdown; the explicit calls below cover normal paths.
-        register_shutdown_function(fn() => $this->invokeShutdown());
+        //
+        // Guarded by pid: without Swoole, `spawn()` runs each task in a forked child
+        // that inherits this callback and exits when the task is done — which would run
+        // the process's onShutdown() once per dispatched task, in the wrong process.
+        $ownPid = $this->pid;
+        register_shutdown_function(function () use ($ownPid): void {
+            if (getmypid() !== $ownPid) {
+                return;
+            }
+            $this->invokeShutdown();
+        });
 
         $this->engine = Engines::common($this->concurrency, $this->grace);
 

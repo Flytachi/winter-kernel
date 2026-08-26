@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Kernel\Process\Engine;
 
 use Flytachi\Winter\Kernel\Concurrent\Executors;
 use Flytachi\Winter\Kernel\Concurrent\Future;
+use Flytachi\Winter\Kernel\Process\Internal\Termination;
 use Flytachi\Winter\Kernel\Process\InterruptedException;
 
 /**
@@ -168,7 +169,11 @@ final class SwooleEngine implements ProcessEngine
                     if ($this->onForceExit !== null) {
                         ($this->onForceExit)();
                     }
-                    exit(1);
+                    // A timer callback runs inside a coroutine, and there `exit()` does
+                    // not exit: Swoole raises Swoole\ExitException, execution continues
+                    // past this line and the process lives on — so the backstop that is
+                    // supposed to force a stuck body down never fired at all.
+                    Termination::leave(1);
                 }
             );
         }

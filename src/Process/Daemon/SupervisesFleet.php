@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Process\Daemon;
 
 use Flytachi\Winter\Kernel\Process\Activity;
+use Flytachi\Winter\Kernel\Process\Internal\Termination;
 use Flytachi\Winter\Kernel\Process\ProcessState;
 
 /**
@@ -460,6 +461,13 @@ trait SupervisesFleet
      * Forks a worker into the slot. In the child, inherited signal handlers are
      * reset so the worker's own runtime installs its own — then the body runs and
      * its outcome maps to the exit code.
+     *
+     * The exit lives outside the `try` on purpose. `exit()` is not a statement inside
+     * a Swoole coroutine: it raises {@see \Swoole\ExitException} instead of ending the
+     * process, so an `exit(0)` written in the `try` would be caught by the very `catch`
+     * that reads a throwable as "the worker failed" — reporting a clean shutdown to the
+     * supervisor as a crash, and restarting a worker that had finished. See
+     * {@see exitStatusOf()} and {@see leaveChild()}.
      */
     private function forkInto(Slot $slot, callable $onChange): void
     {
@@ -471,13 +479,16 @@ trait SupervisesFleet
             pcntl_signal(SIGHUP, SIG_DFL);
             pcntl_signal(SIGUSR1, SIG_DFL);
             pcntl_signal(SIGUSR2, SIG_DFL);
+
+            $code = 0;
             try {
                 $this->bootWorker($slot->index);
-                exit(0);
-            } catch (\Throwable) {
+            } catch (\Throwable $e) {
                 // The worker logs its own failure; the non-zero code is the signal.
-                exit(1);
+                $code = self::exitStatusOf($e);
             }
+
+            self::leaveChild($code);
         }
         $slot->pid = $pid;
         $slot->state = SlotState::STARTING;
@@ -487,6 +498,35 @@ trait SupervisesFleet
         $slot->killed = false;
         $this->fireWorkerStart($slot->index, $pid);
         $onChange();
+    }
+
+    /**
+     * Exit status a worker failure maps to.
+     *
+     * A body that calls `exit()` from inside a coroutine does not exit — Swoole raises
+     * {@see \Swoole\ExitException} carrying the status it asked for. That is the worker's
+     * own decision, not a crash, so the status is honoured; anything else is a failure
+     * and reports 1.
+     */
+    private static function exitStatusOf(\Throwable $e): int
+    {
+        return $e instanceof \Swoole\ExitException ? $e->getStatus() : 1;
+    }
+
+    /**
+     * Ends the forked child with `$code`, whatever context it finds itself in.
+     *
+     * A daemon master often runs inside a process Swoole created — a user process added
+     * to the HTTP server, say — and its forked children inherit that context, where
+     * `exit()` raises an exception instead of exiting. Letting that escape is the worst
+     * outcome available: the child inherited the master's stack, so it would unwind
+     * through {@see \Flytachi\Winter\Kernel\Process\Stereotype\Daemon::supervise()} and be
+     * logged as a supervisor crash while the child kept running inside the master's
+     * frames. {@see Termination::leave()} makes the status arrive regardless.
+     */
+    private static function leaveChild(int $code): void
+    {
+        Termination::leave($code);
     }
 
     /**
