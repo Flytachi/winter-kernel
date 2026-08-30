@@ -15,6 +15,9 @@ final class FpmResponse implements HttpResponse
 {
     private bool $ended = false;
 
+    /** @var bool Whether the caller named a Content-Encoding of its own. */
+    private bool $encodingDeclared = false;
+
     /**
      * @param bool $headOnly suppress the body (HEAD request) while keeping headers
      */
@@ -29,6 +32,10 @@ final class FpmResponse implements HttpResponse
 
     public function header(string $name, string $value): void
     {
+        if (strcasecmp($name, 'Content-Encoding') === 0) {
+            $this->encodingDeclared = true;
+        }
+
         header("{$name}: {$value}");
     }
 
@@ -53,6 +60,14 @@ final class FpmResponse implements HttpResponse
 
         if ($this->headOnly && $body !== '') {
             // HEAD: keep the Content-Length GET would report, drop the body.
+            //
+            // The encoding is named for the same reason as under Swoole — a compressing
+            // runtime in front of this one would otherwise be free to replace the length
+            // announced here — and, more plainly, so that a HEAD leaves both adapters
+            // carrying the same headers. See {@see SwooleResponse::end()}.
+            if (!$this->encodingDeclared) {
+                header('Content-Encoding: identity');
+            }
             header('Content-Length: ' . strlen($body));
             return;
         }

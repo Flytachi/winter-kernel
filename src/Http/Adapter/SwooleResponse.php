@@ -27,6 +27,9 @@ final class SwooleResponse implements HttpResponse
     /** @var list<string> Every Set-Cookie written so far, in order. */
     private array $cookies = [];
 
+    /** @var bool Whether the caller named a Content-Encoding of its own. */
+    private bool $encodingDeclared = false;
+
     public function status(int $code): void
     {
         $this->response->status($code);
@@ -34,6 +37,10 @@ final class SwooleResponse implements HttpResponse
 
     public function header(string $name, string $value): void
     {
+        if (strcasecmp($name, 'Content-Encoding') === 0) {
+            $this->encodingDeclared = true;
+        }
+
         $this->response->header($name, $value);
     }
 
@@ -55,6 +62,22 @@ final class SwooleResponse implements HttpResponse
     {
         if ($this->headOnly && $body !== '') {
             // HEAD: keep the Content-Length GET would report, drop the body.
+            //
+            // The encoding line is what makes the length survive. Holding the client's
+            // Accept-Encoding — every browser sends one — Swoole compresses the body
+            // itself and drops a Content-Length written here, warning ERRNO 7105: the
+            // HEAD answer then announces no length at all, while the same handler under
+            // FPM announces one. Naming an encoding switches that off, and Swoole reads
+            // the headers in the order they were written, so the two lines below cannot
+            // be swapped.
+            //
+            // `identity` is the only honest name for it: the length known here is the
+            // unencoded one, and there is no body yet to measure a compressed one on.
+            // A caller that encoded the representation itself has already said so, and
+            // states the matching length — nothing to overrule.
+            if (!$this->encodingDeclared) {
+                $this->response->header('Content-Encoding', 'identity');
+            }
             $this->response->header('Content-Length', (string) strlen($body));
             $body = '';
         }

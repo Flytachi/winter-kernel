@@ -599,6 +599,25 @@ final class ResponseStreamFileTest extends TestCase
         self::assertNull($res->endBody); // streamed, not end()
     }
 
+    /**
+     * The order of those two headers is load-bearing, which nothing about them shows.
+     * Swoole reads the response headers in the order they were written and stops
+     * compressing at the first Content-Encoding it sees — written the other way round it
+     * has already decided to compress, and drops the Content-Length with a warning
+     * (`ERRNO 7105`). Swapping the two lines in FileResponseHeaders breaks a file
+     * download's length under Swoole and nothing else, so the assertion is made here.
+     */
+    public function test_the_encoding_is_declared_before_the_length(): void
+    {
+        $res = $this->send(ResponseStreamFile::open($this->path), new StubRequest());
+
+        $order = array_keys($res->headers);
+        self::assertLessThan(
+            array_search('Content-Length', $order, true),
+            array_search('Content-Encoding', $order, true),
+        );
+    }
+
     public function testAttachmentDisposition(): void
     {
         $res = $this->send(ResponseStreamFile::open($this->path)->attachment(), new StubRequest());
