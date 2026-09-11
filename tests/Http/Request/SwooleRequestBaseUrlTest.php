@@ -75,13 +75,13 @@ class SwooleRequestBaseUrlTest extends TestCase
         );
     }
 
-    public function test_https_on_custom_port_keeps_port(): void
+    public function test_https_on_custom_forwarded_port_keeps_port(): void
     {
         $this->assertSame(
             'https://example.com:8443',
             $this->baseUrl(
-                ['host' => 'example.com', 'x-forwarded-proto' => 'https'],
-                ['server_port' => 8443],
+                ['host' => 'example.com', 'x-forwarded-proto' => 'https', 'x-forwarded-port' => '8443'],
+                ['server_port' => 9090],
             ),
         );
     }
@@ -136,6 +136,35 @@ class SwooleRequestBaseUrlTest extends TestCase
             $this->baseUrl(
                 ['host' => 'example.com', 'x-forwarded-proto' => 'https'],
                 ['server_port' => 80],
+            ),
+        );
+    }
+
+    public function test_proxy_without_port_headers_drops_backend_listener(): void
+    {
+        // Nginx Proxy Manager and friends send Host + X-Forwarded-Proto and no
+        // port at all; server_port is then the container's own 9090, which the
+        // client never dialled.
+        $this->assertSame(
+            'https://s5w.example.com',
+            $this->baseUrl(
+                [
+                    'host'              => 's5w.example.com',
+                    'x-forwarded-proto' => 'https',
+                    'x-forwarded-for'   => '203.0.113.7',
+                ],
+                ['server_port' => 9090],
+            ),
+        );
+    }
+
+    public function test_plain_http_proxy_drops_backend_listener(): void
+    {
+        $this->assertSame(
+            'http://example.com',
+            $this->baseUrl(
+                ['host' => 'example.com', 'x-forwarded-for' => '203.0.113.7'],
+                ['server_port' => 9090],
             ),
         );
     }

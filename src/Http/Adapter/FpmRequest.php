@@ -203,18 +203,32 @@ final class FpmRequest implements HttpRequest
                 return $port;
             }
         }
-        // SERVER_PORT is the backend's own listener. Port 80 under an https
-        // scheme is a contradiction — a TLS-terminating proxy hop or a
-        // misconfigured HTTPS flag — that would yield an unreachable
-        // https://host:80. Drop that noise and use the scheme default; every
+        // SERVER_PORT is this backend's own listener — the proxy→app hop, not the
+        // port the client dialled, so it counts only on a direct request. A proxy
+        // that publishes a non-default port announces it (X-Forwarded-Port, or a
+        // port kept in Host); silence means the client came in on the scheme
+        // default, and echoing the backend port there yields an unreachable URL.
+        //
+        // On a direct request the scheme can still come from the HTTPS flag alone,
+        // and port 80 under https is a contradiction that would yield an
+        // unreachable https://host:80 — drop that to the https default too. Every
         // other SERVER_PORT (matching or non-standard) is honoured as-is.
-        if (!empty($_SERVER['SERVER_PORT'])) {
+        if (!$this->isProxied() && !empty($_SERVER['SERVER_PORT'])) {
             $serverPort = (int) $_SERVER['SERVER_PORT'];
             if (!($serverPort === 80 && $this->getScheme() === 'https')) {
                 return $serverPort;
             }
         }
         return $this->getScheme() === 'https' ? 443 : 80;
+    }
+
+    /** Whether the request reached this backend through a reverse proxy. */
+    private function isProxied(): bool
+    {
+        return !empty($_SERVER['HTTP_FORWARDED'])
+            || !empty($_SERVER['HTTP_X_FORWARDED_PROTO'])
+            || !empty($_SERVER['HTTP_X_FORWARDED_HOST'])
+            || !empty($_SERVER['HTTP_X_FORWARDED_FOR']);
     }
 
     /**

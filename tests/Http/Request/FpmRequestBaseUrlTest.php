@@ -148,15 +148,41 @@ class FpmRequestBaseUrlTest extends TestCase
         );
     }
 
-    public function test_forwarded_proto_https_keeps_nonstandard_backend_port(): void
+    public function test_forwarded_proto_https_drops_nonstandard_backend_port(): void
     {
-        // A non-default SERVER_PORT behind a proxy is intentional — keep it.
+        // SERVER_PORT behind a proxy is the private proxy→app hop. The public
+        // port is whatever the proxy says; silence means the scheme default.
         $this->assertSame(
-            'https://example.com:8443',
+            'https://example.com',
             $this->baseUrl([
                 'HTTP_HOST'              => 'example.com',
                 'HTTP_X_FORWARDED_PROTO' => 'https',
                 'SERVER_PORT'            => '8443',
+            ]),
+        );
+    }
+
+    public function test_plain_http_proxy_drops_backend_listener(): void
+    {
+        $this->assertSame(
+            'http://example.com',
+            $this->baseUrl([
+                'HTTP_HOST'            => 'example.com',
+                'HTTP_X_FORWARDED_FOR' => '203.0.113.7',
+                'SERVER_PORT'          => '9090',
+            ]),
+        );
+    }
+
+    public function test_direct_https_on_custom_port_keeps_port(): void
+    {
+        // No proxy headers: SERVER_PORT is the port the client actually dialled.
+        $this->assertSame(
+            'https://example.com:8443',
+            $this->baseUrl([
+                'HTTP_HOST'   => 'example.com',
+                'HTTPS'       => 'on',
+                'SERVER_PORT' => '8443',
             ]),
         );
     }

@@ -211,14 +211,24 @@ Resolution order (each method short-circuits on the first hit):
 
 1. `Forwarded` header (RFC 7239): `proto=`, `host=`, plus port part of `host=`.
 2. `X-Forwarded-Proto`, `X-Forwarded-Host`, `X-Forwarded-Port`.
-3. Direct request data — `Host` header, `$_SERVER['HTTPS']` / `REQUEST_SCHEME` / `SERVER_PORT` (FPM), `$request->server['server_port']` (Swoole).
+3. Direct request data — `Host` header, `$_SERVER['HTTPS']` / `REQUEST_SCHEME` / `SERVER_PORT` (FPM), `$request->server['server_port']` (Swoole). The server port is read **only on a direct request** — see *Proxied requests* below.
 4. Safe defaults — `http`, `localhost`, scheme-derived port.
 
 **Trust policy.** Proxy headers are honoured unconditionally — they take precedence over direct values. If the application is not behind a reverse proxy, strip these headers at the edge (nginx / cloud LB) before they reach PHP. Otherwise a client can spoof `X-Forwarded-Host` and force the backend to return URLs pointing at an attacker domain.
 
 **Swoole SSL.** The Swoole HTTP server does not expose an `https`/`scheme` flag on the request object. Direct-SSL Swoole deployments must terminate TLS at a fronting proxy that sets `X-Forwarded-Proto: https`, otherwise `getScheme()` returns `'http'`.
 
-**Contradictory `https:80`.** Behind a TLS-terminating proxy that forwards the scheme but not the port (or with a misconfigured `HTTPS` flag), the backend server port is often `80` while the scheme is `https`. Since TLS on port 80 is unreachable, `getPort()` drops that contradiction to the https default `443`, so `getBaseUrl()` returns `https://example.com`, never `https://example.com:80`. The mirror case is intentionally **not** collapsed: plain HTTP on `443` is reachable, so `http://example.com:443` is kept explicit. Non-standard ports (`:8443`, `:8080`) are always preserved.
+**Proxied requests never inherit the backend port.** The server port (`SERVER_PORT` / `server_port`) is this process's own listener — the private proxy→app hop. As soon as any proxy header is present (`Forwarded`, `X-Forwarded-Proto`, `X-Forwarded-Host`, `X-Forwarded-For`), that port is ignored and the public port comes from `X-Forwarded-Port`, from a port kept in `Host`, or — when the proxy says nothing — from the scheme default. A proxy that publishes a non-default port must announce it:
+
+```nginx
+proxy_set_header Host              $host;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header X-Forwarded-Port  $server_port;   # only needed for non-default public ports
+```
+
+Without this rule a container listening on `:9090` behind a proxy on `app.example.com` would hand out `https://app.example.com:9090/...` — a URL nobody can reach.
+
+**Contradictory `https:80`.** On a direct request a misconfigured `HTTPS` flag can pair an `https` scheme with server port `80`. Since TLS on port 80 is unreachable, `getPort()` drops that contradiction to the https default `443`, so `getBaseUrl()` returns `https://example.com`, never `https://example.com:80`. The mirror case is intentionally **not** collapsed: plain HTTP on `443` is reachable, so `http://example.com:443` is kept explicit. Every other port the client actually dialled (`:8443`, `:8080`) is preserved.
 
 ```php
 public function index(HttpRequest $request): ResponseEntity

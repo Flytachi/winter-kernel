@@ -109,11 +109,17 @@ interface HttpRequest
      * Honours `X-Forwarded-Port` → port part of forwarded/Host header → server port.
      * Falls back to 443 for https / 80 for http when nothing else is available.
      *
-     * A backend server port of 80 under an https scheme is treated as noise
-     * (a TLS-terminating proxy hop or a misconfigured HTTPS flag) and replaced
-     * by the https default 443 — it is never reported as an unreachable
-     * https:80. Every other port, including a non-standard one, is kept as-is;
-     * in particular http on 443 is reported unchanged.
+     * The server port counts only on a direct request. Once any proxy header
+     * (`Forwarded`, `X-Forwarded-Proto/Host/For`) is present, the local listener
+     * is the private proxy→app hop, not the port the client dialled: a proxy
+     * publishing a non-default port says so via `X-Forwarded-Port` or keeps it
+     * in `Host`, and silence means the scheme default.
+     *
+     * On a direct request a server port of 80 under an https scheme is treated
+     * as noise (a misconfigured HTTPS flag) and replaced by the https default
+     * 443 — it is never reported as an unreachable https:80. Every other port,
+     * including a non-standard one, is kept as-is; in particular http on 443 is
+     * reported unchanged.
      */
     public function getPort(): int;
 
@@ -123,9 +129,10 @@ interface HttpRequest
      * getScheme() / getHost() / getPort().
      *
      * Because getPort() collapses a contradictory https/80 to the https
-     * default, an https base URL never carries `:80`. A plain-http URL on
-     * `:443` is kept explicit (it is reachable), as are all non-standard
-     * ports (e.g. `:8443`).
+     * default, an https base URL never carries `:80`, and a proxied request
+     * never carries the backend's own listener port. A plain-http URL on
+     * `:443` is kept explicit (it is reachable), as is any non-standard port
+     * the client actually dialled (e.g. `:8443`).
      */
     public function getBaseUrl(): string;
 }

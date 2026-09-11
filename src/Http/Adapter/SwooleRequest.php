@@ -221,18 +221,25 @@ final class SwooleRequest implements HttpRequest
                 return $port;
             }
         }
-        // server_port is the backend's own listener. Port 80 under an https
-        // scheme is a contradiction — a TLS-terminating proxy hop or a
-        // misconfigured HTTPS flag — that would yield an unreachable
-        // https://host:80. Drop that noise and use the scheme default; every
-        // other server_port (matching or non-standard) is honoured as-is.
-        if (!empty($this->request->server['server_port'])) {
-            $serverPort = (int) $this->request->server['server_port'];
-            if (!($serverPort === 80 && $this->getScheme() === 'https')) {
-                return $serverPort;
-            }
+        // server_port is this worker's own listener — the proxy→app hop, not the
+        // port the client dialled, so it counts only on a direct request. A proxy
+        // that publishes a non-default port announces it (X-Forwarded-Port, or a
+        // port kept in Host); silence means the client came in on the scheme
+        // default, and echoing the backend port there yields an unreachable URL.
+        if (!$this->isProxied() && !empty($this->request->server['server_port'])) {
+            return (int) $this->request->server['server_port'];
         }
         return $this->getScheme() === 'https' ? 443 : 80;
+    }
+
+    /** Whether the request reached this worker through a reverse proxy. */
+    private function isProxied(): bool
+    {
+        $h = $this->request->header ?? [];
+        return !empty($h['forwarded'])
+            || !empty($h['x-forwarded-proto'])
+            || !empty($h['x-forwarded-host'])
+            || !empty($h['x-forwarded-for']);
     }
 
     public function getBaseUrl(): string
