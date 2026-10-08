@@ -57,6 +57,19 @@ final class PackageWiringTest extends TestCase
             'without it a forked worker shares a Redis socket with its parent and both '
             . 'corrupt the protocol',
         ];
+        yield 'a process that used the database can end' => [
+            'RuntimeShutdown::register(static fn() => PpaConnectionPool::shutdown())',
+            'without it the pool housekeeper keeps a Swoole process alive after its body: '
+            . 'a process hangs on stop, a daemon waits out its grace and is killed',
+        ];
+        yield 'a process that published pool telemetry can end' => [
+            'RuntimeShutdown::register(static fn() => PoolTelemetry::stop())',
+            'without it the telemetry publisher keeps a Swoole process alive after its body',
+        ];
+        yield 'a process that used Redis can end' => [
+            'RuntimeShutdown::register(static fn() => RedisPool::shutdown())',
+            'without it the Redis pool housekeeper keeps a Swoole process alive after its body',
+        ];
     }
 
     #[DataProvider('wiring')]

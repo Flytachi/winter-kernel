@@ -14,6 +14,7 @@ use Flytachi\Winter\Kernel\Process\Daemon\SupervisesFleet;
 use Flytachi\Winter\Kernel\Process\Internal\SingletonLock;
 use Flytachi\Winter\Kernel\Process\ProcessState;
 use Flytachi\Winter\Kernel\Process\ProcessStatus;
+use Flytachi\Winter\Kernel\Process\RunningProcess;
 use Flytachi\Winter\Logger\LoggerFactory;
 
 /**
@@ -56,6 +57,9 @@ abstract class Daemon extends Process
 {
     use SingletonLock;
     use SupervisesFleet;
+
+    /** The daemon this OS process supervises; see {@see supervising()}. */
+    private static ?string $supervising = null;
 
     /** Baseline number of workers to keep running (the default scale target). */
     protected int $replicas = 1;
@@ -169,9 +173,28 @@ abstract class Daemon extends Process
     {
         static::ensureNotRunning();
 
+        // Before make(), for the same reason as Process::start(): building the daemon
+        // builds its dependencies here, in the supervisor.
+        self::$supervising = static::class;
+
         /** @var static $self */
         $self = Container::getInstance()->make(static::class);
         $self->supervise();
+    }
+
+    /**
+     * The daemon this OS process supervises, or null anywhere else — its workers
+     * included, which are {@see Process::current()} instead.
+     *
+     * The supervisor runs no body of its own, so it is not a running process; this is
+     * how code that runs there — a dependency built with the daemon, a hook — tells it
+     * apart from a web worker.
+     *
+     * @return class-string<Daemon>|null
+     */
+    public static function supervising(): ?string
+    {
+        return self::$supervising;
     }
 
     // -------------------------------------------------------------------------
@@ -221,6 +244,11 @@ abstract class Daemon extends Process
      */
     private function bootWorker(int $slot): void
     {
+        // A forked worker stops being the supervisor and becomes a running process — set
+        // before an external $workerClass is built, so its dependencies see it too.
+        self::$supervising = null;
+        self::runAs(new RunningProcess(static::class, $slot));
+
         $title = $this->workerTitle($slot);
 
         if ($this->definesWorkerRun()) {

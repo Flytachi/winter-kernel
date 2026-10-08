@@ -8,6 +8,7 @@ use Flytachi\Winter\Kernel\Concurrent\Executors;
 use Flytachi\Winter\Kernel\Concurrent\Future;
 use Flytachi\Winter\Kernel\Process\Internal\Termination;
 use Flytachi\Winter\Kernel\Process\InterruptedException;
+use Flytachi\Winter\Kernel\Process\RuntimeShutdown;
 
 /**
  * Coroutine backend.
@@ -98,6 +99,18 @@ final class SwooleEngine implements ProcessEngine
                 foreach ($signos as $signo) {
                     \Swoole\Process::signal($signo, null);
                 }
+
+                // Timers the engine does not own keep the reactor alive just the same —
+                // a connection pool's housekeeper above all — so Coroutine\run would never
+                // return and the process would hang with its grace timer already gone.
+                // Released only once the last spawned task is done: on the cancelled
+                // path tasks may still be running, and must not lose their pool.
+                \Swoole\Coroutine::create(function (): void {
+                    while ($this->inFlight > 0) {
+                        \Swoole\Coroutine::sleep(0.01);
+                    }
+                    RuntimeShutdown::runAll();
+                });
             }
         });
 

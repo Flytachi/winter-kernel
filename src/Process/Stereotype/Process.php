@@ -7,6 +7,8 @@ namespace Flytachi\Winter\Kernel\Process\Stereotype;
 use Flytachi\FileStore\FileStorage;
 use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\Kernel\Concurrent\Future;
+use Flytachi\Winter\Kernel\Core\Dep;
+use Flytachi\Winter\Kernel\Core\DepSupport;
 use Flytachi\Winter\Kernel\Process\Activity;
 use Flytachi\Winter\Kernel\Process\Engine\Engines;
 use Flytachi\Winter\Kernel\Process\Engine\ProcessEngine;
@@ -18,7 +20,9 @@ use Flytachi\Winter\Kernel\Process\ProcessState;
 use Flytachi\Winter\Kernel\Process\ProcessStatus;
 use Flytachi\Winter\Kernel\Process\ProcessStore;
 use Flytachi\Winter\Kernel\Process\ResourceUsage;
+use Flytachi\Winter\Kernel\Process\RunningProcess;
 use Flytachi\Winter\Logger\LoggerFactory;
+use Flytachi\Winter\Ppa\Pool\PoolTelemetry;
 use Flytachi\Winter\Thread\Thread;
 use Psr\Log\LoggerInterface;
 
@@ -86,6 +90,9 @@ abstract class Process
     private float $lastHeartbeatAt = 0.0;
     /** Minimum seconds between heartbeat writes (throttle for a tight touch() loop). */
     private const float HEARTBEAT_THROTTLE = 1.0;
+
+    /** What this OS process was started as; see {@see current()}. */
+    private static ?RunningProcess $current = null;
 
     /**
      * Constructed by the framework via the DI container (so `#[Autowired]`
@@ -268,12 +275,40 @@ abstract class Process
     // -------------------------------------------------------------------------
 
     /**
+     * What this OS process was started as — a process, or a daemon worker with its slot
+     * — or null where no process is running: a web worker, the console, a daemon's
+     * supervisor (see {@see Daemon::supervising()}).
+     *
+     * Set before the process is built, so it already answers while `#[Autowired]`
+     * dependencies are being constructed — the moment a DB config runs `setUp()` and
+     * picks its pool size. Tasks dispatched with {@see spawn()} run as the same process.
+     */
+    public static function current(): ?RunningProcess
+    {
+        return self::$current;
+    }
+
+    /**
+     * Records what this OS process runs as.
+     *
+     * @internal Called by the runtime before the process is built.
+     */
+    final protected static function runAs(?RunningProcess $running): void
+    {
+        self::$current = $running;
+    }
+
+    /**
      * Runs the process in the foreground, registering it in the store so
      * {@see status()} / {@see stop()} reach it from another terminal.
      */
     public static function start(): void
     {
         static::ensureNotRunning();
+
+        // Before make(): building the process builds its dependencies, and a repository
+        // among them sets up its DB config — which may ask what it runs in.
+        self::runAs(new RunningProcess(static::class));
 
         /** @var static $self */
         $self = Container::getInstance()->make(static::class);
@@ -443,11 +478,36 @@ abstract class Process
 
         $this->engine = Engines::common($this->concurrency, $this->grace);
 
+        // A process keeps a connection pool of its own, apart from the web workers, so it
+        // publishes as a source of its own for `call db pool`. Only an identity is set
+        // here — nothing is armed until a pool is actually opened, and the timer is
+        // stopped through RuntimeShutdown when the body is done.
+        if (DepSupport::has(Dep::Ppa)) {
+            $this->enablePoolTelemetry();
+        }
+
         // A daemon worker writes its initial heartbeat at once, so the supervisor
         // sees it promote from STARTING to RUNNING without waiting a full tick.
         if ($this->workerSlot !== null) {
             $this->writeStatus();
         }
+    }
+
+    /**
+     * Names this process as a pool-telemetry source: the class for a process, the
+     * daemon and its slot for a daemon worker (slots are what the supervisor restarts,
+     * so a restarted worker takes over its predecessor's record).
+     */
+    private function enablePoolTelemetry(): void
+    {
+        $running = self::current() ?? new RunningProcess($this->ownerClass ?? static::class, $this->workerSlot);
+        $name = new \ReflectionClass($running->class)->getShortName();
+
+        if (!$running->isDaemonWorker()) {
+            PoolTelemetry::enable($name, PoolTelemetry::KIND_PROCESS);
+            return;
+        }
+        PoolTelemetry::enable($name . '.' . $running->slot, PoolTelemetry::KIND_DAEMON);
     }
 
     /**

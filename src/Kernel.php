@@ -9,6 +9,7 @@ use Flytachi\Winter\Kernel\Core\DepSupport;
 use Flytachi\Winter\Kernel\Core\KernelStore;
 use Flytachi\Winter\Kernel\Localization\Timezone;
 use Flytachi\Winter\Kernel\Process\ForkReset;
+use Flytachi\Winter\Kernel\Process\RuntimeShutdown;
 use Flytachi\Winter\Ppa\Pool\PoolTelemetry;
 use Flytachi\Winter\Ppa\Pool\PpaConnectionPool;
 use Flytachi\Winter\Redis\RedisPool;
@@ -110,6 +111,12 @@ final class Kernel extends KernelStore
         // fork-safety — a forked daemon worker inherits the parent's DB sockets;
         // reset the pool in the child (Process::afterFork) so it reconnects fresh.
         ForkReset::register(static fn() => PpaConnectionPool::reset());
+
+        // A pool's housekeeping timer — and the telemetry publisher, when the process
+        // published — keep a process's Coroutine\run() open after the body is done; what
+        // workerExit does for an HTTP worker, this does for a process.
+        RuntimeShutdown::register(static fn() => PoolTelemetry::stop());
+        RuntimeShutdown::register(static fn() => PpaConnectionPool::shutdown());
     }
 
     /**
@@ -134,6 +141,9 @@ final class Kernel extends KernelStore
         // inherited connections **without closing** them — closing would tear down the
         // parent's socket — and the child reopens lazily.
         ForkReset::register(static fn() => RedisPool::reset());
+
+        // Same as for the DB pool: release the housekeeping timer when a process ends.
+        RuntimeShutdown::register(static fn() => RedisPool::shutdown());
     }
 
     private static function bootLogger(): void

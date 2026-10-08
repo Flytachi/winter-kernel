@@ -151,13 +151,17 @@ final class Db extends Cmd
     }
 
     /**
-     * Shows connection-pool utilisation of the running server.
+     * Shows connection-pool utilisation of the running application.
      *
-     * A pool lives in one worker's memory and the CLI is a separate process, so this
-     * reads what each worker publishes to the shared store ({@see PoolTelemetry}) —
-     * the same indirection `call process status` uses. Numbers are therefore as fresh
-     * as the last publish (see the `age` column), and a stopped worker's record simply
+     * A pool lives in one process's memory and the CLI is a separate process, so this
+     * reads what each one publishes to the shared store ({@see PoolTelemetry}) — the
+     * same indirection `call process status` uses. Numbers are therefore as fresh as
+     * the last publish (see the `age` column), and a stopped source's record simply
      * expires.
+     *
+     * Web workers and processes are shown apart: every process and daemon worker keeps
+     * a pool of its own, so a saturated one stalls only itself. The totals at the end
+     * add everything up — the number to hold against the database's connection limit.
      */
     private function pool(): void
     {
@@ -165,50 +169,85 @@ final class Db extends Cmd
 
         if ($records === []) {
             self::printWarning('No pool telemetry found.');
-            self::printInfo('A pool lives inside the running server, so the CLI reads what workers publish.');
-            self::printInfo('Check that the server is running, that it queries the database, and that'
+            self::printInfo('A pool lives inside the running application, so the CLI reads what its'
+                . ' workers and processes publish.');
+            self::printInfo('Check that the application is running, that it queries the database, and that'
                 . ' PPA_POOL_TELEMETRY is not 0 (current interval: ' . PoolTelemetry::interval() . 's).');
             return;
         }
 
-        self::printTitle('Connection pools');
-        foreach (PoolTelemetry::aggregate() as $configClass => $stat) {
-            self::printLabel($configClass, 34);
-            self::printKeyValue('active', (string) $stat['active'], 12, 34, 36);
-            self::printKeyValue('idle', (string) $stat['idle'], 12, 34, 36);
-            self::printKeyValue('total', (string) $stat['total'], 12, 34, 36);
-            self::printKeyValue('maximum', (string) $stat['maximum'], 12, 34, 36);
-            self::printKeyValue('workers', (string) $stat['workers'], 12, 34, 36);
+        $background = [PoolTelemetry::KIND_PROCESS, PoolTelemetry::KIND_DAEMON];
+        $web        = PoolTelemetry::aggregate(PoolTelemetry::KIND_WEB);
+        $bg         = PoolTelemetry::aggregate($background);
+        $this->poolGroup('Connection pools — web workers', $web, 'workers');
+        $this->poolGroup('Connection pools — processes', $bg, 'processes');
 
-            // Saturation is per worker: a borrow queues on its own worker's pool, so
-            // one saturated worker matters even when the fleet total shows slack.
-            if ($stat['saturated'] > 0) {
-                self::printKeyValue('saturated', "{$stat['saturated']} of {$stat['workers']} workers", 12, 34, 33);
-                self::printBadge($configClass, 'SATURATED', 34, 33);
-            } else {
-                self::printBadge($configClass, 'OK', 34, 32);
-            }
+        self::printSplit('open connections per database');
+        foreach (PoolTelemetry::aggregate() as $configClass => $stat) {
+            self::printKeyValue($configClass, sprintf(
+                '%d  (web %d + processes %d)',
+                $stat['total'],
+                $web[$configClass]['total'] ?? 0,
+                $bg[$configClass]['total'] ?? 0,
+            ), 40, 34, 36);
         }
 
-        self::printSplit('per worker');
+        self::printSplit('per source');
         $now = time();
         foreach ($records as $record) {
+            $source = $record['kind'] === PoolTelemetry::KIND_WEB
+                ? 'worker#' . $record['worker']
+                : $record['kind'] . ' ' . $record['worker'];
             foreach ($record['pools'] as $configClass => $stat) {
                 self::printKeyValue(
-                    'worker#' . $record['worker'],
+                    $source,
                     sprintf(
-                        '%-40s active=%d idle=%d total=%d max=%d  age=%ds',
+                        '%-40s active=%d idle=%d total=%d max=%d  pid=%s  age=%ds',
                         $configClass,
                         $stat['active'],
                         $stat['idle'],
                         $stat['total'],
                         $stat['maximum'],
+                        $record['pid'] ?? '-',
                         max(0, $now - (int) ($record['at'] ?? $now)),
                     ),
-                    12,
+                    24,
                     34,
                     36,
                 );
+            }
+        }
+    }
+
+    /**
+     * One group of {@see pool()}: per config, the summed utilisation of its sources.
+     * An empty group is skipped — an application without processes shows none.
+     *
+     * @param array<string, array{total: int, idle: int, active: int, maximum: int, workers: int,
+     *     saturated: int}> $aggregate
+     */
+    private function poolGroup(string $title, array $aggregate, string $sources): void
+    {
+        if ($aggregate === []) {
+            return;
+        }
+
+        self::printTitle($title);
+        foreach ($aggregate as $configClass => $stat) {
+            self::printLabel($configClass, 34);
+            self::printKeyValue('active', (string) $stat['active'], 12, 34, 36);
+            self::printKeyValue('idle', (string) $stat['idle'], 12, 34, 36);
+            self::printKeyValue('total', (string) $stat['total'], 12, 34, 36);
+            self::printKeyValue('maximum', (string) $stat['maximum'], 12, 34, 36);
+            self::printKeyValue($sources, (string) $stat['workers'], 12, 34, 36);
+
+            // Saturation is per source: a borrow queues on its own process's pool, so
+            // one saturated source matters even when the group total shows slack.
+            if ($stat['saturated'] > 0) {
+                self::printKeyValue('saturated', "{$stat['saturated']} of {$stat['workers']} {$sources}", 12, 34, 33);
+                self::printBadge($configClass, 'SATURATED', 34, 33);
+            } else {
+                self::printBadge($configClass, 'OK', 34, 32);
             }
         }
     }
@@ -528,7 +567,7 @@ final class Db extends Cmd
         self::printBadge('ping', 'check DB connection and latency', $cl, 36);
         self::printBadge('migrate', 'run migrations against connected databases', $cl, 36);
         self::printBadge('sql', 'preview generated SQL without executing', $cl, 36);
-        self::printBadge('pool', 'show connection-pool utilisation of the running server', $cl, 36);
+        self::printBadge('pool', 'show connection-pool utilisation of the running application', $cl, 36);
         self::printLabel("Commands", $cl);
 
         self::printLabel("Flags", $cl);
