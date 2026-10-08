@@ -161,7 +161,8 @@ final class Db extends Cmd
      *
      * Web workers and processes are shown apart: every process and daemon worker keeps
      * a pool of its own, so a saturated one stalls only itself. The totals at the end
-     * add everything up — the number to hold against the database's connection limit.
+     * add everything up per config — what to hold against the database's connection limit
+     * (configs pointing at one server add up there).
      */
     private function pool(): void
     {
@@ -176,13 +177,21 @@ final class Db extends Cmd
             return;
         }
 
+        // An older winter-ppa (before 1.2) publishes web workers only and cannot filter
+        // by kind: show the single group it knows.
+        if (!defined(PoolTelemetry::class . '::KIND_WEB')) {
+            $this->poolGroup('Connection pools', PoolTelemetry::aggregate(), 'workers');
+            $this->poolSources($records);
+            return;
+        }
+
         $background = [PoolTelemetry::KIND_PROCESS, PoolTelemetry::KIND_DAEMON];
         $web        = PoolTelemetry::aggregate(PoolTelemetry::KIND_WEB);
         $bg         = PoolTelemetry::aggregate($background);
         $this->poolGroup('Connection pools — web workers', $web, 'workers');
         $this->poolGroup('Connection pools — processes', $bg, 'processes');
 
-        self::printSplit('open connections per database');
+        self::printSplit('open connections per config');
         foreach (PoolTelemetry::aggregate() as $configClass => $stat) {
             self::printKeyValue($configClass, sprintf(
                 '%d  (web %d + processes %d)',
@@ -192,12 +201,23 @@ final class Db extends Cmd
             ), 40, 34, 36);
         }
 
+        $this->poolSources($records);
+    }
+
+    /**
+     * The per-source rows of {@see pool()}: one line per source and config.
+     *
+     * @param list<array<string, mixed>> $records
+     */
+    private function poolSources(array $records): void
+    {
         self::printSplit('per source');
         $now = time();
         foreach ($records as $record) {
-            $source = $record['kind'] === PoolTelemetry::KIND_WEB
+            $kind   = $record['kind'] ?? 'web';
+            $source = $kind === 'web'
                 ? 'worker#' . $record['worker']
-                : $record['kind'] . ' ' . $record['worker'];
+                : $kind . ' ' . $record['worker'];
             foreach ($record['pools'] as $configClass => $stat) {
                 self::printKeyValue(
                     $source,

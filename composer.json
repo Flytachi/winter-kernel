@@ -42,7 +42,7 @@
         "ext-fileinfo": "*"
     },
     "require-dev": {
-        "flytachi/winter-ppa": "^1.0",
+        "flytachi/winter-ppa": "^1.2",
         "flytachi/winter-redis": "^1.0",
         "phpunit/phpunit": "@stable",
         "squizlabs/php_codesniffer": "@stable",

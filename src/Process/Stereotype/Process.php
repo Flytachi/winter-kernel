@@ -496,12 +496,20 @@ abstract class Process
     /**
      * Names this process as a pool-telemetry source: the class for a process, the
      * daemon and its slot for a daemon worker (slots are what the supervisor restarts,
-     * so a restarted worker takes over its predecessor's record).
+     * so a restarted worker takes over its predecessor's record). The full class name:
+     * two `Worker` classes in different namespaces are two sources, not one record both
+     * keep overwriting.
      */
     private function enablePoolTelemetry(): void
     {
+        // Sources other than web workers came with winter-ppa 1.2; an older ppa only
+        // publishes for web workers, so a process has nothing to enable.
+        if (!defined(PoolTelemetry::class . '::KIND_PROCESS')) {
+            return;
+        }
+
         $running = self::current() ?? new RunningProcess($this->ownerClass ?? static::class, $this->workerSlot);
-        $name = new \ReflectionClass($running->class)->getShortName();
+        $name = $running->class;
 
         if (!$running->isDaemonWorker()) {
             PoolTelemetry::enable($name, PoolTelemetry::KIND_PROCESS);

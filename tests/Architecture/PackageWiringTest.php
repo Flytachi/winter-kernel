@@ -57,6 +57,15 @@ final class PackageWiringTest extends TestCase
             'without it a forked worker shares a Redis socket with its parent and both '
             . 'corrupt the protocol',
         ];
+        yield 'a fork leaves the parent its database session' => [
+            'BeforeFork::register(static fn() => PpaConnectionPool::closeBeforeFork())',
+            'without it a forked child inherits the parent\'s PDO, and its destructor closes the parent\'s '
+            . 'server session — a spawn() without Swoole, or a supervisor forking a worker',
+        ];
+        yield 'a fork leaves the parent its Redis session' => [
+            'BeforeFork::register(static fn() => RedisPool::closeBeforeFork())',
+            'without it a forked child talks into the parent\'s Redis session',
+        ];
         yield 'a process that used the database can end' => [
             'RuntimeShutdown::register(static fn() => PpaConnectionPool::shutdown())',
             'without it the pool housekeeper keeps a Swoole process alive after its body: '

@@ -29,6 +29,10 @@ final class PoolTelemetryIntegrationTest extends IntegrationCase
         }
         putenv('PPA_POOL_TELEMETRY=1');
         parent::setUp();
+        // After parent::setUp(): tearDown() still runs for a skipped test and needs it.
+        if (!defined(PoolTelemetry::class . '::KIND_PROCESS')) {
+            self::markTestSkipped('per-process telemetry needs winter-ppa 1.2 or later.');
+        }
         putenv('WK_DB=' . $this->storage . '/pool-telemetry.sqlite');
     }
 
@@ -53,7 +57,7 @@ final class PoolTelemetryIntegrationTest extends IntegrationCase
         $pid = $this->fork(static fn() => DbLoopProcess::start());
 
         self::assertTrue(
-            $this->pollUntil(static fn() => in_array('process:DbLoopProcess', self::sources(), true)),
+            $this->pollUntil(static fn() => in_array('process:' . DbLoopProcess::class, self::sources(), true)),
             'the process should appear as a source of kind "process"',
         );
         $record = PoolTelemetry::snapshot()[0];
@@ -73,7 +77,10 @@ final class PoolTelemetryIntegrationTest extends IntegrationCase
         $sup = $this->fork(static fn() => DbLoopDaemon::start());
 
         self::assertTrue(
-            $this->pollUntil(static fn() => self::sources() === ['daemon:DbLoopDaemon.0', 'daemon:DbLoopDaemon.1']),
+            $this->pollUntil(static fn() => self::sources() === [
+                'daemon:' . DbLoopDaemon::class . '.0',
+                'daemon:' . DbLoopDaemon::class . '.1',
+            ]),
             'two workers, two sources: ' . implode(', ', self::sources()),
         );
 

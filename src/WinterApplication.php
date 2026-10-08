@@ -45,6 +45,7 @@ use Flytachi\Winter\Kernel\Http\Health\Health;
 use Flytachi\Winter\Kernel\Http\Health\HealthContributor;
 use Flytachi\Winter\Kernel\Http\Health\HealthIndicator;
 use Flytachi\Winter\Kernel\Plugin;
+use Flytachi\Winter\Kernel\Process\BeforeFork;
 use Flytachi\Winter\Kernel\Process\ForkReset;
 use Flytachi\Winter\Kernel\Route\DevWatcher;
 use Flytachi\Winter\Kernel\Route\RequestWatchdog;
@@ -804,6 +805,12 @@ abstract class WinterApplication
             $watch ? ' (dev/watch)' : ''
         ));
 
+        // Swoole forks every worker and every addProcess child from this master. A
+        // connection the boot opened here would be inherited by all of them, and the
+        // first child to drop it would close the master's server session; closed now, so
+        // there is nothing to inherit.
+        BeforeFork::runAll();
+
         $server->start();
 
         if ($dev !== null && $dev->reloadRequested()) {
@@ -847,6 +854,9 @@ abstract class WinterApplication
                 'Running several headless components needs ext-pcntl.'
             );
         }
+
+        // Same as before the server starts: nothing the boot opened may be inherited.
+        BeforeFork::runAll();
 
         $children = [];
         foreach ($companions as $companion) {

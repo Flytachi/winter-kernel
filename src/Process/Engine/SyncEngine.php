@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Kernel\Process\Engine;
 
 use Flytachi\Winter\Kernel\Concurrent\CompletableFuture;
 use Flytachi\Winter\Kernel\Concurrent\Future;
+use Flytachi\Winter\Kernel\Process\BeforeFork;
 use Flytachi\Winter\Kernel\Process\InterruptedException;
 
 /**
@@ -90,6 +91,12 @@ final class SyncEngine implements ProcessEngine
                 unset($this->children[$pid]);
             }
         }
+
+        // The child would inherit this process's connections, and dropping them — even
+        // just by exiting — closes the parent's server sessions. Closed here instead, so
+        // the child has nothing to share; a connection mid-transaction refuses, and the
+        // refusal reaches the caller of spawn() before anything is forked.
+        BeforeFork::runAll();
 
         $pid = pcntl_fork();
         if ($pid === 0) {

@@ -192,8 +192,10 @@ final class PoolTelemetryTest extends TestCase
     public function test_publish_writes_nothing_when_the_worker_holds_no_pool(): void
     {
         // PpaConnectionPool has no pools in this process, so there is nothing to report.
+        // (Before winter-ppa 1.2 publish() took the worker id as well.)
         PoolTelemetry::enable(0);
-        (new ReflectionMethod(PoolTelemetry::class, 'publish'))->invoke(null, 60);
+        $publish = new ReflectionMethod(PoolTelemetry::class, 'publish');
+        $publish->getNumberOfParameters() === 1 ? $publish->invoke(null, 60) : $publish->invoke(null, 0, 60);
 
         self::assertSame([], PoolTelemetry::snapshot(), 'an app that never touches PPA leaves no records');
     }

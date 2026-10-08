@@ -8,6 +8,7 @@ use Flytachi\Winter\Kernel\Core\Dep;
 use Flytachi\Winter\Kernel\Core\DepSupport;
 use Flytachi\Winter\Kernel\Core\KernelStore;
 use Flytachi\Winter\Kernel\Localization\Timezone;
+use Flytachi\Winter\Kernel\Process\BeforeFork;
 use Flytachi\Winter\Kernel\Process\ForkReset;
 use Flytachi\Winter\Kernel\Process\RuntimeShutdown;
 use Flytachi\Winter\Ppa\Pool\PoolTelemetry;
@@ -108,14 +109,23 @@ final class Kernel extends KernelStore
         // that never opens a pool must not end up with an empty runnable/ppa.pool/.
         PoolTelemetry::setStoreProvider(static fn() => KernelStore::runnable('ppa.pool', false));
 
-        // fork-safety — a forked daemon worker inherits the parent's DB sockets;
-        // reset the pool in the child (Process::afterFork) so it reconnects fresh.
+        // fork-safety, both sides. The parent closes its own connections before it forks
+        // — a child cannot drop an inherited PDO quietly: its destructor closes the
+        // parent's server session — and refuses to fork mid-transaction. The child then
+        // resets the pool (Process::afterFork) and reconnects fresh.
+        // closeBeforeFork() and per-process telemetry came with winter-ppa 1.2; an older
+        // ppa keeps its previous behaviour rather than failing every fork.
+        if (method_exists(PpaConnectionPool::class, 'closeBeforeFork')) {
+            BeforeFork::register(static fn() => PpaConnectionPool::closeBeforeFork());
+        }
         ForkReset::register(static fn() => PpaConnectionPool::reset());
 
         // A pool's housekeeping timer — and the telemetry publisher, when the process
         // published — keep a process's Coroutine\run() open after the body is done; what
         // workerExit does for an HTTP worker, this does for a process.
-        RuntimeShutdown::register(static fn() => PoolTelemetry::stop());
+        if (defined(PoolTelemetry::class . '::KIND_PROCESS')) {
+            RuntimeShutdown::register(static fn() => PoolTelemetry::stop());
+        }
         RuntimeShutdown::register(static fn() => PpaConnectionPool::shutdown());
     }
 
@@ -140,6 +150,13 @@ final class Kernel extends KernelStore
         // somebody else's request) points nowhere near the fork. `reset()` forgets the
         // inherited connections **without closing** them — closing would tear down the
         // parent's socket — and the child reopens lazily.
+        //
+        // The parent side closes its own connections first (see wirePpa()).
+        // closeBeforeFork() came with a later winter-redis than the kernel requires; an
+        // older one keeps its previous behaviour rather than failing every fork.
+        if (method_exists(RedisPool::class, 'closeBeforeFork')) {
+            BeforeFork::register(static fn() => RedisPool::closeBeforeFork());
+        }
         ForkReset::register(static fn() => RedisPool::reset());
 
         // Same as for the DB pool: release the housekeeping timer when a process ends.

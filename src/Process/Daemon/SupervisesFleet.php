@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Process\Daemon;
 
 use Flytachi\Winter\Kernel\Process\Activity;
+use Flytachi\Winter\Kernel\Process\BeforeFork;
 use Flytachi\Winter\Kernel\Process\Internal\Termination;
 use Flytachi\Winter\Kernel\Process\ProcessState;
 
@@ -471,6 +472,26 @@ trait SupervisesFleet
      */
     private function forkInto(Slot $slot, callable $onChange): void
     {
+        // A supervisor that touched a database or Redis would hand each worker a copy of
+        // that connection, and the worker's fork reset would close the supervisor's
+        // session with it. Closed first; the supervisor reopens lazily. A refusal means a
+        // connection that cannot be closed without harm — a transaction a hook left open
+        // — so the worker is not forked now: the slot waits a second and is retried on the
+        // same path as a back-off restart, logging each attempt, until the transaction is
+        // closed. Forking anyway would end that transaction's session from the child.
+        try {
+            BeforeFork::runAll();
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf(
+                'Worker %d not started: a connection of the supervisor is still in use (%s); retrying in 1s.',
+                $slot->index,
+                $e->getMessage(),
+            ));
+            $slot->state = SlotState::RESTARTING;
+            $slot->restartAt = microtime(true) + 1.0;
+            return;
+        }
+
         $slot->startedAt = time();
         $pid = pcntl_fork();
         if ($pid === 0) {

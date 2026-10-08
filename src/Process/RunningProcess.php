@@ -19,6 +19,10 @@ namespace Flytachi\Winter\Kernel\Process;
  *     $this->poolMaxConnections = Process::current() === null ? 10 : 3;
  * }
  * ```
+ *
+ * A daemon's supervisor is not a running process — it has no body — so it reads `null`
+ * here, like a web worker; {@see \Flytachi\Winter\Kernel\Process\Stereotype\Daemon::supervising()}
+ * tells it apart.
  */
 final readonly class RunningProcess
 {
