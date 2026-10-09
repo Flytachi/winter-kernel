@@ -429,9 +429,13 @@ final class Db extends Cmd
                             $db->exec($sql['exec']);
                             self::printBadge($sql['title'], 'OK', 34, 32);
                         } catch (\Throwable $e) {
+                            // MySQL/MariaDB report every CREATE INDEX error as SQLSTATE 42000 — a
+                            // duplicate name, an unknown column, a syntax error alike. Only the
+                            // driver code 1061 ("Duplicate key name") means the index is there;
+                            // reading the whole class as EXIST hid indexes the server rejected.
                             if (
                                 ($item->config->getDriver() === 'pgsql' && $e->getCode() === '42P07')
-                                || ($item->config->getDriver() === 'mysql' && $e->getCode() === '42000')
+                                || ($item->config->getDriver() === 'mysql' && self::driverErrorCode($e) === 1061)
                             ) {
                                 self::printBadge($sql['title'], 'EXIST', 34, 33);
                             } else {
@@ -621,5 +625,20 @@ final class Db extends Cmd
         self::printInfo("Docs: https://winterframe.net/docs/cmd-db");
 
         self::printTitle("Db Help", $cl);
+    }
+
+    /**
+     * The driver's own error number behind a database failure (MySQL's 1061, …), or null when
+     * there is none — read from the first PDOException in the chain, since a wrapper may
+     * carry it as its previous.
+     */
+    private static function driverErrorCode(\Throwable $e): ?int
+    {
+        for ($cause = $e; $cause !== null; $cause = $cause->getPrevious()) {
+            if ($cause instanceof \PDOException && isset($cause->errorInfo[1])) {
+                return (int) $cause->errorInfo[1];
+            }
+        }
+        return null;
     }
 }
