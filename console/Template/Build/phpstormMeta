@@ -15,6 +15,7 @@ namespace PHPSTORM_META {
         'LOG_FILE',
         'LOG_FILE_MAX',
         'LOG_COLOR',
+        'LOG_ACCESS',
         'LOG_SYS_LEVEL',
         'LOG_SYS_FORMAT',
         'LOG_SYS_OUTPUT',

@@ -34,7 +34,34 @@ final class FpmRequest implements HttpRequest
 
     public function getUri(): string
     {
-        return $_SERVER['REQUEST_URI'] ?? '/';
+        $query = $this->getQueryString();
+        return $query === null ? $this->getPath() : $this->getPath() . '?' . $query;
+    }
+
+    public function getPath(): string
+    {
+        $uri = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+        $pos = strpos($uri, '?');
+        $path = $pos === false ? $uri : substr($uri, 0, $pos);
+        return $path === '' ? '/' : $path;
+    }
+
+    public function getQueryString(): ?string
+    {
+        $query = $_SERVER['QUERY_STRING'] ?? null;
+        if ($query === null) {
+            // Not every server sets QUERY_STRING; REQUEST_URI always carries it.
+            $uri = (string) ($_SERVER['REQUEST_URI'] ?? '');
+            $pos = strpos($uri, '?');
+            $query = $pos === false ? '' : substr($uri, $pos + 1);
+        }
+        $query = (string) $query;
+        return $query === '' ? null : $query;
+    }
+
+    public function getUrl(): string
+    {
+        return $this->getBaseUrl() . $this->getUri();
     }
 
     public function getQueryParams(): array
@@ -153,6 +180,29 @@ final class FpmRequest implements HttpRequest
             return null;
         }
         return in_array($tz, timezone_identifiers_list(), true) ? $tz : null;
+    }
+
+    public function getProtocolVersion(): string
+    {
+        return self::protocolVersion($_SERVER['SERVER_PROTOCOL'] ?? null);
+    }
+
+    public function getUserAgent(): ?string
+    {
+        return $this->getHeader('user-agent');
+    }
+
+    /**
+     * 'HTTP/1.1' → '1.1'; 'HTTP/2' and 'HTTP/2.0' → '2', so the two runtimes agree.
+     */
+    private static function protocolVersion(mixed $serverProtocol): string
+    {
+        if (!is_string($serverProtocol) || !preg_match('#^HTTP/(\d+)(?:\.(\d+))?$#i', $serverProtocol, $m)) {
+            return '1.1';
+        }
+        $major = (int) $m[1];
+        $minor = $m[2] ?? null;
+        return $major >= 2 || $minor === null ? (string) $major : "{$major}.{$minor}";
     }
 
     public function getScheme(): string

@@ -32,7 +32,24 @@ final class SwooleRequest implements HttpRequest
 
     public function getUri(): string
     {
+        $query = $this->getQueryString();
+        return $query === null ? $this->getPath() : $this->getPath() . '?' . $query;
+    }
+
+    public function getPath(): string
+    {
         return $this->request->server['request_uri'] ?? '/';
+    }
+
+    public function getQueryString(): ?string
+    {
+        $query = $this->request->server['query_string'] ?? '';
+        return $query === '' ? null : $query;
+    }
+
+    public function getUrl(): string
+    {
+        return $this->getBaseUrl() . $this->getUri();
     }
 
     public function getQueryParams(): array
@@ -152,6 +169,29 @@ final class SwooleRequest implements HttpRequest
             return null;
         }
         return in_array($tz, timezone_identifiers_list(), true) ? $tz : null;
+    }
+
+    public function getProtocolVersion(): string
+    {
+        return self::protocolVersion($this->request->server['server_protocol'] ?? null);
+    }
+
+    public function getUserAgent(): ?string
+    {
+        return $this->getHeader('user-agent');
+    }
+
+    /**
+     * 'HTTP/1.1' → '1.1'; 'HTTP/2' and 'HTTP/2.0' → '2', so the two runtimes agree.
+     */
+    private static function protocolVersion(mixed $serverProtocol): string
+    {
+        if (!is_string($serverProtocol) || !preg_match('#^HTTP/(\d+)(?:\.(\d+))?$#i', $serverProtocol, $m)) {
+            return '1.1';
+        }
+        $major = (int) $m[1];
+        $minor = $m[2] ?? null;
+        return $major >= 2 || $minor === null ? (string) $major : "{$major}.{$minor}";
     }
 
     public function getScheme(): string

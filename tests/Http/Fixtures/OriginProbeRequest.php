@@ -72,6 +72,21 @@ final class OriginProbeRequest implements HttpRequest
         return '/';
     }
 
+    public function getPath(): string
+    {
+        return '/';
+    }
+
+    public function getQueryString(): ?string
+    {
+        return null;
+    }
+
+    public function getUrl(): string
+    {
+        return $this->baseUrl . '/';
+    }
+
     public function getQueryParams(): array
     {
         return [];
@@ -109,6 +124,16 @@ final class OriginProbeRequest implements HttpRequest
     }
 
     public function getClientTimezone(): ?string
+    {
+        return null;
+    }
+
+    public function getProtocolVersion(): string
+    {
+        return '1.1';
+    }
+
+    public function getUserAgent(): ?string
     {
         return null;
     }

@@ -125,7 +125,7 @@ final class ResponseView implements Sendable
 
         $this->writeCookies($response);
 
-        $response->end($this->renderContent($request->getUri()));
+        $response->end($this->renderContent($request->getPath()));
     }
 
     // ── Internals ─────────────────────────────────────────────────────────────

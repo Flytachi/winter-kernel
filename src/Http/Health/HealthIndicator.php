@@ -96,7 +96,9 @@ class HealthIndicator implements HealthIndicatorInterface
         } else {
             $executionTime = microtime(true) - ($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true));
             $method        = $_SERVER['REQUEST_METHOD'] ?? '';
-            $uri           = $_SERVER['REQUEST_URI'] ?? '';
+            // The path only, as the Swoole branch records it — the query string may carry
+            // personal data and has no place in metrics.
+            $uri           = explode('?', (string) ($_SERVER['REQUEST_URI'] ?? ''), 2)[0];
         }
 
         return [

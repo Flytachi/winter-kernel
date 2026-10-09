@@ -319,7 +319,7 @@ final class Router
             $ctx = \Swoole\Coroutine::getContext();
             $ctx['__request_start']  = microtime(true);
             $ctx['__request_method'] = $request->getMethod();
-            $ctx['__request_uri']    = $request->getUri();
+            $ctx['__request_uri']    = $request->getPath();
         }
 
         // Watched from here, with the global deadline; a route carrying its own
@@ -339,9 +339,13 @@ final class Router
         try {
             $method = $request->getMethod();
 
-            if (env('DEBUG', false)) {
-                LoggerFactory::getLogger(self::class)->debug(
-                    $request->getClientIp() . " -- $method " . $request->getUri()
+            // The access line — one per request: `IP -- "POST /path?query" HTTP/1.1 agent`.
+            // LOG_ACCESS turns it on or off; left unset, it follows DEBUG.
+            if (env('LOG_ACCESS', env('DEBUG', false))) {
+                LoggerFactory::getLogger(self::class)->info(
+                    $request->getClientIp() . " -- \"$method " . $request->getUri()
+                    . '" HTTP/' . $request->getProtocolVersion()
+                    . ($request->getUserAgent() ? ' ' . $request->getUserAgent() : '')
                 );
             }
 
@@ -356,7 +360,7 @@ final class Router
                 return;
             }
 
-            $result = $this->dispatch($method, $request->getUri());
+            $result = $this->dispatch($method, $request->getPath());
 
             // ── Per-route #[CrossOrigin] overrides global CORS ────────────────
             if (Cors::getConfig() !== null && $result->status === RouteResult::FOUND) {
@@ -380,18 +384,18 @@ final class Router
                     break;
                 case RouteResult::METHOD_NOT_ALLOWED:
                     LoggerFactory::contextStorage()->set('method', $request->getMethod());
-                    LoggerFactory::contextStorage()->set('path', $request->getUri());
+                    LoggerFactory::contextStorage()->set('path', $request->getPath());
                     throw new ResponseException(
                         'Method Not Allowed',
                         HttpCode::METHOD_NOT_ALLOWED
                     )->withHeader('Allow', implode(', ', $result->allowedMethods));
                 default:
                     LoggerFactory::contextStorage()->set('method', $request->getMethod());
-                    LoggerFactory::contextStorage()->set('path', $request->getUri());
+                    LoggerFactory::contextStorage()->set('path', $request->getPath());
                     if (env('DEBUG', false)) {
                         throw new ResponseException('Not Found [ '
                             . $request->getMethod() . ' '
-                            . $request->getUri() . ' ]',
+                            . $request->getPath() . ' ]',
                             HttpCode::NOT_FOUND
                         );
                     } else {
@@ -525,14 +529,14 @@ final class Router
         $requestedMethod = strtoupper(Header::get('Access-Control-Request-Method') ?? 'GET');
 
         // Probe with the browser's intended method to retrieve handler + CORS config
-        $probe     = $this->dispatch($requestedMethod, $req->getUri());
+        $probe     = $this->dispatch($requestedMethod, $req->getPath());
         $routeCors = null;
         $methods   = ['OPTIONS'];
 
         if ($probe->status === RouteResult::FOUND) {
             $routeCors = $this->extractRouteCors($probe->handler);
             // Find all methods registered for this path via a dummy-method probe
-            $all     = $this->dispatch('__CORS__', $req->getUri());
+            $all     = $this->dispatch('__CORS__', $req->getPath());
             $methods = $all->status === RouteResult::METHOD_NOT_ALLOWED
                 ? array_unique([...$all->allowedMethods, 'OPTIONS'])
                 : [$requestedMethod, 'OPTIONS'];

@@ -41,6 +41,17 @@ final class RouterDispatchTest extends TestCase
         self::assertSame('pong', $response->body);
     }
 
+    public function test_a_query_string_does_not_take_part_in_matching(): void
+    {
+        $router = new Router()->get('/layer/ussd', static fn(): string => 'ok');
+
+        // Routes match the path: getUri() carries the query under both runtimes now.
+        $response = $this->send($router, 'GET', '/layer/ussd?subscriber_number=%2B998&text_message=2');
+
+        self::assertSame(200, $response->status);
+        self::assertSame('ok', $response->body);
+    }
+
     public function test_a_dynamic_segment_is_passed_to_the_handler(): void
     {
         $router = new Router()->get('/users/{id:\d+}', static fn($req, $res, array $p): array => ['id' => $p['id']]);

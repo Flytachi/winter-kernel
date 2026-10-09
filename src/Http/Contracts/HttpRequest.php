@@ -19,8 +19,25 @@ interface HttpRequest
     /** HTTP method in uppercase: GET, POST, PUT, etc. */
     public function getMethod(): string;
 
-    /** Request URI without host, e.g. /users/42?page=1 */
+    /**
+     * The request target — path and query string, without the host: `/users/42?page=1`.
+     * The same under both runtimes (Swoole keeps the two apart, FPM joins them). An access
+     * log writes exactly this. To compare against a route, use {@see getPath()}.
+     */
     public function getUri(): string;
+
+    /** The path alone, without the query string: `/users/42`. */
+    public function getPath(): string;
+
+    /** The raw query string without the leading `?` — `page=1&size=20` — or null when there is none. */
+    public function getQueryString(): ?string;
+
+    /**
+     * The full URL the client requested, query string included, as RFC 3986 defines a URL:
+     * `https://api.example.com/users/42?page=1` — {@see getBaseUrl()} followed by
+     * {@see getUri()}. For the address without the query: `getBaseUrl() . getPath()`.
+     */
+    public function getUrl(): string;
 
     /** Parsed query string as associative array ($_GET equivalent). */
     public function getQueryParams(): array;
@@ -88,6 +105,21 @@ interface HttpRequest
      * timezone_identifiers_list(). Returns null if absent or unknown.
      */
     public function getClientTimezone(): ?string;
+
+    /**
+     * HTTP version of the request as it reached this server — '1.0', '1.1', '2' — the
+     * PSR-7 form, without the 'HTTP/' prefix. HTTP/2 and later read as the bare major
+     * version ('2', '3') whichever way the server spells it ('HTTP/2' under Swoole,
+     * 'HTTP/2.0' from nginx under FPM). '1.1' when the server does not say.
+     *
+     * Behind a reverse proxy this is the proxy's hop, not the client's: nginx talks to a
+     * Swoole upstream over HTTP/1.x whatever the client used. Under FPM nginx passes the
+     * client's own version in SERVER_PROTOCOL.
+     */
+    public function getProtocolVersion(): string;
+
+    /** The `User-Agent` header, or null when the client sent none. */
+    public function getUserAgent(): ?string;
 
     /**
      * Request scheme — 'http' or 'https'.

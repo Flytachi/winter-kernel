@@ -33,6 +33,22 @@ final class FakeRequest implements HttpRequest
         return $this->uri;
     }
 
+    public function getPath(): string
+    {
+        return explode('?', $this->uri, 2)[0];
+    }
+
+    public function getQueryString(): ?string
+    {
+        $query = explode('?', $this->uri, 2)[1] ?? '';
+        return $query === '' ? null : $query;
+    }
+
+    public function getUrl(): string
+    {
+        return 'http://localhost' . $this->uri;
+    }
+
     public function getQueryParams(): array
     {
         return $this->query;
@@ -91,6 +107,16 @@ final class FakeRequest implements HttpRequest
     }
 
     public function getClientTimezone(): ?string
+    {
+        return null;
+    }
+
+    public function getProtocolVersion(): string
+    {
+        return '1.1';
+    }
+
+    public function getUserAgent(): ?string
     {
         return null;
     }
