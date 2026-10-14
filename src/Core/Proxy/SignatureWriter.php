@@ -2,9 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\Kernel\Concurrent\Async\Proxy;
-
-use Flytachi\Winter\Kernel\Concurrent\Async\AsyncException;
+namespace Flytachi\Winter\Kernel\Core\Proxy;
 
 /**
  * Renders reflected method signatures back into PHP source.
@@ -92,7 +90,7 @@ final class SignatureWriter
             return self::named($type, $scope, true);
         }
 
-        throw AsyncException::of(
+        throw ProxyException::of(
             $scope->getName(),
             'type ' . $type . ' is not supported',
             'Use a named, union or intersection type.'
@@ -114,13 +112,10 @@ final class SignatureWriter
             $out .= ' ';
         }
 
+        // Whether a feature can live with a by-reference parameter is its own call
+        // (see MethodInterceptor); the signature only has to reproduce it.
         if ($parameter->isPassedByReference()) {
-            throw AsyncException::of(
-                $method->getDeclaringClass()->getName() . '::' . $method->getName() . '()',
-                'parameter $' . $parameter->getName() . ' is passed by reference',
-                'An asynchronous call returns before the body runs, so writes to it could never be observed. '
-                . 'Return the value instead.'
-            );
+            $out .= '&';
         }
 
         if ($parameter->isVariadic()) {
@@ -183,7 +178,7 @@ final class SignatureWriter
     {
         $parent = $scope->getParentClass();
         if ($parent === false) {
-            throw AsyncException::of(
+            throw ProxyException::of(
                 $scope->getName(),
                 'the signature refers to "parent" but the class has none',
                 'Name the type explicitly.'
@@ -285,7 +280,7 @@ final class SignatureWriter
         }
 
         if (is_object($value)) {
-            throw AsyncException::of(
+            throw ProxyException::of(
                 $subject,
                 'default value of ' . $where . ' is an object of ' . $value::class
                 . ', which cannot be written back as source',

@@ -14,6 +14,7 @@ use Flytachi\Winter\Kernel\App\ApplicationArguments;
 use Flytachi\Winter\Kernel\App\ApplicationConfigException;
 use Flytachi\Winter\Kernel\App\Attribute\EnableActuator;
 use Flytachi\Winter\Kernel\App\Attribute\EnableAsync;
+use Flytachi\Winter\Kernel\App\Attribute\EnableCaching;
 use Flytachi\Winter\Kernel\App\Attribute\EnableDaemon;
 use Flytachi\Winter\Kernel\App\Attribute\EnableProcess;
 use Flytachi\Winter\Kernel\App\Attribute\EnableScheduler;
@@ -34,10 +35,17 @@ use Flytachi\Winter\Kernel\App\PluginPackage;
 use Flytachi\Winter\Kernel\Collector\ConfigurationCollector;
 use Flytachi\Winter\Kernel\Collector\ImplementorCollector;
 use Flytachi\Winter\Kernel\Collector\ScopeGraphCollector;
-use Flytachi\Winter\Kernel\Concurrent\Async\AsyncCollector;
-use Flytachi\Winter\Kernel\Concurrent\Async\Proxy\ProxyFactory;
+use Flytachi\Winter\Kernel\Cache\CacheConfigurer;
+use Flytachi\Winter\Kernel\Cache\CacheException;
+use Flytachi\Winter\Kernel\Cache\CacheInterceptor;
+use Flytachi\Winter\Kernel\Cache\CacheManager;
+use Flytachi\Winter\Kernel\Cache\Caches;
+use Flytachi\Winter\Kernel\Cache\CacheType;
+use Flytachi\Winter\Kernel\Concurrent\Async\AsyncInterceptor;
 use Flytachi\Winter\Kernel\Core\ClassScanner;
 use Flytachi\Winter\Kernel\Core\Dep;
+use Flytachi\Winter\Kernel\Core\Proxy\ProxyCollector;
+use Flytachi\Winter\Kernel\Core\Proxy\ProxyFactory;
 use Flytachi\Winter\Kernel\Core\DepSupport;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleResponse;
@@ -69,6 +77,7 @@ use Psr\Log\LoggerInterface;
  * ```
  * #[EnableWeb]
  * #[EnableAsync]
+ * #[EnableCaching]
  * #[EnableScheduler]
  * #[EnableProcess(SnmpProc::class)]
  * #[EnableDaemon(Emails::class)]
@@ -87,8 +96,8 @@ use Psr\Log\LoggerInterface;
  *
  * The manifest is declarative: each #[Enable*] on the App class maps to one
  * {@see Component} ({@see EnableWeb} → http, {@see EnableProcess}/{@see EnableDaemon}
- * → workers, {@see EnableScheduler} → scheduler), except {@see EnableAsync}, which
- * only toggles #[Async] proxying during boot.
+ * → workers, {@see EnableScheduler} → scheduler), except {@see EnableAsync} and
+ * {@see EnableCaching}, which only toggle proxying during boot.
  *
  * Configuration is not a set of hook methods on this class; it lives in ordinary
  * classes the scanner finds:
@@ -264,18 +273,14 @@ abstract class WinterApplication
         $serverCollector = new ImplementorCollector(ServerConfigurer::class);
         $scopeGraph = new ScopeGraphCollector();
 
-        // #[Async] proxying is opt-in, like Spring's @EnableAsync: the collector is
-        // created and wired only when #[EnableAsync] is present. Without it, classes
-        // carrying #[Async] are not proxied and their methods run synchronously. It
-        // must run after DICollector (which rebinds a class to itself), so it is
-        // collected last.
-        $async = static::hasAttribute(EnableAsync::class)
-            ? new AsyncCollector(
-                $c,
-                ProxyFactory::forKernel($debug),
-                $debug ? null : Kernel::$pathStorageVolatile . '/async.php',
-            )
-            : null;
+        // Proxying is opt-in per feature, like Spring's @EnableAsync / @EnableCaching:
+        // without the attribute, methods carrying #[Async] run synchronously and the
+        // cache attributes do nothing. A class gets one proxy whatever features it
+        // uses, so one collector serves them all. It must run after DICollector
+        // (which rebinds a class to itself), so it is collected last.
+        $caching = static::hasAttribute(EnableCaching::class);
+        $proxies = static::proxyCollector($c, $debug);
+        $cacheCollector = $caching ? new ImplementorCollector(CacheConfigurer::class) : null;
 
         // Everything an imported package may contribute. The application adds
         // ServerConfigurer to this on its own pass; a package may not.
@@ -286,7 +291,8 @@ abstract class WinterApplication
             $logCollector,
             $actuatorCollector,
             $scopeGraph,
-            $async,
+            $cacheCollector,
+            $proxies,
         ): Scanner {
             $scanner
                 ->collect(new DICollector($c))
@@ -296,8 +302,11 @@ abstract class WinterApplication
                 ->collect($actuatorCollector)
                 ->collect($scopeGraph);
 
-            if ($async !== null) {
-                $scanner->collect($async);
+            if ($cacheCollector !== null) {
+                $scanner->collect($cacheCollector);
+            }
+            if ($proxies !== null) {
+                $scanner->collect($proxies);
             }
 
             return $scanner;
@@ -327,7 +336,7 @@ abstract class WinterApplication
         // freeze the first request's instance for the worker's lifetime, and say nothing.
         $scopeGraph->assertNoFrozenRequestScope();
 
-        $async?->flush();
+        $proxies?->flush();
 
         // Default contextual logger: an injected LoggerInterface is named after the
         // class it is injected into.
@@ -341,6 +350,65 @@ abstract class WinterApplication
         static::applyCors($c, $webCollector->getResult());
         static::applyActuator($actuatorCollector->getResult());
         static::applyServerConfigurer($serverCollector->getResult());
+
+        if ($cacheCollector !== null) {
+            static::applyCaching($c, $cacheCollector->getResult(), $proxies?->proxied() ?? []);
+        }
+    }
+
+    /**
+     * The one collector that swaps services for their generated proxies, carrying an
+     * interceptor per enabled feature; null when no feature asks for proxies.
+     */
+    private static function proxyCollector(Container $c, bool $debug): ?ProxyCollector
+    {
+        $interceptors = [];
+        if (static::hasAttribute(EnableAsync::class)) {
+            $interceptors[] = new AsyncInterceptor();
+        }
+        if (static::hasAttribute(EnableCaching::class)) {
+            $interceptors[] = new CacheInterceptor();
+        }
+
+        if ($interceptors === []) {
+            return null;
+        }
+
+        return new ProxyCollector(
+            $c,
+            ProxyFactory::forKernel($interceptors, $debug),
+            $debug ? null : Kernel::$pathStorageVolatile . '/proxy.php',
+        );
+    }
+
+    /**
+     * Declares the caches and checks every cache attribute against them.
+     *
+     * The check runs here, at boot, rather than at the first call: a misspelt cache
+     * name would otherwise fail one request in production — or, on an eviction, fail
+     * nothing at all and keep serving stale data. It runs with `CACHE_ENABLED=false`
+     * too, so switching the cache back on cannot uncover a typo.
+     *
+     * Tables are not created here — {@see serve()} does that in the master, right
+     * before the fork — so a console command does not reserve their memory.
+     *
+     * @param list<\ReflectionClass> $configurers
+     * @param array<class-string, class-string> $proxied Classes swapped for proxies.
+     * @throws CacheException
+     */
+    private static function applyCaching(Container $c, array $configurers, array $proxied): void
+    {
+        $definitions = Caches::declare($c, $configurers, array_keys($proxied));
+
+        $enabled = (bool) env('CACHE_ENABLED', true);
+        CacheManager::configure($definitions, $enabled);
+
+        if (!$enabled) {
+            LoggerFactory::getLogger(static::class)->warning(
+                'Caching is disabled by CACHE_ENABLED=false: every cached method runs its body. '
+                . 'Remove the variable and restart to turn it back on.'
+            );
+        }
     }
 
     /**
@@ -368,6 +436,7 @@ abstract class WinterApplication
             EnableDaemon::class,
             EnableActuator::class,
             EnableAsync::class,
+            EnableCaching::class,
             Import::class,
         ];
 
@@ -656,6 +725,10 @@ abstract class WinterApplication
 
         $logger = LoggerFactory::getLogger(static::class);
 
+        // Here, in the process every worker and companion is forked from: a table
+        // created after the fork would exist in one process only.
+        CacheManager::allocate();
+
         if ($http !== null) {
             static::serveHttp($companions, $watch, $args, $logger);
         }
@@ -924,8 +997,9 @@ abstract class WinterApplication
 
     /**
      * Builds the component manifest from the App class's #[Enable*] attributes.
-     * Each attribute maps to one {@see Component}; {@see EnableAsync} is not here —
-     * it is a boot toggle read in {@see bootstrap()}, not a component.
+     * Each attribute maps to one {@see Component}; {@see EnableAsync} and
+     * {@see EnableCaching} are not here — they are boot toggles read in
+     * {@see bootstrap()}, not components.
      *
      * @return list<Component>
      */
@@ -1006,8 +1080,37 @@ abstract class WinterApplication
         if (static::hasAttribute(EnableAsync::class)) {
             $rows[] = ['async', 'enabled'];
         }
+        if (static::hasAttribute(EnableCaching::class)) {
+            $rows[] = ['cache', self::cacheSummary()];
+        }
 
         return $rows;
+    }
+
+    /**
+     * The declared caches and the shared memory their tables took, for the banner —
+     * the one place a table's up-front reservation is visible before it matters.
+     */
+    private static function cacheSummary(): string
+    {
+        if (!CacheManager::isEnabled()) {
+            return 'disabled by CACHE_ENABLED';
+        }
+
+        $tables = 0;
+        $memory = 0;
+        $bytes = 0;
+        foreach (CacheManager::definitions() as $definition) {
+            $bytes += $definition->reservedBytes();
+            $definition->type === CacheType::Table ? $tables++ : $memory++;
+        }
+
+        return sprintf(
+            '%d table · %d memory%s',
+            $tables,
+            $memory,
+            $tables > 0 ? sprintf(' · ≈%d MB shared', (int) ceil($bytes / 1048576)) : '',
+        );
     }
 
     private static function componentLabel(ComponentKind $kind): string

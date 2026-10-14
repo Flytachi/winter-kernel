@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Concurrent\Async;
 
+use Flytachi\Winter\Kernel\Core\Proxy\ProxyException;
+
 /**
  * Thrown when an {@see Async} method cannot be proxied.
  *
@@ -11,15 +13,6 @@ namespace Flytachi\Winter\Kernel\Concurrent\Async;
  * unsupported return type, a default value that cannot be reproduced — and
  * therefore raised while proxies are generated, never while serving traffic.
  */
-class AsyncException extends \LogicException
+class AsyncException extends ProxyException
 {
-    /**
-     * @param string $subject Fully qualified method or class the problem belongs to.
-     * @param string $problem What is wrong, phrased as a statement.
-     * @param string $remedy What the developer should do instead.
-     */
-    public static function of(string $subject, string $problem, string $remedy): self
-    {
-        return new self(sprintf('%s: %s. %s', $subject, $problem, $remedy));
-    }
 }

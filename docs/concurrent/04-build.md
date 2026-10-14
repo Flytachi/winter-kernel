@@ -1,8 +1,9 @@
 # Build and caches
 
-`#[Async]` needs generated code — a proxy class per annotated service. This page
-covers where that code comes from, where it lives, and what the build step is
-actually for.
+`#[Async]` needs generated code — a proxy class per annotated service. The cache
+attributes (`#[Cacheable]`, `#[CachePut]`, `#[CacheEvict]`) work the same way and
+share it: a class gets one proxy whatever features it uses. This page covers where
+that code comes from, where it lives, and what the build step is actually for.
 
 Nothing here applies if you only use `Executors` directly: the primitive
 generates nothing and caches nothing.
@@ -16,8 +17,11 @@ volatile storage next to the DI cache:
 
 | Path | Contents |
 |---|---|
-| `<volatile>/async.php` | list of classes that carry `#[Async]` |
-| `<volatile>/async/*.php` | the generated proxy classes |
+| `<volatile>/proxy.php` | list of proxied classes, and the features it was built for |
+| `<volatile>/proxy/*.php` | the generated proxy classes |
+
+Releases before the shared generator used `async.php` and `async/`; `call di build`
+and `call di clean` remove them.
 
 `<volatile>` is `Kernel::$pathStorageVolatile`. By default that is
 `sys_get_temp_dir() . '/flytachi.winter.volatile.<project>'`; with
@@ -36,12 +40,14 @@ corrupt a file.
 ```
 DEBUG=true    → no caches at all; a proxy is regenerated whenever its source file is newer
 DEBUG=false   → generated on first boot if missing, then only checked for existence
+                (and for the features it was built for — enabling #[EnableCaching]
+                regenerates an async-only proxy)
 ```
 
 Editing a service and reloading is enough in development. In production nothing
 is regenerated after the first boot unless the files are gone.
 
-The class list is cached separately for a reason: **finding** `#[Async]` methods
+The class list is cached separately for a reason: **finding** intercepted methods
 means reflecting every method of every class in the project, which costs about
 three times as much as the whole DI collector and would be paid on every boot —
 under FPM, on every request. With the list cached, later boots do a plain array
@@ -65,8 +71,9 @@ One scan produces everything the container needs:
 $ php call di build
 
  |  di cache ........................ [BUILT (247 classes)]
- |  async proxies ................... [BUILT (6 classes, 14 methods)]
- |  async bypass .................... [NONE]
+ |  caches .......................... [DECLARED (products, stock)]
+ |  proxies ......................... [BUILT (6 classes, 14 methods)]
+ |  proxy bypass .................... [NONE]
 ```
 
 The DI class list and the proxies come from the same filesystem walk on purpose
@@ -74,12 +81,14 @@ The DI class list and the proxies come from the same filesystem walk on purpose
 
 **The build is primarily a contract check.** With volatile storage in `/tmp` the
 generated files do not survive into a container image anyway, so the value is
-not a warmer start: it is that an invalid `#[Async]` method fails here rather
-than on the first request in production.
+not a warmer start: it is that an invalid `#[Async]` or cache method — or a cache
+attribute naming a cache no `CacheConfigurer` declares — fails here rather than on
+the first request in production. The `caches` line appears only with
+`#[EnableCaching]`.
 
 ```
  |  di cache ........................ [BUILT (248 classes)]
- |  async proxies ................... [FAILED]
+ |  proxies ......................... [FAILED]
  | [!] App\Services\BrokenService: the class is final and cannot be extended.
       Drop "final" from the class, or move the #[Async] method to a non-final service.
 ```
@@ -93,11 +102,11 @@ output says so honestly rather than pretending the whole step failed.
 
 ## `call di clean`
 
-Removes `di.php`, `async.php` and every generated proxy:
+Removes `di.php`, `proxy.php` and every generated proxy:
 
 ```
  |  di cache ........................ [CLEANED]
- |  async proxies ................... [CLEANED (6 files)]
+ |  proxies ......................... [CLEANED (6 files)]
 ```
 
 Worth running after deleting or renaming a service — a stale proxy for a class
@@ -106,23 +115,24 @@ before regenerating.
 
 ---
 
-## `call di async`
+## `call di proxies`
 
-Lists every `#[Async]` method in the project and whether its proxy exists:
+Lists every intercepted method in the project, the feature it belongs to, and
+whether its proxy exists (`call di async` is kept as an alias):
 
 ```
-$ php call di async
+$ php call di proxies
 
- | [ Async methods (2 classes) ]
+ | [ Proxied methods (2 classes) ]
  |  App\Services\NotificationService ......... [BUILT]
- |      track() → void
- |      send() → Flytachi\Winter\Kernel\Concurrent\Future
- |  App\Services\ReportService ............... [PENDING]
- |      build() → Flytachi\Winter\Kernel\Concurrent\Future
+ |      track() → void  [async]
+ |      send() → Flytachi\Winter\Kernel\Concurrent\Future  [async]
+ |  App\Services\ProductService .............. [PENDING]
+ |      find() → ?App\Entity\Product  [cache]
 ```
 
 `PENDING` means the proxy has not been generated yet; it will be on first use.
-Accepts an optional case-insensitive FQCN filter: `call di async Notification`.
+Accepts an optional case-insensitive FQCN filter: `call di proxies Notification`.
 
 ---
 
@@ -132,11 +142,11 @@ Every build scans your sources for services built with `new` instead of resolved
 from the container — the trap described in [03-async.md](03-async.md#the-new-trap):
 
 ```
- |  async bypass .................... [2 FOUND]
+ |  proxy bypass .................... [2 FOUND]
  | [!] main/Http/AuthController.php:16 — new App\Services\NotificationService()
-      bypasses the proxy and runs synchronously; inject it instead
- | [!] main/Http/OrderController.php:13 — new App\Services\ReportService()
-      bypasses the proxy and runs synchronously; inject it instead
+      bypasses the proxy, so its attributes do nothing; inject it instead
+ | [!] main/Http/OrderController.php:13 — new App\Services\ProductService()
+      bypasses the proxy, so its attributes do nothing; inject it instead
 ```
 
 It resolves names through each file's `namespace` and `use` block, so imported,
@@ -161,10 +171,10 @@ summarised.
 
 ```bash
 php call mapping build     # route cache
-php call di build          # DI cache + async proxies + contract check
+php call di build          # DI cache + proxies + contract check
 ```
 
-Run both in CI so a broken `#[Async]` contract fails the pipeline. If your
+Run both in CI so a broken `#[Async]` or cache contract fails the pipeline. If your
 volatile storage is project-local (`isTmpVolatile: false`) the artefacts also
 ship with the image and the first request skips generation entirely.
 

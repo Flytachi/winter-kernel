@@ -2,9 +2,8 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\Kernel\Concurrent\Async\Proxy;
+namespace Flytachi\Winter\Kernel\Core\Proxy;
 
-use Flytachi\Winter\Kernel\Concurrent\Async\AsyncException;
 use Flytachi\Winter\Kernel\Kernel;
 
 /**
@@ -16,7 +15,9 @@ use Flytachi\Winter\Kernel\Kernel;
  *
  * In development the proxy is regenerated whenever the original file is newer,
  * so editing a service and reloading is enough. Otherwise a missing file is
- * generated on first use and only checked for existence afterwards.
+ * generated on first use and only checked for existence afterwards — and for the
+ * set of interceptors it was built with, so switching `#[EnableCaching]` on does
+ * not leave an old async-only proxy in place.
  *
  * They live next to the DI cache, in volatile storage, because they are the same
  * kind of artefact: derived from one scan, disposable, rebuilt on demand. That
@@ -29,14 +30,19 @@ use Flytachi\Winter\Kernel\Kernel;
 final class ProxyFactory
 {
     /** Sub-directory of the volatile store holding generated proxies. */
-    public const string DIRECTORY = 'async';
+    public const string DIRECTORY = 'proxy';
+
+    /** How much of a file is read to find its interceptor marker. */
+    private const int HEADER_BYTES = 1024;
 
     /**
      * @param string $directory Absolute path proxies are written to.
+     * @param list<MethodInterceptor> $interceptors Enabled features.
      * @param bool $refresh Whether a proxy older than its source must be rebuilt.
      */
     public function __construct(
         private readonly string $directory,
+        private readonly array $interceptors,
         private readonly bool $refresh = false
     ) {
     }
@@ -44,12 +50,14 @@ final class ProxyFactory
     /**
      * Builds a factory rooted in the kernel volatile store, beside the DI cache.
      *
+     * @param list<MethodInterceptor> $interceptors Enabled features.
      * @param bool|null $refresh Overrides the DEBUG-driven default.
      */
-    public static function forKernel(?bool $refresh = null): self
+    public static function forKernel(array $interceptors, ?bool $refresh = null): self
     {
         return new self(
             Kernel::$pathStorageVolatile . DIRECTORY_SEPARATOR . self::DIRECTORY,
+            $interceptors,
             $refresh ?? (bool) env('DEBUG', false)
         );
     }
@@ -63,11 +71,21 @@ final class ProxyFactory
     }
 
     /**
+     * Returns the enabled features.
+     *
+     * @return list<MethodInterceptor>
+     */
+    public function interceptors(): array
+    {
+        return $this->interceptors;
+    }
+
+    /**
      * Returns the loaded proxy class for the given class, generating it if needed.
      *
      * @param \ReflectionClass $class Class to proxy.
      * @return class-string Name of the generated subclass.
-     * @throws AsyncException If generation or loading fails.
+     * @throws ProxyException If generation or loading fails.
      */
     public function proxyFor(\ReflectionClass $class): string
     {
@@ -80,7 +98,7 @@ final class ProxyFactory
         // boot has already loaded the proxies, and skipping the write here
         // would leave the build reporting success over an empty directory.
         if ($this->isStale($file, $class)) {
-            $this->write($file, ProxyGenerator::generate($class));
+            $this->write($file, ProxyGenerator::generate($class, $this->interceptors));
         }
 
         if (class_exists($proxyClass, false)) {
@@ -90,7 +108,7 @@ final class ProxyFactory
         require_once $file;
 
         if (!class_exists($proxyClass, false)) {
-            throw AsyncException::of(
+            throw ProxyException::of(
                 $class->getName(),
                 'the generated proxy ' . $proxyClass . ' was not declared by ' . $file,
                 'Delete the file and let it be regenerated.'
@@ -114,7 +132,7 @@ final class ProxyFactory
 
         foreach ($classes as $class) {
             $file = $this->fileFor($class->getName());
-            $this->write($file, ProxyGenerator::generate($class));
+            $this->write($file, ProxyGenerator::generate($class, $this->interceptors));
             $written[$class->getName()] = $file;
         }
 
@@ -166,6 +184,12 @@ final class ProxyFactory
             return true;
         }
 
+        $header = (string) @file_get_contents($file, false, null, 0, self::HEADER_BYTES);
+        $marker = ProxyGenerator::MARKER . ProxyGenerator::fingerprint($this->interceptors) . "\n";
+        if (!str_contains($header, $marker)) {
+            return true;
+        }
+
         if (!$this->refresh) {
             return false;
         }
@@ -190,7 +214,7 @@ final class ProxyFactory
         if (file_put_contents($temporary, $source, LOCK_EX) === false || !rename($temporary, $file)) {
             @unlink($temporary);
 
-            throw AsyncException::of(
+            throw ProxyException::of(
                 $file,
                 'the generated proxy could not be written',
                 'Check that ' . $this->directory . ' exists and is writable.'

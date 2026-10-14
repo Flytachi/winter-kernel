@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\Kernel\Concurrent\Async\Proxy;
+namespace Flytachi\Winter\Kernel\Core\Proxy;
 
 /**
- * Finds places where an {@see \Flytachi\Winter\Kernel\Concurrent\Async\Async} service is
- * built with `new` instead of being taken from the container.
+ * Finds places where a proxied service is built with `new` instead of being taken
+ * from the container.
  *
- * Such a call gets the original class, not the proxy, so the annotated method
- * runs synchronously — correct result, wrong timing, and nothing in the code
- * says so: same return type, same `instanceof`, no error. The mistake is
- * invisible at runtime, which is exactly why it is worth reporting at build
- * time.
+ * Such a call gets the original class, not the proxy, so nothing the attributes
+ * promise happens: an `#[Async]` method runs synchronously, a `#[Cacheable]` one
+ * computes on every call. The result is still correct, and nothing in the code
+ * says so — same return type, same `instanceof`, no error. The mistake is
+ * invisible at runtime, which is exactly why it is worth reporting at build time.
  *
  * ---
  * ### Deliberately a warning
@@ -20,7 +20,7 @@ namespace Flytachi\Winter\Kernel\Concurrent\Async\Proxy;
  * The scan reads source text, so it is a heuristic and cannot be exhaustive:
  *
  * - dynamic construction (`new $class`, factories, names from config) is invisible;
- * - a `new` inside tests is usually intentional — synchronous is what a test wants;
+ * - a `new` inside tests is usually intentional — a test wants the plain class;
  * - `new self()` / `new static()` inside the service itself are not bypasses.
  *
  * It reports what it can prove textually and never fails a build.
@@ -32,17 +32,17 @@ final class BypassScanner
     /** Names that never denote another class. */
     private const array SELF_REFERENCES = ['self', 'static', 'parent'];
 
-    /** @var array<string, true> Fully qualified names of classes carrying #[Async]. */
+    /** @var array<string, true> Fully qualified names of the proxied classes. */
     private array $targets;
 
     /**
-     * @param iterable<class-string> $asyncClasses Classes whose instances must come from the container.
+     * @param iterable<class-string> $classes Classes whose instances must come from the container.
      * @param list<string> $exclude Absolute directory prefixes to skip.
      */
-    public function __construct(iterable $asyncClasses, private readonly array $exclude = [])
+    public function __construct(iterable $classes, private readonly array $exclude = [])
     {
         $this->targets = [];
-        foreach ($asyncClasses as $class) {
+        foreach ($classes as $class) {
             $this->targets[ltrim($class, '\\')] = true;
         }
     }

@@ -9,6 +9,7 @@ namespace PHPSTORM_META {
         'WINTER_KEY',
         'TIME_ZONE',
         'DEBUG',
+        'CACHE_ENABLED',
         'LOG_LEVEL',
         'LOG_FORMAT',
         'LOG_OUTPUT',

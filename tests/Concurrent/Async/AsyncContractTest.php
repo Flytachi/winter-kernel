@@ -6,10 +6,11 @@ namespace Flytachi\Winter\Kernel\Tests\Concurrent\Async;
 
 use Flytachi\Winter\Kernel\Concurrent\Async\Async;
 use Flytachi\Winter\Kernel\Concurrent\Async\AsyncException;
-use Flytachi\Winter\Kernel\Concurrent\Async\Proxy\ProxyFactory;
+use Flytachi\Winter\Kernel\Concurrent\Async\AsyncInterceptor;
 use Flytachi\Winter\Kernel\Concurrent\CompletableFuture;
 use Flytachi\Winter\Kernel\Concurrent\Future;
 use Flytachi\Winter\Kernel\Core\KernelConfig;
+use Flytachi\Winter\Kernel\Core\Proxy\ProxyFactory;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -53,7 +54,7 @@ final class AsyncContractTest extends TestCase
 
     private function proxyFor(string $class): string
     {
-        return ProxyFactory::forKernel(true)->proxyFor(new ReflectionClass($class));
+        return ProxyFactory::forKernel([new AsyncInterceptor()], true)->proxyFor(new ReflectionClass($class));
     }
 
     // ── Accepted ───────────────────────────────────────────────────────────────

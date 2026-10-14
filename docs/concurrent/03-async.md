@@ -48,7 +48,7 @@ At scan time the kernel finds every class with `#[Async]` methods and generates
 a **subclass** that overrides them:
 
 ```php
-final class NotificationService__Async extends NotificationService implements ProxyInterface
+final class NotificationService__Proxy extends NotificationService implements ProxyInterface
 {
     public static function proxyTarget(): string
     {
@@ -67,7 +67,9 @@ generated class — while the DI lifetime is preserved: a `#[Singleton]` service
 stays a singleton, only its concrete class changes.
 
 Generated files live in volatile storage and are produced on first boot or by
-`call di build`; see [04-build.md](04-build.md).
+`call di build`; see [04-build.md](04-build.md). A class that also uses the cache
+attributes (`#[Cacheable]`, `#[CachePut]`, `#[CacheEvict]`) gets the same single
+proxy, with both kinds of methods in it; one method cannot carry both.
 
 Because the proxy **extends** the original, `instanceof NotificationService`
 still holds and every type hint keeps working.
