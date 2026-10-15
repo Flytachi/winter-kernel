@@ -15,8 +15,10 @@ namespace Flytachi\Winter\Kernel\Cache;
  *     public function configureCaches(Caches $caches): void
  *     {
  *         $caches
- *             ->table('products', rows: 10_000, valueSize: 4 * 1024, ttl: 300)
- *             ->memory('stock', maxItems: 1_000, ttl: 30);
+ *             ->table('settings')
+ *             ->memory('stock', maxItems: 1_000, ttl: 30)
+ *             ->file('api-token', ttl: 3300)
+ *             ->redis('products', MainRedisConfig::class, ttl: 300);
  *     }
  * }
  * ```

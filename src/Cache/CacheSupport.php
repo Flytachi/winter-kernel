@@ -19,11 +19,28 @@ final class CacheSupport
     /** Separates the arguments of a key built from all of them. */
     private const string ARGUMENT_SEPARATOR = "\x1F";
 
+    /** What `serialize(false)` produces — the one hit that legitimately restores to false. */
+    private const string SERIALIZED_FALSE = 'b:0;';
+
     /** Stands for null in a key, so it differs from an empty string. */
     private const string NULL_PART = "\0";
 
+    /**
+     * How long a store that failed is left alone, in seconds.
+     *
+     * An unreachable Redis does not fail fast: each attempt waits out the connect
+     * timeout — about three seconds with winter-redis defaults. Without a pause every
+     * cached call would pay that twice, once to read and once to write, and an
+     * application that "does not fall over" would in fact stand still. After a failure
+     * the worker runs without the store for this long, then tries again.
+     */
+    private const int RETRY_AFTER = 5;
+
     /** @var array<string, \Swoole\Coroutine\Channel> Computations in flight in this worker, for `sync`. */
     private static array $inflight = [];
+
+    /** @var array<string, array{int, \Throwable}> Stores left alone in this worker: until when, and why. */
+    private static array $down = [];
 
     private function __construct()
     {
@@ -51,10 +68,9 @@ final class CacheSupport
             return $body();
         }
 
-        $store = CacheManager::store($cache);
-        $hit = $store->get($key);
-        if ($hit !== null) {
-            return unserialize($hit);
+        [$found, $value] = self::read($cache, $key);
+        if ($found) {
+            return $value;
         }
 
         if (!$sync || !self::inCoroutine()) {
@@ -68,9 +84,9 @@ final class CacheSupport
         while (isset(self::$inflight[$id])) {
             self::$inflight[$id]->pop();
 
-            $hit = $store->get($key);
-            if ($hit !== null) {
-                return unserialize($hit);
+            [$found, $value] = self::read($cache, $key);
+            if ($found) {
+                return $value;
             }
         }
 
@@ -101,7 +117,7 @@ final class CacheSupport
         }
 
         if ($value === null && !$cacheNull) {
-            CacheManager::store($cache)->evict($key);
+            self::evict($cache, $key);
 
             return;
         }
@@ -121,8 +137,23 @@ final class CacheSupport
             return;
         }
 
-        $store = CacheManager::store($cache);
-        $key === null ? $store->clear() : $store->evict($key);
+        // A removal that cannot happen still has to be reported: the entry stays stale.
+        $error = self::downError($cache);
+        if ($error !== null) {
+            CacheManager::failed($cache, 'evict', $error);
+
+            return;
+        }
+
+        try {
+            $store = CacheManager::store($cache);
+            $key === null ? $store->clear() : $store->evict($key);
+        } catch (CacheException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            self::markDown($cache, $e);
+            CacheManager::failed($cache, 'evict', $e);
+        }
     }
 
     /**
@@ -161,11 +192,12 @@ final class CacheSupport
     }
 
     /**
-     * Forgets the computations in flight (for tests).
+     * Forgets the computations in flight and the stores left alone (for tests).
      */
     public static function reset(): void
     {
         self::$inflight = [];
+        self::$down = [];
     }
 
     /**
@@ -187,13 +219,91 @@ final class CacheSupport
         try {
             $serialized = serialize($value);
         } catch (\Throwable $e) {
-            CacheManager::store($cache)->evict($key);
+            self::evict($cache, $key);
             CacheManager::skipped($cache, 'the value cannot be serialized (' . $e->getMessage() . ')');
 
             return;
         }
 
-        CacheManager::store($cache)->put($key, $serialized, $ttl);
+        if (self::downError($cache) !== null) {
+            return;
+        }
+
+        try {
+            CacheManager::store($cache)->put($key, $serialized, $ttl);
+        } catch (CacheException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            self::markDown($cache, $e);
+            CacheManager::failed($cache, 'write', $e);
+        }
+    }
+
+    /**
+     * Looks the key up and restores its value.
+     *
+     * An unreachable store counts as a miss. So does a value that no longer restores:
+     * an entry written before a deploy may hold an object whose class has since
+     * changed or gone, and handing it out would fail the caller later and further
+     * away. Such an entry is removed and computed again. Only the top level is
+     * checked — an incomplete object nested in an array passes; a new `version` on
+     * the cache is the answer to that.
+     *
+     * @return array{bool, mixed} Whether a usable value was found, and the value.
+     */
+    private static function read(string $cache, string $key): array
+    {
+        if (self::downError($cache) !== null) {
+            return [false, null];
+        }
+
+        try {
+            $hit = CacheManager::store($cache)->get($key);
+        } catch (CacheException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            self::markDown($cache, $e);
+            CacheManager::failed($cache, 'read', $e);
+
+            return [false, null];
+        }
+
+        if ($hit === null) {
+            return [false, null];
+        }
+
+        $value = @unserialize($hit);
+        if (($value === false && $hit !== self::SERIALIZED_FALSE) || $value instanceof \__PHP_Incomplete_Class) {
+            self::evict($cache, $key);
+
+            return [false, null];
+        }
+
+        return [true, $value];
+    }
+
+    private static function markDown(string $cache, \Throwable $error): void
+    {
+        self::$down[$cache] = [time() + self::RETRY_AFTER, $error];
+    }
+
+    /**
+     * The failure a store is being left alone for, or null when it may be tried.
+     */
+    private static function downError(string $cache): ?\Throwable
+    {
+        if (!isset(self::$down[$cache])) {
+            return null;
+        }
+
+        [$until, $error] = self::$down[$cache];
+        if (time() >= $until) {
+            unset(self::$down[$cache]);
+
+            return null;
+        }
+
+        return $error;
     }
 
     private static function inCoroutine(): bool

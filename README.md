@@ -141,6 +141,7 @@ none and boot fails rather than starting an application that does nothing.
 | `#[EnableProcess(Foo::class)]` | a managed worker beside the server | [Processes](https://winterframe.net/docs/processes) |
 | `#[EnableDaemon(Bar::class)]` | a supervised fleet of workers | [Daemons](https://winterframe.net/docs/daemons) |
 | `#[EnableAsync]` | proxies `#[Async]` methods so they run off the request | [Async](https://winterframe.net/docs/async) |
+| `#[EnableCaching]` | caches method results declared with `#[Cacheable]` | [Caching](https://winterframe.net/docs/caching) |
 | `#[EnableActuator]` | `/actuator` — health, pools, metrics, mappings | [Actuator](https://winterframe.net/docs/actuator) |
 | `#[Import('vendor/pkg', '/prefix')]` | mounts a package under a URL prefix | [Packages](https://winterframe.net/docs/packages) |
 
@@ -151,6 +152,7 @@ override:
 #[Configuration] / #[Bean]   // DI factories            → dependency-injection
 WebConfigurer                // host, port, CORS, static → web-configuration
 LoggingConfigurer            // extra log channels       → logging
+CacheConfigurer              // caches for #[Cacheable]  → caching
 ```
 
 Full list and the rules: [Components](https://winterframe.net/docs/components).
@@ -228,20 +230,22 @@ The tree below mirrors the site's own navigation.
 6. [mapping](https://winterframe.net/docs/cmd-mapping) — the route table
 7. [storage](https://winterframe.net/docs/cmd-storage) — service directories
 8. [script](https://winterframe.net/docs/cmd-script) — your own commands
-9. [di](https://winterframe.net/docs/cmd-di) — scanner cache and `#[Async]` proxies
+9. [di](https://winterframe.net/docs/cmd-di) — scanner cache and the `#[Async]` and cache proxies
 10. [process](https://winterframe.net/docs/cmd-process) — start, stop, status
 11. [daemon](https://winterframe.net/docs/cmd-daemon) — fleets of workers
 12. [schedule](https://winterframe.net/docs/cmd-schedule) — the scheduler
+13. [cache](https://winterframe.net/docs/cmd-cache) — inspect and clear method caches
 
 **8. Advanced** — the parts you reach for later
 
 1. [Logging](https://winterframe.net/docs/logging)
 2. [Localization](https://winterframe.net/docs/localization)
 3. [Asynchronous calls](https://winterframe.net/docs/async)
-4. [Actuator / Health](https://winterframe.net/docs/actuator)
-5. [File storage](https://winterframe.net/docs/file-storage)
-6. [Packages](https://winterframe.net/docs/packages)
-7. [Runtimes (FPM and Swoole)](https://winterframe.net/docs/runtime)
+4. [Method caching](https://winterframe.net/docs/caching)
+5. [Actuator / Health](https://winterframe.net/docs/actuator)
+6. [File storage](https://winterframe.net/docs/file-storage)
+7. [Packages](https://winterframe.net/docs/packages)
+8. [Runtimes (FPM and Swoole)](https://winterframe.net/docs/runtime)
 
 ---
 

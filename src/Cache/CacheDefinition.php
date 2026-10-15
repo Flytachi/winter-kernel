@@ -24,12 +24,18 @@ final readonly class CacheDefinition
      */
     public const float CONFLICT_PROPORTION = 0.5;
 
+    /** Directory under `storage/cache` the file caches live in. */
+    public const string FILE_ROOT = 'winter-cache';
+
     /**
      * @param string $name Name the attributes refer to.
      * @param CacheType $type Where entries are kept.
      * @param int $size Rows of a table, or entries of a memory cache.
      * @param int|null $valueSize Largest serialized value a table row holds, in bytes; null for memory.
      * @param int|null $ttl Default lifetime in seconds; null or 0 never expires.
+     * @param string|null $redisConfig Redis endpoint class of a redis cache.
+     * @param string|null $prefix Key prefix of a redis cache; null derives it from the name.
+     * @param string|null $version Generation of a persistent cache; changing it leaves older entries behind.
      */
     public function __construct(
         public string $name,
@@ -37,11 +43,32 @@ final readonly class CacheDefinition
         public int $size,
         public ?int $valueSize,
         public ?int $ttl,
+        public ?string $redisConfig = null,
+        public ?string $prefix = null,
+        public ?string $version = null,
     ) {
     }
 
     /**
-     * Shared memory a table reserves when it is created, in bytes; 0 for memory.
+     * The prefix every key of a redis cache carries: `cache:<name>:`, or the declared
+     * one, followed by the version when there is one.
+     */
+    public function redisPrefix(): string
+    {
+        return ($this->prefix ?? 'cache:' . $this->name . ':')
+            . ($this->version === null ? '' : $this->version . ':');
+    }
+
+    /**
+     * The folder of a file cache under `storage/cache`, the version as a subfolder.
+     */
+    public function fileFolder(): string
+    {
+        return self::FILE_ROOT . '/' . $this->name . ($this->version === null ? '' : '/' . $this->version);
+    }
+
+    /**
+     * Shared memory a table reserves when it is created, in bytes; 0 for every other store.
      *
      * An estimate: `Swoole\Table::$memorySize` reports less than the process
      * actually takes, so it is computed from the rounding Swoole applies — rows up

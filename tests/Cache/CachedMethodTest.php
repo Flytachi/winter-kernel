@@ -16,7 +16,6 @@ use Flytachi\Winter\Kernel\Core\Proxy\ProxyFactory;
 use Flytachi\Winter\Logger\LoggerFactory;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\AbstractLogger;
 use ReflectionClass;
 
 /**
@@ -25,6 +24,8 @@ use ReflectionClass;
  */
 final class CachedMethodTest extends TestCase
 {
+    use UsesTemporaryStorage;
+
     private static string $directory = '';
 
     public static function setUpBeforeClass(): void
@@ -38,16 +39,22 @@ final class CachedMethodTest extends TestCase
         @rmdir(self::$directory);
     }
 
+    protected function setUp(): void
+    {
+        $this->useTemporaryStorage();
+    }
+
     protected function tearDown(): void
     {
         CacheManager::reset();
         CacheSupport::reset();
+        $this->dropTemporaryStorage();
     }
 
     /** @return array<string, array{CacheType}> */
     public static function stores(): array
     {
-        $stores = ['memory' => [CacheType::Memory]];
+        $stores = ['memory' => [CacheType::Memory], 'file' => [CacheType::File]];
         if (extension_loaded('swoole')) {
             $stores['table'] = [CacheType::Table];
         }
@@ -286,6 +293,29 @@ final class CachedMethodTest extends TestCase
         $synced = [];
         $unsynced = [];
 
+        // PHPUnit's error handler cannot find the test case on a coroutine's stack and
+        // throws even for a warning silenced with `@` — such as the miss a file cache
+        // reads on purpose. Silenced warnings are dropped here; anything else still
+        // reaches PHPUnit.
+        set_error_handler(static fn(int $level): bool => (error_reporting() & $level) === 0);
+        try {
+            self::runConcurrently($service, $synced, $unsynced);
+        } finally {
+            restore_error_handler();
+        }
+
+        self::assertSame(array_fill(0, 10, 7), $synced);
+        self::assertSame(array_fill(0, 10, 7), $unsynced);
+        self::assertSame(1, $service->slowCalls, 'ten concurrent misses, one computation');
+        self::assertSame(10, $service->unsyncedCalls, 'without sync every miss computes');
+    }
+
+    /**
+     * @param list<int> $synced
+     * @param list<int> $unsynced
+     */
+    private static function runConcurrently(CountingService $service, array &$synced, array &$unsynced): void
+    {
         \Swoole\Coroutine\run(static function () use ($service, &$synced, &$unsynced): void {
             $group = new \Swoole\Coroutine\WaitGroup();
             for ($i = 0; $i < 10; $i++) {
@@ -301,11 +331,6 @@ final class CachedMethodTest extends TestCase
             }
             $group->wait();
         });
-
-        self::assertSame(array_fill(0, 10, 7), $synced);
-        self::assertSame(array_fill(0, 10, 7), $unsynced);
-        self::assertSame(1, $service->slowCalls, 'ten concurrent misses, one computation');
-        self::assertSame(10, $service->unsyncedCalls, 'without sync every miss computes');
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
@@ -440,16 +465,5 @@ class CountingService
         \Swoole\Coroutine::sleep(0.05);
 
         return $id;
-    }
-}
-
-final class CacheWarningRecorder extends AbstractLogger
-{
-    /** @var list<array{level: string, message: string}> */
-    public array $records = [];
-
-    public function log($level, \Stringable|string $message, array $context = []): void
-    {
-        $this->records[] = ['level' => (string) $level, 'message' => (string) $message];
     }
 }

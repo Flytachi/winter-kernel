@@ -5,15 +5,19 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Cache;
 
 use Flytachi\Winter\DI\Container;
+use Flytachi\Winter\Kernel\Core\Dep;
+use Flytachi\Winter\Kernel\Core\DepSupport;
 
 /**
  * The caches an application declares, handed to every {@see CacheConfigurer}.
  *
  * ```
  * $caches
- *     ->table('api-token')                                              // a few values, ~1.6 MB
+ *     ->table('settings')                                               // a few values, ~1.6 MB
  *     ->table('products', rows: 10_000, valueSize: 4 * 1024, ttl: 300) // ~99 MB
- *     ->memory('stock', maxItems: 1_000, ttl: 30);
+ *     ->memory('stock', maxItems: 1_000, ttl: 30)                      // per worker
+ *     ->file('api-token', ttl: 3300)                                   // survives restarts, seen by `call`
+ *     ->redis('sessions', MainRedisConfig::class, ttl: 600);           // shared by every instance
  * ```
  *
  * Every name the cache attributes use has to be declared here; an undeclared one
@@ -29,6 +33,9 @@ final class Caches
 
     /** Largest value of a table declared without sizes, in bytes. */
     public const int DEFAULT_VALUE_SIZE = 16 * 1024;
+
+    /** The winter-redis endpoint contract, by name: the package is optional. */
+    private const string REDIS_CONFIG = 'Flytachi\\Winter\\Redis\\Config\\Common\\RedisConfigInterface';
 
     /** @var array<string, CacheDefinition> */
     private array $definitions = [];
@@ -96,6 +103,104 @@ final class Caches
         }
 
         return $this->add(new CacheDefinition($name, CacheType::Memory, $maxItems, null, $this->ttl($name, $ttl)));
+    }
+
+    /**
+     * Declares a cache kept in files under `storage/cache/winter-cache/<name>`.
+     *
+     * Every worker and every process reads the same files, the entries survive a
+     * restart, and a console command can list and clear them (`call cache`). A read
+     * is a file read — about 17 µs, slower than a table but far from a database
+     * query; a write about 150 µs. Under FPM, where a process lives for one request,
+     * this is the store that still caches.
+     *
+     * Entries outlive a deploy. If the cached classes changed shape, give the cache a
+     * new `version`: older entries are then simply not found.
+     *
+     * @param string $name Name the attributes refer to; also the folder name.
+     * @param int|null $ttl Default lifetime in seconds; null or 0 never expires.
+     * @param string|null $version Generation of the entries; a subfolder when set.
+     * @return $this
+     * @throws CacheException If the name is already declared.
+     * @throws \InvalidArgumentException If the name or version cannot be a folder.
+     */
+    public function file(string $name, ?int $ttl = null, ?string $version = null): self
+    {
+        $this->assertPathSafe($name, 'name', $name);
+        if ($version !== null) {
+            $this->assertPathSafe($name, 'version', $version);
+        }
+
+        return $this->add(new CacheDefinition(
+            $name,
+            CacheType::File,
+            0,
+            null,
+            $this->ttl($name, $ttl),
+            version: $version,
+        ));
+    }
+
+    /**
+     * Declares a cache kept in Redis, through the pooled connection of winter-redis.
+     *
+     * The one store shared by every instance of the application: an eviction on one
+     * server is seen by all of them. Keys carry the prefix `cache:<name>:` (or the
+     * given one) and the version after it. If Redis cannot be reached, a read counts
+     * as a miss and a write is skipped — the method still answers, and the log says
+     * the cache is down.
+     *
+     * @param string $name Name the attributes refer to.
+     * @param string $config Endpoint class implementing the winter-redis RedisConfigInterface.
+     * @param int|null $ttl Default lifetime in seconds; null or 0 never expires.
+     * @param string|null $prefix Key prefix; null uses `cache:<name>:`.
+     * @param string|null $version Generation of the entries; part of the prefix when set.
+     * @return $this
+     * @throws CacheException If the name is already declared or winter-redis is missing.
+     * @throws \InvalidArgumentException If the endpoint class is not a Redis config.
+     */
+    public function redis(
+        string $name,
+        string $config,
+        ?int $ttl = null,
+        ?string $prefix = null,
+        ?string $version = null,
+    ): self {
+        if (!DepSupport::has(Dep::Redis)) {
+            throw CacheException::of(
+                "Cache '{$name}'",
+                'a redis cache needs ' . Dep::Redis->package() . ', which is not installed',
+                'Add it with: composer require ' . Dep::Redis->package()
+            );
+        }
+
+        if (!is_subclass_of($config, self::REDIS_CONFIG)) {
+            throw new \InvalidArgumentException(
+                "Cache '{$name}': {$config} is not a Redis endpoint; pass a class implementing "
+                . self::REDIS_CONFIG . '.'
+            );
+        }
+
+        if ($prefix === '') {
+            throw new \InvalidArgumentException(
+                "Cache '{$name}': an empty prefix would let clearing the cache empty the whole database."
+            );
+        }
+
+        if ($version !== null) {
+            $this->assertPathSafe($name, 'version', $version);
+        }
+
+        return $this->add(new CacheDefinition(
+            $name,
+            CacheType::Redis,
+            0,
+            null,
+            $this->ttl($name, $ttl),
+            redisConfig: $config,
+            prefix: $prefix,
+            version: $version,
+        ));
     }
 
     /**
@@ -171,6 +276,19 @@ final class Caches
         $this->definitions[$definition->name] = $definition;
 
         return $this;
+    }
+
+    /**
+     * A name or version that becomes a folder or a key segment may not escape it.
+     */
+    private function assertPathSafe(string $name, string $what, string $value): void
+    {
+        if (preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]*$/', $value) !== 1) {
+            throw new \InvalidArgumentException(
+                "Cache '{$name}': the {$what} '{$value}' may hold only letters, digits, '.', '_' and '-', "
+                . 'and must start with a letter or a digit.'
+            );
+        }
     }
 
     private function ttl(string $name, ?int $ttl): ?int

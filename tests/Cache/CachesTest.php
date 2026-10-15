@@ -93,6 +93,48 @@ final class CachesTest extends TestCase
         $declare(new Caches());
     }
 
+    public function test_file_and_redis_caches_are_declared(): void
+    {
+        $definitions = new Caches()
+            ->file('tokens', ttl: 3300)
+            ->file('settings', version: 'v2')
+            ->redis('products', TestRedisEndpoint::class, ttl: 300)
+            ->redis('shared', TestRedisEndpoint::class, prefix: 'shop:', version: '2026-10')
+            ->definitions();
+
+        self::assertSame(CacheType::File, $definitions['tokens']->type);
+        self::assertSame(3300, $definitions['tokens']->ttl);
+        self::assertNull($definitions['tokens']->version, 'the version is optional');
+        self::assertSame('winter-cache/settings/v2', $definitions['settings']->fileFolder());
+        self::assertSame(TestRedisEndpoint::class, $definitions['products']->redisConfig);
+        self::assertSame('cache:products:', $definitions['products']->redisPrefix());
+        self::assertSame('shop:2026-10:', $definitions['shared']->redisPrefix());
+    }
+
+    /** @return array<string, array{callable(Caches): mixed, string}> */
+    public static function invalidPersistent(): array
+    {
+        return [
+            'folder escape in name'   => [static fn(Caches $c) => $c->file('../etc'), "name '../etc'"],
+            'slash in version'        => [static fn(Caches $c) => $c->file('t', version: 'a/b'), "version 'a/b'"],
+            'not a redis endpoint'    => [static fn(Caches $c) => $c->redis('r', \stdClass::class), 'not a Redis endpoint'],
+            'empty prefix'            => [
+                static fn(Caches $c) => $c->redis('r', TestRedisEndpoint::class, prefix: ''),
+                'empty the whole database',
+            ],
+        ];
+    }
+
+    /** @param callable(Caches): mixed $declare */
+    #[\PHPUnit\Framework\Attributes\DataProvider('invalidPersistent')]
+    public function test_an_unsafe_file_or_redis_declaration_is_refused(callable $declare, string $needle): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage($needle);
+
+        $declare(new Caches());
+    }
+
     public function test_declare_runs_the_configurers(): void
     {
         $definitions = Caches::declare(

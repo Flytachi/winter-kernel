@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Cache;
 
 use Flytachi\Winter\Kernel\Cache\Store\CacheStore;
+use Flytachi\Winter\Kernel\Cache\Store\FileStore;
 use Flytachi\Winter\Kernel\Cache\Store\MemoryStore;
+use Flytachi\Winter\Kernel\Cache\Store\RedisCacheStore;
 use Flytachi\Winter\Kernel\Cache\Store\TableStore;
 use Flytachi\Winter\Logger\LoggerFactory;
+use Psr\Log\LogLevel;
 
 /**
  * The caches of the running application, by name.
@@ -34,7 +37,7 @@ final class CacheManager
 
     private static bool $enabled = false;
 
-    /** @var array<string, array{at: int, skipped: int}> Last warning per cache and writes skipped since. */
+    /** @var array<string, array{at: int, skipped: int}> Last report per cache and kind, and occurrences since. */
     private static array $skips = [];
 
     private function __construct()
@@ -85,8 +88,9 @@ final class CacheManager
      * Creates every store now.
      *
      * Call in the process the workers fork from, before they do: a table created
-     * later would exist in one process only. Does nothing while caching is off,
-     * so `CACHE_ENABLED=false` reserves no memory.
+     * later would exist in one process only. File caches drop their expired entries
+     * here, once per start. Does nothing while caching is off, so
+     * `CACHE_ENABLED=false` reserves no memory.
      */
     public static function allocate(): void
     {
@@ -95,7 +99,10 @@ final class CacheManager
         }
 
         foreach (array_keys(self::$definitions) as $name) {
-            self::store($name);
+            $store = self::store($name);
+            if ($store instanceof FileStore) {
+                $store->sweep();
+            }
         }
     }
 
@@ -119,20 +126,23 @@ final class CacheManager
         return self::$stores[$name] = match ($definition->type) {
             CacheType::Table => new TableStore($definition),
             CacheType::Memory => new MemoryStore($definition),
+            CacheType::File => new FileStore($definition),
+            CacheType::Redis => new RedisCacheStore($definition),
         };
     }
 
     /**
      * Removes one entry from a cache — for the cases an attribute cannot express.
      *
+     * Like `#[CacheEvict]`, it does not throw when the store is unreachable; the
+     * failure is logged as an error.
+     *
      * @param string $cache Cache name.
      * @param string $key Entry key, as the attribute's key template produces it.
      */
     public static function evict(string $cache, string $key): void
     {
-        if (self::$enabled) {
-            self::store($cache)->evict($key);
-        }
+        CacheSupport::evict($cache, $key);
     }
 
     /**
@@ -142,9 +152,7 @@ final class CacheManager
      */
     public static function clear(string $cache): void
     {
-        if (self::$enabled) {
-            self::store($cache)->clear();
-        }
+        CacheSupport::evict($cache, null);
     }
 
     /**
@@ -169,25 +177,75 @@ final class CacheManager
      */
     public static function skipped(string $cache, string $reason): void
     {
+        self::report($cache, 'skipped', LogLevel::WARNING, static fn(int $count): string => sprintf(
+            "Cache '%s' skipped a write: %s. The value was returned uncached; "
+            . '%d write(s) skipped since the last warning.',
+            $cache,
+            $reason,
+            $count,
+        ));
+    }
+
+    /**
+     * Records a store that could not be reached, at most once a minute per cache and
+     * operation.
+     *
+     * A read or a write that fails costs a database query and nothing else, so it is
+     * a warning. A failed eviction leaves stale data behind — users keep seeing the
+     * old value — so it is an error.
+     *
+     * @internal Called by the proxies.
+     * @param string $cache Cache name.
+     * @param string $operation What failed: `read`, `write` or `evict`.
+     * @param \Throwable $error What the store threw.
+     */
+    public static function failed(string $cache, string $operation, \Throwable $error): void
+    {
+        $evict = $operation === 'evict';
+        self::report(
+            $cache,
+            'failed-' . $operation,
+            $evict ? LogLevel::ERROR : LogLevel::WARNING,
+            static fn(int $count): string => sprintf(
+                "Cache '%s' is unavailable: %s failed (%s: %s). %s; %d failure(s) since the last report.",
+                $cache,
+                $operation,
+                $error::class,
+                $error->getMessage(),
+                $evict
+                    ? 'The entry may still be served stale until it expires'
+                    : 'Calls run without the cache',
+                $count,
+            ),
+        );
+    }
+
+    /**
+     * Logs one kind of trouble with a cache at most once per interval, with the number
+     * of occurrences since the last time.
+     *
+     * @param callable(int): string $message Builds the message from the count.
+     */
+    private static function report(string $cache, string $kind, string $level, callable $message): void
+    {
         $now = time();
-        $state = self::$skips[$cache] ?? ['at' => 0, 'skipped' => 0];
+        $id = $cache . '|' . $kind;
+        $state = self::$skips[$id] ?? ['at' => 0, 'skipped' => 0];
         $state['skipped']++;
 
         if ($now - $state['at'] >= self::WARNING_INTERVAL) {
             try {
-                LoggerFactory::getLogger(self::class)->warning(sprintf(
-                    "Cache '%s' skipped a write: %s. The value was returned uncached; "
-                    . '%d write(s) skipped since the last warning.',
-                    $cache,
-                    $reason,
-                    $state['skipped'],
-                ), ['cache' => $cache, 'skipped' => $state['skipped']]);
+                LoggerFactory::getLogger(self::class)->log(
+                    $level,
+                    $message($state['skipped']),
+                    ['cache' => $cache, 'count' => $state['skipped']],
+                );
             } catch (\Throwable) {
                 // A warning that cannot be logged must not fail the call it is about.
             }
             $state = ['at' => $now, 'skipped' => 0];
         }
 
-        self::$skips[$cache] = $state;
+        self::$skips[$id] = $state;
     }
 }

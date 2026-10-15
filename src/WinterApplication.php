@@ -178,7 +178,11 @@ abstract class WinterApplication
      */
     final public static function executor(array $argv): never
     {
-        static::bootstrap(ApplicationArguments::parse($argv));
+        try {
+            static::bootstrap(ApplicationArguments::parse($argv));
+        } catch (\Throwable $e) {
+            static::bootFailed($e);
+        }
 
         exit(AdaptiveRunner::adaptive()->execute(
             getopt('', ['namespace::', 'name::', 'tag::', 'debug', 'detach', 'shmkey::'])
@@ -226,11 +230,16 @@ abstract class WinterApplication
     {
         self::$bootStartedAt = hrtime(true);
         $args = ApplicationArguments::parse($argv);
-        static::bootstrap($args);
 
-        if ($args->command() === 'run') {
-            $watch = $args->sub() === 'dev' || $args->flag('w') || $args->has('watcher');
-            static::serve($watch, $args);
+        try {
+            static::bootstrap($args);
+
+            if ($args->command() === 'run') {
+                $watch = $args->sub() === 'dev' || $args->flag('w') || $args->has('watcher');
+                static::serve($watch, $args);
+            }
+        } catch (\Throwable $e) {
+            static::bootFailed($e);
         }
 
         // Bare `call` and every other verb are console commands (bare → Help); they
@@ -241,6 +250,55 @@ abstract class WinterApplication
     }
 
     // ── Boot ──────────────────────────────────────────────────────────────────
+
+    /**
+     * Reports a start that did not happen, then exits with 1.
+     *
+     * With `DEBUG=false` the kernel turns PHP's own error output off, so an exception
+     * escaping the boot used to end the process with code 255 and not a single line
+     * anywhere: a container restarting in a loop with an empty `docker logs`. The
+     * checks that run at boot — undeclared caches, an `#[Async]` method that cannot be
+     * proxied, an empty manifest — exist precisely to fail loudly before traffic
+     * arrives, and they failed silently in the one place that matters.
+     *
+     * So one line always goes to stderr, whatever `DEBUG` and the log settings say:
+     * the logger is off unless `LOG_LEVEL` is set, and the failure may come before it
+     * is configured at all. The line carries the exception's own message — a statement
+     * about the application's configuration, not about any request — and the stack
+     * trace only with `DEBUG=true`. The same failure is logged as critical when a
+     * logger is available.
+     */
+    private static function bootFailed(\Throwable $e): never
+    {
+        $stderr = defined('STDERR') ? STDERR : fopen('php://stderr', 'w');
+        if ($stderr !== false) {
+            fwrite($stderr, sprintf(
+                "winter: boot failed — %s: %s\n%s",
+                $e::class,
+                $e->getMessage(),
+                env('DEBUG', false) ? $e->getTraceAsString() . "\n" : '',
+            ));
+        }
+
+        // An exception built by a static factory (`CacheException::of()`) reports the
+        // factory as its origin; the frame that called it is the one worth reading.
+        $origin = $e->getFile() . ':' . $e->getLine();
+        $frame = $e->getTrace()[0] ?? [];
+        if (isset($frame['class'], $frame['file']) && is_a($frame['class'], \Throwable::class, true)) {
+            $origin = $frame['file'] . ':' . ($frame['line'] ?? 0);
+        }
+
+        try {
+            LoggerFactory::getLogger(static::class)->critical('Boot failed: ' . $e->getMessage(), [
+                'exception' => $e::class,
+                'file'      => $origin,
+            ]);
+        } catch (\Throwable) {
+            // The logger may not exist yet; the stderr line above already said it.
+        }
+
+        exit(1);
+    }
 
     /**
      * The boot sequence: kernel init → one project scan (DI + beans + configurers)
@@ -1097,20 +1155,24 @@ abstract class WinterApplication
             return 'disabled by CACHE_ENABLED';
         }
 
-        $tables = 0;
-        $memory = 0;
+        $counts = [];
         $bytes = 0;
         foreach (CacheManager::definitions() as $definition) {
             $bytes += $definition->reservedBytes();
-            $definition->type === CacheType::Table ? $tables++ : $memory++;
+            $counts[$definition->type->value] = ($counts[$definition->type->value] ?? 0) + 1;
         }
 
-        return sprintf(
-            '%d table · %d memory%s',
-            $tables,
-            $memory,
-            $tables > 0 ? sprintf(' · ≈%d MB shared', (int) ceil($bytes / 1048576)) : '',
-        );
+        $parts = [];
+        foreach (CacheType::cases() as $type) {
+            if (isset($counts[$type->value])) {
+                $parts[] = $counts[$type->value] . ' ' . $type->value;
+            }
+        }
+        if ($bytes > 0) {
+            $parts[] = sprintf('≈%d MB shared', (int) ceil($bytes / 1048576));
+        }
+
+        return $parts === [] ? 'no caches declared' : implode(' · ', $parts);
     }
 
     private static function componentLabel(ComponentKind $kind): string
