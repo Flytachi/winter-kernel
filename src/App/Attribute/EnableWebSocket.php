@@ -20,6 +20,8 @@ use Flytachi\Winter\Kernel\WebSocket\WebSocket;
  *
  * One port serves one process: two sockets cannot share a port, not even with
  * different paths — routing by path is the proxy's job.
+ *
+ * @link https://winterframe.net/docs/websockets Running a WebSocket server with the application
  */
 #[\Attribute(\Attribute::TARGET_CLASS | \Attribute::IS_REPEATABLE)]
 final class EnableWebSocket

@@ -32,6 +32,7 @@ final class Complete extends Cmd
             '-q:Request — validated request object',
             '-P:Process — long-running process',
             '-N:Daemon — background daemon',
+            '-W:WebSocket — WebSocket server process',
             '-D:DbConfig — database configuration',
             '-R:RedisConfig — Redis configuration',
             '-n:Cmd — custom console command',
@@ -207,7 +208,11 @@ final class Complete extends Cmd
             } elseif ($act === 'status') {
                 $base = ['-v:detailed status (resources + workers)'];
             } elseif ($act === 'start') {
-                $base = ['-d:start detached in background'];
+                $base = [
+                    '-d:start detached in background',
+                    '--port:port to listen on (a WebSocket requires it)',
+                    '--host:interface to bind (a WebSocket; default 0.0.0.0)',
+                ];
             } else {
                 $base = [];
             }

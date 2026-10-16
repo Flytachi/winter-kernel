@@ -79,6 +79,9 @@ final class Make extends Cmd
             if (in_array('N', $this->args['flags'])) {
                 $this->createDaemon($templateName);
             }
+            if (in_array('W', $this->args['flags'])) {
+                $this->createWebSocket($templateName);
+            }
             if (in_array('D', $this->args['flags'])) {
                 $this->createConfig($templateName);
             }
@@ -260,6 +263,21 @@ final class Make extends Cmd
         $this->createFile($info['className'], $info['path'], $code, 'daemon');
     }
 
+    private function createWebSocket(string $name): void
+    {
+        $info = $this->getInfo($name, 'Socket', 'WebSocketTemplate');
+        $this->smartInfo(
+            $info,
+            'Sockets',
+            'Processes',
+            'Process'
+        );
+        $code = file_get_contents($info['template']);
+        $code = str_replace("__namespace__", $info['namespace'], $code);
+        $code = str_replace("__className__", $info['className'], $code);
+        $this->createFile($info['className'], $info['path'], $code, 'websocket');
+    }
+
     private function createConfig(string $name): void
     {
         // The generated class imports the database package; without it the file
@@ -366,6 +384,7 @@ final class Make extends Cmd
                 'Dto'                 => 'Dto',
                 'Request'             => 'Requests',
                 'Daemon', 'Process'   => 'Processes',
+                'Socket'              => 'Sockets',
                 'Cmd'                 => 'Commands',
                 default               => 'Utils',
             };
@@ -496,6 +515,7 @@ final class Make extends Cmd
         self::printLabel("Flags — Process", $cl);
         self::printBadge('-P', 'Process          (suffix: Process)', $cl, 36);
         self::printBadge('-N', 'Daemon           (suffix: Daemon)', $cl, 36);
+        self::printBadge('-W', 'WebSocket        (suffix: Socket)', $cl, 36);
         self::printLabel("Flags — Process", $cl);
 
         self::printLabel("Flags — Config / Console", $cl);

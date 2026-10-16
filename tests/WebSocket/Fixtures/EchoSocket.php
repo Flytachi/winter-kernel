@@ -21,6 +21,7 @@ final class EchoSocket extends WebSocket
     protected ?string $path = '/ws';
     protected int $maxFrameSize = 65_536;
     protected float $grace = 5.0;
+    protected ?array $allowedOrigins = ['https://app.example'];
 
     protected function onStart(): void
     {

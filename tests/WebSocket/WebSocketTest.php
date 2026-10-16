@@ -248,6 +248,28 @@ final class WebSocketTest extends TestCase
         self::assertStringContainsString('close big 1009 message too big', $this->waitLog('close big'));
     }
 
+    public function test_a_foreign_origin_is_refused_before_on_handshake(): void
+    {
+        $this->startServer();
+
+        $statuses = self::co(function (): array {
+            $out = [];
+            foreach (['own' => 'HTTPS://App.Example/', 'foreign' => 'https://evil.example'] as $case => $origin) {
+                $c = $this->client();
+                $c->setHeaders(['Origin' => $origin]);
+                // token=boom would make onHandshake answer 500 — 403 proves it never ran.
+                $c->upgrade($case === 'own' ? '/ws?token=ok' : '/ws?token=boom');
+                $out[$case] = $c->statusCode;
+                $c->close();
+            }
+            return $out;
+        });
+
+        self::assertSame(101, $statuses['own'], 'an allowed origin, compared case-insensitively');
+        self::assertSame(403, $statuses['foreign'], 'an origin not in $allowedOrigins');
+        self::assertStringNotContainsString('error handshake', (string) @file_get_contents($this->log));
+    }
+
     // ── Limits and heartbeat ──────────────────────────────────────────────────
 
     public function test_max_connections_answers_503_to_one_more(): void

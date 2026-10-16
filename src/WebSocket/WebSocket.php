@@ -49,6 +49,8 @@ use Swoole\Http\Response;
  * A port is always required; one port serves one process.
  *
  * Needs ext-swoole.
+ *
+ * @link https://winterframe.net/docs/websockets Hooks, connections, heartbeat, stop and proxy setup
  */
 abstract class WebSocket extends Process
 {
@@ -70,6 +72,19 @@ abstract class WebSocket extends Process
 
     /** Largest message accepted, in bytes; a bigger one closes the connection with 1009. */
     protected int $maxFrameSize = 1_048_576;
+
+    /**
+     * Browser origins allowed to connect, e.g. `['https://example.com']`; any other
+     * `Origin` is answered 403 before {@see onHandshake()}. A request without the header
+     * (not a browser) passes. Null turns the check off.
+     *
+     * Set it whenever the socket trusts the browser's cookies: browsers do not apply
+     * the same-origin policy to WebSockets, so without it any site the user visits can
+     * open the socket on their behalf (cross-site WebSocket hijacking).
+     *
+     * @var list<string>|null
+     */
+    protected ?array $allowedOrigins = null;
 
     /** Messages queued for one client before {@see Connection::send()} starts dropping them. */
     private const int SEND_QUEUE = 1024;
@@ -341,6 +356,10 @@ abstract class WebSocket extends Process
             $this->refuse($response, 426);
             return;
         }
+        if (!$this->originAllowed($request->header['origin'] ?? null)) {
+            $this->refuse($response, 403);
+            return;
+        }
         if ($this->maxConnections > 0 && count($this->live) >= $this->maxConnections) {
             $this->refuse($response, 503);
             return;
@@ -531,6 +550,21 @@ abstract class WebSocket extends Process
             'status' => $status,
             'remote' => $conn->remoteAddress,
         ]);
+    }
+
+    /** Whether the handshake's `Origin` passes {@see $allowedOrigins}; compared case-insensitively. */
+    private function originAllowed(?string $origin): bool
+    {
+        if ($this->allowedOrigins === null || $origin === null) {
+            return true;
+        }
+        $origin = strtolower(rtrim($origin, '/'));
+        foreach ($this->allowedOrigins as $allowed) {
+            if (strtolower(rtrim($allowed, '/')) === $origin) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function refuse(Response $response, int $status): void

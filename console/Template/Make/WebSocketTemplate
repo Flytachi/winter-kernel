@@ -1,0 +1,50 @@
+<?php
+
+namespace __namespace__;
+
+use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
+use Flytachi\Winter\Kernel\WebSocket\Connection;
+use Flytachi\Winter\Kernel\WebSocket\Frame;
+use Flytachi\Winter\Kernel\WebSocket\WebSocket;
+
+/**
+ * Declare on the application with a port:
+ *   #[EnableWebSocket(__className__::class, port: 8001)]
+ * or run on its own: call process <dot.Name> start --port=8001
+ */
+final class __className__ extends WebSocket
+{
+    /** The one accepted path, e.g. '/ws'; null accepts any (usual behind a proxy). */
+    protected ?string $path = null;
+
+    /**
+     * Browser origins allowed to connect; others get 403. Set it when the socket
+     * trusts session cookies, or any site can connect on the user's behalf.
+     */
+    // protected ?array $allowedOrigins = ['https://example.com'];
+
+    /**
+     * Before the upgrade: decide whether the client gets in. Nothing can be sent yet;
+     * store what later hooks need with $conn->set(). False answers 403.
+     */
+    protected function onHandshake(Connection $conn, HttpRequest $request): bool
+    {
+        return true;
+    }
+
+    /** The connection is open — sending works from here on. */
+    protected function onOpen(Connection $conn): void
+    {
+    }
+
+    /** A message from the client. */
+    protected function onMessage(Connection $conn, Frame $frame): void
+    {
+        $conn->send($frame->data);
+    }
+
+    /** The connection ended, whoever closed it. */
+    protected function onClose(Connection $conn, int $code, string $reason): void
+    {
+    }
+}

@@ -28,6 +28,8 @@ use Flytachi\Winter\Kernel\WebSocket\Internal\Wire;
  *     $conn->send('echo from ' . $conn->get('user')->name . ': ' . $frame->data);
  * }
  * ```
+ *
+ * @link https://winterframe.net/docs/websockets#send Sending, closing and per-connection state
  */
 final class Connection
 {
