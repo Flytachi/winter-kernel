@@ -8,10 +8,13 @@ use Flytachi\Winter\Kernel\App\Attribute\EnableAsync;
 use Flytachi\Winter\Kernel\App\Attribute\EnableDaemon;
 use Flytachi\Winter\Kernel\App\Attribute\EnableProcess;
 use Flytachi\Winter\Kernel\App\Attribute\EnableScheduler;
+use Flytachi\Winter\Kernel\App\ApplicationConfigException;
 use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
+use Flytachi\Winter\Kernel\App\Attribute\EnableWebSocket;
 use Flytachi\Winter\Kernel\App\Component;
 use Flytachi\Winter\Kernel\App\ComponentKind;
 use Flytachi\Winter\Kernel\Schedule\Stereotype\Scheduler;
+use Flytachi\Winter\Kernel\Tests\WebSocket\Fixtures\EchoSocket;
 use Flytachi\Winter\Kernel\WinterApplication;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -90,6 +93,61 @@ final class EnableManifestTest extends TestCase
         self::assertTrue($this->hasAttr(FullApp::class, EnableAsync::class));
         self::assertFalse($this->hasAttr(HeadlessApp::class, EnableAsync::class));
     }
+
+    public function test_websocket_carries_its_port_and_host(): void
+    {
+        $c = $this->resolve(SocketApp::class);
+
+        self::assertCount(3, $c);
+        self::assertSame(ComponentKind::WebSocket, $c[1]->kind);
+        self::assertSame(EchoSocket::class, $c[1]->class);
+        self::assertSame(8001, $c[1]->port);
+        self::assertSame('0.0.0.0', $c[1]->host);
+        self::assertSame(8002, $c[2]->port);
+        self::assertSame('127.0.0.1', $c[2]->host);
+    }
+
+    public function test_websocket_under_enable_process_is_refused(): void
+    {
+        $this->expectException(ApplicationConfigException::class);
+        $this->expectExceptionMessage('#[EnableWebSocket(EchoSocket::class, port: …)]');
+        $this->resolve(SocketAsProcessApp::class);
+    }
+
+    public function test_enable_websocket_with_a_plain_class_is_refused(): void
+    {
+        $this->expectException(ApplicationConfigException::class);
+        $this->expectExceptionMessage('expects a WebSocket class');
+        $this->resolve(NotASocketApp::class);
+    }
+
+    public function test_a_websocket_on_the_web_port_is_refused(): void
+    {
+        $this->expectException(ApplicationConfigException::class);
+        $this->expectExceptionMessage('Port 8000 is used twice: by the web server and by EchoSocket');
+        new ReflectionMethod(WinterApplication::class, 'assertFreePorts')
+            ->invoke(null, [Component::websocket(EchoSocket::class, 8000)], 8000);
+    }
+
+    public function test_two_websockets_on_one_port_are_refused(): void
+    {
+        $this->expectException(ApplicationConfigException::class);
+        $this->expectExceptionMessage('Port 8001 is used twice');
+        new ReflectionMethod(WinterApplication::class, 'assertFreePorts')->invoke(null, [
+            Component::websocket(EchoSocket::class, 8001),
+            Component::websocket(EchoSocket::class, 8001),
+        ], null);
+    }
+
+    public function test_distinct_ports_pass(): void
+    {
+        new ReflectionMethod(WinterApplication::class, 'assertFreePorts')->invoke(null, [
+            Component::process('Main\\Proc\\A'),
+            Component::websocket(EchoSocket::class, 8001),
+            Component::websocket(EchoSocket::class, 8002),
+        ], 8000);
+        $this->addToAssertionCount(1);
+    }
 }
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -115,5 +173,22 @@ final class HeadlessApp extends WinterApplication
 }
 
 final class EmptyApp extends WinterApplication
+{
+}
+
+#[EnableWeb]
+#[EnableWebSocket(EchoSocket::class, port: 8001)]
+#[EnableWebSocket(EchoSocket::class, port: 8002, host: '127.0.0.1')]
+final class SocketApp extends WinterApplication
+{
+}
+
+#[EnableProcess(EchoSocket::class)]
+final class SocketAsProcessApp extends WinterApplication
+{
+}
+
+#[EnableWebSocket(\stdClass::class, port: 8001)]
+final class NotASocketApp extends WinterApplication
 {
 }

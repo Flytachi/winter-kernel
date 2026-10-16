@@ -60,6 +60,9 @@
         <testsuite name="Cache">
             <directory>tests/Cache</directory>
         </testsuite>
+        <testsuite name="WebSocket">
+            <directory>tests/WebSocket</directory>
+        </testsuite>
     </testsuites>
 
     <groups>

@@ -28,10 +28,12 @@ final class ProcessRunnable implements Runnable
      * Runs in the detached child: starts the process in the foreground, so the
      * child becomes the process. {@inheritDoc}
      *
-     * @param array<string, scalar> $args Launch arguments (unused — a process is self-configuring).
+     * @param array<string, string|bool> $args Launch arguments from
+     *   {@see \Flytachi\Winter\Kernel\Process\Stereotype\Process::dispatchWith()} —
+     *   empty for a plain process, a port and host for a WebSocket.
      */
     public function run(array $args): void
     {
-        ($this->class)::start();
+        ($this->class)::startWith($args);
     }
 }

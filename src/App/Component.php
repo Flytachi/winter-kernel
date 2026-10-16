@@ -30,17 +30,15 @@ use Flytachi\Winter\Kernel\Schedule\Stereotype\Scheduler;
 final readonly class Component
 {
     /**
-     * @param class-string|null $class Process/Daemon/Scheduler class, or a WebSocket handler
-     * @param string $host Bind host (Http)
-     * @param int $port Bind port (Http)
-     * @param string|null $path Mount path (WebSocket)
+     * @param class-string|null $class Process/Daemon/Scheduler/WebSocket class
+     * @param string $host Bind host (Http, WebSocket)
+     * @param int $port Bind port (Http, WebSocket)
      */
     private function __construct(
         public ComponentKind $kind,
         public ?string $class = null,
         public string $host = '0.0.0.0',
         public int $port = 8000,
-        public ?string $path = null,
     ) {
     }
 
@@ -51,13 +49,14 @@ final readonly class Component
     }
 
     /**
-     * A WebSocket endpoint mounted on the server at $path.
+     * A {@see \Flytachi\Winter\Kernel\WebSocket\WebSocket} server — a process of its own
+     * listening on its own port.
      *
-     * @param class-string $handler
+     * @param class-string<\Flytachi\Winter\Kernel\WebSocket\WebSocket> $class
      */
-    public static function websocket(string $path, string $handler): self
+    public static function websocket(string $class, int $port, string $host = '0.0.0.0'): self
     {
-        return new self(ComponentKind::WebSocket, class: $handler, path: $path);
+        return new self(ComponentKind::WebSocket, class: $class, host: $host, port: $port);
     }
 
     /**

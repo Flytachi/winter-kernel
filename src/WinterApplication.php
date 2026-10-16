@@ -19,6 +19,7 @@ use Flytachi\Winter\Kernel\App\Attribute\EnableDaemon;
 use Flytachi\Winter\Kernel\App\Attribute\EnableProcess;
 use Flytachi\Winter\Kernel\App\Attribute\EnableScheduler;
 use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
+use Flytachi\Winter\Kernel\App\Attribute\EnableWebSocket;
 use Flytachi\Winter\Kernel\App\Attribute\Import;
 use Flytachi\Winter\Kernel\App\Banner;
 use Flytachi\Winter\Kernel\App\Component;
@@ -58,6 +59,7 @@ use Flytachi\Winter\Kernel\Process\ForkReset;
 use Flytachi\Winter\Kernel\Route\DevWatcher;
 use Flytachi\Winter\Kernel\Route\RequestWatchdog;
 use Flytachi\Winter\Kernel\Route\Router;
+use Flytachi\Winter\Kernel\WebSocket\WebSocket;
 use Flytachi\Winter\Logger\Context\CoroutineContext;
 use Flytachi\Winter\Logger\Context\ProcessContext;
 use Flytachi\Winter\Logger\LoggerFactory;
@@ -756,29 +758,21 @@ abstract class WinterApplication
         if ($components === []) {
             throw new ApplicationConfigException(
                 'No components declared on ' . static::class . ': add at least one '
-                . '#[EnableWeb], #[EnableProcess], #[EnableDaemon] or #[EnableScheduler].'
+                . '#[EnableWeb], #[EnableWebSocket], #[EnableProcess], #[EnableDaemon] or #[EnableScheduler].'
             );
         }
 
         /** @var ?Component $http */
         $http = null;
-        /** @var list<Component> $sockets */
-        $sockets = [];
         /** @var list<Component> $companions */
         $companions = [];
 
         foreach ($components as $component) {
-            match ($component->kind) {
-                ComponentKind::Http      => $http = $component,
-                ComponentKind::WebSocket => $sockets[] = $component,
-                default                  => $companions[] = $component,
-            };
-        }
-
-        if ($sockets !== []) {
-            throw new ApplicationConfigException(
-                'WebSocket components are not hosted by the bundled runtime yet.'
-            );
+            if ($component->kind === ComponentKind::Http) {
+                $http = $component;
+                continue;
+            }
+            $companions[] = $component;
         }
 
         $logger = LoggerFactory::getLogger(static::class);
@@ -841,18 +835,18 @@ abstract class WinterApplication
         );
 
         $names = [];
+        self::assertFreePorts($companions, $port);
         foreach ($companions as $companion) {
-            $class = (string) $companion->class;
-            $names[] = self::shortName($class);
+            $names[] = self::shortName((string) $companion->class);
             $server->addProcess(new \Swoole\Process(
-                static function () use ($class): void {
-                    // Reset runtime hooks (flags = 0) so the child is a clean plain
-                    // process, exactly like a standalone launch.
-                    \Swoole\Runtime::enableCoroutine(0);
+                static function () use ($companion): void {
+                    // Runtime hooks stay as inherited (SWOOLE_HOOK_ALL): a standalone
+                    // launch runs its body under them too, and without them every
+                    // blocking call in spawn() would stall the whole process.
                     LoggerFactory::setContextStorage(new ProcessContext());
                     LoggerFactory::setDefaultChannel('sys');
                     ForkReset::runAll();
-                    $class::start();
+                    self::launch($companion);
                 }
             ));
         }
@@ -965,7 +959,7 @@ abstract class WinterApplication
         if ($companions === []) {
             throw new ApplicationConfigException(
                 'Nothing to run: no components declared. Add at least one '
-                . '#[EnableWeb]/#[EnableProcess]/#[EnableDaemon]/#[EnableScheduler].'
+                . '#[EnableWeb]/#[EnableWebSocket]/#[EnableProcess]/#[EnableDaemon]/#[EnableScheduler].'
             );
         }
 
@@ -973,10 +967,11 @@ abstract class WinterApplication
             Banner::print(static::bannerRows($companions, null, null), self::elapsedMs());
         }
 
+        self::assertFreePorts($companions, null);
+
         if (count($companions) === 1) {
-            $class = (string) $companions[0]->class;
-            $logger->info('Application up (headless): ' . self::shortName($class));
-            $class::start();
+            $logger->info('Application up (headless): ' . self::shortName((string) $companions[0]->class));
+            self::launch($companions[0]);
             exit(0);
         }
 
@@ -997,13 +992,12 @@ abstract class WinterApplication
                 throw new \RuntimeException("WinterApplication: fork failed for {$class}.");
             }
             if ($pid === 0) {
-                if (extension_loaded('swoole')) {
-                    \Swoole\Runtime::enableCoroutine(0);
-                }
+                // Runtime hooks are left untouched, as in a standalone launch: an
+                // explicit flags = 0 here would switch them off inside the body.
                 LoggerFactory::setContextStorage(new ProcessContext());
                 LoggerFactory::setDefaultChannel('sys');
                 ForkReset::runAll();
-                $class::start();
+                self::launch($companion);
                 exit(0);
             }
             $children[$pid] = self::shortName($class);
@@ -1074,7 +1068,25 @@ abstract class WinterApplication
             $components[] = Component::scheduler($scheduler[0]->newInstance()->class);
         }
         foreach ($ref->getAttributes(EnableProcess::class) as $attribute) {
-            $components[] = Component::process($attribute->newInstance()->class);
+            $class = $attribute->newInstance()->class;
+            if (is_subclass_of($class, WebSocket::class)) {
+                throw new ApplicationConfigException(sprintf(
+                    '%s is a WebSocket and needs a port: use #[EnableWebSocket(%s::class, port: …)] '
+                    . 'instead of #[EnableProcess].',
+                    $class,
+                    self::shortName($class),
+                ));
+            }
+            $components[] = Component::process($class);
+        }
+        foreach ($ref->getAttributes(EnableWebSocket::class) as $attribute) {
+            $socket = $attribute->newInstance();
+            if (!is_subclass_of($socket->class, WebSocket::class)) {
+                throw new ApplicationConfigException(
+                    "#[EnableWebSocket] expects a WebSocket class, got {$socket->class}."
+                );
+            }
+            $components[] = Component::websocket($socket->class, $socket->port, $socket->host);
         }
         foreach ($ref->getAttributes(EnableDaemon::class) as $attribute) {
             $components[] = Component::daemon($attribute->newInstance()->class);
@@ -1131,9 +1143,16 @@ abstract class WinterApplication
             $rows[] = ['web', sprintf('http://%s:%d', $host, $port)];
         }
         foreach ($companions as $companion) {
-            $rows[] = $companion->kind === ComponentKind::Scheduler
-                ? ['scheduler', 'enabled']
-                : [self::componentLabel($companion->kind), self::shortName((string) $companion->class)];
+            $rows[] = match ($companion->kind) {
+                ComponentKind::Scheduler => ['scheduler', 'enabled'],
+                ComponentKind::WebSocket => ['websocket', sprintf(
+                    '%s ws://%s:%d',
+                    self::shortName((string) $companion->class),
+                    $companion->host,
+                    $companion->port,
+                )],
+                default => [self::componentLabel($companion->kind), self::shortName((string) $companion->class)],
+            };
         }
         if (static::hasAttribute(EnableAsync::class)) {
             $rows[] = ['async', 'enabled'];
@@ -1173,6 +1192,48 @@ abstract class WinterApplication
         }
 
         return $parts === [] ? 'no caches declared' : implode(' · ', $parts);
+    }
+
+    /**
+     * Starts a background component in the current (child) process. A WebSocket gets
+     * the port and host its #[EnableWebSocket] declared; everything else starts bare.
+     */
+    private static function launch(Component $component): void
+    {
+        $class = (string) $component->class;
+        if ($component->kind === ComponentKind::WebSocket) {
+            $class::start($component->port, $component->host);
+            return;
+        }
+        $class::start();
+    }
+
+    /**
+     * Refuses two components on one port before anything binds: one of them would die
+     * on "address in use" after the server is up, and be restarted forever.
+     *
+     * @param list<Component> $companions
+     * @param int|null $httpPort The web tier's port, when there is one.
+     */
+    private static function assertFreePorts(array $companions, ?int $httpPort): void
+    {
+        $taken = $httpPort === null ? [] : [$httpPort => 'the web server'];
+        foreach ($companions as $companion) {
+            if ($companion->kind !== ComponentKind::WebSocket) {
+                continue;
+            }
+            $name = self::shortName((string) $companion->class);
+            if (isset($taken[$companion->port])) {
+                throw new ApplicationConfigException(sprintf(
+                    'Port %d is used twice: by %s and by %s. One port serves one process — '
+                    . 'give each its own and route by path in the proxy.',
+                    $companion->port,
+                    $taken[$companion->port],
+                    $name,
+                ));
+            }
+            $taken[$companion->port] = $name;
+        }
     }
 
     private static function componentLabel(ComponentKind $kind): string

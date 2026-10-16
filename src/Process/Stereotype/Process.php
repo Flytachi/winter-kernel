@@ -320,7 +320,34 @@ abstract class Process
      *
      * @param string|null $output '/dev/null' (default) or a file path for the child's stdio.
      */
-    final public static function dispatch(?string $output = '/dev/null'): int
+    public static function dispatch(?string $output = '/dev/null'): int
+    {
+        return static::dispatchWith([], $output);
+    }
+
+    /**
+     * Starts the process in a detached child that was launched with launch arguments —
+     * the child side of {@see dispatchWith()}. A plain process takes none; a stereotype
+     * that needs some (a {@see \Flytachi\Winter\Kernel\WebSocket\WebSocket} port)
+     * overrides this to read them.
+     *
+     * @param array<string, string|bool> $args What {@see dispatchWith()} was given.
+     * @internal Called by {@see ProcessRunnable} in the detached child.
+     */
+    public static function startWith(array $args): void
+    {
+        static::start();
+    }
+
+    /**
+     * Launches the process detached, handing launch arguments to the child's
+     * {@see startWith()}. They cross a process boundary as command-line options, so
+     * values arrive as strings.
+     *
+     * @param array<string, string> $args
+     * @param string|null $output '/dev/null' or a file path for the child's stdio.
+     */
+    final protected static function dispatchWith(array $args, ?string $output): int
     {
         static::ensureNotRunning();
 
@@ -328,7 +355,7 @@ abstract class Process
             new ProcessRunnable(static::class),
             'process',
             new \ReflectionClass(static::class)->getShortName(),
-        )->start(outputTarget: $output, detached: true);
+        )->start(arguments: $args, outputTarget: $output, detached: true);
     }
 
     /**

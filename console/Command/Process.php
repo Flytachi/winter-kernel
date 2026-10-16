@@ -10,6 +10,7 @@ use Flytachi\Winter\Kernel\Core\ClassScanner;
 use Flytachi\Winter\Kernel\Process\Activity;
 use Flytachi\Winter\Kernel\Process\Stereotype\Daemon as DaemonUnit;
 use Flytachi\Winter\Kernel\Process\Stereotype\Process as ProcessUnit;
+use Flytachi\Winter\Kernel\WebSocket\WebSocket;
 
 /**
  * Manages bare {@see ProcessUnit} units. Daemons are managed by `call daemon`.
@@ -79,8 +80,19 @@ final class Process extends Cmd
             return;
         }
 
+        $socket = is_subclass_of($class, WebSocket::class);
+        if ($socket) {
+            $port = $this->args['options']['port'] ?? null;
+            if (!is_string($port) || !ctype_digit($port)) {
+                self::printWarning("A WebSocket needs a port: --port=8001 [--host=0.0.0.0].");
+                return;
+            }
+            $host = $this->args['options']['host'] ?? null;
+            $host = is_string($host) && $host !== '' ? $host : null;
+        }
+
         if (in_array('d', $this->args['flags'])) {
-            $pid = $class::dispatch();
+            $pid = $socket ? $class::dispatch(port: (int) $port, host: $host) : $class::dispatch();
             // The detached double-fork reports the launcher PID; the real process
             // registers its own PID in the store. Poll briefly for it.
             $info = null;
@@ -94,7 +106,7 @@ final class Process extends Cmd
         }
 
         self::printInfo("Starting: $class");
-        $class::start();
+        $socket ? $class::start((int) $port, $host) : $class::start();
         self::printSuccess("Finished: $class");
     }
 
@@ -283,6 +295,7 @@ final class Process extends Cmd
         self::printBadge('<dot.notation.Class> start -d', 'start detached in background', $cl, 36);
         self::printBadge('<dot.notation.Class> stop', 'send graceful stop signal (SIGTERM)', $cl, 36);
         self::printBadge('<dot.notation.Class> status -v', 'detailed: resource usage', $cl, 36);
+        self::printBadge('<Socket> start --port=N', 'a WebSocket: port required, --host=…', $cl, 36);
         self::printLabel("Commands", $cl);
 
         self::printDivider($cl);
