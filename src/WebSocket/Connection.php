@@ -29,7 +29,7 @@ use Flytachi\Winter\Kernel\WebSocket\Internal\Wire;
  * }
  * ```
  *
- * @link https://winterframe.net/docs/websockets#send Sending, closing and per-connection state
+ * @link https://winterframe.net/docs/websockets#connection The Connection object
  */
 final class Connection
 {
@@ -49,7 +49,11 @@ final class Connection
     ) {
     }
 
-    /** The handshake request — headers, cookies, query — kept for the life of the connection. */
+    /**
+     * The handshake request — headers, cookies, query — kept for the life of the connection.
+     *
+     * @link https://winterframe.net/docs/websockets#request request
+     */
     public function request(): HttpRequest
     {
         return $this->request;
@@ -64,6 +68,8 @@ final class Connection
      * @return bool False when the connection is closed or closing, or the client has
      *              stopped reading and its queue is full (the message is dropped).
      * @throws \LogicException Called in {@see WebSocket::onHandshake()}, before the upgrade.
+     *
+     * @link https://winterframe.net/docs/websockets#send send
      */
     public function send(string $data): bool
     {
@@ -75,6 +81,8 @@ final class Connection
      * Sends a binary message — {@see send()} otherwise.
      *
      * @throws \LogicException Called before the upgrade.
+     *
+     * @link https://winterframe.net/docs/websockets#sendbinary sendBinary
      */
     public function sendBinary(string $data): bool
     {
@@ -88,31 +96,49 @@ final class Connection
      *
      * @param int $code 1000 normal, 1001 going away, 1008 policy violation, 1011 server error, 4000–4999 your own.
      * @param string $reason Short text for the client (at most 123 bytes on the wire).
+     *
+     * @link https://winterframe.net/docs/websockets#close close and close codes
      */
     public function close(int $code = 1000, string $reason = ''): void
     {
         $this->wire->close($code, $reason);
     }
 
-    /** Whether messages can still be sent. False in onHandshake() and from the close on. */
+    /**
+     * Whether messages can still be sent. False in onHandshake() and from the close on.
+     *
+     * @link https://winterframe.net/docs/websockets#isopen isOpen
+     */
     public function isOpen(): bool
     {
         return $this->wire->open;
     }
 
-    /** Stores a value on this connection; it lives until the connection closes. */
+    /**
+     * Stores a value on this connection; it lives until the connection closes.
+     *
+     * @link https://winterframe.net/docs/websockets#set-get-has set, get, has
+     */
     public function set(string $key, mixed $value): void
     {
         $this->attributes[$key] = $value;
     }
 
-    /** A value stored with {@see set()}, or null. */
+    /**
+     * A value stored with {@see set()}, or null.
+     *
+     * @link https://winterframe.net/docs/websockets#set-get-has set, get, has
+     */
     public function get(string $key): mixed
     {
         return $this->attributes[$key] ?? null;
     }
 
-    /** Whether a value is stored under the key (a stored null counts). */
+    /**
+     * Whether a value is stored under the key (a stored null counts).
+     *
+     * @link https://winterframe.net/docs/websockets#set-get-has set, get, has
+     */
     public function has(string $key): bool
     {
         return array_key_exists($key, $this->attributes);

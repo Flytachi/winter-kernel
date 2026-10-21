@@ -22,6 +22,8 @@ use Flytachi\Winter\Kernel\Core\DepSupport;
  *
  * Every name the cache attributes use has to be declared here; an undeclared one
  * stops the boot.
+ *
+ * @link https://winterframe.net/docs/caching Declaring caches and choosing a store
  */
 final class Caches
 {
@@ -63,6 +65,8 @@ final class Caches
      * @return $this
      * @throws CacheException If the name is already declared.
      * @throws \InvalidArgumentException If a number is out of range.
+     *
+     * @link https://winterframe.net/docs/caching#table The table store
      */
     public function table(
         string $name,
@@ -95,6 +99,8 @@ final class Caches
      * @return $this
      * @throws CacheException If the name is already declared.
      * @throws \InvalidArgumentException If a number is out of range.
+     *
+     * @link https://winterframe.net/docs/caching#memory The memory store
      */
     public function memory(string $name, int $maxItems = 1000, ?int $ttl = null): self
     {
@@ -123,6 +129,8 @@ final class Caches
      * @return $this
      * @throws CacheException If the name is already declared.
      * @throws \InvalidArgumentException If the name or version cannot be a folder.
+     *
+     * @link https://winterframe.net/docs/caching#file The file store
      */
     public function file(string $name, ?int $ttl = null, ?string $version = null): self
     {
@@ -158,6 +166,8 @@ final class Caches
      * @return $this
      * @throws CacheException If the name is already declared or winter-redis is missing.
      * @throws \InvalidArgumentException If the endpoint class is not a Redis config.
+     *
+     * @link https://winterframe.net/docs/caching#redis The redis store
      */
     public function redis(
         string $name,

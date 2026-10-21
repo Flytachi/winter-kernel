@@ -24,7 +24,7 @@ namespace Flytachi\Winter\Kernel\Cache\Attribute;
  * Unlike the caching attributes, a `void` method and parameters passed by
  * reference are fine here.
  *
- * @link https://winterframe.net/docs/caching Caching method results
+ * @link https://winterframe.net/docs/caching#cacheevict Removing entries
  */
 #[\Attribute(\Attribute::TARGET_METHOD | \Attribute::IS_REPEATABLE)]
 final class CacheEvict

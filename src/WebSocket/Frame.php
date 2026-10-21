@@ -19,6 +19,8 @@ namespace Flytachi\Winter\Kernel\WebSocket;
  *     $msg = json_decode($frame->data, true);
  * }
  * ```
+ *
+ * @link https://winterframe.net/docs/websockets#frame The Frame object
  */
 final readonly class Frame
 {

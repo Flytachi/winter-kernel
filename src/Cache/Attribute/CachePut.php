@@ -24,7 +24,7 @@ namespace Flytachi\Winter\Kernel\Cache\Attribute;
  * The contract is that of {@see Cacheable}; the two cannot be combined on one
  * method.
  *
- * @link https://winterframe.net/docs/caching Caching method results
+ * @link https://winterframe.net/docs/caching#cacheput Always run and refresh the cache
  */
 #[\Attribute(\Attribute::TARGET_METHOD)]
 final class CachePut

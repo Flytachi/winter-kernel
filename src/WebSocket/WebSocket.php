@@ -111,6 +111,8 @@ abstract class WebSocket extends Process
      * The place for preparation and for background work: start anything that loops
      * forever with {@see spawn()}, or the server never starts accepting clients.
      * An exception here stops the process.
+     *
+     * @link https://winterframe.net/docs/websockets#onstart onStart
      */
     protected function onStart(): void
     {
@@ -124,18 +126,28 @@ abstract class WebSocket extends Process
      * Return false for 403; throw a {@see \Flytachi\Winter\Kernel\Http\Response\ResponseException}
      * for an exact status (e.g. 401). Any other exception answers 500 and goes to
      * {@see onError()}.
+     *
+     * @link https://winterframe.net/docs/websockets#onhandshake onHandshake
      */
     protected function onHandshake(Connection $conn, HttpRequest $request): bool
     {
         return true;
     }
 
-    /** The connection is upgraded — sending works from here on. */
+    /**
+     * The connection is upgraded — sending works from here on.
+     *
+     * @link https://winterframe.net/docs/websockets#onopen onOpen
+     */
     protected function onOpen(Connection $conn): void
     {
     }
 
-    /** A text or binary message from the client. */
+    /**
+     * A text or binary message from the client.
+     *
+     * @link https://winterframe.net/docs/websockets#onmessage onMessage
+     */
     abstract protected function onMessage(Connection $conn, Frame $frame): void;
 
     /**
@@ -144,6 +156,8 @@ abstract class WebSocket extends Process
      *
      * @param int $code 1000 normal, 1001 going away (stop, heartbeat), 1005 closed without a code,
      *                  1006 dropped without a close, 1009 message too big, or the client's own.
+     *
+     * @link https://winterframe.net/docs/websockets#onclose onClose and close codes
      */
     protected function onClose(Connection $conn, int $code, string $reason): void
     {
@@ -152,6 +166,8 @@ abstract class WebSocket extends Process
     /**
      * An exception escaped a hook. By default it is logged and the connection stays
      * open — override to close it (`$conn->close(1011)`) or to tell the client.
+     *
+     * @link https://winterframe.net/docs/websockets#onerror onError
      */
     protected function onError(Connection $conn, \Throwable $e): void
     {
@@ -176,6 +192,8 @@ abstract class WebSocket extends Process
      *
      * @param Connection|null $except Usually the sender.
      * @return int How many connections it was queued to.
+     *
+     * @link https://winterframe.net/docs/websockets#broadcast broadcast
      */
     final protected function broadcast(string $data, ?Connection $except = null): int
     {
@@ -192,19 +210,29 @@ abstract class WebSocket extends Process
      * The open connections of this process, keyed by id — filter them for rooms or users.
      *
      * @return array<int, Connection>
+     *
+     * @link https://winterframe.net/docs/websockets#connections-connection connections and connection
      */
     final protected function connections(): array
     {
         return array_map(static fn(array $pair): Connection => $pair[0], $this->live);
     }
 
-    /** An open connection by its id, or null. */
+    /**
+     * An open connection by its id, or null.
+     *
+     * @link https://winterframe.net/docs/websockets#connections-connection connections and connection
+     */
     final protected function connection(int $id): ?Connection
     {
         return $this->live[$id][0] ?? null;
     }
 
-    /** How many connections are open right now. */
+    /**
+     * How many connections are open right now.
+     *
+     * @link https://winterframe.net/docs/websockets#count count
+     */
     final protected function count(): int
     {
         return count($this->live);

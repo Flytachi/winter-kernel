@@ -41,7 +41,7 @@ namespace Flytachi\Winter\Kernel\Cache\Attribute;
  * Only instances obtained from the DI container are proxied, and nothing happens
  * unless the application declares {@see \Flytachi\Winter\Kernel\App\Attribute\EnableCaching}.
  *
- * @link https://winterframe.net/docs/caching Caching method results
+ * @link https://winterframe.net/docs/caching#cacheable Return from the cache or compute
  */
 #[\Attribute(\Attribute::TARGET_METHOD)]
 final class Cacheable

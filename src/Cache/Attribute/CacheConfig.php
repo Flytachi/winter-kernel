@@ -19,7 +19,7 @@ namespace Flytachi\Winter\Kernel\Cache\Attribute;
  *
  * A value given on the method wins over the one given here.
  *
- * @link https://winterframe.net/docs/caching Caching method results
+ * @link https://winterframe.net/docs/caching#cacheconfig Class defaults
  */
 #[\Attribute(\Attribute::TARGET_CLASS)]
 final class CacheConfig
