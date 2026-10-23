@@ -6,6 +6,9 @@ namespace Flytachi\Winter\Kernel\Tests\Process\Integration;
 
 use Flytachi\Winter\Kernel\Core\KernelStore;
 use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Kernel\Process\Activity;
+use Flytachi\Winter\Kernel\Process\ProcessState;
+use Flytachi\Winter\Kernel\Process\ProcessStatus;
 use Flytachi\Winter\Kernel\Tests\Process\Integration\Fixtures\DispatchMarkerProcess;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
@@ -38,7 +41,10 @@ final class DispatchRunnerTest extends TestCase
             self::markTestSkipped('pcntl and posix are required for the integration tests.');
         }
 
-        $this->project = sys_get_temp_dir() . '/wk_dispatch_' . getmypid() . '_' . bin2hex(random_bytes(4));
+        // The real path: the child resolves the project from its own location, and the
+        // record store names its files after the directory path as written — through the
+        // /var → /private/var symlink on macOS, the two would not see each other's records.
+        $this->project = realpath(sys_get_temp_dir()) . '/wk_dispatch_' . getmypid() . '_' . bin2hex(random_bytes(4));
         $this->buildProject();
 
         // The launcher signs the payload with this; Kernel::init reads it when it binds
@@ -97,6 +103,31 @@ final class DispatchRunnerTest extends TestCase
         self::assertSame('', trim((string) @file_get_contents($log)), 'the runner reported no error');
         self::assertNotNull($childPid, 'the dispatched process reached run() and wrote its marker');
         self::assertTrue($this->isAlive($childPid), 'it keeps running detached from this test process');
+    }
+
+    public function test_dispatch_goes_through_a_stale_record_whose_pid_is_alive(): void
+    {
+        // Left by an instance killed without cleanup, its PID since taken by another
+        // process (here: the shell that runs the tests). The lock is free.
+        $stale = new ProcessStatus(
+            pid: posix_getppid(),
+            className: DispatchMarkerProcess::class,
+            state: ProcessState::RUNNING,
+            activity: Activity::IDLE,
+            startedAt: time() - 3600,
+        );
+        $stale->locked = true;
+        $store = (new \ReflectionMethod(DispatchMarkerProcess::class, 'store'))->invoke(null);
+        $store->write((new \ReflectionMethod(DispatchMarkerProcess::class, 'key'))->invoke(null), $stale);
+        touch($this->project . '/storage/runnable/' . str_replace('\\', '.', DispatchMarkerProcess::class) . '.lock');
+
+        $log = $this->project . '/runner.log';
+        DispatchMarkerProcess::dispatch(output: $log);
+
+        $childPid = $this->awaitMarker(10.0);
+        self::assertSame('', trim((string) @file_get_contents($log)), 'the runner reported no error');
+        self::assertNotNull($childPid, 'the dispatched process started over the stale record');
+        self::assertSame($childPid, DispatchMarkerProcess::status()?->pid, 'and the record is its own now');
     }
 
     // ── fixture project ────────────────────────────────────────────────────────

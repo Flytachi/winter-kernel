@@ -366,7 +366,12 @@ abstract class Process
     protected static function ensureNotRunning(): void
     {
         $info = static::status();
-        if ($info !== null) {
+        // A record with the caller's own PID is a dead instance's, not a live one: the
+        // caller is the one starting. Only reachable when the lock cannot be read (the
+        // PID fallback in status()) — a container restarted after a SIGKILL hands the
+        // same PID to the new process. Were this process the running instance after
+        // all, boot() would still refuse on the lock.
+        if ($info !== null && $info->pid !== getmypid()) {
             throw new ProcessAlreadyRunningException(
                 static::class . " is already running [PID {$info->pid}] (since {$info->getStartedAt()})."
             );
@@ -388,14 +393,24 @@ abstract class Process
             if (!$status) {
                 return null;
             }
-            // Liveness via getpgid, not kill(pid, 0): getpgid needs no permission,
-            // so a status check from another user (web as `winter`, process as
-            // root) cannot mistake a live process for a dead one. And status() is a
-            // pure read — it never deletes: a read must have no side effect, or any
-            // caller who can query could evict a running process's record. A stale
-            // record left by a crash is harmless (this returns null) and is
-            // overwritten by the next start().
-            if (posix_getpgid($status->pid) === false) {
+            // Liveness by the lock, not by the PID in the record. The record is written
+            // after the lock is taken and removed before it is released, so a record
+            // with a free lock was left by a crash (SIGKILL skips the cleanup) — and its
+            // PID may well be alive: a restarted container hands out the same PIDs, often
+            // to the very process now starting, and stop() would signal a stranger.
+            //
+            // The lock is asked only when the record says it can be trusted — `flock`
+            // does not exclude on every filesystem. Otherwise, and when the lock file
+            // cannot be read, fall back to the PID: getpgid, not
+            // kill(pid, 0), since getpgid needs no permission and a check from another
+            // user (web as `winter`, process as root) must not see a live process dead.
+            //
+            // status() is a pure read — it never deletes: a read must have no side
+            // effect, or any caller who can query could evict a running process's
+            // record. A stale record is harmless (this returns null) and is overwritten
+            // by the next start().
+            $held = $status->locked ? self::probeLock() : null;
+            if ($held === false || ($held === null && posix_getpgid($status->pid) === false)) {
                 return null;
             }
             if ($usage) {
@@ -675,15 +690,17 @@ abstract class Process
             return;
         }
         $activity = $this->activity();
+        $status = new ProcessStatus(
+            pid: $this->pid,
+            className: static::class,
+            state: $this->state,
+            activity: $activity,
+            startedAt: $this->startedAt,
+            concurrency: $this->concurrency,
+        );
+        $status->locked = $this->lockReliable;
         try {
-            static::store()->write(static::key(), new ProcessStatus(
-                pid: $this->pid,
-                className: static::class,
-                state: $this->state,
-                activity: $activity,
-                startedAt: $this->startedAt,
-                concurrency: $this->concurrency,
-            ));
+            static::store()->write(static::key(), $status);
         } catch (\Throwable $e) {
             $this->logger->warning('Status write failed: ' . $e->getMessage());
             return;

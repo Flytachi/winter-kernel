@@ -272,10 +272,24 @@ abstract class WinterApplication
      */
     private static function bootFailed(\Throwable $e): never
     {
+        self::reportFailure('boot failed', $e);
+
+        exit(1);
+    }
+
+    /**
+     * Says why a start failed, whatever `DEBUG` and the log settings are: one line to
+     * stderr (`winter: <what> — <exception>: <message>`, the trace only with
+     * `DEBUG=true`) and the same as critical to the log when a logger is available.
+     * See {@see bootFailed()} for why both.
+     */
+    private static function reportFailure(string $what, \Throwable $e): void
+    {
         $stderr = defined('STDERR') ? STDERR : fopen('php://stderr', 'w');
         if ($stderr !== false) {
             fwrite($stderr, sprintf(
-                "winter: boot failed — %s: %s\n%s",
+                "winter: %s — %s: %s\n%s",
+                $what,
                 $e::class,
                 $e->getMessage(),
                 env('DEBUG', false) ? $e->getTraceAsString() . "\n" : '',
@@ -291,15 +305,13 @@ abstract class WinterApplication
         }
 
         try {
-            LoggerFactory::getLogger(static::class)->critical('Boot failed: ' . $e->getMessage(), [
+            LoggerFactory::getLogger(static::class)->critical(ucfirst($what) . ': ' . $e->getMessage(), [
                 'exception' => $e::class,
                 'file'      => $origin,
             ]);
         } catch (\Throwable) {
             // The logger may not exist yet; the stderr line above already said it.
         }
-
-        exit(1);
     }
 
     /**
@@ -846,7 +858,18 @@ abstract class WinterApplication
                     LoggerFactory::setContextStorage(new ProcessContext());
                     LoggerFactory::setDefaultChannel('sys');
                     ForkReset::runAll();
-                    self::launch($companion);
+                    try {
+                        self::launch($companion);
+                    } catch (\Throwable $e) {
+                        // Nothing above this callback catches: the exception would end
+                        // the process as a PHP fatal error, which DEBUG=false keeps
+                        // silent, and Swoole restarts it at once — a loop of hundreds
+                        // of restarts a second with not a word about why. Say why, and
+                        // pause before exiting so the restarts do not flood the log.
+                        self::reportFailure(self::shortName((string) $companion->class) . ' failed', $e);
+                        sleep(1);
+                        exit(1);
+                    }
                 }
             ));
         }

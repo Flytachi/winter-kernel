@@ -55,11 +55,28 @@ final class RunningProcessIntegrationTest extends IntegrationCase
         );
     }
 
+    /**
+     * Waits for the body's pool mark. The pool is Swoole's: without it there is no
+     * ceiling to read, but the body still ran, and what the process knew while its
+     * repositories were built — the point of these tests — holds all the same.
+     */
+    private function waitForPoolMark(string $who): void
+    {
+        if (extension_loaded('swoole')) {
+            $this->waitForMark("{$who} maximum=3");
+            return;
+        }
+        self::assertTrue(
+            $this->pollUntil(fn() => preg_grep("/^{$who} maximum=/", $this->marks()) !== []),
+            "expected the {$who} body to run, got:\n" . implode("\n", $this->marks()),
+        );
+    }
+
     public function test_a_process_is_current_while_its_repositories_are_built(): void
     {
         $pid = $this->fork(static fn() => ProbeProcess::start());
 
-        $this->waitForMark('process maximum=3');
+        $this->waitForPoolMark('process');
         self::assertContains('built current=ProbeProcess supervising=null', $this->marks());
         self::assertContains('setUp current=ProbeProcess slot=null supervising=null', $this->marks());
 
@@ -71,7 +88,7 @@ final class RunningProcessIntegrationTest extends IntegrationCase
     {
         $sup = $this->fork(static fn() => ProbeDaemon::start());
 
-        $this->waitForMark('worker maximum=3');
+        $this->waitForPoolMark('worker');
         self::assertContains(
             'built current=null supervising=ProbeDaemon',
             $this->marks(),
@@ -87,7 +104,7 @@ final class RunningProcessIntegrationTest extends IntegrationCase
     {
         $sup = $this->fork(static fn() => ProbeWorkerClassDaemon::start());
 
-        $this->waitForMark('worker maximum=3');
+        $this->waitForPoolMark('worker');
         self::assertContains('built current=ProbeWorkerClassDaemon supervising=null', $this->marks());
         self::assertNotContains('setUp current=null slot=null supervising=null', $this->marks());
 

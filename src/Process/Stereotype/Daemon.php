@@ -382,17 +382,19 @@ abstract class Daemon extends Process
                     break;
                 }
             }
+            $status = new DaemonStatus(
+                pid: $this->pid,
+                className: static::class,
+                state: $this->isStopping() ? ProcessState::STOPPING : ProcessState::RUNNING,
+                activity: $busy ? Activity::BUSY : Activity::IDLE,
+                startedAt: $startedAt,
+                concurrency: $this->concurrency,
+                restarts: $this->restartsTotal(),
+                workers: $workers,
+            );
+            $status->locked = $this->lockReliable;
             try {
-                $store->write($key, new DaemonStatus(
-                    pid: $this->pid,
-                    className: static::class,
-                    state: $this->isStopping() ? ProcessState::STOPPING : ProcessState::RUNNING,
-                    activity: $busy ? Activity::BUSY : Activity::IDLE,
-                    startedAt: $startedAt,
-                    concurrency: $this->concurrency,
-                    restarts: $this->restartsTotal(),
-                    workers: $workers,
-                ));
+                $store->write($key, $status);
             } catch (\Throwable $e) {
                 $this->logger->warning('Daemon status write failed: ' . $e->getMessage());
             }

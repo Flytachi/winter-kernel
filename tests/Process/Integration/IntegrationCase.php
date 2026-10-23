@@ -43,6 +43,10 @@ abstract class IntegrationCase extends TestCase
 
     protected function tearDown(): void
     {
+        // A test skipped before parent::setUp() still gets here, with nothing set up.
+        if (!isset($this->storage)) {
+            return;
+        }
         foreach ($this->children as $pid) {
             if ($this->isAlive($pid)) {
                 @posix_kill($pid, SIGTERM);

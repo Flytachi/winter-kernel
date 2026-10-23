@@ -17,6 +17,16 @@ namespace Flytachi\Winter\Kernel\Process;
  */
 class ProcessStatus implements \JsonSerializable
 {
+    /**
+     * Whether the instance that wrote this record holds a singleton lock that works on
+     * this filesystem — then the lock, not the PID, says whether it is alive. False on
+     * a filesystem where `flock` does not exclude (a host directory mounted into Docker
+     * Desktop), and in a record written before the field existed.
+     *
+     * @internal Read by {@see \Flytachi\Winter\Kernel\Process\Stereotype\Process::status()}.
+     */
+    public bool $locked = false;
+
     public function __construct(
         public int $pid,
         public string $className,

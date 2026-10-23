@@ -99,7 +99,11 @@ anything; if two launches slip past the first check at the same instant, only on
 wins the lock and the other exits. Because a `flock` is released by the operating
 system the moment the process dies, it is never left stale — a crashed or
 `kill -9`-ed process frees it instantly, and the next launch succeeds with no
-manual cleanup, which a PID file could not guarantee.
+manual cleanup, which a PID file could not guarantee. The lock file is opened
+close-on-exec, so a program the process runs (`exec`, a dispatched process) does
+not inherit it and keep it held after the process is gone; and the file itself is
+never deleted — a process locking a deleted file and another locking its
+replacement would both run.
 
 To run **several workers of the same logic**, this is not the mechanism — launching
 the same class repeatedly is precisely what is forbidden. Use a `Daemon`, which
@@ -164,10 +168,23 @@ or coordination between them.
 
 Two properties keep the record both trustworthy and cheap.
 
-It is **self-healing**. Every `status()` call verifies that the recorded PID still
-exists before trusting the record; if the process died without cleaning up — a
-forced exit, a crash — the stale record is dropped on that read and the process
-correctly reports as stopped. You never see a ghost.
+It is **self-healing**. A process killed without cleanup (`kill -9`, an OOM kill,
+`docker kill`, a host reboot) leaves its record behind, and the PID in it proves
+nothing: after a restart it may belong to another process — in a container, usually
+to the very process that is starting, since PIDs are handed out in the same order
+every time. So `status()` asks the singleton lock instead: the record is written
+after the lock is taken and removed before it is released, and the operating system
+releases the lock with the dead process, so a record whose lock is free is a stale
+one. `status()` then reports the process as stopped, `stop()` signals nobody, and the
+next `start()` overwrites the record. The read deletes nothing — any caller able to
+query must not be able to evict a running process's record.
+
+Where `flock` does not exclude — a host directory mounted into Docker Desktop, where
+a lock taken through the descriptor that created the file is granted to everyone —
+the lock proves nothing either. The holder checks this when it takes the lock and
+writes the answer into the record (`locked`); a record that says no, or one written
+by an older version, is judged by its PID as before. A record carrying the starting
+process's own PID is stale in any case: the caller is the one starting.
 
 Its writes are **throttled**. The frequently-changing part of the record is the
 activity, and a busy worker can flip between `BUSY` and `IDLE` many times a second.
