@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Process\Daemon;
 
+use Flytachi\Winter\Kernel\App\Supervision\ComponentChannel;
 use Flytachi\Winter\Kernel\Process\Activity;
 use Flytachi\Winter\Kernel\Process\BeforeFork;
 use Flytachi\Winter\Kernel\Process\Internal\Termination;
@@ -42,6 +43,11 @@ trait SupervisesFleet
     private int $totalRestarts = 0;
     private ProcessState $finalState = ProcessState::TERMINATED;
 
+    /** A stop signal ended the fleet — an end on request, not a failure. */
+    private bool $stopSignalled = false;
+    /** Whether the fleet told its supervisor it is up. */
+    private bool $readyAnnounced = false;
+
     /** @var list<array{0: float, 1: int}> Ring of [microtime, rawDesired] for scaling damping. */
     private array $desiredHistory = [];
     private float $lastScaleAt = 0.0;
@@ -74,6 +80,10 @@ trait SupervisesFleet
 
         while (true) {
             $changed = $this->refreshWorkers();
+            if (!$this->readyAnnounced && $this->fleetIsUp()) {
+                $this->readyAnnounced = true;
+                ComponentChannel::ready();
+            }
             if (!$this->stop) {
                 $this->watchdog();
             }
@@ -394,6 +404,7 @@ trait SupervisesFleet
      */
     private function requestFleetStop(): void
     {
+        $this->stopSignalled = true;
         if (!$this->stop) {
             $this->beginStop();
         } else {
@@ -598,6 +609,20 @@ trait SupervisesFleet
     // -------------------------------------------------------------------------
     // Worker observation
     // -------------------------------------------------------------------------
+
+    /** Every slot's worker runs — the daemon is up. */
+    private function fleetIsUp(): bool
+    {
+        if ($this->slots === []) {
+            return false;
+        }
+        foreach ($this->slots as $slot) {
+            if ($slot->state !== SlotState::RUNNING) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     /**
      * Refreshes each live slot's activity from the worker heartbeat, and promotes

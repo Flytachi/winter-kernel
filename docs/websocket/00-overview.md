@@ -148,8 +148,10 @@ reading and its queue (1024 messages) is full — the message is dropped.
   `run()` then closes every connection with 1001, and waits for running handlers up to
   `$grace`.
 - A request without `Upgrade: websocket` gets 426.
-- Under `call run` the process is a companion (`addProcess`) and inherits the coroutine
-  hooks, so blocking I/O in a hook yields instead of stalling every connection.
+- Under `call run` the process is a child of the application's supervisor and gets the
+  coroutine hooks back right after the fork, so blocking I/O in a hook yields instead of
+  stalling every connection. It is ready — for the supervisor's `startTimeout` — once the
+  port is bound and `onStart()` is done (see `docs/process/04-supervision.md`).
 
 ## Not here (yet)
 

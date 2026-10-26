@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\WebSocket;
 
 use Flytachi\Winter\Base\Exception\ExceptionLogLevel;
+use Flytachi\Winter\Kernel\App\Supervision\ComponentChannel;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
 use Flytachi\Winter\Kernel\Http\Response\ExceptionWrapper;
@@ -313,6 +314,17 @@ abstract class WebSocket extends Process
     // -------------------------------------------------------------------------
 
     /**
+     * Ready once it listens, not when the body starts: binding the port and onStart()
+     * come first.
+     *
+     * @internal
+     */
+    protected function readyOnRun(): bool
+    {
+        return false;
+    }
+
+    /**
      * The server itself — written by the framework.
      */
     final public function run(): void
@@ -347,6 +359,8 @@ abstract class WebSocket extends Process
                 self::$bindPort,
                 $this->path ?? '',
             ));
+            // Ready now: the port is bound and onStart() is done.
+            ComponentChannel::ready();
             // Returns when a stop is requested: the engine cancels the body.
             $server->start();
         }

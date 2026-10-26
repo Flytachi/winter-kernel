@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Process;
 
+use Flytachi\Winter\Kernel\App\Runtime\ManagedBy;
+
 /**
  * Persisted status record of a {@see \Flytachi\Winter\Kernel\Process\Stereotype\Process}.
  *
@@ -26,6 +28,20 @@ class ProcessStatus implements \JsonSerializable
      * @internal Read by {@see \Flytachi\Winter\Kernel\Process\Stereotype\Process::status()}.
      */
     public bool $locked = false;
+
+    /**
+     * Where the instance runs — {@see \Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime::host()}.
+     * A record from another host (a container's, read through a mounted storage) names
+     * PIDs of another process namespace: nobody may signal by them from here. Null in a
+     * record written before the field existed.
+     */
+    public ?string $host = null;
+
+    /**
+     * The application run that started this instance as one of its components — null
+     * for a process started on its own (`call process … start`, `dispatch()`).
+     */
+    public ?ManagedBy $managedBy = null;
 
     public function __construct(
         public int $pid,

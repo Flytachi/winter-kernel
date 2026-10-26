@@ -12,9 +12,13 @@ use Flytachi\Winter\Kernel\App\ApplicationConfigException;
 use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
 use Flytachi\Winter\Kernel\App\Attribute\EnableWebSocket;
 use Flytachi\Winter\Kernel\App\Component;
+use Flytachi\Winter\Kernel\App\Components;
 use Flytachi\Winter\Kernel\App\ComponentKind;
 use Flytachi\Winter\Kernel\Schedule\Stereotype\Scheduler;
 use Flytachi\Winter\Kernel\Tests\WebSocket\Fixtures\EchoSocket;
+use Flytachi\Winter\Kernel\WebSocket\Connection;
+use Flytachi\Winter\Kernel\WebSocket\Frame;
+use Flytachi\Winter\Kernel\WebSocket\WebSocket;
 use Flytachi\Winter\Kernel\WinterApplication;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -107,6 +111,13 @@ final class EnableManifestTest extends TestCase
         self::assertSame('127.0.0.1', $c[2]->host);
     }
 
+    public function test_one_class_declared_twice_is_refused(): void
+    {
+        $this->expectException(ApplicationConfigException::class);
+        $this->expectExceptionMessage('EchoSocket is declared twice');
+        $this->resolve(SameSocketTwiceApp::class);
+    }
+
     public function test_websocket_under_enable_process_is_refused(): void
     {
         $this->expectException(ApplicationConfigException::class);
@@ -148,6 +159,88 @@ final class EnableManifestTest extends TestCase
         ], 8000);
         $this->addToAssertionCount(1);
     }
+
+    // ── Supervision parameters ───────────────────────────────────────────────
+
+    public function test_components_default_to_critical_with_three_retries_and_a_minute_to_start(): void
+    {
+        $c = $this->resolve(FullApp::class);
+
+        foreach (array_slice($c, 1) as $component) {
+            self::assertTrue($component->critical, $component->kind->name);
+            self::assertSame(60, $component->startTimeout, $component->kind->name);
+        }
+        self::assertSame([3, 3, 3, 0], array_map(static fn($c) => $c->retries, array_slice($c, 1)), 'a daemon: none');
+    }
+
+    public function test_declared_supervision_parameters_reach_the_components(): void
+    {
+        [$scheduler, $process, $socket, $daemon] = $this->resolve(TunedApp::class);
+
+        self::assertSame([false, 1, 0], [$scheduler->critical, $scheduler->retries, $scheduler->startTimeout]);
+        self::assertSame([false, 5, 120], [$process->critical, $process->retries, $process->startTimeout]);
+        self::assertSame([false, 2, 10], [$socket->critical, $socket->retries, $socket->startTimeout]);
+        self::assertSame([8001, '127.0.0.1'], [$socket->port, $socket->host]);
+        self::assertSame([false, 0, 300], [$daemon->critical, $daemon->retries, $daemon->startTimeout]);
+    }
+
+    public function test_a_negative_value_is_a_boot_error_naming_its_declaration(): void
+    {
+        $this->expectException(ApplicationConfigException::class);
+        $this->expectExceptionMessage('#[EnableProcess(Only)]: retries and startTimeout cannot be negative.');
+        $this->resolve(NegativeRetriesApp::class);
+    }
+
+    // ── Components declared in code ──────────────────────────────────────────
+
+    public function test_components_declared_in_code_add_to_the_attributes(): void
+    {
+        $c = $this->resolve(CodeDeclaredApp::class);
+
+        self::assertSame(
+            [
+                ComponentKind::Http,
+                ComponentKind::Process,
+                ComponentKind::Daemon,
+                ComponentKind::Command,
+                ComponentKind::Command,
+            ],
+            array_map(static fn(Component $c) => $c->kind, $c),
+        );
+        self::assertSame('Main\\Daemon\\E', $c[2]->class);
+        self::assertFalse($c[2]->critical);
+        self::assertSame(['node', 'tools/bridge.js'], $c[3]->command);
+        self::assertSame('bridge', $c[3]->name());
+        self::assertSame([PHP_BINARY, __FILE__, '--once'], $c[4]->command);
+        self::assertSame('EnableManifestTest', $c[4]->name(), 'a script is named after its file');
+        self::assertSame([0, 0], [$c[3]->retries, $c[3]->startTimeout], 'a program is never restarted');
+    }
+
+    public function test_a_class_declared_by_an_attribute_and_in_code_is_refused(): void
+    {
+        $this->expectExceptionMessage('A is declared twice');
+        $this->resolve(DeclaredTwiceApp::class);
+    }
+
+    public function test_two_programs_with_one_name_are_refused(): void
+    {
+        $this->expectExceptionMessage('The program "bridge" is declared twice');
+        $this->resolve(SameProgramTwiceApp::class);
+    }
+
+    public function test_a_bad_value_in_code_names_the_hook(): void
+    {
+        $this->expectException(ApplicationConfigException::class);
+        $this->expectExceptionMessage('CodeNegativeApp::components(): retries and startTimeout cannot be negative.');
+        $this->resolve(CodeNegativeApp::class);
+    }
+
+    public function test_a_missing_script_stops_the_boot(): void
+    {
+        $this->expectException(ApplicationConfigException::class);
+        $this->expectExceptionMessage('Script scripts/nowhere.php not found');
+        $this->resolve(MissingScriptApp::class);
+    }
 }
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -178,8 +271,22 @@ final class EmptyApp extends WinterApplication
 
 #[EnableWeb]
 #[EnableWebSocket(EchoSocket::class, port: 8001)]
-#[EnableWebSocket(EchoSocket::class, port: 8002, host: '127.0.0.1')]
+#[EnableWebSocket(SecondSocket::class, port: 8002, host: '127.0.0.1')]
 final class SocketApp extends WinterApplication
+{
+}
+
+/** A second socket class: one class runs once, so two sockets are two classes. */
+final class SecondSocket extends WebSocket
+{
+    protected function onMessage(Connection $conn, Frame $frame): void
+    {
+    }
+}
+
+#[EnableWebSocket(EchoSocket::class, port: 8001)]
+#[EnableWebSocket(EchoSocket::class, port: 8002)]
+final class SameSocketTwiceApp extends WinterApplication
 {
 }
 
@@ -191,4 +298,63 @@ final class SocketAsProcessApp extends WinterApplication
 #[EnableWebSocket(\stdClass::class, port: 8001)]
 final class NotASocketApp extends WinterApplication
 {
+}
+
+#[EnableScheduler(critical: false, retries: 1, startTimeout: 0)]
+#[EnableProcess('Main\\Proc\\A', critical: false, retries: 5, startTimeout: 120)]
+#[EnableWebSocket(EchoSocket::class, port: 8001, host: '127.0.0.1', critical: false, retries: 2, startTimeout: 10)]
+#[EnableDaemon('Main\\Daemon\\E', critical: false, startTimeout: 300)]
+final class TunedApp extends WinterApplication
+{
+}
+
+#[EnableProcess('Main\\Proc\\Only', retries: -1)]
+final class NegativeRetriesApp extends WinterApplication
+{
+}
+
+#[EnableWeb]
+#[EnableProcess('Main\\Proc\\A')]
+final class CodeDeclaredApp extends WinterApplication
+{
+    protected static function components(Components $components): void
+    {
+        $components
+            ->daemon('Main\\Daemon\\E', critical: false)
+            ->command(['node', 'tools/bridge.js'], name: 'bridge')
+            ->script(__FILE__, args: ['--once']);
+    }
+}
+
+#[EnableProcess('Main\\Proc\\A')]
+final class DeclaredTwiceApp extends WinterApplication
+{
+    protected static function components(Components $components): void
+    {
+        $components->process('Main\\Proc\\A');
+    }
+}
+
+final class SameProgramTwiceApp extends WinterApplication
+{
+    protected static function components(Components $components): void
+    {
+        $components->command(['node', 'a.js'], name: 'bridge')->command(['node', 'b.js'], name: 'bridge');
+    }
+}
+
+final class CodeNegativeApp extends WinterApplication
+{
+    protected static function components(Components $components): void
+    {
+        $components->process('Main\\Proc\\A', retries: -1);
+    }
+}
+
+final class MissingScriptApp extends WinterApplication
+{
+    protected static function components(Components $components): void
+    {
+        $components->script('scripts/nowhere.php');
+    }
 }

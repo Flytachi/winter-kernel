@@ -22,7 +22,12 @@ use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
 use Flytachi\Winter\Kernel\App\Attribute\EnableWebSocket;
 use Flytachi\Winter\Kernel\App\Attribute\Import;
 use Flytachi\Winter\Kernel\App\Banner;
+use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
+use Flytachi\Winter\Kernel\App\Supervision\ComponentControl;
+use Flytachi\Winter\Kernel\App\Supervision\ComponentRecords;
+use Flytachi\Winter\Kernel\App\Supervision\Supervisor;
 use Flytachi\Winter\Kernel\App\Component;
+use Flytachi\Winter\Kernel\App\Components;
 use Flytachi\Winter\Kernel\App\ContributionCollector;
 use Flytachi\Winter\Kernel\App\ComponentKind;
 use Flytachi\Winter\Kernel\App\Config\ChannelRegistry;
@@ -275,6 +280,23 @@ abstract class WinterApplication
         self::reportFailure('boot failed', $e);
 
         exit(1);
+    }
+
+    /**
+     * One line that must be seen, whatever `DEBUG` and the log settings are: to stderr
+     * (`winter: <message>`) and as critical to the log when a logger is available.
+     */
+    private static function reportLine(string $message): void
+    {
+        $stderr = defined('STDERR') ? STDERR : fopen('php://stderr', 'w');
+        if ($stderr !== false) {
+            fwrite($stderr, "winter: {$message}\n");
+        }
+        try {
+            LoggerFactory::getLogger(static::class)->critical($message);
+        } catch (\Throwable) {
+            // The stderr line above already said it.
+        }
     }
 
     /**
@@ -789,6 +811,10 @@ abstract class WinterApplication
 
         $logger = LoggerFactory::getLogger(static::class);
 
+        // Before anything binds or forks: a second run of the same application is refused
+        // here, and every process forked from now on knows the run it belongs to.
+        ApplicationRuntime::claim(static::class, $components);
+
         // Here, in the process every worker and companion is forked from: a table
         // created after the fork would exist in one process only.
         CacheManager::allocate();
@@ -846,29 +872,34 @@ abstract class WinterApplication
             LoggerFactory::getLogger('sys'),
         );
 
-        $names = [];
+        $names = array_map(static fn(Component $c): string => $c->name(), $companions);
         self::assertFreePorts($companions, $port);
-        foreach ($companions as $companion) {
-            $names[] = self::shortName((string) $companion->class);
+
+        // The background components run under one supervisor process of the server. A
+        // critical component that cannot run stops the whole application: the supervisor
+        // raises this flag and stops the master, which then exits with 1.
+        $failed = new \Swoole\Atomic(0);
+        if ($companions !== []) {
+            $masterPid = getmypid();
             $server->addProcess(new \Swoole\Process(
-                static function () use ($companion): void {
-                    // Runtime hooks stay as inherited (SWOOLE_HOOK_ALL): a standalone
-                    // launch runs its body under them too, and without them every
-                    // blocking call in spawn() would stall the whole process.
+                static function () use ($companions, $failed, $masterPid, $logger): void {
+                    // Runtime hooks stay as inherited (SWOOLE_HOOK_ALL): the components
+                    // run their bodies under them, as a standalone launch does.
+                    cli_set_process_title('winter-supervisor');
                     LoggerFactory::setContextStorage(new ProcessContext());
                     LoggerFactory::setDefaultChannel('sys');
                     ForkReset::runAll();
-                    try {
-                        self::launch($companion);
-                    } catch (\Throwable $e) {
-                        // Nothing above this callback catches: the exception would end
-                        // the process as a PHP fatal error, which DEBUG=false keeps
-                        // silent, and Swoole restarts it at once — a loop of hundreds
-                        // of restarts a second with not a word about why. Say why, and
-                        // pause before exiting so the restarts do not flood the log.
-                        self::reportFailure(self::shortName((string) $companion->class) . ' failed', $e);
+                    if (self::supervisor($companions, $logger)->run(untilDone: false) === 0) {
+                        return;
+                    }
+                    $failed->set(1);
+                    @posix_kill($masterPid, SIGTERM);
+                    // Stay until the server stops this process: leaving now would only have
+                    // Swoole start a new supervisor while the application shuts down.
+                    pcntl_signal(SIGTERM, SIG_DFL);
+                    pcntl_signal(SIGINT, SIG_DFL);
+                    while (true) {
                         sleep(1);
-                        exit(1);
                     }
                 }
             ));
@@ -961,6 +992,9 @@ abstract class WinterApplication
 
         $server->start();
 
+        if ($failed->get() === 1) {
+            exit(1);
+        }
         if ($dev !== null && $dev->reloadRequested()) {
             $dev->reexec();
         }
@@ -992,59 +1026,71 @@ abstract class WinterApplication
 
         self::assertFreePorts($companions, null);
 
-        if (count($companions) === 1) {
-            $logger->info('Application up (headless): ' . self::shortName((string) $companions[0]->class));
-            self::launch($companions[0]);
-            exit(0);
-        }
-
         if (!function_exists('pcntl_fork')) {
             throw new ApplicationConfigException(
-                'Running several headless components needs ext-pcntl.'
+                '`call run` needs ext-pcntl to run its components (each runs in a process of its own).'
             );
         }
 
-        // Same as before the server starts: nothing the boot opened may be inherited.
-        BeforeFork::runAll();
+        $names = array_map(static fn(Component $c): string => $c->name(), $companions);
+        $logger->info('Application up (headless): [' . implode(', ', $names) . ']');
 
-        $children = [];
-        foreach ($companions as $companion) {
-            $class = (string) $companion->class;
-            $pid = pcntl_fork();
-            if ($pid === -1) {
-                throw new \RuntimeException("WinterApplication: fork failed for {$class}.");
-            }
-            if ($pid === 0) {
-                // Runtime hooks are left untouched, as in a standalone launch: an
-                // explicit flags = 0 here would switch them off inside the body.
+        // The master is the supervisor: every component in a process of its own, restarted
+        // or given up on by the same rules as under the web tier.
+        $code = self::supervisor($companions, $logger)->run(untilDone: true);
+        ApplicationRuntime::release(static::class);
+        exit($code);
+    }
+
+    /**
+     * The supervisor of the background components, wired to this application: how to
+     * start a component in its own process, and how to say that one could not run.
+     *
+     * @param list<Component> $components
+     */
+    private static function supervisor(array $components, LoggerInterface $logger): Supervisor
+    {
+        $run = ApplicationRuntime::current()?->managedBy();
+        return new Supervisor(
+            $components,
+            launch: static function (Component $component): void {
                 LoggerFactory::setContextStorage(new ProcessContext());
                 LoggerFactory::setDefaultChannel('sys');
                 ForkReset::runAll();
-                self::launch($companion);
-                exit(0);
-            }
-            $children[$pid] = self::shortName($class);
-        }
+                self::launch($component);
+            },
+            report: static fn(string $what, \Throwable $e) => self::reportFailure($what, $e),
+            announce: static fn(string $message) => self::reportLine($message),
+            // An outside program has no class, and so no record: it is only in the log.
+            records: new class implements ComponentRecords {
+                public function failed(Component $component): void
+                {
+                    $component->class !== null && $component->class::recordFailed();
+                }
 
-        $forward = static function (int $signo) use (&$children): void {
-            foreach (array_keys($children) as $pid) {
-                @posix_kill($pid, $signo);
-            }
-        };
-        pcntl_async_signals(true);
-        pcntl_signal(SIGTERM, $forward);
-        pcntl_signal(SIGINT, $forward);
+                public function stopped(Component $component): void
+                {
+                    $component->class !== null && $component->class::recordStopped();
+                }
 
-        $logger->info('Application up (headless): [' . implode(', ', $children) . ']');
+                public function forget(Component $component): void
+                {
+                    $component->class !== null && $component->class::forgetRecord();
+                }
 
-        while ($children !== []) {
-            $pid = pcntl_waitpid(-1, $status);
-            if ($pid > 0) {
-                unset($children[$pid]);
-            }
-        }
-
-        exit(0);
+                public function outsider(Component $component): ?int
+                {
+                    return $component->class !== null ? $component->class::outsider() : null;
+                }
+            },
+            name: static fn(Component $component): string => $component->name(),
+            logger: $logger,
+            commands: $run === null
+                ? null
+                : static fn(Component $component): ?string => $component->class === null
+                    ? null
+                    : ComponentControl::take($run, $component->class),
+        );
     }
 
     // ── Internal ──────────────────────────────────────────────────────────────
@@ -1088,10 +1134,15 @@ abstract class WinterApplication
         }
         $scheduler = $ref->getAttributes(EnableScheduler::class);
         if ($scheduler !== []) {
-            $components[] = Component::scheduler($scheduler[0]->newInstance()->class);
+            $s = $scheduler[0]->newInstance();
+            $components[] = self::component(
+                '#[EnableScheduler]',
+                static fn() => Component::scheduler($s->class, $s->critical, $s->retries, $s->startTimeout),
+            );
         }
         foreach ($ref->getAttributes(EnableProcess::class) as $attribute) {
-            $class = $attribute->newInstance()->class;
+            $process = $attribute->newInstance();
+            $class = $process->class;
             if (is_subclass_of($class, WebSocket::class)) {
                 throw new ApplicationConfigException(sprintf(
                     '%s is a WebSocket and needs a port: use #[EnableWebSocket(%s::class, port: …)] '
@@ -1100,7 +1151,15 @@ abstract class WinterApplication
                     self::shortName($class),
                 ));
             }
-            $components[] = Component::process($class);
+            $components[] = self::component(
+                '#[EnableProcess(' . self::bareName($class) . ')]',
+                static fn() => Component::process(
+                    $class,
+                    $process->critical,
+                    $process->retries,
+                    $process->startTimeout,
+                ),
+            );
         }
         foreach ($ref->getAttributes(EnableWebSocket::class) as $attribute) {
             $socket = $attribute->newInstance();
@@ -1109,13 +1168,99 @@ abstract class WinterApplication
                     "#[EnableWebSocket] expects a WebSocket class, got {$socket->class}."
                 );
             }
-            $components[] = Component::websocket($socket->class, $socket->port, $socket->host);
+            $components[] = self::component(
+                '#[EnableWebSocket(' . self::bareName($socket->class) . ')]',
+                static fn() => Component::websocket(
+                    $socket->class,
+                    $socket->port,
+                    $socket->host,
+                    $socket->critical,
+                    $socket->retries,
+                    $socket->startTimeout,
+                ),
+            );
         }
         foreach ($ref->getAttributes(EnableDaemon::class) as $attribute) {
-            $components[] = Component::daemon($attribute->newInstance()->class);
+            $daemon = $attribute->newInstance();
+            $components[] = self::component(
+                '#[EnableDaemon(' . self::bareName($daemon->class) . ')]',
+                static fn() => Component::daemon($daemon->class, $daemon->critical, $daemon->startTimeout),
+            );
         }
 
+        $declared = new Components(Kernel::$pathRoot ?? '');
+        try {
+            static::components($declared);
+        } catch (\InvalidArgumentException $e) {
+            throw new ApplicationConfigException(static::class . '::components(): ' . $e->getMessage(), previous: $e);
+        }
+        $components = [...$components, ...$declared->all()];
+        self::assertDistinct($components);
+
         return $components;
+    }
+
+    /**
+     * Declares components in code — what the #[Enable*] attributes cannot: conditions,
+     * values from the environment, lists from configuration, outside programs. Runs at
+     * boot, after the scan: the container is ready. What it declares adds to the
+     * attributes.
+     *
+     * ```
+     * protected static function components(Components $components): void
+     * {
+     *     if (env('ROLE') !== 'web') {
+     *         $components->scheduler();
+     *     }
+     *     $components->websocket(Chat::class, port: (int) env('CHAT_WS_PORT', 8001));
+     *     $components->script('scripts/legacy-sync.php', critical: false);
+     * }
+     * ```
+     *
+     * @link https://winterframe.net/docs/components#components Declaring components in code
+     */
+    protected static function components(Components $components): void
+    {
+    }
+
+    /**
+     * One class runs once — a process is a singleton per class — and an outside program
+     * is told apart by its name: either declared twice stops the boot.
+     *
+     * @param list<Component> $components
+     */
+    private static function assertDistinct(array $components): void
+    {
+        $seen = [];
+        foreach ($components as $component) {
+            if ($component->kind === ComponentKind::Http) {
+                continue;
+            }
+            $key = $component->class ?? 'command:' . $component->name();
+            if (isset($seen[$key])) {
+                throw new ApplicationConfigException(sprintf(
+                    '%s is declared twice — %s runs once per application.',
+                    $component->class !== null ? $component->name() : "The program \"{$component->name()}\"",
+                    $component->class !== null ? 'a component' : 'each program name',
+                ));
+            }
+            $seen[$key] = true;
+        }
+    }
+
+    /**
+     * Builds a component from its declaration, naming the declaration when its values are
+     * out of range — a negative `retries` is a boot error, not a mystery.
+     *
+     * @param \Closure(): Component $build
+     */
+    private static function component(string $declaration, \Closure $build): Component
+    {
+        try {
+            return $build();
+        } catch (\InvalidArgumentException $e) {
+            throw new ApplicationConfigException("{$declaration}: {$e->getMessage()}", previous: $e);
+        }
     }
 
     /**
@@ -1170,11 +1315,12 @@ abstract class WinterApplication
                 ComponentKind::Scheduler => ['scheduler', 'enabled'],
                 ComponentKind::WebSocket => ['websocket', sprintf(
                     '%s ws://%s:%d',
-                    self::shortName((string) $companion->class),
+                    $companion->name(),
                     $companion->host,
                     $companion->port,
                 )],
-                default => [self::componentLabel($companion->kind), self::shortName((string) $companion->class)],
+                ComponentKind::Command => ['command', $companion->name()],
+                default => [self::componentLabel($companion->kind), $companion->name()],
             };
         }
         if (static::hasAttribute(EnableAsync::class)) {
@@ -1223,6 +1369,7 @@ abstract class WinterApplication
      */
     private static function launch(Component $component): void
     {
+        ApplicationRuntime::markManaged();
         $class = (string) $component->class;
         if ($component->kind === ComponentKind::WebSocket) {
             $class::start($component->port, $component->host);
@@ -1283,5 +1430,12 @@ abstract class WinterApplication
     private static function shortName(string $class): string
     {
         return new \ReflectionClass($class)->getShortName();
+    }
+
+    /** The last segment of a class name — without loading the class, which may not exist yet. */
+    private static function bareName(string $class): string
+    {
+        $at = strrpos($class, '\\');
+        return $at === false ? $class : substr($class, $at + 1);
     }
 }

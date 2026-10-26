@@ -14,6 +14,6 @@ namespace Flytachi\Winter\Kernel\Process;
  * {@see \Flytachi\Winter\Kernel\Process\Stereotype\Daemon} with replicas, or
  * distinct classes.
  */
-final class ProcessAlreadyRunningException extends \RuntimeException
+class ProcessAlreadyRunningException extends \RuntimeException
 {
 }

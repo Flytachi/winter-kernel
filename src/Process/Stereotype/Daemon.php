@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Process\Stereotype;
 
 use Flytachi\Winter\DI\Container;
+use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
+use Flytachi\Winter\Kernel\App\Supervision\ComponentChannel;
 use Flytachi\Winter\Kernel\Process\Activity;
 use Flytachi\Winter\Kernel\Process\Daemon\DaemonConfigException;
 use Flytachi\Winter\Kernel\Process\Daemon\DaemonStatus;
@@ -393,6 +395,8 @@ abstract class Daemon extends Process
                 workers: $workers,
             );
             $status->locked = $this->lockReliable;
+            $status->host = ApplicationRuntime::host();
+            $status->managedBy = ApplicationRuntime::managedBy();
             try {
                 $store->write($key, $status);
             } catch (\Throwable $e) {
@@ -419,12 +423,16 @@ abstract class Daemon extends Process
             $final = $this->superviseFleet($write);
             if ($final === ProcessState::FAILED) {
                 $this->logger->critical('Daemon reached maxRestarts; giving up.');
+                ComponentChannel::failed();
+            } elseif ($this->stopSignalled) {
+                ComponentChannel::stopped();
             }
         } catch (\Throwable $e) {
             $this->logger->critical(
                 $e->getMessage()
                 . (env('DEBUG', false) ? "\n" . $e->getTraceAsString() : '')
             );
+            ComponentChannel::failed();
         } finally {
             $this->guard(fn() => $this->onShutdown());
             $store->del($key);

@@ -181,14 +181,25 @@ final class StaleRecordIntegrationTest extends IntegrationCase
     {
         $stranger = $this->stranger();
         $this->touchLockFile(SignalProcess::class);
-        // What an older kernel wrote: no `locked` in the serialized record.
-        $legacy = serialize(
-            new ProcessStatus($stranger, SignalProcess::class, ProcessState::RUNNING, Activity::IDLE, time())
+        // Exactly what 4.3 wrote: the eight fields of that time, none of the later ones.
+        $legacy = sprintf(
+            'O:%d:"%s":8:{s:3:"pid";i:%d;s:9:"className";s:%d:"%s";'
+            . 's:5:"state";E:51:"Flytachi\\Winter\\Kernel\\Process\\ProcessState:RUNNING";'
+            . 's:8:"activity";E:44:"Flytachi\\Winter\\Kernel\\Process\\Activity:IDLE";'
+            . 's:9:"startedAt";i:%d;s:11:"concurrency";i:0;s:5:"usage";N;s:11:"heartbeatAt";i:0;}',
+            strlen(ProcessStatus::class),
+            ProcessStatus::class,
+            $stranger,
+            strlen(SignalProcess::class),
+            SignalProcess::class,
+            time(),
         );
-        $legacy = str_replace(':9:{', ':8:{', preg_replace('/s:6:"locked";b:0;/', '', $legacy));
         self::store(SignalProcess::class)->write(self::key(SignalProcess::class), unserialize($legacy));
 
-        self::assertFalse($this->readRecord(SignalProcess::class)->locked, 'the missing field reads as false');
+        $record = $this->readRecord(SignalProcess::class);
+        self::assertFalse($record->locked, 'a missing `locked` reads as false');
+        self::assertNull($record->host, 'a missing `host` reads as null');
+        self::assertNull($record->managedBy, 'a missing `managedBy` reads as null');
         self::assertSame($stranger, SignalProcess::status()?->pid, 'and the PID decides');
     }
 

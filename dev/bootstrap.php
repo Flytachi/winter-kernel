@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Flytachi\Winter\Kernel\App\Attribute\EnableActuator;
+use Flytachi\Winter\Kernel\App\Attribute\EnableScheduler;
 use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
 use Flytachi\Winter\Kernel\WinterApplication;
 

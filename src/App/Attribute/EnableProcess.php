@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\App\Attribute;
 
+use Flytachi\Winter\Kernel\App\Component;
 use Flytachi\Winter\Kernel\Process\Stereotype\Process;
 
 /**
@@ -24,8 +25,17 @@ final class EnableProcess
 {
     /**
      * @param class-string<Process> $class The Process class to run.
+     * @param bool $critical Whether the application stops when it cannot run (the default);
+     *                       false leaves it down, marked failed, while the rest runs on.
+     * @param int $retries Restarts after it crashed while running, within 30 minutes.
+     *                     A failure to start is never retried.
+     * @param int $startTimeout Seconds to become ready (to enter run()); 0 waits for good.
      */
-    public function __construct(public string $class)
-    {
+    public function __construct(
+        public string $class,
+        public bool $critical = true,
+        public int $retries = Component::RETRIES,
+        public int $startTimeout = Component::START_TIMEOUT,
+    ) {
     }
 }

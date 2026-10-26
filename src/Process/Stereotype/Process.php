@@ -6,6 +6,10 @@ namespace Flytachi\Winter\Kernel\Process\Stereotype;
 
 use Flytachi\FileStore\FileStorage;
 use Flytachi\Winter\DI\Container;
+use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
+use Flytachi\Winter\Kernel\App\Runtime\ApplicationRecord;
+use Flytachi\Winter\Kernel\App\Supervision\ComponentChannel;
+use Flytachi\Winter\Kernel\App\Supervision\ComponentControl;
 use Flytachi\Winter\Kernel\Concurrent\Future;
 use Flytachi\Winter\Kernel\Core\Dep;
 use Flytachi\Winter\Kernel\Core\DepSupport;
@@ -15,6 +19,7 @@ use Flytachi\Winter\Kernel\Process\Engine\ProcessEngine;
 use Flytachi\Winter\Kernel\Process\ForkReset;
 use Flytachi\Winter\Kernel\Process\Internal\SingletonLock;
 use Flytachi\Winter\Kernel\Process\ProcessAlreadyRunningException;
+use Flytachi\Winter\Kernel\Process\ProcessManagedException;
 use Flytachi\Winter\Kernel\Process\ProcessRunnable;
 use Flytachi\Winter\Kernel\Process\ProcessState;
 use Flytachi\Winter\Kernel\Process\ProcessStatus;
@@ -349,6 +354,14 @@ abstract class Process
      */
     final protected static function dispatchWith(array $args, ?string $output): int
     {
+        // A component of the running application is started by the application: it is
+        // asked to, and the call waits a moment for the new process.
+        if (!ApplicationRuntime::isComponent()) {
+            $app = ApplicationRuntime::managing(static::class);
+            if ($app !== null) {
+                return static::resumeIn($app);
+            }
+        }
         static::ensureNotRunning();
 
         return new Thread(
@@ -365,13 +378,29 @@ abstract class Process
      */
     protected static function ensureNotRunning(): void
     {
+        // A component of the running application is started there, not here.
+        if (!ApplicationRuntime::isComponent()) {
+            $app = ApplicationRuntime::managing(static::class);
+            if ($app !== null) {
+                throw new ProcessManagedException(
+                    static::class . " is a component of the running application [PID {$app->pid}]: it is started "
+                    . 'there — with ' . static::class . '::dispatch() or `call process … start`.'
+                );
+            }
+        }
         $info = static::status();
+        if ($info !== null && self::isForeign($info)) {
+            throw new ProcessManagedException(
+                static::class . " runs in another environment ({$info->host}) [PID {$info->pid}]: "
+                . 'manage it there (for a container: docker exec … php call …).'
+            );
+        }
         // A record with the caller's own PID is a dead instance's, not a live one: the
         // caller is the one starting. Only reachable when the lock cannot be read (the
         // PID fallback in status()) — a container restarted after a SIGKILL hands the
         // same PID to the new process. Were this process the running instance after
         // all, boot() would still refuse on the lock.
-        if ($info !== null && $info->pid !== getmypid()) {
+        if ($info !== null && $info->pid !== getmypid() && !self::isDown($info)) {
             throw new ProcessAlreadyRunningException(
                 static::class . " is already running [PID {$info->pid}] (since {$info->getStartedAt()})."
             );
@@ -392,6 +421,17 @@ abstract class Process
             $status = $store->read($key);
             if (!$status) {
                 return null;
+            }
+            // Written in another environment (a container's record read through a mounted
+            // storage): its PID belongs to another process namespace, so nothing here can
+            // confirm or deny it. Returned as it is; nobody may signal by it.
+            if (self::isForeign($status)) {
+                return $status;
+            }
+            // Written by the application's supervisor for a component that is down: it
+            // holds as long as that run of the application does.
+            if (self::isDown($status) && $status->managedBy !== null) {
+                return $status->managedBy->isAlive() ? $status : null;
             }
             // Liveness by the lock, not by the PID in the record. The record is written
             // after the lock is taken and removed before it is released, so a record
@@ -428,10 +468,180 @@ abstract class Process
     final public static function stop(): bool
     {
         $status = static::status();
-        if (!$status) {
+        // A component of the application that is down has no process of its own: its
+        // record names the supervisor, which must not be signalled. A record from another
+        // environment names a PID that means nothing here.
+        if (!$status || self::isDown($status) || self::isForeign($status)) {
             return false;
         }
         return posix_kill($status->pid, SIGTERM);
+    }
+
+    /**
+     * Stops and starts the process again. (Not `restart()`: a daemon's `restart()` is its
+     * workers' restart policy.)
+     *
+     * A component of the running application is restarted by the application — at once,
+     * not counted as a crash; the call only asks for it and returns. A process on its own
+     * is stopped, waited for (up to a minute), and dispatched again.
+     *
+     * @return bool False when it could not be restarted from here: it runs in another
+     *              environment, or did not stop within the minute.
+     * @link https://winterframe.net/docs/components Controlling a running component
+     */
+    final public static function relaunch(): bool
+    {
+        if (!ApplicationRuntime::isComponent()) {
+            $app = ApplicationRuntime::managing(static::class);
+            if ($app !== null) {
+                ComponentControl::request($app->managedBy(), static::class, ComponentControl::RESTART);
+                return true;
+            }
+        }
+        $status = static::status();
+        if ($status !== null) {
+            if (self::isForeign($status) || !static::stop()) {
+                return false;
+            }
+            $deadline = microtime(true) + 60.0;
+            while (static::status() !== null) {
+                if (microtime(true) >= $deadline) {
+                    return false;
+                }
+                usleep(100_000);
+            }
+        }
+        static::dispatch();
+        return true;
+    }
+
+    /**
+     * Asks the running application to start this component again, and waits up to a few
+     * seconds for it.
+     *
+     * @return int The new process's PID, or 0 when it is not up yet.
+     * @throws ProcessAlreadyRunningException It is running already.
+     */
+    private static function resumeIn(ApplicationRecord $app): int
+    {
+        $status = static::status();
+        if ($status !== null && !self::isDown($status)) {
+            throw new ProcessAlreadyRunningException(
+                static::class . " is already running [PID {$status->pid}] (since {$status->getStartedAt()})."
+            );
+        }
+        ComponentControl::request($app->managedBy(), static::class, ComponentControl::START);
+        $deadline = microtime(true) + 5.0;
+        do {
+            usleep(50_000);
+            $status = static::status();
+            if ($status !== null && !self::isDown($status)) {
+                return $status->pid;
+            }
+        } while (microtime(true) < $deadline);
+        return 0;
+    }
+
+    /**
+     * Whether a record is the supervisor's note of a component that is down — finished,
+     * stopped on request, or failed — rather than a process of its own.
+     */
+    private static function isDown(ProcessStatus $status): bool
+    {
+        return $status->state === ProcessState::TERMINATED || $status->state === ProcessState::FAILED;
+    }
+
+    /** Whether a record was written in another environment, where its PID means nothing. */
+    private static function isForeign(ProcessStatus $status): bool
+    {
+        return $status->host !== null && $status->host !== ApplicationRuntime::host();
+    }
+
+    /**
+     * Records this class as a component of the application that is down on request, or
+     * whose work is done. Written by the supervisor; it lasts as long as the application
+     * run does.
+     *
+     * @internal Called by the application's supervisor.
+     */
+    final public static function recordStopped(): void
+    {
+        static::recordDown(ProcessState::TERMINATED);
+    }
+
+    /**
+     * Removes what the supervisor recorded of this class — only that: a record of a
+     * process of its own, or of another run, is left alone.
+     *
+     * @internal Called by the application's supervisor.
+     */
+    final public static function forgetRecord(): void
+    {
+        $run = ApplicationRuntime::current()?->managedBy();
+        try {
+            $status = static::store()->read(static::key());
+        } catch (\Throwable) {
+            return;
+        }
+        if ($run !== null && $status instanceof ProcessStatus && self::isDown($status) && $status->managedBy == $run) {
+            static::store()->del(static::key());
+        }
+    }
+
+    /**
+     * The PID of a live instance of this class that the running application did not
+     * start — one started on its own, or left from a previous run — or null.
+     *
+     * @internal Called by the application's supervisor.
+     */
+    final public static function outsider(): ?int
+    {
+        $status = static::status();
+        if ($status === null || self::isDown($status)) {
+            return null;
+        }
+        $run = ApplicationRuntime::current();
+        if ($run !== null && $status->managedBy?->isRun($run)) {
+            return null;
+        }
+        return $status->pid;
+    }
+
+    /**
+     * Records this class as a component the application could not keep running — what
+     * `status` shows for a non-critical component left down. Written by the supervisor,
+     * so the record names the supervisor's process, alive as long as the application is.
+     *
+     * @internal Called by the application's supervisor.
+     */
+    final public static function recordFailed(): void
+    {
+        static::recordDown(ProcessState::FAILED);
+    }
+
+    private static function recordDown(ProcessState $state): void
+    {
+        $status = new ProcessStatus(
+            pid: getmypid(),
+            className: static::class,
+            state: $state,
+            activity: Activity::IDLE,
+            startedAt: time(),
+        );
+        $status->host = ApplicationRuntime::host();
+        $status->managedBy = ApplicationRuntime::current()?->managedBy();
+        static::store()->write(static::key(), $status);
+    }
+
+    /**
+     * Whether the component announces readiness itself, at a later point than the start
+     * of {@see run()} — a WebSocket once it listens.
+     *
+     * @internal For the framework's stereotypes.
+     */
+    protected function readyOnRun(): bool
+    {
+        return true;
     }
 
     // -------------------------------------------------------------------------
@@ -463,6 +673,10 @@ abstract class Process
         try {
             $this->runBody();
         } finally {
+            // Under a supervisor: an end on request is not a failure, and not restarted.
+            if ($this->stopping) {
+                ComponentChannel::stopped();
+            }
             static::store()->del(static::key());
             $this->releaseLock();
         }
@@ -484,6 +698,9 @@ abstract class Process
      */
     protected function runWorker(?int $slot = null, ?string $title = null, ?string $ownerClass = null): void
     {
+        // The daemon's channel to the application's supervisor is not this worker's: its
+        // readiness and its stop are the daemon's to report.
+        ComponentChannel::detach();
         $this->workerSlot = $slot;
         $this->titleOverride = $title;
         $this->ownerClass = $ownerClass;
@@ -569,7 +786,12 @@ abstract class Process
     {
         try {
             $this->engine->enter(
-                fn() => $this->run(),
+                function (): void {
+                    if ($this->readyOnRun()) {
+                        ComponentChannel::ready();
+                    }
+                    $this->run();
+                },
                 [
                     SIGTERM => fn() => $this->onStopSignal(fn() => $this->onTerminate()),
                     SIGINT => fn() => $this->onStopSignal(fn() => $this->onInterrupt()),
@@ -699,6 +921,8 @@ abstract class Process
             concurrency: $this->concurrency,
         );
         $status->locked = $this->lockReliable;
+        $status->host = ApplicationRuntime::host();
+        $status->managedBy = ApplicationRuntime::managedBy();
         try {
             static::store()->write(static::key(), $status);
         } catch (\Throwable $e) {
