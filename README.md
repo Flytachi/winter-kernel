@@ -63,12 +63,12 @@ composer require flytachi/winter-kernel
 
 declare(strict_types=1);
 
-use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
+use Flytachi\Winter\Kernel\App\Attribute\EnableHttp;
 use Flytachi\Winter\Kernel\WinterApplication;
 
 require __DIR__ . '/vendor/autoload.php';
 
-#[EnableWeb]
+#[EnableHttp]
 final class Application extends WinterApplication
 {
     public static function main(array $argv): never
@@ -136,7 +136,7 @@ none and boot fails rather than starting an application that does nothing.
 
 | Attribute | Effect | Docs |
 |---|---|---|
-| `#[EnableWeb]` | the Swoole HTTP server | [Routing](https://winterframe.net/docs/routing) |
+| `#[EnableHttp]` | the Swoole HTTP server | [Routing](https://winterframe.net/docs/routing) |
 | `#[EnableScheduler]` | runs `#[Scheduled]` methods on their triggers | [Scheduler](https://winterframe.net/docs/scheduler) |
 | `#[EnableProcess(Foo::class)]` | a managed worker beside the server | [Processes](https://winterframe.net/docs/processes) |
 | `#[EnableDaemon(Bar::class)]` | a supervised fleet of workers | [Daemons](https://winterframe.net/docs/daemons) |

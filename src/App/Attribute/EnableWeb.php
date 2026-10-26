@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\App\Attribute;
 
 /**
- * Enables the HTTP web tier — the analogue of Spring's `@EnableWebMvc`. Declared
- * on the {@see \Flytachi\Winter\Kernel\WinterApplication} class; produces one
- * {@see \Flytachi\Winter\Kernel\App\Component::http()} in the manifest.
+ * The former name of {@see EnableHttp}, and the same: one
+ * {@see \Flytachi\Winter\Kernel\App\Component::http()} in the manifest, with the
+ * default supervision. Declare #[EnableHttp] instead — it also takes the supervision
+ * parameters.
+ *
+ * @deprecated Use {@see EnableHttp}.
  *
  * A pure capability toggle: it carries no host/port. The bind address is
  * deployment configuration, not a property of the application, so it lives in

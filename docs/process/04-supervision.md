@@ -8,22 +8,30 @@ web page *Application components → Supervision*; this page is how they are bui
 ## Shape
 
 ```
-php call run                     (master; claims the application)
-├── winter-web: Worker N         (only with #[EnableWeb])
-└── winter-supervisor            (a Swoole addProcess under the web tier;
-    ├── winter-process: …         the master itself without one)
-    ├── winter-daemon: … master → workers
-    └── php scripts/x.php / node … (outside programs, exec'd)
+php call run                     (PID 1: the application — claims it, supervises)
+├── winter-http: manager → Worker N   (the HTTP server, with #[EnableHttp])
+├── winter-process: …
+├── winter-daemon: … master → workers
+└── php scripts/x.php / node …        (outside programs, exec'd)
 ```
 
 - `App\Runtime\ApplicationRuntime::claim()` — in `serve()`, before anything binds or
   forks: the application lock (`runnable/app.<App>.lock`, a `LockFile`) plus the
   application record (PID, start time, host, components). A second `call run` of the same
   application on the same storage is refused. Liveness is the lock, as for processes.
-- `App\Supervision\Supervisor` — one per application. Under the web tier it is the one
-  `addProcess` of the server; on a critical failure it raises a `Swoole\Atomic`, SIGTERMs
-  the master and waits to be stopped, and the master exits with 1. Without the web tier
-  the master runs it and exits with its code.
+- `App\Supervision\Supervisor` runs in PID 1 in both shapes — with and without the HTTP
+  server — and its result is the exit code (1 when a critical component failed).
+- The HTTP server is `ComponentKind::Http`: PID 1 prepares what is shared (settings, the
+  route scan, the dev watcher — `App\HttpTier`), the component's process creates and
+  starts the Swoole server (`WinterApplication::runHttp()`), ready on `onStart`. PID 1 is
+  never the Swoole master: Swoole runs threads there, and a threaded process must not
+  fork the rest. SIGHUP/SIGUSR1/SIGUSR2 to PID 1 are forwarded to it (worker reload).
+- `call run dev`: the watcher in the HTTP process stops the server and sends `L`; the
+  supervisor stops everything and PID 1 re-execs itself, so every component runs the new
+  code.
+- Each component runs in a process group of its own; when its main process exits, the
+  rest of the group is SIGKILLed — a Swoole worker of a killed server would otherwise keep
+  the port, a daemon's workers would run on unwatched.
 
 ## Phases and the channel
 
@@ -35,6 +43,7 @@ Each start opens a socket pair; the child keeps one end in `ComponentChannel`:
 | `S` stopped | Process/Daemon ending after SIGTERM/SIGINT | a stop on request: not restarted, recorded `TERMINATED` |
 | `F` failed | Daemon that gave up (maxRestarts) or threw | a failure, never retried |
 | `H` held | the child, on `ProcessAlreadyRunningException` | an outsider (or `ensureNotRunning()`) holds it: wait, retry every second |
+| `L` reload | the HTTP process under `call run dev`, after a watched change | restart the whole application in place |
 
 Decisions in `Supervisor::exited()`: shutdown → stopped; restart requested → start at
 once; start timed out → failure to start; `H` → held; `S` → stopped; `F` → fail; clean
@@ -64,8 +73,12 @@ project root and `pcntl_exec`s — through `/usr/bin/env` for a bare name, with
 
 ## Traps met on the way
 
-- Under `SWOOLE_HOOK_ALL`, `stream_select()` outside a coroutine is fatal: the supervisor
-  sets hook flags to 0 and gives each child the original flags back right after the fork.
+- The supervisor never touches the Swoole hook flags. Left unset, `Coroutine\run()` switches
+  all hooks on inside a component's coroutines; set to 0 (even explicitly), it does not, and
+  `spawn()` runs its I/O one task at a time. The HTTP process switches them on itself
+  (`enableCoroutine(SWOOLE_HOOK_ALL)`) before creating the server. Should PID 1 ever run
+  with hooks on, `listen()` polls instead of `stream_select()`, which is fatal outside a
+  coroutine then.
 - In a process forked from one Swoole created, `exit()` only throws `ExitException`: a child
   leaves with `Termination::leave()`, or it would run on into the supervisor's loop.
 - A daemon's workers inherit the daemon's channel: `runWorker()` detaches it first.

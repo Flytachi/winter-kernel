@@ -24,7 +24,7 @@ final class ChatSocket extends WebSocket
 ```
 
 ```php
-#[EnableWeb]
+#[EnableHttp]
 #[EnableWebSocket(ChatSocket::class, port: 8001)]
 final class App extends WinterApplication {}
 ```

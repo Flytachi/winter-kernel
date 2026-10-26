@@ -98,8 +98,9 @@ final class DevWatcher
      * callback) and the master-side file-watch timer.
      *
      * @param callable|null $onWorkerStart function(Server $server, int $workerId): void
+     * @param callable|null $onStart function(Server $server): void — run first on the master's start.
      */
-    public function attach(Server $server, ?callable $onWorkerStart = null): void
+    public function attach(Server $server, ?callable $onWorkerStart = null, ?callable $onStart = null): void
     {
         $server->on('workerStart', function (Server $server, int $workerId) use ($onWorkerStart): void {
             $this->workerId = $workerId;
@@ -114,7 +115,10 @@ final class DevWatcher
 
         // The file watcher lives in the master reactor. On a change it stops the
         // server; serve() then re-exec's the process (see reexec()).
-        $server->on('start', function (Server $server): void {
+        $server->on('start', function (Server $server) use ($onStart): void {
+            if ($onStart !== null) {
+                $onStart($server);
+            }
             $this->snapshot = $this->scan();
             $this->timerId = Timer::tick((int) ($this->interval * 1000), function () use ($server): void {
                 if ($this->stopping) {
@@ -193,6 +197,12 @@ final class DevWatcher
     {
         $this->reloadRequested = true;
         @file_put_contents($this->signalPath, (string) getmypid());
+    }
+
+    /** Whether a restart was asked for — without answering it: {@see reloadRequested()} does. */
+    public function reloadPending(): bool
+    {
+        return $this->reloadRequested || is_file($this->signalPath);
     }
 
     /**

@@ -52,9 +52,9 @@ final class Supervisor
     private array $units = [];
     private bool $stopping = false;
     private int $exitCode = 0;
-    /** Swoole runtime hooks this process had — given back to every component it starts. */
-    private int $hooks = 0;
     private float $commandsAt = 0.0;
+    /** A component asked for the whole application to restart in place (`call run dev`). */
+    private bool $reloadRequested = false;
 
     /**
      * @param list<Component> $components
@@ -92,17 +92,21 @@ final class Supervisor
      */
     public function run(bool $untilDone): int
     {
-        // The supervisor only waits, forks and reads its channels — none of it inside a
-        // coroutine, which the runtime hooks would demand of stream_select(). Its
-        // components get the hooks back as soon as they are forked.
-        if (extension_loaded('swoole')) {
-            $this->hooks = \Swoole\Runtime::getHookFlags();
-            \Swoole\Runtime::setHookFlags(0);
-        }
+        // The Swoole runtime hooks are left exactly as they are. A component inherits them
+        // unset, and Coroutine\run() then switches all of them on inside its coroutines —
+        // set them here, even to 0, and that no longer happens: spawn() would do its I/O
+        // one task at a time. Nor may hooks be switched on here for the components: a
+        // process that ran hooked I/O outside a coroutine — a daemon's master — hands its
+        // workers a half-built async runtime, and their coroutines stall.
 
         pcntl_async_signals(true);
         pcntl_signal(SIGTERM, fn() => $this->stop(SIGTERM));
         pcntl_signal(SIGINT, fn() => $this->stop(SIGINT));
+        // What a Swoole server answers to — a graceful reload of its workers — reaches the
+        // HTTP server, as it did when the server was this process.
+        foreach ([SIGHUP, SIGUSR1, SIGUSR2] as $signal) {
+            pcntl_signal($signal, fn() => $this->forward($signal, ComponentKind::Http));
+        }
 
         while (true) {
             $now = microtime(true);
@@ -118,6 +122,22 @@ final class Supervisor
             if ($this->alive() === 0 && ($this->stopping || ($untilDone && $this->done()))) {
                 $this->forgetAll();
                 return $this->exitCode;
+            }
+        }
+    }
+
+    /** Whether a component asked for the application to restart in place. */
+    public function reloadRequested(): bool
+    {
+        return $this->reloadRequested;
+    }
+
+    /** Passes a signal on to the running components of one kind. */
+    private function forward(int $signal, ComponentKind $kind): void
+    {
+        foreach ($this->units as $unit) {
+            if ($unit->pid > 0 && $unit->component->kind === $kind) {
+                @posix_kill($unit->pid, $signal);
             }
         }
     }
@@ -189,6 +209,9 @@ final class Supervisor
             return;
         }
         if ($pid === 0) {
+            // A group of its own: whatever the component forks — a daemon's workers, a
+            // Swoole server's manager and workers, a script's children — goes with it.
+            @posix_setpgid(0, 0);
             fclose($pair[0]);
             if ($unit->component->kind === ComponentKind::Command) {
                 fclose($pair[1]);
@@ -197,6 +220,8 @@ final class Supervisor
             $this->becomeComponent($unit, $pair[1]);
         }
 
+        // Set from both sides: whichever runs first, the group exists before it is needed.
+        @posix_setpgid($pid, $pid);
         fclose($pair[1]);
         stream_set_blocking($pair[0], false);
         $unit->pid = $pid;
@@ -264,9 +289,6 @@ final class Supervisor
      */
     private function becomeComponent(Unit $unit, mixed $socket): never
     {
-        if ($this->hooks !== 0) {
-            \Swoole\Runtime::setHookFlags($this->hooks);
-        }
         foreach ([SIGTERM, SIGINT, SIGHUP, SIGUSR1, SIGUSR2] as $signal) {
             pcntl_signal($signal, SIG_DFL);
         }
@@ -305,13 +327,17 @@ final class Supervisor
                 $read[] = $unit->socket;
             }
         }
-        if ($read === []) {
+        // stream_select() is fatal outside a coroutine once the runtime hooks are on — not
+        // the case unless the application switched them on in this process itself; then the
+        // channels are only polled.
+        $hooked = extension_loaded('swoole') && \Swoole\Runtime::getHookFlags() !== 0;
+        if ($read === [] || $hooked) {
             usleep((int) (self::TICK * 1_000_000));
-            return;
-        }
-        $write = $except = null;
-        if (@stream_select($read, $write, $except, 0, (int) (self::TICK * 1_000_000)) < 1) {
-            return;
+        } else {
+            $write = $except = null;
+            if (@stream_select($read, $write, $except, 0, (int) (self::TICK * 1_000_000)) < 1) {
+                return;
+            }
         }
         foreach ($this->units as $unit) {
             if ($unit->socket === null || !in_array($unit->socket, $read, true)) {
@@ -329,6 +355,11 @@ final class Supervisor
             }
             if (str_contains($data, ComponentChannel::HELD)) {
                 $unit->held = true;
+            }
+            if (str_contains($data, ComponentChannel::RELOAD) && !$this->stopping) {
+                $this->logger->info("{$unit->name} asked for a restart of the application.");
+                $this->reloadRequested = true;
+                $this->stop(SIGTERM);
             }
         }
     }
@@ -382,6 +413,11 @@ final class Supervisor
 
     private function exited(Unit $unit, int $status): void
     {
+        // What the component left behind — children of a process killed outright, a Swoole
+        // worker still holding the port — goes now: they would outlive it unwatched, and a
+        // restart would meet them.
+        @posix_kill(-$unit->pid, SIGKILL);
+
         if ($unit->socket !== null) {
             // Whatever it said last may still be unread.
             $tail = (string) @stream_get_contents($unit->socket);
@@ -391,6 +427,10 @@ final class Supervisor
             $unit->stopRequested = $unit->stopRequested || str_contains($tail, ComponentChannel::STOPPED);
             $unit->gaveUp = $unit->gaveUp || str_contains($tail, ComponentChannel::FAILED);
             $unit->held = $unit->held || str_contains($tail, ComponentChannel::HELD);
+            if (str_contains($tail, ComponentChannel::RELOAD) && !$this->stopping) {
+                $this->reloadRequested = true;
+                $this->stop(SIGTERM);
+            }
             @fclose($unit->socket);
         }
         $wasReady = $unit->state === UnitState::Running;

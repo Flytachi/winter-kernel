@@ -16,7 +16,7 @@ root from the application class's own file.
 
 ```php
 // bootstrap.php — no Kernel::init() in sight
-#[EnableWeb]
+#[EnableHttp]
 final class Application extends WinterApplication
 {
     public static function main(array $argv): never { parent::run($argv); }
@@ -30,7 +30,7 @@ files outside the project:
 use Flytachi\Winter\Kernel\App\ApplicationArguments;
 use Flytachi\Winter\Kernel\Kernel;
 
-#[EnableWeb]
+#[EnableHttp]
 final class Application extends WinterApplication
 {
     protected static function configure(ApplicationArguments $args): void

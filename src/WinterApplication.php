@@ -18,6 +18,7 @@ use Flytachi\Winter\Kernel\App\Attribute\EnableCaching;
 use Flytachi\Winter\Kernel\App\Attribute\EnableDaemon;
 use Flytachi\Winter\Kernel\App\Attribute\EnableProcess;
 use Flytachi\Winter\Kernel\App\Attribute\EnableScheduler;
+use Flytachi\Winter\Kernel\App\Attribute\EnableHttp;
 use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
 use Flytachi\Winter\Kernel\App\Attribute\EnableWebSocket;
 use Flytachi\Winter\Kernel\App\Attribute\Import;
@@ -28,6 +29,8 @@ use Flytachi\Winter\Kernel\App\Supervision\ComponentRecords;
 use Flytachi\Winter\Kernel\App\Supervision\Supervisor;
 use Flytachi\Winter\Kernel\App\Component;
 use Flytachi\Winter\Kernel\App\Components;
+use Flytachi\Winter\Kernel\App\HttpTier;
+use Flytachi\Winter\Kernel\App\Supervision\ComponentChannel;
 use Flytachi\Winter\Kernel\App\ContributionCollector;
 use Flytachi\Winter\Kernel\App\ComponentKind;
 use Flytachi\Winter\Kernel\App\Config\ChannelRegistry;
@@ -82,7 +85,7 @@ use Psr\Log\LoggerInterface;
  * Extend it once, declare what the application contains with #[Enable*] attributes,
  * then route the CLI through {@see main()} from a single file:
  * ```
- * #[EnableWeb]
+ * #[EnableHttp]
  * #[EnableAsync]
  * #[EnableCaching]
  * #[EnableScheduler]
@@ -102,7 +105,7 @@ use Psr\Log\LoggerInterface;
  * ```
  *
  * The manifest is declarative: each #[Enable*] on the App class maps to one
- * {@see Component} ({@see EnableWeb} → http, {@see EnableProcess}/{@see EnableDaemon}
+ * {@see Component} ({@see EnableHttp} → http, {@see EnableProcess}/{@see EnableDaemon}
  * → workers, {@see EnableScheduler} → scheduler), except {@see EnableAsync} and
  * {@see EnableCaching}, which only toggle proxying during boot.
  *
@@ -508,7 +511,7 @@ abstract class WinterApplication
     /**
      * Refuses a manifest attribute left on an ancestor of the application class.
      *
-     * PHP does not inherit attributes — a `#[EnableWeb]` on an abstract base reads as
+     * PHP does not inherit attributes — a `#[EnableHttp]` on an abstract base reads as
      * zero attributes on the class that extends it. The manifest is deliberately not
      * made inheritable: its value is that one class tells you everything the process
      * will start, and walking a hierarchy to find a `#[EnableProcess]` two levels up
@@ -516,7 +519,7 @@ abstract class WinterApplication
      *
      * What has to go is the silence. A missing manifest is caught only by `serve`, and
      * a partial loss — the base carrying `#[EnableActuator]` while the child carries
-     * `#[EnableWeb]` — is caught nowhere: the application starts, the actuator does not,
+     * `#[EnableHttp]` — is caught nowhere: the application starts, the actuator does not,
      * and nothing says why.
      *
      * @throws ApplicationConfigException
@@ -524,6 +527,7 @@ abstract class WinterApplication
     private static function assertManifestIsNotInherited(): void
     {
         $manifest = [
+            EnableHttp::class,
             EnableWeb::class,
             EnableScheduler::class,
             EnableProcess::class,
@@ -733,10 +737,10 @@ abstract class WinterApplication
                     $package,
                     $contribution->controllers(),
                 ), ['package' => $package, 'controllers' => $contribution->controllers()]);
-            } elseif (!static::hasAttribute(EnableWeb::class)) {
+            } elseif (!static::hasAttribute(EnableHttp::class) && !static::hasAttribute(EnableWeb::class)) {
                 $logger->warning(sprintf(
                     'Package %s brings %d controller(s), but the application declares no '
-                    . '#[EnableWeb], so nothing is served.',
+                    . '#[EnableHttp], so nothing is served.',
                     $package,
                     $contribution->controllers(),
                 ), ['package' => $package, 'controllers' => $contribution->controllers()]);
@@ -780,9 +784,12 @@ abstract class WinterApplication
     // ── Serve ─────────────────────────────────────────────────────────────────
 
     /**
-     * Brings the application up and blocks until shutdown. With a
-     * {@see Component::http()} declared: one Swoole HTTP server plus every other
-     * component supervised via `addProcess`. Without it: headless.
+     * Brings the application up and blocks until it stops: this process — PID 1 in a
+     * container — claims the application and supervises every component, the HTTP server
+     * among them, each in a process of its own.
+     *
+     * Exits with 0 when stopped, 1 when a critical component could not run. Under
+     * `call run dev` a change in a watched file restarts the whole application in place.
      *
      * @param bool $watch Attach the DevWatcher (memory + hot-reload) — development.
      */
@@ -792,15 +799,17 @@ abstract class WinterApplication
         if ($components === []) {
             throw new ApplicationConfigException(
                 'No components declared on ' . static::class . ': add at least one '
-                . '#[EnableWeb], #[EnableWebSocket], #[EnableProcess], #[EnableDaemon] or #[EnableScheduler].'
+                . '#[EnableHttp], #[EnableWebSocket], #[EnableProcess], #[EnableDaemon] or #[EnableScheduler].'
+            );
+        }
+        if (!function_exists('pcntl_fork')) {
+            throw new ApplicationConfigException(
+                '`call run` needs ext-pcntl to run its components (each runs in a process of its own).'
             );
         }
 
-        /** @var ?Component $http */
         $http = null;
-        /** @var list<Component> $companions */
         $companions = [];
-
         foreach ($components as $component) {
             if ($component->kind === ComponentKind::Http) {
                 $http = $component;
@@ -815,52 +824,71 @@ abstract class WinterApplication
         // here, and every process forked from now on knows the run it belongs to.
         ApplicationRuntime::claim(static::class, $components);
 
-        // Here, in the process every worker and companion is forked from: a table
-        // created after the fork would exist in one process only.
+        // Here, in the process every component is forked from: a table created after the
+        // fork would exist in one process only.
         CacheManager::allocate();
 
-        if ($http !== null) {
-            static::serveHttp($companions, $watch, $args, $logger);
+        // What the HTTP server needs is prepared here, once — the route scan above all,
+        // which every worker then shares from this process's memory. The server itself is
+        // created in its own process: the one Swoole runs threads in must not be the one
+        // that forks the rest.
+        $web = $http !== null ? static::prepareHttp($args, $watch) : null;
+        self::assertFreePorts($companions, $web?->port());
+
+        if (Banner::isEnabled($args)) {
+            $rows = static::bannerRows($companions, $web?->host(), $web?->port());
+            if ($web !== null) {
+                // What the profile resolved to, because a limit nobody can see is a limit
+                // nobody thinks of when a request starts queueing or a connection is refused.
+                $rows[] = ['profile', self::profileSummary($web->settings)];
+            }
+            Banner::print($rows, self::elapsedMs());
         }
 
-        static::serveHeadless($companions, $args, $logger);
+        $names = array_map(static fn(Component $c): string => $c->name(), $companions);
+        $logger->info(sprintf(
+            'Application up%s%s%s',
+            $web !== null ? sprintf(': http://%s:%d', $web->host(), $web->port()) : ' (headless)',
+            $names === [] ? '' : ($web !== null ? ' + ' : ': ') . '[' . implode(', ', $names) . ']',
+            $watch ? ' (dev/watch)' : ''
+        ));
+
+        // Nothing the boot opened may be inherited by the components forked from here.
+        BeforeFork::runAll();
+
+        $supervisor = self::supervisor($components, $web);
+        $code = $supervisor->run(untilDone: true);
+        ApplicationRuntime::release(static::class);
+
+        if ($supervisor->reloadRequested() && $web?->dev !== null) {
+            $web->dev->reloadRequested();
+            $web->dev->reexec();
+        }
+
+        exit($code);
     }
 
     /**
-     * Web bundle: the Http component becomes the Swoole server; every other
-     * component is attached with addProcess so the master supervises it.
-     *
-     * @param list<Component> $companions
+     * Prepares the HTTP server in the application's process: its settings, the route scan,
+     * the dev watcher — what the server's own process then starts from.
      */
-    private static function serveHttp(
-        array $companions,
-        bool $watch,
-        ApplicationArguments $args,
-        LoggerInterface $logger,
-    ): never {
+    private static function prepareHttp(ApplicationArguments $args, bool $watch): HttpTier
+    {
         if (!extension_loaded('swoole')) {
             throw new ApplicationConfigException(
-                '`call run` with a web tier needs ext-swoole (pecl install swoole).'
+                '`call run` with an HTTP server needs ext-swoole (pecl install swoole).'
             );
         }
 
         $settings = static::buildServerSettings($args);
-        $host = $settings->getHost();
-        $port = $settings->getPort();
 
         // The same class-list cache the boot scan built a moment ago: without it this
         // walks the whole tree a second time, `require_once`-ing every file again — and
-        // the master's memory is what every worker forks from.
+        // this process's memory is what every worker forks from.
         $router = Router::fromScan(
             Kernel::$pathRoot,
             cache: env('DEBUG', false) ? null : Kernel::$pathStorageVolatile . '/di.php',
         );
-
-        \Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL);
-        Runtime::boot(RuntimeMode::Swoole);
-
-        $server = new \Swoole\Http\Server($host, $port);
-        $server->set($settings->toArray());
 
         // Says the arithmetic out loud before any worker exists: the memory limit is per
         // worker and shared by every coroutine in it, so what the box must hold is
@@ -872,40 +900,28 @@ abstract class WinterApplication
             LoggerFactory::getLogger('sys'),
         );
 
-        $names = array_map(static fn(Component $c): string => $c->name(), $companions);
-        self::assertFreePorts($companions, $port);
+        // Built here so the server's process and this one name the same reload marker.
+        $dev = $watch ? new DevWatcher([Kernel::$pathRoot]) : null;
 
-        // The background components run under one supervisor process of the server. A
-        // critical component that cannot run stops the whole application: the supervisor
-        // raises this flag and stops the master, which then exits with 1.
-        $failed = new \Swoole\Atomic(0);
-        if ($companions !== []) {
-            $masterPid = getmypid();
-            $server->addProcess(new \Swoole\Process(
-                static function () use ($companions, $failed, $masterPid, $logger): void {
-                    // Runtime hooks stay as inherited (SWOOLE_HOOK_ALL): the components
-                    // run their bodies under them, as a standalone launch does.
-                    cli_set_process_title('winter-supervisor');
-                    LoggerFactory::setContextStorage(new ProcessContext());
-                    LoggerFactory::setDefaultChannel('sys');
-                    ForkReset::runAll();
-                    if (self::supervisor($companions, $logger)->run(untilDone: false) === 0) {
-                        return;
-                    }
-                    $failed->set(1);
-                    @posix_kill($masterPid, SIGTERM);
-                    // Stay until the server stops this process: leaving now would only have
-                    // Swoole start a new supervisor while the application shuts down.
-                    pcntl_signal(SIGTERM, SIG_DFL);
-                    pcntl_signal(SIGINT, SIG_DFL);
-                    while (true) {
-                        sleep(1);
-                    }
-                }
-            ));
-        }
+        return new HttpTier($settings, $router, $dev);
+    }
 
-        $trimThreshold = $settings->getMemoryTrimThreshold();
+    /**
+     * The HTTP server's own process: the Swoole server, from bind to shutdown. Ready for
+     * the supervisor once the server has started — its port is bound.
+     */
+    private static function runHttp(HttpTier $web): void
+    {
+        // Every request coroutine needs the hooks, and the server's workers are forked from
+        // this process: switched on here, for the whole server.
+        \Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL);
+        Runtime::boot(RuntimeMode::Swoole);
+
+        $server = new \Swoole\Http\Server($web->host(), $web->port());
+        $server->set($web->settings->toArray());
+
+        $router = $web->router;
+        $trimThreshold = $web->settings->getMemoryTrimThreshold();
         $handler = static function (
             \Swoole\Http\Request $req,
             \Swoole\Http\Response $res
@@ -923,13 +939,13 @@ abstract class WinterApplication
         // Request workers log on 'http' with per-request coroutine isolation, and are
         // marked eligible to publish their connection-pool utilisation for
         // `call db pool` — the publisher itself only starts if a pool is ever opened.
-        $memoryLimit    = $settings->getMemoryLimit();
-        $requestTimeout = $settings->getRequestTimeout();
+        $memoryLimit    = $web->settings->getMemoryLimit();
+        $requestTimeout = $web->settings->getRequestTimeout();
         $workerStart = static function (
             \Swoole\Http\Server $server,
             int $workerId
         ) use ($memoryLimit, $requestTimeout): void {
-            cli_set_process_title("winter-web: Worker $workerId");
+            cli_set_process_title("winter-http: Worker $workerId");
             // Per worker, because the limit is a property of this process — and a no-op
             // when nothing was configured, so PHP's own value stands.
             WorkerMemory::apply($memoryLimit);
@@ -958,88 +974,30 @@ abstract class WinterApplication
             }
         };
 
-        $dev = $watch ? new DevWatcher([Kernel::$pathRoot]) : null;
-        if ($dev !== null) {
-            $dev->attach($server, $workerStart);
-            $server->on('request', $dev->wrap($handler));
+        // Started means bound: from here the server accepts connections.
+        $onStart = static function (): void {
+            cli_set_process_title('winter-http: master');
+            ComponentChannel::ready();
+        };
+        $server->on('managerStart', static fn() => cli_set_process_title('winter-http: manager'));
+
+        if ($web->dev !== null) {
+            $web->dev->attach($server, $workerStart, $onStart);
+            $server->on('request', $web->dev->wrap($handler));
         } else {
+            $server->on('start', $onStart);
             $server->on('workerStart', $workerStart);
             $server->on('request', $handler);
         }
         $server->on('workerExit', $workerExit);
 
-        if (Banner::isEnabled($args)) {
-            $rows = static::bannerRows($companions, $host, $port);
-            // What the profile resolved to, because a limit nobody can see is a limit
-            // nobody thinks of when a request starts queueing or a connection is refused.
-            $rows[] = ['profile', self::profileSummary($settings)];
-            Banner::print($rows, self::elapsedMs());
-        }
-
-        $logger->info(sprintf(
-            'Application up: http://%s:%d%s%s',
-            $host,
-            $port,
-            $names === [] ? '' : ' + [' . implode(', ', $names) . ']',
-            $watch ? ' (dev/watch)' : ''
-        ));
-
-        // Swoole forks every worker and every addProcess child from this master. A
-        // connection the boot opened here would be inherited by all of them, and the
-        // first child to drop it would close the master's server session; closed now, so
-        // there is nothing to inherit.
-        BeforeFork::runAll();
-
         $server->start();
 
-        if ($failed->get() === 1) {
-            exit(1);
+        // A watched file changed: the whole application restarts, so that every component
+        // runs the new code — said to the supervisor, which owns the restart.
+        if ($web->dev !== null && $web->dev->reloadPending()) {
+            ComponentChannel::reload();
         }
-        if ($dev !== null && $dev->reloadRequested()) {
-            $dev->reexec();
-        }
-
-        exit(0);
-    }
-
-    /**
-     * No web tier: run the background components directly — one in the foreground,
-     * several under a small pcntl supervisor that forwards the stop signal.
-     *
-     * @param list<Component> $companions
-     */
-    private static function serveHeadless(
-        array $companions,
-        ApplicationArguments $args,
-        LoggerInterface $logger,
-    ): never {
-        if ($companions === []) {
-            throw new ApplicationConfigException(
-                'Nothing to run: no components declared. Add at least one '
-                . '#[EnableWeb]/#[EnableWebSocket]/#[EnableProcess]/#[EnableDaemon]/#[EnableScheduler].'
-            );
-        }
-
-        if (Banner::isEnabled($args)) {
-            Banner::print(static::bannerRows($companions, null, null), self::elapsedMs());
-        }
-
-        self::assertFreePorts($companions, null);
-
-        if (!function_exists('pcntl_fork')) {
-            throw new ApplicationConfigException(
-                '`call run` needs ext-pcntl to run its components (each runs in a process of its own).'
-            );
-        }
-
-        $names = array_map(static fn(Component $c): string => $c->name(), $companions);
-        $logger->info('Application up (headless): [' . implode(', ', $names) . ']');
-
-        // The master is the supervisor: every component in a process of its own, restarted
-        // or given up on by the same rules as under the web tier.
-        $code = self::supervisor($companions, $logger)->run(untilDone: true);
-        ApplicationRuntime::release(static::class);
-        exit($code);
     }
 
     /**
@@ -1048,15 +1006,19 @@ abstract class WinterApplication
      *
      * @param list<Component> $components
      */
-    private static function supervisor(array $components, LoggerInterface $logger): Supervisor
+    private static function supervisor(array $components, ?HttpTier $web): Supervisor
     {
         $run = ApplicationRuntime::current()?->managedBy();
         return new Supervisor(
             $components,
-            launch: static function (Component $component): void {
+            launch: static function (Component $component) use ($web): void {
                 LoggerFactory::setContextStorage(new ProcessContext());
                 LoggerFactory::setDefaultChannel('sys');
                 ForkReset::runAll();
+                if ($component->kind === ComponentKind::Http && $web !== null) {
+                    self::runHttp($web);
+                    return;
+                }
                 self::launch($component);
             },
             report: static fn(string $what, \Throwable $e) => self::reportFailure($what, $e),
@@ -1084,7 +1046,7 @@ abstract class WinterApplication
                 }
             },
             name: static fn(Component $component): string => $component->name(),
-            logger: $logger,
+            logger: LoggerFactory::getLogger('Supervisor'),
             commands: $run === null
                 ? null
                 : static fn(Component $component): ?string => $component->class === null
@@ -1129,7 +1091,23 @@ abstract class WinterApplication
         $ref = new \ReflectionClass(static::class);
         $components = [];
 
-        if ($ref->getAttributes(EnableWeb::class) !== []) {
+        $http = $ref->getAttributes(EnableHttp::class);
+        if ($http !== [] && $ref->getAttributes(EnableWeb::class) !== []) {
+            throw new ApplicationConfigException(
+                '#[EnableWeb] and #[EnableHttp] are the same server: declare #[EnableHttp] only.'
+            );
+        }
+        if ($http !== []) {
+            $h = $http[0]->newInstance();
+            $components[] = self::component(
+                '#[EnableHttp]',
+                static fn() => Component::http(
+                    critical: $h->critical,
+                    retries: $h->retries,
+                    startTimeout: $h->startTimeout,
+                ),
+            );
+        } elseif ($ref->getAttributes(EnableWeb::class) !== []) {
             $components[] = Component::http();
         }
         $scheduler = $ref->getAttributes(EnableScheduler::class);

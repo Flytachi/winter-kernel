@@ -105,9 +105,22 @@ final readonly class Component
     }
 
     /** The main HTTP server — controllers under the app root are scanned automatically. */
-    public static function http(string $host = '0.0.0.0', int $port = 8000): self
-    {
-        return new self(ComponentKind::Http, host: $host, port: $port);
+    public static function http(
+        string $host = '0.0.0.0',
+        int $port = 8000,
+        bool $critical = true,
+        int $retries = self::RETRIES,
+        int $startTimeout = self::START_TIMEOUT,
+    ): self {
+        return new self(
+            ComponentKind::Http,
+            host: $host,
+            port: $port,
+            critical: $critical,
+            retries: $retries,
+            startTimeout: $startTimeout,
+            label: 'Http',
+        );
     }
 
     /**

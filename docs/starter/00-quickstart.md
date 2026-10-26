@@ -64,12 +64,12 @@ declares the application:
 declare(strict_types=1);
 
 use Flytachi\Winter\Kernel\App\Attribute\EnableActuator;
-use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
+use Flytachi\Winter\Kernel\App\Attribute\EnableHttp;
 use Flytachi\Winter\Kernel\WinterApplication;
 
 require __DIR__ . '/vendor/autoload.php';
 
-#[EnableWeb]
+#[EnableHttp]
 #[EnableActuator]
 final class Application extends WinterApplication
 {
@@ -85,7 +85,7 @@ application that does nothing.
 
 | Attribute | Adds |
 |---|---|
-| `#[EnableWeb]` | the Swoole HTTP server |
+| `#[EnableHttp]` | the Swoole HTTP server |
 | `#[EnableActuator]` | `/actuator` diagnostics |
 | `#[EnableScheduler]` | runs `#[Scheduled]` methods on their triggers |
 | `#[EnableProcess(Foo::class)]` | a managed worker beside the server |
@@ -232,7 +232,7 @@ php call process main.process.EmailWorker stop
 …or beside the server, by adding it to the manifest:
 
 ```php
-#[EnableWeb]
+#[EnableHttp]
 #[EnableProcess(\Main\Process\EmailWorker::class)]
 final class Application extends WinterApplication { /* ... */ }
 ```
@@ -269,7 +269,7 @@ executes from is never the directory it writes to.
 |---|---|---|
 | Server | `php call run` | one long-lived Swoole process; log to stdout and let the orchestrator collect |
 | Server + workers | `php call run` with `#[EnableProcess]` / `#[EnableDaemon]` | workers supervised beside the server |
-| Headless | `php call run` with no `#[EnableWeb]` | workers and scheduler only, no HTTP |
+| Headless | `php call run` with no `#[EnableHttp]` | workers and scheduler only, no HTTP |
 | One-off | `php call <verb>` | console commands, migrations, diagnostics |
 
 In containers keep `LOG_OUTPUT` at its default (stdout) and let the orchestrator collect

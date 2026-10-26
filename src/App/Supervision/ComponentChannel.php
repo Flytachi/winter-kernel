@@ -31,6 +31,7 @@ final class ComponentChannel
     public const string STOPPED = 'S';
     public const string FAILED = 'F';
     public const string HELD = 'H';
+    public const string RELOAD = 'L';
 
     /** @var resource|null */
     private static mixed $socket = null;
@@ -89,6 +90,15 @@ final class ComponentChannel
     public static function failed(): void
     {
         self::send(self::FAILED);
+    }
+
+    /**
+     * The whole application should restart in place — the HTTP server under `call run dev`,
+     * after a watched file changed: every component has to run the new code.
+     */
+    public static function reload(): void
+    {
+        self::send(self::RELOAD);
     }
 
     /** The component cannot start: a process outside the application runs it. */

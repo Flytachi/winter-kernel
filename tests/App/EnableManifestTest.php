@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Kernel\Tests\App;
 
 use Flytachi\Winter\Kernel\App\Attribute\EnableAsync;
 use Flytachi\Winter\Kernel\App\Attribute\EnableDaemon;
+use Flytachi\Winter\Kernel\App\Attribute\EnableHttp;
 use Flytachi\Winter\Kernel\App\Attribute\EnableProcess;
 use Flytachi\Winter\Kernel\App\Attribute\EnableScheduler;
 use Flytachi\Winter\Kernel\App\ApplicationConfigException;
@@ -241,6 +242,32 @@ final class EnableManifestTest extends TestCase
         $this->expectExceptionMessage('Script scripts/nowhere.php not found');
         $this->resolve(MissingScriptApp::class);
     }
+
+    // ── The HTTP server ──────────────────────────────────────────────────────
+
+    public function test_enable_http_carries_its_supervision_parameters(): void
+    {
+        [$http] = $this->resolve(TunedHttpApp::class);
+
+        self::assertSame(ComponentKind::Http, $http->kind);
+        self::assertSame([false, 5, 30], [$http->critical, $http->retries, $http->startTimeout]);
+        self::assertSame('Http', $http->name());
+    }
+
+    public function test_the_deprecated_enable_web_declares_the_same_server(): void
+    {
+        [$web] = $this->resolve(FullApp::class);
+
+        self::assertSame(ComponentKind::Http, $web->kind);
+        self::assertSame([true, 3, 60], [$web->critical, $web->retries, $web->startTimeout]);
+    }
+
+    public function test_enable_web_and_enable_http_together_are_refused(): void
+    {
+        $this->expectException(ApplicationConfigException::class);
+        $this->expectExceptionMessage('declare #[EnableHttp] only');
+        $this->resolve(BothServersApp::class);
+    }
 }
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -357,4 +384,15 @@ final class MissingScriptApp extends WinterApplication
     {
         $components->script('scripts/nowhere.php');
     }
+}
+
+#[EnableHttp(critical: false, retries: 5, startTimeout: 30)]
+final class TunedHttpApp extends WinterApplication
+{
+}
+
+#[EnableHttp]
+#[EnableWeb]
+final class BothServersApp extends WinterApplication
+{
 }

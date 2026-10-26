@@ -18,7 +18,7 @@ Override `health()` in your `Boot` class and call `Health::configure()`:
 use Flytachi\Winter\Kernel\App\Attribute\EnableActuator;
 use Flytachi\Winter\Kernel\WinterApplication;
 
-#[EnableWeb]
+#[EnableHttp]
 #[EnableActuator]                  // default built-in indicator, open access
 final class Application extends WinterApplication { /* ... */ }
 ```

@@ -18,7 +18,7 @@ Override `plugins()` in your `Boot` class:
 use Flytachi\Winter\Kernel\App\Attribute\Import;
 use Flytachi\Winter\Kernel\WinterApplication;
 
-#[EnableWeb]
+#[EnableHttp]
 #[Import('acme/auth-plugin',    '/auth')]
 #[Import('acme/billing-plugin', '/billing')]
 final class Application extends WinterApplication { /* ... */ }

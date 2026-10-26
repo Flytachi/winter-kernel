@@ -14,6 +14,7 @@ use Flytachi\Winter\Kernel\Tests\Process\Fixtures\Supervision\BrokenWorkersDaemo
 use Flytachi\Winter\Kernel\Tests\Process\Fixtures\Supervision\CrashingProcess;
 use Flytachi\Winter\Kernel\Tests\Process\Fixtures\Supervision\FinishingProcess;
 use Flytachi\Winter\Kernel\Tests\Process\Fixtures\Supervision\HangingStartProcess;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\Supervision\SpawnTimingProcess;
 use PHPUnit\Framework\Attributes\Group;
 
 /**
@@ -145,6 +146,18 @@ final class SupervisorIntegrationTest extends IntegrationCase
         self::assertSame(0, $this->exitCode($supervisor));
         self::assertNull(SignalProcess::status());
         self::assertNull(LoopDaemon::status());
+    }
+
+    public function test_a_component_runs_its_coroutines_with_the_runtime_hooks_on(): void
+    {
+        if (!extension_loaded('swoole')) {
+            self::markTestSkipped('the runtime hooks are Swoole\'s.');
+        }
+        $supervisor = $this->supervise([Component::process(SpawnTimingProcess::class)]);
+
+        self::assertSame(0, $this->exitCode($supervisor));
+        $elapsed = (float) substr((string) file_get_contents($this->marker), strlen('spawn '));
+        self::assertLessThan(0.6, $elapsed, 'three 0.3 s waits ran side by side, not one after another');
     }
 
     // ── Daemons ───────────────────────────────────────────────────────────────

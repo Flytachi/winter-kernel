@@ -194,7 +194,7 @@ final class ImportReportTest extends TestCase
             ReportHeadlessApp::class,
         );
 
-        self::assertStringContainsString('#[EnableWeb]', $logger->records[1]['message']);
+        self::assertStringContainsString('#[EnableHttp]', $logger->records[1]['message']);
     }
 
     /** The application serves HTTP, so mounted routes are not a problem worth mentioning. */
