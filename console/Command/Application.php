@@ -155,6 +155,9 @@ final class Application extends Cmd
         self::printKeyValue("Memory", $settings->getMemoryLimit() ?? 'PHP default (' . ini_get('memory_limit') . ')', 14, self::CL, 36);
         self::printKeyValue("Timeout", $timeout > 0 ? $timeout . 's per request' : 'none', 14, self::CL, 36);
         self::printKeyValue("Profile", WinterApplication::profileSummary($settings), 14, self::CL, 36);
+        self::printKeyValue("Compression", $settings->isCompressionEnabled()
+            ? sprintf('br/gzip · level %d · from %s', $settings->getCompressionLevel(), self::size($settings->getCompressionMinLength()))
+            : 'off', 14, self::CL, 36);
         $serverHeader = $settings->getServerHeader();
         self::printKeyValue("Server header", $serverHeader !== '' ? $serverHeader : 'not sent', 14, self::CL, 36);
         self::printLabel("HTTP server", self::CL);
@@ -390,6 +393,17 @@ final class Application extends Cmd
     /**
      * Human-readable duration, e.g. 90061 → "1d 1h".
      */
+    /** Bytes as written in `.env`: 512, 1K, 2M. */
+    private static function size(int $bytes): string
+    {
+        foreach (['G' => 1024 ** 3, 'M' => 1024 ** 2, 'K' => 1024] as $unit => $factor) {
+            if ($bytes >= $factor && $bytes % $factor === 0) {
+                return intdiv($bytes, $factor) . $unit;
+            }
+        }
+        return (string) $bytes;
+    }
+
     private function duration(int $seconds): string
     {
         $seconds = max(0, $seconds);

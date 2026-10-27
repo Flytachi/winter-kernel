@@ -123,4 +123,105 @@ final class ServerSettingsTest extends TestCase
         self::assertArrayNotHasKey('http_server_header', $s->toArray());
         self::assertNotContains('Mine', $s->toArray());
     }
+
+    /** On, level 1 and a 1K threshold — Swoole's own threshold is about 20 bytes. */
+    public function test_compression_defaults(): void
+    {
+        $s = ServerSettings::fromEnv();
+        $options = $s->toArray();
+
+        self::assertTrue($s->isCompressionEnabled());
+        self::assertSame(1, $s->getCompressionLevel());
+        self::assertSame(1024, $s->getCompressionMinLength());
+        self::assertTrue($options['http_compression']);
+        self::assertSame(1, $options['http_compression_level']);
+        self::assertSame(1024, $options['http_compression_min_length']);
+    }
+
+    /**
+     * env() hands `false` over as a boolean and digits as an integer; `off` and sizes
+     * with a unit arrive as strings.
+     *
+     * @return array<string, array{array<string, string>, bool, int, int}>
+     */
+    public static function compressionEnv(): array
+    {
+        return [
+            'off'             => [['SERVER_COMPRESSION' => 'false'], false, 1, 1024],
+            'off as word'     => [['SERVER_COMPRESSION' => 'off'], false, 1, 1024],
+            'off as digit'    => [['SERVER_COMPRESSION' => '0'], false, 1, 1024],
+            'level'           => [['SERVER_COMPRESSION_LEVEL' => '5'], true, 5, 1024],
+            'level too high'  => [['SERVER_COMPRESSION_LEVEL' => '12'], true, 9, 1024],
+            'level not a number' => [['SERVER_COMPRESSION_LEVEL' => 'max'], true, 1, 1024],
+            'min in bytes'    => [['SERVER_COMPRESSION_MIN' => '512'], true, 1, 512],
+            'min with a unit' => [['SERVER_COMPRESSION_MIN' => '4K'], true, 1, 4096],
+            'min zero'        => [['SERVER_COMPRESSION_MIN' => '0'], true, 1, 0],
+            'min not a size'  => [['SERVER_COMPRESSION_MIN' => 'big'], true, 1, 1024],
+        ];
+    }
+
+    /**
+     * @param array<string, string> $env
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('compressionEnv')]
+    public function test_env_sets_compression(array $env, bool $enabled, int $level, int $minLength): void
+    {
+        $_ENV = $env + $_ENV;
+        try {
+            $s = ServerSettings::fromEnv();
+            self::assertSame($enabled, $s->isCompressionEnabled());
+            self::assertSame($level, $s->getCompressionLevel());
+            self::assertSame($minLength, $s->getCompressionMinLength());
+        } finally {
+            foreach (array_keys($env) as $name) {
+                unset($_ENV[$name]);
+            }
+        }
+    }
+
+    public function test_fluent_compression(): void
+    {
+        $s = ServerSettings::fromEnv()->compression(false)->compressionLevel(6)->compressionMinLength('2K');
+        $options = $s->toArray();
+
+        self::assertFalse($options['http_compression']);
+        self::assertSame(6, $options['http_compression_level']);
+        self::assertSame(2048, $options['http_compression_min_length']);
+    }
+
+    /** The code has the last word over `.env`. */
+    public function test_a_configurer_overrides_compression_env(): void
+    {
+        $_ENV['SERVER_COMPRESSION'] = 'false';
+        try {
+            self::assertTrue(ServerSettings::fromEnv()->compression(true)->isCompressionEnabled());
+        } finally {
+            unset($_ENV['SERVER_COMPRESSION']);
+        }
+    }
+
+    public function test_a_compression_level_out_of_range_is_refused(): void
+    {
+        $this->expectException(\Flytachi\Winter\Kernel\App\ApplicationConfigException::class);
+        ServerSettings::fromEnv()->compressionLevel(10);
+    }
+
+    public function test_a_compression_threshold_that_is_not_a_size_is_refused(): void
+    {
+        $this->expectException(\Flytachi\Winter\Kernel\App\ApplicationConfigException::class);
+        ServerSettings::fromEnv()->compressionMinLength('1 kilobyte');
+    }
+
+    /** env() turns digits into an integer and `false` into a boolean. */
+    public function test_server_header_survives_envs_type_juggling(): void
+    {
+        try {
+            $_ENV['SERVER_HEADER'] = '2026';
+            self::assertSame('2026', ServerSettings::fromEnv()->getServerHeader());
+            $_ENV['SERVER_HEADER'] = 'false';
+            self::assertSame('', ServerSettings::fromEnv()->getServerHeader());
+        } finally {
+            unset($_ENV['SERVER_HEADER']);
+        }
+    }
 }

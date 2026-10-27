@@ -56,6 +56,24 @@ final class ServerSettings
     /** What the `Server` response header says unless told otherwise. */
     public const string DEFAULT_SERVER_HEADER = 'Winter';
 
+    /**
+     * Smallest response compressed, in bytes.
+     *
+     * Swoole's own threshold is about 20 bytes — measured: 14 bytes go out as they are,
+     * 28 come back as 37. Below a kilobyte a response fits one TCP packet either way, so
+     * compressing it saves the client nothing and costs the worker: measured on a 537-
+     * byte JSON, 103 000 requests a second plain against 62 700 compressed. Caddy stops
+     * at 512 bytes; nginx guides settle on 1 KB.
+     */
+    private const int DEFAULT_COMPRESSION_MIN_LENGTH = 1024;
+
+    /**
+     * How hard to compress, 1–9 — the same scale for brotli and gzip. Swoole's own
+     * default, kept: measured on JSON, level 5 makes responses only 8–10 % smaller and
+     * the worker 2–4 times slower.
+     */
+    private const int DEFAULT_COMPRESSION_LEVEL = 1;
+
     /** Assumed heap when the limit cannot be read — `-1`, or a value PHP cannot parse. */
     private const int ASSUMED_MEMORY_LIMIT = 128 * 1024 * 1024;
 
@@ -95,6 +113,9 @@ final class ServerSettings
             // survives and {@see \Flytachi\Winter\Kernel\Http\Cookie\CookieParser} decides.
             // An application may switch it back on; the adapter degrades rather than breaks.
             'http_parse_cookie' => false,
+            'http_compression'            => true,
+            'http_compression_level'      => self::DEFAULT_COMPRESSION_LEVEL,
+            'http_compression_min_length' => self::DEFAULT_COMPRESSION_MIN_LENGTH,
         ];
         $map = [
             'SERVER_WORKERS'           => 'worker_num',
@@ -106,6 +127,25 @@ final class ServerSettings
             'SERVER_MAX_CONCURRENCY'   => 'worker_max_concurrency',
             'SERVER_IDLE_TIMEOUT'      => 'heartbeat_idle_time',
         ];
+        // env() hands `true`/`false` over as booleans and digits as integers.
+        $compression = env('SERVER_COMPRESSION');
+        $compression = match (true) {
+            is_bool($compression), is_int($compression) => (bool) $compression,
+            is_string($compression) => filter_var($compression, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE),
+            default => null,
+        };
+        if ($compression !== null) {
+            $options['http_compression'] = $compression;
+        }
+        $level = env('SERVER_COMPRESSION_LEVEL');
+        if (is_int($level)) {
+            $options['http_compression_level'] = max(1, min(9, $level));
+        }
+        $minLength = self::byteCount(env('SERVER_COMPRESSION_MIN'));
+        if ($minLength !== null) {
+            $options['http_compression_min_length'] = $minLength;
+        }
+
         // `SERVER_MEMORY_LIMIT` is handled below — it is a PHP ini, not a Swoole key.
         foreach ($map as $envKey => $swooleKey) {
             $raw = env($envKey);
@@ -680,9 +720,102 @@ final class ServerSettings
      */
     public static function serverHeaderFromEnv(): string
     {
-        // Set but empty is an answer of its own: no header at all.
+        // Set but empty is an answer of its own: no header at all. env() turns `false`
+        // into a boolean — read as "none" too — and digits into an integer.
         $value = env('SERVER_HEADER');
-        return is_string($value) ? trim($value) : self::DEFAULT_SERVER_HEADER;
+        return match (true) {
+            $value === null, $value === true => self::DEFAULT_SERVER_HEADER,
+            $value === false => '',
+            default => trim((string) $value),
+        };
+    }
+
+    /**
+     * Whether responses are compressed. Default: on — brotli for browsers, gzip or
+     * deflate for the rest, whichever the client's `Accept-Encoding` names first among
+     * what Swoole was built with.
+     *
+     * ```
+     * $server->compression(false);   // nginx or a CDN in front compresses already
+     * ```
+     *
+     * Compressing is CPU work the worker does without yielding: while a large response
+     * is compressed, other requests in that worker wait — 1–2 ms for 400 KB at
+     * level 1, microseconds for a typical API response. Files sent by
+     * {@see \Flytachi\Winter\Kernel\Http\Response\ResponseStreamFile} are never
+     * compressed: their length has to match the file.
+     *
+     * @link https://winterframe.net/docs/web-configuration Compression
+     */
+    public function compression(bool $enabled): self
+    {
+        return $this->set('http_compression', $enabled);
+    }
+
+    /**
+     * How hard to compress, from 1 (fastest) to 9 (smallest). Default: 1.
+     *
+     * Measured on JSON: level 5 is 8–10 % smaller and 2–4 times slower than level 1; past
+     * that the size barely moves. Worth raising only when bandwidth costs more than CPU.
+     *
+     * @throws ApplicationConfigException When the level is outside 1–9.
+     */
+    public function compressionLevel(int $level): self
+    {
+        if ($level < 1 || $level > 9) {
+            throw new ApplicationConfigException("Compression level must be 1–9, {$level} given.");
+        }
+        return $this->set('http_compression_level', $level);
+    }
+
+    /**
+     * Smallest response compressed. Default: 1K — a smaller response fits one TCP packet
+     * anyway, so compressing it costs CPU and saves the client nothing.
+     *
+     * ```
+     * $server->compressionMinLength('4K');
+     * ```
+     *
+     * @param int|string $bytes Bytes, or a PHP memory value: '512', '1K', '2M'.
+     * @throws ApplicationConfigException When the value is not a size.
+     */
+    public function compressionMinLength(int|string $bytes): self
+    {
+        $count = self::byteCount($bytes);
+        if ($count === null) {
+            throw new ApplicationConfigException("Not a size: {$bytes}.");
+        }
+        return $this->set('http_compression_min_length', $count);
+    }
+
+    /** Whether responses are compressed. */
+    public function isCompressionEnabled(): bool
+    {
+        return (bool) ($this->options['http_compression'] ?? true);
+    }
+
+    /** The compression level, 1–9. */
+    public function getCompressionLevel(): int
+    {
+        return (int) ($this->options['http_compression_level'] ?? self::DEFAULT_COMPRESSION_LEVEL);
+    }
+
+    /** The smallest response compressed, in bytes. */
+    public function getCompressionMinLength(): int
+    {
+        return (int) ($this->options['http_compression_min_length'] ?? self::DEFAULT_COMPRESSION_MIN_LENGTH);
+    }
+
+    /** A size in bytes from an integer or '512' / '1K' / '2M'; null when it is none. */
+    private static function byteCount(mixed $value): ?int
+    {
+        if (is_int($value)) {
+            return $value >= 0 ? $value : null;
+        }
+        if (!is_string($value) || !preg_match('/^\s*\d+\s*[KMG]?\s*$/i', $value)) {
+            return null;
+        }
+        return WorkerMemory::bytes($value);
     }
 
     /** Set any raw Swoole option. */
