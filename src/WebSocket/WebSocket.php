@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\WebSocket;
 
 use Flytachi\Winter\Base\Exception\ExceptionLogLevel;
+use Flytachi\Winter\Kernel\App\Config\ServerSettings;
+use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
 use Flytachi\Winter\Kernel\App\Supervision\ComponentChannel;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
@@ -86,6 +88,16 @@ abstract class WebSocket extends Process
      * @var list<string>|null
      */
     protected ?array $allowedOrigins = null;
+
+    /**
+     * What a refused handshake says in its `Server` header; an empty string sends none.
+     * Null takes `SERVER_HEADER` — `Winter` when that is not set, as for the HTTP
+     * server.
+     *
+     * The `101` of an accepted handshake is not covered: Swoole writes that response
+     * itself and keeps no header set before it, so it says `swoole-http-server`.
+     */
+    protected ?string $serverHeader = null;
 
     /** Messages queued for one client before {@see Connection::send()} starts dropping them. */
     private const int SEND_QUEUE = 1024;
@@ -270,6 +282,10 @@ abstract class WebSocket extends Process
      */
     public static function dispatch(?string $output = '/dev/null', ?int $port = null, ?string $host = null): int
     {
+        // A component of the running application is started with its declared port.
+        if ($port === null && ApplicationRuntime::serving() !== null && ApplicationRuntime::managing(static::class) !== null) {
+            return static::dispatchWith([], $output);
+        }
         self::bind($port, $host);
         return static::dispatchWith(['port' => (string) self::$bindPort, 'host' => self::$bindHost], $output);
     }
@@ -282,6 +298,16 @@ abstract class WebSocket extends Process
         $port = isset($args['port']) && is_numeric($args['port']) ? (int) $args['port'] : null;
         $host = isset($args['host']) && is_string($args['host']) && $args['host'] !== '' ? $args['host'] : null;
         static::start($port, $host);
+    }
+
+    /**
+     * A restart needs the port, and the port of a server started on its own is not known
+     * here: {@see relaunch()} refuses rather than stop it for good. Under the application,
+     * a server it runs is restarted with the port it has.
+     */
+    protected static function relaunchArgs(): ?array
+    {
+        return null;
     }
 
     /** The port this process listens on, once started. */
@@ -339,7 +365,10 @@ abstract class WebSocket extends Process
             'open_websocket_pong_frame'  => true,
             'package_max_length'         => $this->maxFrameSize + self::FRAME_HEADER,
         ]);
-        $server->handle('/', function (Request $request, Response $response): void {
+        $serverHeader = trim($this->serverHeader ?? ServerSettings::serverHeaderFromEnv());
+        $server->handle('/', function (Request $request, Response $response) use ($serverHeader): void {
+            // An empty value makes Swoole send no header instead of its own name.
+            $response->header('Server', $serverHeader);
             $this->handlers?->add();
             try {
                 $this->serve($request, $response);

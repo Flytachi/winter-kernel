@@ -175,7 +175,7 @@ trait KnowsTheApplication
 
         try {
             $pid = $dispatch();
-        } catch (ProcessAlreadyRunningException | ProcessManagedException $e) {
+        } catch (ProcessAlreadyRunningException | ProcessManagedException | \InvalidArgumentException $e) {
             self::printWarning($e->getMessage());
             return true;
         }
@@ -208,7 +208,8 @@ trait KnowsTheApplication
             return;
         }
         if (!$class::relaunch()) {
-            self::printWarning("Not restarted: it runs in another environment, or did not stop within a minute.");
+            self::printWarning("Not restarted: it runs in another environment, did not stop within a minute,");
+            self::printInfo("or what it starts with is not known here (a WebSocket: stop, then start --port=…).");
             return;
         }
         if ($app['where'] === 'here') {

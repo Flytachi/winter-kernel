@@ -155,6 +155,8 @@ final class Application extends Cmd
         self::printKeyValue("Memory", $settings->getMemoryLimit() ?? 'PHP default (' . ini_get('memory_limit') . ')', 14, self::CL, 36);
         self::printKeyValue("Timeout", $timeout > 0 ? $timeout . 's per request' : 'none', 14, self::CL, 36);
         self::printKeyValue("Profile", WinterApplication::profileSummary($settings), 14, self::CL, 36);
+        $serverHeader = $settings->getServerHeader();
+        self::printKeyValue("Server header", $serverHeader !== '' ? $serverHeader : 'not sent', 14, self::CL, 36);
         self::printLabel("HTTP server", self::CL);
     }
 

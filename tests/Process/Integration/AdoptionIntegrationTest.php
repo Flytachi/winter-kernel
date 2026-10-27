@@ -15,6 +15,7 @@ use Flytachi\Winter\Kernel\Tests\Process\Fixtures\Supervision\CrashingProcess;
 use Flytachi\Winter\Kernel\Tests\Process\Fixtures\Supervision\DispatchingProcess;
 use Flytachi\Winter\Kernel\Tests\Process\Fixtures\Supervision\FinishingProcess;
 use Flytachi\Winter\Kernel\Tests\Process\Fixtures\Supervision\FixableProcess;
+use Flytachi\Winter\Kernel\Tests\WebSocket\Fixtures\EchoSocket;
 use PHPUnit\Framework\Attributes\Group;
 
 /**
@@ -127,6 +128,50 @@ final class AdoptionIntegrationTest extends IntegrationCase
         self::assertTrue($this->waitLogged('FinishingProcess finished its work.'), 'run by the application');
     }
 
+    public function test_a_job_over_in_a_moment_is_started_without_waiting(): void
+    {
+        $this->supervise([Component::process(SignalProcess::class)], asApplication: true);
+        $this->awaitRunning(SignalProcess::class);
+
+        $started = microtime(true);
+        $pid = FinishingProcess::dispatch();
+
+        self::assertGreaterThan(0, $pid, 'the PID it was forked as');
+        self::assertLessThan(2.0, microtime(true) - $started, 'answered once forked, not after a 5 s wait');
+    }
+
+    public function test_two_requests_for_one_class_are_both_taken(): void
+    {
+        $run = $this->asRun();
+        ComponentControl::request($run, FinishingProcess::class, ComponentControl::START);
+        ComponentControl::request($run, FinishingProcess::class, ComponentControl::RESTART);
+
+        self::assertCount(2, ComponentControl::pending($run), 'neither overwrote the other');
+    }
+
+    public function test_a_request_the_application_cannot_take_does_not_bring_it_down(): void
+    {
+        $this->supervise([Component::process(SignalProcess::class)], asApplication: true);
+        $pid = $this->awaitRunning(SignalProcess::class);
+
+        $app = ApplicationRuntime::live(self::$testApp);
+        self::assertNotNull($app);
+        ComponentControl::request($app->managedBy(), 'Main\\No\\Such\\Process', ComponentControl::START);
+
+        self::assertTrue($this->waitLogged('Not started on request'));
+        usleep(700_000);
+        self::assertSame($pid, SignalProcess::status()?->pid, 'the application runs on');
+    }
+
+    public function test_a_websocket_whose_port_is_not_known_is_not_restarted_from_here(): void
+    {
+        self::assertFalse(EchoSocket::relaunch(), 'nothing is stopped that could not be started again');
+
+        $this->supervise([Component::process(SignalProcess::class)], asApplication: true);
+        $this->awaitRunning(SignalProcess::class);
+        self::assertFalse(EchoSocket::relaunch(), 'not declared, not running: no port to take it in with');
+    }
+
     public function test_nothing_starts_here_while_the_application_runs_in_another_environment(): void
     {
         $this->actAsApplication(self::$testApp);
@@ -149,6 +194,11 @@ final class AdoptionIntegrationTest extends IntegrationCase
         self::assertNull(ApplicationRuntime::servingElsewhere());
         (new \ReflectionMethod(FinishingProcess::class, 'ensureNotRunning'))->invoke(null);
         $this->addToAssertionCount(1);
+    }
+
+    private function asRun(): \Flytachi\Winter\Kernel\App\Runtime\ManagedBy
+    {
+        return new \Flytachi\Winter\Kernel\App\Runtime\ManagedBy(self::$testApp, getmypid(), time(), ApplicationRuntime::host());
     }
 
     private function foreignApplication(int $seenAt): void

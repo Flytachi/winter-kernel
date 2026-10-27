@@ -53,6 +53,9 @@ final class ServerSettings
      */
     private const int DEFAULT_MAX_REQUEST_SIZE = 8 * 1024 * 1024;
 
+    /** What the `Server` response header says unless told otherwise. */
+    public const string DEFAULT_SERVER_HEADER = 'Winter';
+
     /** Assumed heap when the limit cannot be read — `-1`, or a value PHP cannot parse. */
     private const int ASSUMED_MEMORY_LIMIT = 128 * 1024 * 1024;
 
@@ -66,6 +69,7 @@ final class ServerSettings
         private ?string $memoryTrimThreshold = null,
         private ?Profile $profile = null,
         private int $baselineBytes = 0,
+        private string $serverHeader = self::DEFAULT_SERVER_HEADER,
     ) {
     }
 
@@ -124,11 +128,12 @@ final class ServerSettings
         $profile = env('SERVER_PROFILE');
         $profile = is_string($profile) ? Profile::tryFrom(strtolower(trim($profile))) : null;
 
+
         // Captured once, here, rather than on every read: this runs after bootstrap and
         // before any worker exists, which is exactly the heap a worker starts from, and a
         // value that changed between two reads would make the derived limits disagree
         // with each other.
-        return new self($host, $port, $options, $memoryLimit, $timeout, $trim, $profile, memory_get_usage(true));
+        return new self($host, $port, $options, $memoryLimit, $timeout, $trim, $profile, memory_get_usage(true), self::serverHeaderFromEnv());
     }
 
     /** Bind host (e.g. '0.0.0.0', '127.0.0.1'). */
@@ -638,6 +643,46 @@ final class ServerSettings
         }
 
         return $this->getProfile()->trimThreshold($this->limitBytes());
+    }
+
+    /**
+     * What every response says in its `Server` header. Default: `Winter`, from
+     * `SERVER_HEADER` when set. An empty string sends no header at all.
+     *
+     * ```
+     * $server->serverHeader('Orders API');
+     * $server->serverHeader('');   // say nothing about the server
+     * ```
+     *
+     * Without it Swoole sends `swoole-http-server`, which names the runtime to anyone who
+     * asks. No version is sent by default: a version tells a scanner which known flaws to
+     * try. A response may still set its own `Server` header — it replaces this one.
+     *
+     * @link https://winterframe.net/docs/web-configuration The Server header
+     */
+    public function serverHeader(string $value): self
+    {
+        $this->serverHeader = trim($value);
+        return $this;
+    }
+
+    /** The `Server` header's value; empty when none is sent. */
+    public function getServerHeader(): string
+    {
+        return $this->serverHeader;
+    }
+
+    /**
+     * The `Server` header the environment asks for: `SERVER_HEADER`, or `Winter`
+     * when it is not set. Shared by the HTTP server and every WebSocket.
+     *
+     * @internal
+     */
+    public static function serverHeaderFromEnv(): string
+    {
+        // Set but empty is an answer of its own: no header at all.
+        $value = env('SERVER_HEADER');
+        return is_string($value) ? trim($value) : self::DEFAULT_SERVER_HEADER;
     }
 
     /** Set any raw Swoole option. */

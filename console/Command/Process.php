@@ -85,7 +85,9 @@ final class Process extends Cmd
         }
 
         $socket = is_subclass_of($class, WebSocket::class);
-        if ($socket) {
+        // A WebSocket the running application declares is started with its own port.
+        $declared = $socket && $this->roleOf($class) === 'boot' && $this->application()['where'] === 'here';
+        if ($socket && !$declared) {
             $port = $this->args['options']['port'] ?? null;
             if (!is_string($port) || !ctype_digit($port)) {
                 self::printWarning("A WebSocket needs a port: --port=8001 [--host=0.0.0.0].");
@@ -97,9 +99,11 @@ final class Process extends Cmd
 
         // While the application runs, it starts the process — in the background, with or
         // without -d.
-        $dispatch = $socket
-            ? static fn(): int => $class::dispatch(port: (int) $port, host: $host)
-            : static fn(): int => $class::dispatch();
+        $dispatch = match (true) {
+            $declared => static fn(): int => $class::dispatch(),
+            $socket => static fn(): int => $class::dispatch(port: (int) $port, host: $host),
+            default => static fn(): int => $class::dispatch(),
+        };
         if ($this->startThroughApplication($class, 'process', $dispatch, 34)) {
             return;
         }

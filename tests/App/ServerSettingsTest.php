@@ -88,4 +88,39 @@ final class ServerSettingsTest extends TestCase
         self::assertSame(5000, $options['max_request']);
         self::assertSame('/etc/ssl/app.pem', $options['ssl_cert_file']);
     }
+
+    public function test_server_header_defaults_to_winter(): void
+    {
+        self::assertSame('Winter', ServerSettings::fromEnv()->getServerHeader());
+    }
+
+    public function test_env_sets_the_server_header(): void
+    {
+        $_ENV['SERVER_HEADER'] = ' Orders API ';
+        try {
+            self::assertSame('Orders API', ServerSettings::fromEnv()->getServerHeader());
+        } finally {
+            unset($_ENV['SERVER_HEADER']);
+        }
+    }
+
+    /** Set but empty: no header — not the default. */
+    public function test_an_empty_env_value_sends_no_server_header(): void
+    {
+        $_ENV['SERVER_HEADER'] = '';
+        try {
+            self::assertSame('', ServerSettings::fromEnv()->getServerHeader());
+        } finally {
+            unset($_ENV['SERVER_HEADER']);
+        }
+    }
+
+    public function test_the_server_header_is_not_a_swoole_option(): void
+    {
+        $s = ServerSettings::fromEnv()->serverHeader('Mine');
+
+        self::assertSame('Mine', $s->getServerHeader());
+        self::assertArrayNotHasKey('http_server_header', $s->toArray());
+        self::assertNotContains('Mine', $s->toArray());
+    }
 }

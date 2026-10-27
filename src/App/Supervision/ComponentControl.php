@@ -42,19 +42,68 @@ final class ComponentControl
      * with, or any other process class, which it then takes in ({@see
      * \Flytachi\Winter\Kernel\App\Component::adopted()}).
      *
+     * Each request is a record of its own: two requests for one class do not overwrite
+     * each other.
+     *
      * @param class-string $class
      * @param array<string, string> $args What the component is started with — a
      *     WebSocket's `port` and `host`; used when the application takes it in.
+     * @param bool $reply Whether the caller waits for the answer ({@see awaitReply()}).
+     * @return string The request's id — what its reply is found by.
      */
-    public static function request(ManagedBy $run, string $class, string $action, array $args = []): void
-    {
-        self::store()->write(self::key($class), [
+    public static function request(
+        ManagedBy $run,
+        string $class,
+        string $action,
+        array $args = [],
+        bool $reply = false,
+    ): string {
+        $id = bin2hex(random_bytes(8));
+        self::store()->write(self::key($class) . '.' . $id, [
             'class'  => $class,
             'action' => $action,
             'args'   => $args,
+            'reply'  => $reply ? $id : null,
             'run'    => $run,
             'at'     => time(),
         ]);
+        return $id;
+    }
+
+    /**
+     * The supervisor's answer to a request that waits for one: the PID it started, or 0
+     * and why not.
+     *
+     * @internal Called by the supervisor.
+     */
+    public static function reply(string $id, int $pid, string $error = ''): void
+    {
+        self::replies()->write($id, ['pid' => $pid, 'error' => $error, 'at' => time()]);
+    }
+
+    /**
+     * Waits for the answer to a request.
+     *
+     * @return array{pid: int, error: string}|null Null when none came in time — the
+     *     application is busy, or gone.
+     */
+    public static function awaitReply(string $id, float $timeout): ?array
+    {
+        $store = self::replies();
+        $deadline = microtime(true) + $timeout;
+        do {
+            usleep(20_000);
+            try {
+                $reply = $store->read($id);
+            } catch (\Throwable) {
+                $reply = null;
+            }
+            if (is_array($reply)) {
+                $store->del($id);
+                return ['pid' => (int) ($reply['pid'] ?? 0), 'error' => (string) ($reply['error'] ?? '')];
+            }
+        } while (microtime(true) < $deadline);
+        return null;
     }
 
     /**
@@ -92,7 +141,8 @@ final class ComponentControl
                 static fn($value, $name): bool => is_string($name) && is_string($value),
                 ARRAY_FILTER_USE_BOTH,
             );
-            $requests[] = new ControlRequest($class, $action, $args);
+            $reply = is_string($request['reply'] ?? null) ? $request['reply'] : null;
+            $requests[] = new ControlRequest($class, $action, $args, $reply);
         }
         return $requests;
     }
@@ -102,6 +152,11 @@ final class ComponentControl
         // Plain file names: the supervisor walks the requests, and a hashed name cannot be
         // read back by what keys() returns.
         return Kernel::runnable('requests', isHash: false);
+    }
+
+    private static function replies(): FileStorage
+    {
+        return Kernel::runnable('replies', isHash: false);
     }
 
     private static function key(string $class): string

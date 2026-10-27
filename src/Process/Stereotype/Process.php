@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Kernel\Process\Stereotype;
 
 use Flytachi\FileStore\FileStorage;
 use Flytachi\Winter\DI\Container;
+use Flytachi\Winter\Kernel\App\Component;
 use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
 use Flytachi\Winter\Kernel\App\Runtime\ApplicationRecord;
 use Flytachi\Winter\Kernel\App\Supervision\ComponentChannel;
@@ -497,8 +498,12 @@ abstract class Process
      * application, the process is stopped, waited for (up to a minute), and dispatched
      * again.
      *
+     * Nothing is stopped that could not be started again: without what it is started
+     * with ({@see relaunchArgs()} — a WebSocket's port), the call returns false first.
+     *
      * @return bool False when it could not be restarted from here: it runs in another
-     *              environment, or did not stop within the minute.
+     *              environment, did not stop within the minute, or what it is started
+     *              with is not known here.
      * @link https://winterframe.net/docs/components Controlling a running component
      */
     final public static function relaunch(): bool
@@ -507,26 +512,56 @@ abstract class Process
             $app = ApplicationRuntime::serving();
             if ($app !== null) {
                 $status = static::status();
-                $outside = $status !== null && !self::isDown($status) && !$status->managedBy?->isRun($app);
-                if ($outside) {
-                    if (!static::stopAndWait()) {
-                        return false;
-                    }
-                    ComponentControl::request($app->managedBy(), static::class, ComponentControl::START);
+                $running = $status !== null && !self::isDown($status);
+                // The application knows how to start it again: it declares it, or runs it.
+                if (($running && $status->managedBy?->isRun($app)) || ApplicationRuntime::managing(static::class) !== null) {
+                    ComponentControl::request($app->managedBy(), static::class, ComponentControl::RESTART);
                     return true;
                 }
-                ComponentControl::request($app->managedBy(), static::class, ComponentControl::RESTART);
+                // Otherwise it is taken in afresh, with what it is started with.
+                $args = static::relaunchArgs();
+                if ($args === null || !self::adoptable($args)) {
+                    return false;
+                }
+                if ($running && !static::stopAndWait()) {
+                    return false;
+                }
+                ComponentControl::request($app->managedBy(), static::class, ComponentControl::START, $args);
                 return true;
             }
             if (ApplicationRuntime::servingElsewhere() !== null) {
                 return false;
             }
         }
-        if (!static::stopAndWait()) {
+        $args = static::relaunchArgs();
+        if ($args === null || !static::stopAndWait()) {
             return false;
         }
-        static::dispatch();
+        static::dispatchWith($args, '/dev/null');
         return true;
+    }
+
+    /**
+     * What {@see relaunch()} starts the process with again — or null when that is not
+     * known here, and a restart must not stop what it could not start. A plain process
+     * takes nothing; a stereotype that needs arguments overrides this.
+     *
+     * @return array<string, string>|null
+     */
+    protected static function relaunchArgs(): ?array
+    {
+        return [];
+    }
+
+    /** Whether the application could take this class in, started with these arguments. */
+    private static function adoptable(array $args): bool
+    {
+        try {
+            Component::adopted(static::class, $args);
+            return true;
+        } catch (\InvalidArgumentException) {
+            return false;
+        }
     }
 
     /**
@@ -557,9 +592,14 @@ abstract class Process
      * Asks the running application to start this process — its component, or taken in
      * for one run — and waits up to a few seconds for it.
      *
+     * The application answers once it has forked the process — a job that is over in a
+     * moment is no slower to start than one that runs for days.
+     *
      * @param array<string, string> $args What the process is started with.
-     * @return int The new process's PID, or 0 when it is not up yet.
+     * @return int The new process's PID, or 0 when the application did not answer in time.
      * @throws ProcessAlreadyRunningException It is running already.
+     * @throws ProcessManagedException The application did not start it, and says why.
+     * @throws \InvalidArgumentException It cannot be taken in — a WebSocket without a port.
      */
     private static function resumeIn(ApplicationRecord $app, array $args): int
     {
@@ -569,16 +609,35 @@ abstract class Process
                 static::class . " is already running [PID {$status->pid}] (since {$status->getStartedAt()})."
             );
         }
-        ComponentControl::request($app->managedBy(), static::class, ComponentControl::START, $args);
+        if (ApplicationRuntime::managing(static::class) === null) {
+            // Refused here, where the caller hears it, not in the application's log.
+            Component::adopted(static::class, $args);
+        }
+        $id = ComponentControl::request($app->managedBy(), static::class, ComponentControl::START, $args, reply: true);
+        $reply = ComponentControl::awaitReply($id, 5.0);
+        if ($reply === null) {
+            return 0;
+        }
+        $pid = $reply['pid'];
+        if ($pid === 0 && $reply['error'] !== '') {
+            throw new ProcessManagedException(
+                static::class . " was not started by the application: {$reply['error']}."
+            );
+        }
+        // As a start on its own: once this returns, status() shows the process — unless
+        // it is already over, a job done in a moment, which leaves nothing to wait for.
         $deadline = microtime(true) + 5.0;
-        do {
-            usleep(50_000);
+        while ($pid > 0 && microtime(true) < $deadline) {
             $status = static::status();
-            if ($status !== null && !self::isDown($status)) {
-                return $status->pid;
+            if ($status !== null && $status->pid === $pid && !self::isDown($status)) {
+                break;
             }
-        } while (microtime(true) < $deadline);
-        return 0;
+            if (!function_exists('posix_getpgid') || posix_getpgid($pid) === false) {
+                break;
+            }
+            usleep(20_000);
+        }
+        return $pid;
     }
 
     /**

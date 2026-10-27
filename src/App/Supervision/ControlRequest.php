@@ -15,11 +15,13 @@ final readonly class ControlRequest
      * @param class-string $class The component's class.
      * @param string $action {@see ComponentControl::START} or {@see ComponentControl::RESTART}.
      * @param array<string, string> $args What it is started with, when the application takes it in.
+     * @param string|null $replyTo The request's id when its caller waits for an answer.
      */
     public function __construct(
         public string $class,
         public string $action,
         public array $args = [],
+        public ?string $replyTo = null,
     ) {
     }
 }

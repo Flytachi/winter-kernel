@@ -934,10 +934,14 @@ abstract class WinterApplication
 
         $router = $web->router;
         $trimThreshold = $web->settings->getMemoryTrimThreshold();
+        $serverHeader = $web->settings->getServerHeader();
         $handler = static function (
             \Swoole\Http\Request $req,
             \Swoole\Http\Response $res
-        ) use ($router, $trimThreshold): void {
+        ) use ($router, $trimThreshold, $serverHeader): void {
+            // Before the route runs, so a response that sets its own `Server` replaces it;
+            // an empty value makes Swoole send no header instead of its own name.
+            $res->header('Server', $serverHeader);
             $request = new SwooleRequest($req);
             $isHead  = strtoupper($request->getMethod()) === 'HEAD';
             $router->handle($request, new SwooleResponse($res, $isHead));
@@ -1058,7 +1062,9 @@ abstract class WinterApplication
                 }
             },
             name: static fn(Component $component): string => $component->name(),
-            logger: LoggerFactory::getLogger('Supervisor'),
+            // The application's own voice, as its "Application up" line: PID 1 is the
+            // application, and what it says about its components is the application talking.
+            logger: LoggerFactory::getLogger(static::class),
             commands: $run === null ? null : static fn(): array => ComponentControl::pending($run),
             publish: $run === null
                 ? null

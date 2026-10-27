@@ -74,6 +74,28 @@ final class WebSocketTest extends TestCase
         self::assertStringContainsString('error handshake exploded', $this->waitLog('error handshake'));
     }
 
+    /** A refusal is the framework's own answer; the 101 is Swoole's and keeps its name. */
+    public function test_a_refused_handshake_names_the_server_winter(): void
+    {
+        $this->startServer();
+
+        $servers = self::co(function (): array {
+            $out = [];
+            foreach (['bad' => '/ws?token=bad', 'path' => '/other?token=ok'] as $case => $uri) {
+                $c = $this->client();
+                $c->upgrade($uri);
+                $out[$case] = $c->headers['server'] ?? null;
+                $c->close();
+            }
+            $plain = $this->client();
+            $plain->get('/ws');
+            $out['plain'] = $plain->headers['server'] ?? null;
+            return $out;
+        });
+
+        self::assertSame(['bad' => 'Winter', 'path' => 'Winter', 'plain' => 'Winter'], $servers);
+    }
+
     public function test_send_is_refused_before_the_upgrade_and_works_from_on_open(): void
     {
         $this->startServer();

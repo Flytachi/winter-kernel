@@ -193,6 +193,7 @@ final class Supervisor
         $outsider = $this->records->outsider($unit->component);
         if ($outsider !== null) {
             $this->hold($unit, $outsider);
+            $this->answer($unit, 0, $unit->reason);
             return;
         }
         // What the supervisor recorded of it while it was down gives way to its own record.
@@ -211,6 +212,7 @@ final class Supervisor
 
         $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         if ($pair === false) {
+            $this->answer($unit, 0, 'could not open its channel');
             $this->fail($unit, 'could not open its channel');
             return;
         }
@@ -219,6 +221,7 @@ final class Supervisor
         if ($pid === -1) {
             fclose($pair[0]);
             fclose($pair[1]);
+            $this->answer($unit, 0, 'could not be forked');
             $this->fail($unit, 'could not be forked');
             return;
         }
@@ -241,6 +244,7 @@ final class Supervisor
         $unit->pid = $pid;
         $unit->socket = $pair[0];
         $unit->state = UnitState::Starting;
+        $this->answer($unit, $pid);
         $unit->startedAt = microtime(true);
         $timeout = $unit->component->startTimeout;
         $unit->readyDeadline = $timeout > 0 ? $unit->startedAt + $timeout : 0.0;
@@ -583,15 +587,60 @@ final class Supervisor
             return;
         }
         $this->commandsAt = $now;
-        foreach (($this->commands)() as $request) {
-            $unit = $this->unitOf($request->class);
-            if ($unit === null || ($unit->component->adopted && $unit->state === UnitState::Failed)) {
-                $this->adopt($request, $unit);
-            } elseif ($request->action === ComponentControl::START) {
-                $this->startOnRequest($unit, 'started on request');
-            } else {
-                $this->restartOnRequest($unit);
+        // A request is the outside world's: nothing in it may bring the application down.
+        try {
+            $requests = ($this->commands)();
+        } catch (\Throwable $e) {
+            $this->logger->error("Requests could not be read: {$e->getMessage()}");
+            return;
+        }
+        foreach ($requests as $request) {
+            try {
+                $this->take($request);
+            } catch (\Throwable $e) {
+                $this->logger->error("Request for {$request->class} not taken: {$e->getMessage()}");
+                $this->reply($request->replyTo, 0, $e->getMessage());
             }
+        }
+    }
+
+    private function take(ControlRequest $request): void
+    {
+        $unit = $this->unitOf($request->class);
+        if ($unit === null || ($unit->component->adopted && $unit->state === UnitState::Failed)) {
+            $this->adopt($request, $unit);
+            return;
+        }
+        if ($request->action === ComponentControl::RESTART) {
+            $this->restartOnRequest($unit);
+            $unit->replyTo = $request->replyTo ?? $unit->replyTo;
+            return;
+        }
+        $this->startOnRequest($unit, 'started on request');
+        match ($unit->state) {
+            // Answered once it is forked.
+            UnitState::Waiting => $unit->replyTo = $request->replyTo ?? $unit->replyTo,
+            UnitState::Starting, UnitState::Running => $this->reply($request->replyTo, $unit->pid),
+            default => $this->reply($request->replyTo, 0, $unit->reason !== '' ? $unit->reason : 'not started'),
+        };
+    }
+
+    /** Tells the request waiting on this unit which process its start became. */
+    private function answer(Unit $unit, int $pid, string $error = ''): void
+    {
+        $this->reply($unit->replyTo, $pid, $error);
+        $unit->replyTo = null;
+    }
+
+    private function reply(?string $id, int $pid, string $error = ''): void
+    {
+        if ($id === null) {
+            return;
+        }
+        try {
+            ComponentControl::reply($id, $pid, $error);
+        } catch (\Throwable) {
+            // The caller stops waiting on its own.
         }
     }
 
@@ -605,8 +654,10 @@ final class Supervisor
     {
         try {
             $component = Component::adopted($request->class, $request->args);
-        } catch (\InvalidArgumentException $e) {
+        } catch (\Throwable $e) {
+            // A class this process cannot load — newer code than it runs — among them.
             $this->logger->error("Not started on request: {$e->getMessage()}");
+            $this->reply($request->replyTo, 0, $e->getMessage());
             return;
         }
         if ($previous !== null) {
@@ -614,6 +665,7 @@ final class Supervisor
         }
         $unit = new Unit($component, ($this->name)($component));
         $unit->startAt = 0.0;
+        $unit->replyTo = $request->replyTo;
         $this->units[] = $unit;
         $this->logger->info("{$unit->name} started on request: not declared, it runs once — never restarted.");
     }
@@ -808,13 +860,17 @@ final class Supervisor
     }
 
     /**
-     * Nothing more will run: every declared component finished its work. One taken in
-     * keeps the application only while it runs.
+     * Nothing more will run: every declared component finished its work, and none taken
+     * in is still on its way — about to start, or waiting for an outside holder.
      */
     private function done(): bool
     {
+        $pending = [UnitState::Waiting, UnitState::Starting, UnitState::Running, UnitState::Held];
         foreach ($this->units as $unit) {
-            if (!$unit->component->adopted && $unit->state !== UnitState::Completed) {
+            $busy = $unit->component->adopted
+                ? in_array($unit->state, $pending, true)
+                : $unit->state !== UnitState::Completed;
+            if ($busy) {
                 return false;
             }
         }

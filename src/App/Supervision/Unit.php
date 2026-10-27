@@ -47,6 +47,9 @@ final class Unit
     /** Whether the current wait was told already — once per wait, not once per try. */
     public bool $heldTold = false;
 
+    /** The request waiting to hear which process its start became ({@see ComponentControl::reply()}). */
+    public ?string $replyTo = null;
+
     /** @var list<float> Restarts within the retry window. */
     public array $restarts = [];
 
