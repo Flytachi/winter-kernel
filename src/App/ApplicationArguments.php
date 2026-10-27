@@ -78,6 +78,12 @@ final class ApplicationArguments
         return $this->positionals[1] ?? null;
     }
 
+    /** The positional word at an index (0 = the command), or null. */
+    public function positional(int $index): ?string
+    {
+        return $this->positionals[$index] ?? null;
+    }
+
     /** True if a long option `--key` was passed (with or without a value). */
     public function has(string $key): bool
     {

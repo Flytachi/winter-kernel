@@ -354,12 +354,13 @@ abstract class Process
      */
     final protected static function dispatchWith(array $args, ?string $output): int
     {
-        // A component of the running application is started by the application: it is
-        // asked to, and the call waits a moment for the new process.
-        if (!ApplicationRuntime::isComponent()) {
-            $app = ApplicationRuntime::managing(static::class);
+        // While the application runs here, it starts every process: a component it was
+        // declared with, with its settings; any other, taken in for one run. It is asked
+        // to, and the call waits a moment for the new process.
+        if (!ApplicationRuntime::launching(static::class)) {
+            $app = ApplicationRuntime::serving();
             if ($app !== null) {
-                return static::resumeIn($app);
+                return static::resumeIn($app, $args);
             }
         }
         static::ensureNotRunning();
@@ -378,13 +379,22 @@ abstract class Process
      */
     protected static function ensureNotRunning(): void
     {
-        // A component of the running application is started there, not here.
-        if (!ApplicationRuntime::isComponent()) {
+        if (!ApplicationRuntime::launching(static::class)) {
+            // A component of the running application is started there, not here.
             $app = ApplicationRuntime::managing(static::class);
             if ($app !== null) {
                 throw new ProcessManagedException(
                     static::class . " is a component of the running application [PID {$app->pid}]: it is started "
                     . 'there — with ' . static::class . '::dispatch() or `call process … start`.'
+                );
+            }
+            // Started here, it would run beside the application, outside it — a second
+            // scheduler firing every task twice.
+            $elsewhere = ApplicationRuntime::servingElsewhere();
+            if ($elsewhere !== null) {
+                throw new ProcessManagedException(
+                    "The application runs in another environment ({$elsewhere->host}) [PID {$elsewhere->pid}]: "
+                    . 'start ' . static::class . ' there (for a container: docker exec … php call …).'
                 );
             }
         }
@@ -481,9 +491,11 @@ abstract class Process
      * Stops and starts the process again. (Not `restart()`: a daemon's `restart()` is its
      * workers' restart policy.)
      *
-     * A component of the running application is restarted by the application — at once,
-     * not counted as a crash; the call only asks for it and returns. A process on its own
-     * is stopped, waited for (up to a minute), and dispatched again.
+     * While the application runs, it restarts the process — at once, not counted as a
+     * crash; the call only asks for it and returns. One that runs on its own beside the
+     * application is stopped first, and the application starts it again. Without the
+     * application, the process is stopped, waited for (up to a minute), and dispatched
+     * again.
      *
      * @return bool False when it could not be restarted from here: it runs in another
      *              environment, or did not stop within the minute.
@@ -491,38 +503,65 @@ abstract class Process
      */
     final public static function relaunch(): bool
     {
-        if (!ApplicationRuntime::isComponent()) {
-            $app = ApplicationRuntime::managing(static::class);
+        if (!ApplicationRuntime::launching(static::class)) {
+            $app = ApplicationRuntime::serving();
             if ($app !== null) {
+                $status = static::status();
+                $outside = $status !== null && !self::isDown($status) && !$status->managedBy?->isRun($app);
+                if ($outside) {
+                    if (!static::stopAndWait()) {
+                        return false;
+                    }
+                    ComponentControl::request($app->managedBy(), static::class, ComponentControl::START);
+                    return true;
+                }
                 ComponentControl::request($app->managedBy(), static::class, ComponentControl::RESTART);
                 return true;
             }
-        }
-        $status = static::status();
-        if ($status !== null) {
-            if (self::isForeign($status) || !static::stop()) {
+            if (ApplicationRuntime::servingElsewhere() !== null) {
                 return false;
             }
-            $deadline = microtime(true) + 60.0;
-            while (static::status() !== null) {
-                if (microtime(true) >= $deadline) {
-                    return false;
-                }
-                usleep(100_000);
-            }
+        }
+        if (!static::stopAndWait()) {
+            return false;
         }
         static::dispatch();
         return true;
     }
 
     /**
-     * Asks the running application to start this component again, and waits up to a few
-     * seconds for it.
+     * Stops the running instance, if there is one, and waits up to a minute for it to go.
      *
+     * @return bool False when it runs in another environment or did not stop in time.
+     */
+    private static function stopAndWait(): bool
+    {
+        $status = static::status();
+        if ($status === null) {
+            return true;
+        }
+        if (self::isForeign($status) || !static::stop()) {
+            return false;
+        }
+        $deadline = microtime(true) + 60.0;
+        while (($status = static::status()) !== null && !self::isDown($status)) {
+            if (microtime(true) >= $deadline) {
+                return false;
+            }
+            usleep(100_000);
+        }
+        return true;
+    }
+
+    /**
+     * Asks the running application to start this process — its component, or taken in
+     * for one run — and waits up to a few seconds for it.
+     *
+     * @param array<string, string> $args What the process is started with.
      * @return int The new process's PID, or 0 when it is not up yet.
      * @throws ProcessAlreadyRunningException It is running already.
      */
-    private static function resumeIn(ApplicationRecord $app): int
+    private static function resumeIn(ApplicationRecord $app, array $args): int
     {
         $status = static::status();
         if ($status !== null && !self::isDown($status)) {
@@ -530,7 +569,7 @@ abstract class Process
                 static::class . " is already running [PID {$status->pid}] (since {$status->getStartedAt()})."
             );
         }
-        ComponentControl::request($app->managedBy(), static::class, ComponentControl::START);
+        ComponentControl::request($app->managedBy(), static::class, ComponentControl::START, $args);
         $deadline = microtime(true) + 5.0;
         do {
             usleep(50_000);
@@ -558,9 +597,8 @@ abstract class Process
     }
 
     /**
-     * Records this class as a component of the application that is down on request, or
-     * whose work is done. Written by the supervisor; it lasts as long as the application
-     * run does.
+     * Records this class as a component of the application that is down on request.
+     * Written by the supervisor; it lasts as long as the application run does.
      *
      * @internal Called by the application's supervisor.
      */

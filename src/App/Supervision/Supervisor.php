@@ -33,7 +33,13 @@ use Psr\Log\LoggerInterface;
  *
  * Not failures: a component stopped on request (a stop signal), a process whose body
  * returned (its work is done). A scheduler, WebSocket or daemon whose loop ends without
- * being asked to has crashed.
+ * being asked to has crashed. A process whose work is done leaves no record behind: it
+ * shows as completed here, and can be started again.
+ *
+ * A process class the application was not declared with, started while it runs (from
+ * the console, with `dispatch()`), is taken in ({@see Component::adopted()}): it runs
+ * once — never restarted, never critical — and is let go when it ends or is stopped;
+ * one that failed stays listed, with why, until it is started again.
  *
  * @internal Started by {@see \Flytachi\Winter\Kernel\WinterApplication} — not for application code.
  */
@@ -47,12 +53,17 @@ final class Supervisor
     private const float COMMAND_INTERVAL = 0.5;
     /** Seconds between looks at an outside process holding a component. */
     private const float HELD_INTERVAL = 1.0;
+    /** Seconds between publications when nothing changed: the application is still here. */
+    private const float HEARTBEAT = 10.0;
 
     /** @var list<Unit> */
     private array $units = [];
     private bool $stopping = false;
     private int $exitCode = 0;
     private float $commandsAt = 0.0;
+    /** What was published last, to publish only changes. */
+    private string $published = '';
+    private float $publishedAt = 0.0;
     /** A component asked for the whole application to restart in place (`call run dev`). */
     private bool $reloadRequested = false;
 
@@ -63,9 +74,10 @@ final class Supervisor
      * @param \Closure(string): void $announce Says one line, loudly — a critical failure.
      * @param ComponentRecords $records The records of components that are down.
      * @param \Closure(Component): string $name How logs name a component.
-     * @param (\Closure(Component): ?string)|null $commands The pending request for a
-     *     component ({@see ComponentControl::START} or {@see ComponentControl::RESTART}),
-     *     or null; none are taken when absent.
+     * @param (\Closure(): list<ControlRequest>)|null $commands The pending requests
+     *     ({@see ComponentControl::pending()}); none are taken when absent.
+     * @param (\Closure(list<array<string, mixed>>): void)|null $publish Receives where every
+     *     component stands whenever that changes — see {@see snapshot()}.
      */
     public function __construct(
         array $components,
@@ -73,9 +85,10 @@ final class Supervisor
         private readonly \Closure $report,
         private readonly \Closure $announce,
         private readonly ComponentRecords $records,
-        \Closure $name,
+        private readonly \Closure $name,
         private readonly LoggerInterface $logger,
         private readonly ?\Closure $commands = null,
+        private readonly ?\Closure $publish = null,
     ) {
         foreach ($components as $component) {
             $this->units[] = new Unit($component, $name($component));
@@ -118,6 +131,7 @@ final class Supervisor
             $this->listen();
             $this->reap();
             $this->enforceStartTimeouts(microtime(true));
+            $this->publish();
 
             if ($this->alive() === 0 && ($this->stopping || ($untilDone && $this->done()))) {
                 $this->forgetAll();
@@ -369,6 +383,7 @@ final class Supervisor
         if ($unit->state !== UnitState::Starting) {
             return;
         }
+        $unit->reason = '';
         $unit->state = UnitState::Running;
         $unit->everReady = true;
         $unit->readyDeadline = 0.0;
@@ -460,8 +475,12 @@ final class Supervisor
             return;
         }
         if ($stopRequested) {
-            $unit->state = UnitState::Stopped;
             $this->logger->info("{$unit->name} stopped.");
+            if ($unit->component->adopted) {
+                $this->letGo($unit);
+                return;
+            }
+            $unit->state = UnitState::Stopped;
             $this->recordStopped($unit);
             return;
         }
@@ -473,9 +492,15 @@ final class Supervisor
         $finishes = $unit->component->kind === ComponentKind::Process
             || $unit->component->kind === ComponentKind::Command;
         if ($clean && $finishes) {
-            $unit->state = UnitState::Completed;
             $this->logger->info("{$unit->name} finished its work.");
-            $this->recordStopped($unit);
+            if ($unit->component->adopted) {
+                $this->letGo($unit);
+                return;
+            }
+            // Nothing is left of it but this line: no record says it is down, and it can
+            // be started again like any process.
+            $unit->state = UnitState::Completed;
+            $this->forget($unit);
             return;
         }
         $this->crashed($unit, self::describe($status, $clean), $wasReady);
@@ -508,6 +533,7 @@ final class Supervisor
         $unit->restarts[] = $now;
         $attempt = count($unit->restarts);
         $delay = 2 ** ($attempt - 1);
+        $unit->reason = $reason;
         $unit->state = UnitState::Waiting;
         $unit->startAt = $now + $delay;
         $this->logger->warning(sprintf(
@@ -524,6 +550,7 @@ final class Supervisor
     /** It cannot run any more: stop the application, or leave it down. */
     private function fail(Unit $unit, string $reason): void
     {
+        $unit->reason = $reason;
         if ($unit->component->critical) {
             ($this->announce)("{$unit->name} failed: {$reason}. It is critical: the application stops.");
             $unit->state = UnitState::Failed;
@@ -535,6 +562,11 @@ final class Supervisor
         $this->logger->error(
             "{$unit->name} failed: {$reason}. It is not critical: the application runs on without it."
         );
+        if ($unit->component->adopted) {
+            // Listed here with why; its class keeps no record — started again, it is
+            // taken in afresh.
+            return;
+        }
         try {
             $this->records->failed($unit->component);
         } catch (\Throwable) {
@@ -551,14 +583,57 @@ final class Supervisor
             return;
         }
         $this->commandsAt = $now;
-        foreach ($this->units as $unit) {
-            $action = ($this->commands)($unit->component);
-            if ($action === ComponentControl::START) {
+        foreach (($this->commands)() as $request) {
+            $unit = $this->unitOf($request->class);
+            if ($unit === null || ($unit->component->adopted && $unit->state === UnitState::Failed)) {
+                $this->adopt($request, $unit);
+            } elseif ($request->action === ComponentControl::START) {
                 $this->startOnRequest($unit, 'started on request');
-            } elseif ($action === ComponentControl::RESTART) {
+            } else {
                 $this->restartOnRequest($unit);
             }
         }
+    }
+
+    /**
+     * Takes in a process the application was not declared with: it runs once, under the
+     * application, and the application lets it go when it ends.
+     *
+     * @param Unit|null $previous What is left of its last run here — a failure.
+     */
+    private function adopt(ControlRequest $request, ?Unit $previous): void
+    {
+        try {
+            $component = Component::adopted($request->class, $request->args);
+        } catch (\InvalidArgumentException $e) {
+            $this->logger->error("Not started on request: {$e->getMessage()}");
+            return;
+        }
+        if ($previous !== null) {
+            $this->units = array_values(array_filter($this->units, static fn(Unit $u): bool => $u !== $previous));
+        }
+        $unit = new Unit($component, ($this->name)($component));
+        $unit->startAt = 0.0;
+        $this->units[] = $unit;
+        $this->logger->info("{$unit->name} started on request: not declared, it runs once — never restarted.");
+    }
+
+    /** A component taken in has ended: nothing of it is kept. */
+    private function letGo(Unit $unit): void
+    {
+        $this->forget($unit);
+        $this->units = array_values(array_filter($this->units, static fn(Unit $u): bool => $u !== $unit));
+    }
+
+    /** @param class-string $class */
+    private function unitOf(string $class): ?Unit
+    {
+        foreach ($this->units as $unit) {
+            if ($unit->component->class === $class && $unit->component->kind !== ComponentKind::Command) {
+                return $unit;
+            }
+        }
+        return null;
     }
 
     /** A component that is down runs again — afresh: its count of restarts starts over. */
@@ -592,6 +667,9 @@ final class Supervisor
     /** A process outside the application runs the component: wait for it, do not fight it. */
     private function hold(Unit $unit, int $outsider): void
     {
+        $unit->reason = $outsider > 0
+            ? "runs outside the application [PID {$outsider}]"
+            : 'its start condition refuses';
         $unit->state = UnitState::Held;
         $unit->heldBy = $outsider;
         $unit->heldCheckedAt = microtime(true);
@@ -624,6 +702,15 @@ final class Supervisor
         }
     }
 
+    private function forget(Unit $unit): void
+    {
+        try {
+            $this->records->forget($unit->component);
+        } catch (\Throwable) {
+            // A record left behind reads as down only while this run lasts.
+        }
+    }
+
     private function recordStopped(Unit $unit): void
     {
         try {
@@ -649,6 +736,66 @@ final class Supervisor
 
     // ── Bookkeeping ───────────────────────────────────────────────────────────
 
+    /**
+     * Where every component stands, as `call application status` shows it.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function snapshot(): array
+    {
+        $now = microtime(true);
+        $units = [];
+        foreach ($this->units as $unit) {
+            if ($unit->sinceState !== $unit->state) {
+                $unit->sinceState = $unit->state;
+                $unit->since = time();
+            }
+            $units[] = [
+                'name'     => $unit->name,
+                'kind'     => $unit->component->kind->name,
+                'class'    => $unit->component->class,
+                'state'    => $unit->state->name,
+                'pid'      => $unit->pid,
+                'since'    => $unit->since,
+                'restarts' => count(array_filter(
+                    $unit->restarts,
+                    static fn(float $at): bool => $now - $at < Component::RETRY_WINDOW,
+                )),
+                'retries'  => $unit->component->retries,
+                'critical' => $unit->component->critical,
+                'retryAt'  => $unit->state === UnitState::Waiting && $unit->startAt > $now ? (int) $unit->startAt : 0,
+                'reason'   => $unit->reason,
+                'adopted'  => $unit->component->adopted,
+            ];
+        }
+        return $units;
+    }
+
+    private function publish(): void
+    {
+        if ($this->publish === null) {
+            return;
+        }
+        $snapshot = $this->snapshot();
+        $key = json_encode(array_map(static function (array $u): array {
+            unset($u['since']);
+            return $u;
+        }, $snapshot));
+        // Said again every few seconds even when nothing changed: from another environment,
+        // where its PID cannot be checked, that is how the application is known to be up.
+        $now = microtime(true);
+        if ($key === $this->published && $now - $this->publishedAt < self::HEARTBEAT) {
+            return;
+        }
+        $this->published = (string) $key;
+        $this->publishedAt = $now;
+        try {
+            ($this->publish)($snapshot);
+        } catch (\Throwable) {
+            // Only the view is missing; supervision goes on.
+        }
+    }
+
     private function alive(): int
     {
         $alive = 0;
@@ -660,11 +807,14 @@ final class Supervisor
         return $alive;
     }
 
-    /** Nothing more will run: every component finished its work. */
+    /**
+     * Nothing more will run: every declared component finished its work. One taken in
+     * keeps the application only while it runs.
+     */
     private function done(): bool
     {
         foreach ($this->units as $unit) {
-            if ($unit->state !== UnitState::Completed) {
+            if (!$unit->component->adopted && $unit->state !== UnitState::Completed) {
                 return false;
             }
         }

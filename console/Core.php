@@ -11,14 +11,15 @@ final class Core extends CoreHandle
     /**
      * Short aliases → Command class name.
      *
-     * One entry, and deliberately. An alias has to be guessable to save anything, and
+     * Few entries, and deliberately. An alias has to be guessable to save anything, and
      * `proc` / `dmn` / `sch` were not: they cost a lookup in the documentation to save
      * three keystrokes, while `call process` reads the same as what it does. `sc` stays
      * because `script` is the one name typed several times a session — it prefixes every
-     * custom command an application has.
+     * custom command an application has; `app` because it is what everyone calls it.
      */
     protected static array $aliases = [
-        'sc' => 'Script',
+        'sc'  => 'Script',
+        'app' => 'Application',
     ];
 
     public function __construct($args)

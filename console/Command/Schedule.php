@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
+use Flytachi\Winter\Console\Inc\KnowsTheApplication;
 use Flytachi\Winter\Kernel\Core\ClassScanner;
 use Flytachi\Winter\Kernel\Process\Activity;
 use Flytachi\Winter\Kernel\Schedule\Stereotype\Scheduler;
@@ -19,6 +20,8 @@ use Flytachi\Winter\Kernel\Schedule\ScheduledTask;
  */
 final class Schedule extends Cmd
 {
+    use KnowsTheApplication;
+
     private const int CL = 36;
 
     public static string $title = "run the scheduler and list #[Scheduled] tasks";
@@ -31,9 +34,10 @@ final class Schedule extends Cmd
             'list'   => $this->listArg(),
             'start'  => $this->startArg(),
             'stop'   => $this->stopArg(),
+            'restart' => $this->restartThroughApplication($this->scheduler(), 'schedule', self::CL),
             'status' => $this->statusArg(in_array('v', $this->args['flags'])),
             ''       => $this->listArg(),
-            default  => self::printWarning("Unknown action (use list|start|stop|status)."),
+            default  => self::printWarning("Unknown action (use list|start|stop|restart|status)."),
         };
 
         self::printTitle("Schedule", self::CL);
@@ -47,7 +51,7 @@ final class Schedule extends Cmd
     {
         $tasks = $this->discover();
 
-        self::printLabel("Scheduled Tasks", self::CL);
+        $this->printListLabel("Scheduled Tasks", self::CL);
         if ($tasks === []) {
             self::printWarning("No #[Scheduled] methods found.");
             self::printInfo("Annotate a public, no-argument method with #[Scheduled].");
@@ -67,18 +71,25 @@ final class Schedule extends Cmd
 
     private function startArg(): void
     {
-        $info = Scheduler::status();
-        if ($info) {
+        $scheduler = $this->scheduler();
+        $info = $scheduler::status();
+        if ($info && !$this->isDownRecord($info)) {
             self::printWarning("Scheduler already running [PID:{$info->pid}] ({$info->getStartedAt()}).");
             return;
         }
 
+        // While the application runs, it starts the scheduler — in the background, with
+        // or without -d. Not declared, it runs until stopped: on for a while, then off.
+        if ($this->startThroughApplication($scheduler, 'schedule', static fn(): int => $scheduler::dispatch(), self::CL)) {
+            return;
+        }
+
         if (in_array('d', $this->args['flags'])) {
-            $pid = Scheduler::dispatch();
+            $pid = $scheduler::dispatch();
             $info = null;
             for ($i = 0; $i < 20 && $info === null; $i++) {
                 usleep(50_000);
-                $info = Scheduler::status();
+                $info = $scheduler::status();
             }
             self::printSuccess("Scheduler dispatched (background).");
             self::printKeyValue("PID", (string) ($info->pid ?? $pid), 12, self::CL, 32);
@@ -86,18 +97,19 @@ final class Schedule extends Cmd
         }
 
         self::printInfo("Starting scheduler …");
-        Scheduler::start();
+        $scheduler::start();
         self::printSuccess("Scheduler finished.");
     }
 
     private function stopArg(): void
     {
-        $info = Scheduler::status();
-        if (!$info) {
+        $scheduler = $this->scheduler();
+        $info = $scheduler::status();
+        if (!$info || $this->isDownRecord($info)) {
             self::printWarning("Scheduler is not running.");
             return;
         }
-        if (Scheduler::stop()) {
+        if ($scheduler::stop()) {
             self::printSuccess("Stop signal sent.");
             self::printKeyValue("PID", (string) $info->pid, 12, self::CL, 32);
         } else {
@@ -107,9 +119,15 @@ final class Schedule extends Cmd
 
     private function statusArg(bool $detailed): void
     {
-        $info = Scheduler::status($detailed);
+        $scheduler = $this->scheduler();
+        $info = $scheduler::status($detailed);
 
-        self::printLabel("Scheduler Status", self::CL);
+        $this->printListLabel("Scheduler Status", self::CL);
+        if ($info && $this->isDownRecord($info)) {
+            $this->printDownStatus(str_replace('\\', '.', $scheduler), $info, 'schedule', self::CL);
+            self::printLabel("Scheduler Status", self::CL);
+            return;
+        }
         if (!$info) {
             self::printBadge('Scheduler', '○ STOPPED', self::CL, 31);
             self::printInfo("The scheduler is not running.");
@@ -120,6 +138,7 @@ final class Schedule extends Cmd
         self::printBadge('Scheduler', 'Scheduler ● ' . $info->state->name, self::CL, 32);
         self::printDivider();
         self::printKeyValue("PID", (string) $info->pid, 12, self::CL, 36);
+        $this->printOwnership($scheduler, $info, self::CL);
         self::printKeyValue("State", $info->state->name, 12, self::CL, 36);
         self::printKeyValue(
             "Activity",
@@ -143,6 +162,22 @@ final class Schedule extends Cmd
         $collector = new ScheduledCollector();
         ClassScanner::scan($collector);
         return $collector->getResult();
+    }
+
+    /**
+     * The scheduler class: the one the application declares, when it declares its own;
+     * the built-in one otherwise.
+     *
+     * @return class-string<Scheduler>
+     */
+    private function scheduler(): string
+    {
+        foreach ($this->application()['record']?->components ?? [] as $component) {
+            if (($component['kind'] ?? null) === 'Scheduler' && is_string($component['class'] ?? null)) {
+                return $component['class'];
+            }
+        }
+        return Scheduler::class;
     }
 
     /**
@@ -179,11 +214,14 @@ final class Schedule extends Cmd
         self::printBadge('start', 'run the scheduler in the foreground', $cl, 36);
         self::printBadge('start -d', 'run the scheduler detached in the background', $cl, 36);
         self::printBadge('stop', 'send a graceful stop signal (SIGTERM)', $cl, 36);
+        self::printBadge('restart', 'stop and start again', $cl, 36);
         self::printBadge('status', 'scheduler run state + task count', $cl, 36);
         self::printLabel("Commands", $cl);
 
         self::printDivider($cl);
         self::printInfo("The scheduler fires one process per host (singleton lock).");
+        self::printInfo("While the application runs, it starts the scheduler (start, with or without -d):");
+        self::printInfo("  declared — with its settings; not declared — runs until stopped, never restarted.");
 
         self::printDivider($cl);
 

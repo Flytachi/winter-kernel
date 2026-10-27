@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\App;
 
+use Flytachi\Winter\Kernel\Process\Stereotype\Daemon;
+use Flytachi\Winter\Kernel\Process\Stereotype\Process;
 use Flytachi\Winter\Kernel\Schedule\Stereotype\Scheduler;
+use Flytachi\Winter\Kernel\WebSocket\WebSocket;
 
 /**
  * A declared unit of a {@see \Flytachi\Winter\Kernel\WinterApplication} — the "what my app
@@ -34,6 +37,8 @@ final readonly class Component
      * @param list<string> $command The program and its arguments (Command).
      * @param string|null $label The name logs and the banner give it (Command).
      * @param float $grace Seconds an outside program has to stop before SIGKILL (Command).
+     * @param bool $adopted Not declared: started while the application runs, and taken in.
+     * @param array<string, string> $args What it was started with ({@see Process::startWith()}).
      */
     private function __construct(
         public ComponentKind $kind,
@@ -46,6 +51,8 @@ final readonly class Component
         public array $command = [],
         public ?string $label = null,
         public float $grace = 10.0,
+        public bool $adopted = false,
+        public array $args = [],
     ) {
         if ($retries < 0 || $startTimeout < 0) {
             throw new \InvalidArgumentException('retries and startTimeout cannot be negative.');
@@ -101,6 +108,48 @@ final readonly class Component
             command: $command,
             label: $name ?? basename($command[0]),
             grace: $grace,
+        );
+    }
+
+    /**
+     * A component the application was not declared with, started while it runs — from
+     * the console or with `dispatch()` — and taken in: it runs once. Never restarted,
+     * never critical: whatever becomes of it, the application runs on.
+     *
+     * @param class-string<Process> $class
+     * @param array<string, string> $args What it was started with; a WebSocket's `port`
+     *     and `host` among them.
+     * @throws \InvalidArgumentException Not a process class, or a WebSocket without a port.
+     */
+    public static function adopted(string $class, array $args = []): self
+    {
+        if (!class_exists($class) || !is_subclass_of($class, Process::class)) {
+            throw new \InvalidArgumentException("{$class} is not a Process class.");
+        }
+        $kind = match (true) {
+            is_subclass_of($class, WebSocket::class) => ComponentKind::WebSocket,
+            is_subclass_of($class, Daemon::class) => ComponentKind::Daemon,
+            $class === Scheduler::class || is_subclass_of($class, Scheduler::class) => ComponentKind::Scheduler,
+            default => ComponentKind::Process,
+        };
+        $port = 8000;
+        $host = '0.0.0.0';
+        if ($kind === ComponentKind::WebSocket) {
+            if (!ctype_digit($args['port'] ?? '')) {
+                throw new \InvalidArgumentException("{$class} is a WebSocket: it needs a port.");
+            }
+            $port = (int) $args['port'];
+            $host = ($args['host'] ?? '') !== '' ? $args['host'] : $host;
+        }
+        return new self(
+            $kind,
+            $class,
+            $host,
+            $port,
+            critical: false,
+            retries: 0,
+            adopted: true,
+            args: $args,
         );
     }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
+use Flytachi\Winter\Console\Inc\KnowsTheApplication;
 use Flytachi\Winter\Kernel\Collector\SubclassCollector;
 use Flytachi\Winter\Kernel\Core\ClassScanner;
 use Flytachi\Winter\Kernel\Process\Activity;
@@ -19,7 +20,9 @@ use Flytachi\Winter\Kernel\Process\Daemon\WorkerStatus;
  */
 final class Daemon extends Cmd
 {
-    public static string $title = "manage Daemon fleets (start/stop/status)";
+    use KnowsTheApplication;
+
+    public static string $title = "manage Daemon fleets (start/stop/restart/status)";
 
     public function handle(): void
     {
@@ -61,9 +64,10 @@ final class Daemon extends Cmd
         match (strtolower($this->args['arguments'][2] ?? '')) {
             'start'  => $this->startArg($class),
             'stop'   => $this->stopArg($class),
+            'restart' => $this->restartThroughApplication($class, 'daemon', 35),
             'status' => $this->statusArg($class, in_array('v', $this->args['flags'])),
             ''       => $this->startArg($class),
-            default  => self::printWarning("Unknown action (use start|stop|status)."),
+            default  => self::printWarning("Unknown action (use start|stop|restart|status)."),
         };
     }
 
@@ -73,8 +77,14 @@ final class Daemon extends Cmd
     private function startArg(string $class): void
     {
         $info = $class::status();
-        if ($info) {
+        if ($info && !$this->isDownRecord($info)) {
             self::printWarning("Already running [PID:{$info->pid}] ({$info->getStartedAt()}).");
+            return;
+        }
+
+        // While the application runs, it starts the daemon — in the background, with or
+        // without -d.
+        if ($this->startThroughApplication($class, 'daemon', static fn(): int => $class::dispatch(), 35)) {
             return;
         }
 
@@ -101,7 +111,7 @@ final class Daemon extends Cmd
     private function stopArg(string $class): void
     {
         $info = $class::status();
-        if (!$info) {
+        if (!$info || $this->isDownRecord($info)) {
             self::printWarning("Daemon is not running.");
             return;
         }
@@ -130,9 +140,16 @@ final class Daemon extends Cmd
             return;
         }
 
+        if ($this->isDownRecord($info)) {
+            $this->printDownStatus($dot, $info, 'daemon', 35);
+            self::printLabel("Daemon Status", 35);
+            return;
+        }
+
         self::printBadge($dot, 'Daemon ● ' . $info->state->name, 35, 32);
         self::printDivider();
         self::printKeyValue("PID", (string) $info->pid, 12, 35, 36);
+        $this->printOwnership($class, $info, 35);
         self::printKeyValue("State", $info->state->name, 12, 35, 36);
         self::printKeyValue(
             "Activity",
@@ -204,7 +221,7 @@ final class Daemon extends Cmd
         ClassScanner::scan($collector);
         $daemons = $collector->getResult();
 
-        self::printLabel("Available Daemons", 35);
+        $this->printListLabel("Available Daemons", 35);
         if (empty($daemons)) {
             self::printWarning("No Daemon classes found.");
             self::printInfo("Create one that extends Daemon.");
@@ -236,7 +253,11 @@ final class Daemon extends Cmd
 
         echo "\033[35m" . str_pad(" |\t [D] {$dot} ", 72, '.') . " ";
         if (!$info) {
-            echo "\033[31m[○ STOPPED]\033[0m\n";
+            echo "\033[31m[○ STOPPED]" . $this->roleTag($class) . "\033[0m\n";
+            return false;
+        }
+        if ($this->isDownRecord($info)) {
+            echo $this->downTag($class, $info) . "\033[0m\n";
             return false;
         }
 
@@ -245,6 +266,7 @@ final class Daemon extends Cmd
         echo "\033[32m[● {$info->state->name}]"
             . $this->activityTag($info->activity)
             . $workers
+            . $this->roleTag($class)
             . "\033[90m {$uptime}\033[0m\n";
 
         return true;
@@ -309,6 +331,7 @@ final class Daemon extends Cmd
         self::printBadge('<dot.notation.Class>', 'supervise in foreground (default)', $cl, 36);
         self::printBadge('<dot.notation.Class> start -d', 'supervise detached in background', $cl, 36);
         self::printBadge('<dot.notation.Class> stop', 'graceful stop (drains the whole fleet)', $cl, 36);
+        self::printBadge('<dot.notation.Class> restart', 'stop and start again', $cl, 36);
         self::printBadge('<dot.notation.Class> status', 'status + per-worker fleet table', $cl, 36);
         self::printBadge('<dot.notation.Class> status -v', 'also master resource usage', $cl, 36);
         self::printLabel("Commands", $cl);
@@ -316,6 +339,8 @@ final class Daemon extends Cmd
         self::printDivider($cl);
         self::printInfo("Worker states: running / starting / retiring / killing / restarting");
         self::printInfo("Bare processes are managed by 'call process'.");
+        self::printInfo("While the application runs, it starts every daemon (start, with or without -d):");
+        self::printInfo("  [boot] declared — its settings; [adopted] not declared — runs once, not critical.");
 
         self::printDivider($cl);
 

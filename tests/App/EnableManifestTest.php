@@ -268,6 +268,29 @@ final class EnableManifestTest extends TestCase
         $this->expectExceptionMessage('declare #[EnableHttp] only');
         $this->resolve(BothServersApp::class);
     }
+
+    // ── The manifest `call application info` shows ───────────────────────────
+
+    public function test_the_manifest_names_where_each_component_was_declared(): void
+    {
+        $manifest = CodeDeclaredApp::manifest();
+
+        self::assertSame(
+            ['#[EnableWeb]', '#[EnableProcess]', 'components()', 'components()', 'components()'],
+            array_column($manifest, 'source'),
+        );
+        self::assertEquals($this->resolve(CodeDeclaredApp::class), array_column($manifest, 'component'));
+    }
+
+    public function test_the_manifest_names_enable_http_as_written(): void
+    {
+        self::assertSame(['#[EnableHttp]'], array_column(TunedHttpApp::manifest(), 'source'));
+    }
+
+    public function test_the_manifest_of_an_app_with_nothing_declared_is_empty(): void
+    {
+        self::assertSame([], EmptyApp::manifest());
+    }
 }
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────

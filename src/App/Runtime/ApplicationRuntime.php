@@ -33,6 +33,11 @@ final class ApplicationRuntime
     private static ?LockFile $lock = null;
     private static ?ApplicationRecord $current = null;
     private static bool $managed = false;
+    /** @var class-string|null The component the supervisor launched in this process. */
+    private static ?string $launched = null;
+
+    /** Seconds within which a record from another host counts as a running application. */
+    public const int HEARTBEAT_TTL = 30;
 
     /** Static-only — not instantiable. */
     private function __construct()
@@ -110,6 +115,7 @@ final class ApplicationRuntime
         }
         try {
             self::store()->del(self::key($appClass));
+            self::store()->del(self::key($appClass) . '.units');
         } catch (\Throwable) {
             // Left behind, it reads as a dead run: the lock is free.
         }
@@ -128,13 +134,103 @@ final class ApplicationRuntime
     }
 
     /**
+     * Records where every component of the running application stands — written by the
+     * supervisor whenever that changes, read by `call application status`.
+     *
+     * @param class-string<\Flytachi\Winter\Kernel\WinterApplication> $appClass
+     * @param list<array<string, mixed>> $units
+     */
+    public static function publishUnits(string $appClass, array $units): void
+    {
+        self::store()->write(self::key($appClass) . '.units', ['seenAt' => time(), 'units' => $units]);
+    }
+
+    /**
+     * When the supervisor last said anything — it says so at least every few seconds.
+     * What tells a running application in another environment from one that is gone:
+     * its record cannot be checked from here, its silence can.
+     *
+     * @param class-string<\Flytachi\Winter\Kernel\WinterApplication> $appClass
+     */
+    public static function seenAt(string $appClass): int
+    {
+        try {
+            $published = self::store()->read(self::key($appClass) . '.units');
+        } catch (\Throwable) {
+            return 0;
+        }
+        return is_array($published) ? (int) ($published['seenAt'] ?? 0) : 0;
+    }
+
+    /**
+     * Where every component stood when the supervisor last said — meaningful only while
+     * the application's record is alive.
+     *
+     * @param class-string<\Flytachi\Winter\Kernel\WinterApplication> $appClass
+     * @return list<array<string, mixed>>
+     */
+    public static function units(string $appClass): array
+    {
+        try {
+            $published = self::store()->read(self::key($appClass) . '.units');
+        } catch (\Throwable) {
+            return [];
+        }
+        return is_array($published) && is_array($published['units'] ?? null) ? $published['units'] : [];
+    }
+
+    /**
      * Marks this process as a component the application started — called by the master's
      * launcher right before the component starts, so its record names the application.
      * A process merely forked or dispatched from inside the application is not one.
+     *
+     * @param class-string $class The component being launched.
      */
-    public static function markManaged(): void
+    public static function markManaged(string $class): void
     {
         self::$managed = true;
+        self::$launched = $class;
+    }
+
+    /**
+     * Whether this process is the application's launch of this very class — its start
+     * goes ahead here. Any other start, from anywhere, is the application's to make.
+     *
+     * @param class-string $class
+     */
+    public static function launching(string $class): bool
+    {
+        return self::$launched === $class && self::$current !== null;
+    }
+
+    /**
+     * The application of this project, when it runs on this host — then every component
+     * is started through it. Null when it does not run, or runs elsewhere.
+     */
+    public static function serving(): ?ApplicationRecord
+    {
+        $appClass = WinterApplication::getAppClass();
+        return $appClass === '' ? null : self::live($appClass);
+    }
+
+    /**
+     * The application of this project when it runs in another environment sharing this
+     * storage — a container, seen from the host. Nothing is started here then: it would
+     * run beside the application, outside it. Known only while the application keeps
+     * saying it is there ({@see seenAt()}); a record from a host that went silent is a
+     * leftover.
+     */
+    public static function servingElsewhere(): ?ApplicationRecord
+    {
+        $appClass = WinterApplication::getAppClass();
+        if ($appClass === '') {
+            return null;
+        }
+        $record = self::record($appClass);
+        if ($record === null || self::isAlive($record) !== null) {
+            return null;
+        }
+        return time() - self::seenAt($appClass) <= self::HEARTBEAT_TTL ? $record : null;
     }
 
     /** The reference this process's record carries, or null when the application did not start it. */

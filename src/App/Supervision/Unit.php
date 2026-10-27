@@ -50,6 +50,13 @@ final class Unit
     /** @var list<float> Restarts within the retry window. */
     public array $restarts = [];
 
+    /** Why it is not running, or ran into trouble last — for `call application status`. */
+    public string $reason = '';
+    /** When it entered its current state (Unix time). */
+    public int $since = 0;
+    /** The state $since belongs to. */
+    public ?UnitState $sinceState = null;
+
     public function __construct(
         public readonly Component $component,
         public readonly string $name,

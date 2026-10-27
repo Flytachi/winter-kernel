@@ -244,8 +244,10 @@ abstract class WinterApplication
         try {
             static::bootstrap($args);
 
-            if ($args->command() === 'run') {
-                $watch = $args->sub() === 'dev' || $args->flag('w') || $args->has('watcher');
+            if (self::startsTheApplication($args)) {
+                // `run dev` / `application start dev`: the word after the verb.
+                $mode = $args->command() === 'run' ? $args->sub() : $args->positional(2);
+                $watch = $mode === 'dev' || $args->flag('w') || $args->has('watcher');
                 static::serve($watch, $args);
             }
         } catch (\Throwable $e) {
@@ -257,6 +259,16 @@ abstract class WinterApplication
         LoggerFactory::setDefaultChannel('sys');
         new Core($args->raw())->run();
         exit(0);
+    }
+
+    /**
+     * Whether the command line starts the application in this process: `call run`, or its
+     * full name `call application start` (`call app start`).
+     */
+    private static function startsTheApplication(ApplicationArguments $args): bool
+    {
+        return $args->command() === 'run'
+            || (in_array($args->command(), ['application', 'app'], true) && $args->sub() === 'start');
     }
 
     // ── Boot ──────────────────────────────────────────────────────────────────
@@ -1047,11 +1059,10 @@ abstract class WinterApplication
             },
             name: static fn(Component $component): string => $component->name(),
             logger: LoggerFactory::getLogger('Supervisor'),
-            commands: $run === null
+            commands: $run === null ? null : static fn(): array => ComponentControl::pending($run),
+            publish: $run === null
                 ? null
-                : static fn(Component $component): ?string => $component->class === null
-                    ? null
-                    : ComponentControl::take($run, $component->class),
+                : static fn(array $units) => ApplicationRuntime::publishUnits($run->appClass, $units),
         );
     }
 
@@ -1166,16 +1177,66 @@ abstract class WinterApplication
             );
         }
 
+        $components = [...$components, ...self::declaredInCode()];
+        self::assertDistinct($components);
+
+        return $components;
+    }
+
+    /**
+     * What the application runs, and where each component was declared — the manifest
+     * `call application info` shows, read without starting anything.
+     *
+     * @return list<array{component: Component, source: string}>
+     * @throws ApplicationConfigException The manifest is invalid, as it would be at startup.
+     */
+    public static function manifest(): array
+    {
+        $all = static::resolveComponents();
+        $inCode = count(self::declaredInCode());
+        $fromAttributes = count($all) - $inCode;
+        $web = static::hasAttribute(EnableWeb::class) ? '#[EnableWeb]' : '#[EnableHttp]';
+
+        $manifest = [];
+        foreach ($all as $i => $component) {
+            $manifest[] = [
+                'component' => $component,
+                'source' => $i >= $fromAttributes ? 'components()' : match ($component->kind) {
+                    ComponentKind::Http => $web,
+                    ComponentKind::Process => '#[EnableProcess]',
+                    ComponentKind::Daemon => '#[EnableDaemon]',
+                    ComponentKind::Scheduler => '#[EnableScheduler]',
+                    ComponentKind::WebSocket => '#[EnableWebSocket]',
+                    ComponentKind::Command => 'components()',
+                },
+            ];
+        }
+        return $manifest;
+    }
+
+    /**
+     * The HTTP server's settings as `call run` would resolve them without flags — from the
+     * environment and the application's ServerConfigurer.
+     */
+    public static function httpSettings(): ServerSettings
+    {
+        return static::buildServerSettings(ApplicationArguments::parse([]));
+    }
+
+    /**
+     * What the {@see components()} hook declares.
+     *
+     * @return list<Component>
+     */
+    private static function declaredInCode(): array
+    {
         $declared = new Components(Kernel::$pathRoot ?? '');
         try {
             static::components($declared);
         } catch (\InvalidArgumentException $e) {
             throw new ApplicationConfigException(static::class . '::components(): ' . $e->getMessage(), previous: $e);
         }
-        $components = [...$components, ...$declared->all()];
-        self::assertDistinct($components);
-
-        return $components;
+        return $declared->all();
     }
 
     /**
@@ -1266,7 +1327,12 @@ abstract class WinterApplication
      * periodic work that would distort a measurement, which is right for a benchmark and
      * wrong for anything else, and a banner is the last place it can still be noticed.
      */
-    private static function profileSummary(ServerSettings $settings): string
+    /**
+     * The resolved server profile in one line, for the banner and `call application info`.
+     *
+     * @internal
+     */
+    public static function profileSummary(ServerSettings $settings): string
     {
         $profile = $settings->getProfile();
         if (!$profile->guards()) {
@@ -1347,13 +1413,14 @@ abstract class WinterApplication
      */
     private static function launch(Component $component): void
     {
-        ApplicationRuntime::markManaged();
         $class = (string) $component->class;
+        ApplicationRuntime::markManaged($class);
         if ($component->kind === ComponentKind::WebSocket) {
             $class::start($component->port, $component->host);
             return;
         }
-        $class::start();
+        // Taken in on request: started with what it was started with.
+        $class::startWith($component->args);
     }
 
     /**

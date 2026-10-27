@@ -8,7 +8,7 @@ use Flytachi\Winter\Console\Inc\Cmd;
 
 final class Run extends Cmd
 {
-    public static string $title = "run the application: web + declared components (Swoole)";
+    public static string $title = "run the application (= application start)";
 
     public function handle(): void
     {
@@ -19,8 +19,8 @@ final class Run extends Cmd
         // Reaching this command means the entry did not intercept `run`.
         self::printWarning("`call run` is served by your WinterApplication entry, not this command.");
         self::printInfo("Ensure your `call` launcher calls App::main(\$argv), where App extends WinterApplication.");
-        self::printInfo("Declare components with #[EnableWeb] / #[EnableProcess] / #[EnableDaemon] / #[EnableScheduler].");
-        self::printInfo("Docs: doc-new/winter-application.md");
+        self::printInfo("Declare components with #[EnableHttp] / #[EnableProcess] / #[EnableDaemon] / #[EnableScheduler] / #[EnableWebSocket].");
+        self::printInfo("Docs: https://winterframe.net/docs/cmd-run");
 
         self::printTitle("Run", 34);
     }
@@ -33,17 +33,22 @@ final class Run extends Cmd
         self::printLabel("Usage", $cl);
         self::print("call run       - run the application (production; DevWatcher off)", $cl);
         self::print("call run dev   - run the application (development; DevWatcher: memory + hot-reload)", $cl);
+        self::print("`call run` is short for `call application start` — see `call help application`", $cl);
         self::printLabel("Usage", $cl);
 
         self::printDivider($cl);
 
         self::printLabel("What runs", $cl);
-        self::print("Everything declared on your WinterApplication via #[Enable*]:", $cl);
-        self::print("  #[EnableWeb]        -> the Swoole HTTP server (main)", $cl);
-        self::print("  #[EnableProcess()]  -> a managed Process, attached via addProcess", $cl);
-        self::print("  #[EnableDaemon()]   -> a supervised Daemon fleet", $cl);
-        self::print("  #[EnableScheduler]  -> the #[Scheduled] scheduler", $cl);
-        self::print("With no #[EnableWeb] the app runs headless (background only).", $cl);
+        self::print("This process is the application (PID 1 in a container): it starts every", $cl);
+        self::print("component declared on your WinterApplication and supervises it:", $cl);
+        self::print("  #[EnableHttp]        -> the Swoole HTTP server", $cl);
+        self::print("  #[EnableWebSocket()] -> a WebSocket server", $cl);
+        self::print("  #[EnableProcess()]   -> a Process", $cl);
+        self::print("  #[EnableDaemon()]    -> a Daemon fleet", $cl);
+        self::print("  #[EnableScheduler]   -> the #[Scheduled] scheduler", $cl);
+        self::print("  components()         -> the same in code, plus scripts and outside programs", $cl);
+        self::print("With no #[EnableHttp] the app runs headless (background only).", $cl);
+        self::print("What starts: `call application info`; how it runs: `call application status`.", $cl);
         self::printLabel("What runs", $cl);
 
         self::printDivider($cl);

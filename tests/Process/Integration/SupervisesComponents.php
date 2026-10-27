@@ -59,8 +59,8 @@ trait SupervisesComponents
             $code = (new Supervisor(
                 $components,
                 launch: static function (Component $c): void {
-                    ApplicationRuntime::markManaged();
-                    ((string) $c->class)::start();
+                    ApplicationRuntime::markManaged((string) $c->class);
+                    ((string) $c->class)::startWith($c->args);
                 },
                 report: static fn(string $what, \Throwable $e) =>
                     $write('reports', "{$what} — " . $e::class . ": {$e->getMessage()}"),
@@ -88,11 +88,10 @@ trait SupervisesComponents
                 },
                 name: static fn(Component $c): string => $c->name(),
                 logger: $logger,
-                commands: $run === null
+                commands: $run === null ? null : static fn(): array => ComponentControl::pending($run),
+                publish: $run === null
                     ? null
-                    : static fn(Component $c): ?string => $c->class === null
-                        ? null
-                        : ComponentControl::take($run, $c->class),
+                    : static fn(array $units) => ApplicationRuntime::publishUnits($app, $units),
             ))->run(untilDone: !$asApplication);
             file_put_contents("{$storage}/exit", (string) $code);
         });

@@ -8,6 +8,7 @@ use Flytachi\Winter\Kernel\App\Component;
 use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
 use Flytachi\Winter\Kernel\App\Runtime\ManagedBy;
 use Flytachi\Winter\Kernel\App\Supervision\ComponentControl;
+use Flytachi\Winter\Kernel\App\Supervision\ControlRequest;
 use Flytachi\Winter\Kernel\Process\Activity;
 use Flytachi\Winter\Kernel\Process\ProcessManagedException;
 use Flytachi\Winter\Kernel\Process\ProcessState;
@@ -71,6 +72,31 @@ final class ComponentControlIntegrationTest extends IntegrationCase
         self::assertNotSame($first, $second);
         self::assertSame($second, SignalProcess::status()?->pid);
         self::assertStringContainsString('SignalProcess started on request.', $this->logged());
+    }
+
+    public function test_the_supervisor_publishes_where_every_component_stands(): void
+    {
+        touch($this->storage . '/broken');
+        $this->supervise([
+            Component::process(SignalProcess::class),
+            Component::process(FixableProcess::class, critical: false),
+        ], asApplication: true);
+        $pid = $this->awaitRunning(SignalProcess::class);
+
+        $byName = fn(): array => array_column(ApplicationRuntime::units(self::$testApp), null, 'name');
+        self::assertTrue($this->pollUntil(fn() => ($byName()['FixableProcess']['state'] ?? null) === 'Failed'));
+
+        $units = $byName();
+        self::assertSame(
+            ['kind' => 'Process', 'state' => 'Running', 'pid' => $pid, 'critical' => true],
+            array_intersect_key($units['SignalProcess'], array_flip(['kind', 'state', 'pid', 'critical'])),
+        );
+        self::assertFalse($units['FixableProcess']['critical']);
+        self::assertNotEmpty($units['FixableProcess']['reason'], 'a failure says why');
+        self::assertGreaterThan(0, $units['SignalProcess']['since']);
+
+        self::assertTrue(SignalProcess::stop());
+        self::assertTrue($this->pollUntil(fn() => ($byName()['SignalProcess']['state'] ?? null) === 'Stopped'));
     }
 
     public function test_relaunch_restarts_a_running_component_without_counting_a_crash(): void
@@ -137,11 +163,14 @@ final class ComponentControlIntegrationTest extends IntegrationCase
         $current = new ManagedBy(self::$testApp, 222, time(), ApplicationRuntime::host());
 
         ComponentControl::request($previous, SignalProcess::class, ComponentControl::START);
-        self::assertNull(ComponentControl::take($current, SignalProcess::class), 'meant for a run that is gone');
-        self::assertNull(ComponentControl::take($current, SignalProcess::class), 'and taken away');
+        self::assertSame([], ComponentControl::pending($current), 'meant for a run that is gone');
+        self::assertSame([], ComponentControl::pending($current), 'and taken away');
 
-        ComponentControl::request($current, SignalProcess::class, ComponentControl::RESTART);
-        self::assertSame(ComponentControl::RESTART, ComponentControl::take($current, SignalProcess::class));
+        ComponentControl::request($current, SignalProcess::class, ComponentControl::RESTART, ['port' => '8001']);
+        self::assertEquals(
+            [new ControlRequest(SignalProcess::class, ComponentControl::RESTART, ['port' => '8001'])],
+            ComponentControl::pending($current),
+        );
     }
 
     public function test_what_the_application_recorded_goes_with_it(): void

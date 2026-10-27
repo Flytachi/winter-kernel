@@ -140,7 +140,7 @@ final class ApplicationRuntimeIntegrationTest extends IntegrationCase
     {
         $this->fork(static function (): void {
             $app = ApplicationRuntime::claim(self::APP, []);
-            ApplicationRuntime::markManaged();
+            ApplicationRuntime::markManaged(SignalProcess::class);
             file_put_contents(dirname((string) getenv('WK_MARKER')) . '/app.json', json_encode($app->managedBy()));
             SignalProcess::start();
         });

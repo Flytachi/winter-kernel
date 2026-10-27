@@ -122,18 +122,19 @@ final class CommandSurfaceTest extends TestCase
     }
 
     /**
-     * `sc` is the only alias, and that is a decision rather than an accident.
+     * `sc` and `app` are the only aliases, and that is a decision rather than an accident.
      *
      * `proc`, `dmn` and `sch` were removed: an alias earns its place by being guessable,
      * and those three cost a trip to the documentation to save three keystrokes. `script`
      * stays abbreviated because it prefixes every custom command an application has, so
-     * it is the one name typed repeatedly in a session.
+     * it is the one name typed repeatedly in a session; `app` is what everyone calls
+     * the application anyway.
      *
      * Pinning the whole map keeps a new alias a considered addition instead of a habit.
      */
     public function test_the_alias_map_is_deliberately_small(): void
     {
-        self::assertSame(['sc' => 'Script'], Core::getAliases());
+        self::assertSame(['sc' => 'Script', 'app' => 'Application'], Core::getAliases());
     }
 
     /** @return list<string> */

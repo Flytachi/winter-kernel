@@ -54,7 +54,7 @@ final class Complete extends Cmd
 
         // --- run ---
         'run' => [
-            'dev:start PHP built-in dev server',
+            'dev:with the DevWatcher (memory + hot-reload)',
             '--host=:bind host (default: 0.0.0.0)',
             '--port=:bind port (default: 8000)',
             '--workers=:number of Swoole workers',
@@ -67,6 +67,26 @@ final class Complete extends Cmd
             '--host=:bind host (default: 0.0.0.0)',
             '--port=:bind port (default: 8000)',
         ],
+
+        // --- application ---
+        'application' => [
+            'start:run the application in the foreground (= run)',
+            'stop:stop the running application (SIGTERM, waits)',
+            'status:the application and every component, live',
+            'info:components that start with it + configuration',
+        ],
+        'application start' => [
+            'dev:with the DevWatcher (memory + hot-reload)',
+            '--host=:bind host (default: 0.0.0.0)',
+            '--port=:bind port (default: 8000)',
+            '-w:enable DevWatcher (memory + hot-reload)',
+        ],
+        'application stop' => [
+            '--timeout=:seconds to wait (default: 60)',
+            '--force:SIGKILL what is left after the timeout',
+        ],
+        'application status' => [],
+        'application info'   => [],
 
         // --- mapping ---
         'mapping' => [
@@ -115,6 +135,7 @@ final class Complete extends Cmd
             'list:list all #[Scheduled] tasks and cadence',
             'start:run the scheduler (foreground; -d for background)',
             'stop:send graceful stop (SIGTERM)',
+            'restart:stop and start again',
             'status:scheduler run state + task count',
         ],
         'schedule start' => ['-d:run detached in background'],
@@ -202,6 +223,7 @@ final class Complete extends Cmd
                 $base = [
                     'start:start (foreground; -d for background)',
                     'stop:send graceful stop (SIGTERM)',
+                    'restart:stop and start again',
                     'status:show status (-v for detail)',
                     '-d:start detached in background',
                 ];
@@ -227,6 +249,7 @@ final class Complete extends Cmd
                 $base = [
                     'start:supervise (foreground; -d for background)',
                     'stop:graceful stop (drains the fleet)',
+                    'restart:stop and start again',
                     'status:show status + worker fleet',
                     '-d:supervise detached in background',
                 ];

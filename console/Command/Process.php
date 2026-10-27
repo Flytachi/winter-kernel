@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Console\Command;
 
 use Flytachi\Winter\Console\Inc\Cmd;
+use Flytachi\Winter\Console\Inc\KnowsTheApplication;
 use Flytachi\Winter\Kernel\Collector\SubclassCollector;
 use Flytachi\Winter\Kernel\Core\ClassScanner;
 use Flytachi\Winter\Kernel\Process\Activity;
@@ -17,7 +18,9 @@ use Flytachi\Winter\Kernel\WebSocket\WebSocket;
  */
 final class Process extends Cmd
 {
-    public static string $title = "manage Process units (start/stop/status)";
+    use KnowsTheApplication;
+
+    public static string $title = "manage Process units (start/stop/restart/status)";
 
     public function handle(): void
     {
@@ -63,9 +66,10 @@ final class Process extends Cmd
         match (strtolower($this->args['arguments'][2] ?? '')) {
             'start'  => $this->startArg($class),
             'stop'   => $this->stopArg($class),
+            'restart' => $this->restartThroughApplication($class, 'process', 34),
             'status' => $this->statusArg($class, in_array('v', $this->args['flags'])),
             ''       => $this->startArg($class),
-            default  => self::printWarning("Unknown action (use start|stop|status)."),
+            default  => self::printWarning("Unknown action (use start|stop|restart|status)."),
         };
     }
 
@@ -75,7 +79,7 @@ final class Process extends Cmd
     private function startArg(string $class): void
     {
         $info = $class::status();
-        if ($info) {
+        if ($info && !$this->isDownRecord($info)) {
             self::printWarning("Already running [PID:{$info->pid}] ({$info->getStartedAt()}).");
             return;
         }
@@ -89,6 +93,15 @@ final class Process extends Cmd
             }
             $host = $this->args['options']['host'] ?? null;
             $host = is_string($host) && $host !== '' ? $host : null;
+        }
+
+        // While the application runs, it starts the process — in the background, with or
+        // without -d.
+        $dispatch = $socket
+            ? static fn(): int => $class::dispatch(port: (int) $port, host: $host)
+            : static fn(): int => $class::dispatch();
+        if ($this->startThroughApplication($class, 'process', $dispatch, 34)) {
+            return;
         }
 
         if (in_array('d', $this->args['flags'])) {
@@ -116,7 +129,7 @@ final class Process extends Cmd
     private function stopArg(string $class): void
     {
         $info = $class::status();
-        if (!$info) {
+        if (!$info || $this->isDownRecord($info)) {
             self::printWarning("Process is not running.");
             return;
         }
@@ -145,9 +158,16 @@ final class Process extends Cmd
             return;
         }
 
+        if ($this->isDownRecord($info)) {
+            $this->printDownStatus($dot, $info, 'process', 34);
+            self::printLabel("Process Status", 34);
+            return;
+        }
+
         self::printBadge($dot, 'Process ● ' . $info->state->name, 34, 32);
         self::printDivider();
         self::printKeyValue("PID", (string) $info->pid, 12, 34, 36);
+        $this->printOwnership($class, $info, 34);
         self::printKeyValue("State", $info->state->name, 12, 34, 36);
         self::printKeyValue(
             "Activity",
@@ -191,7 +211,7 @@ final class Process extends Cmd
             static fn($ref) => !$ref->isSubclassOf(DaemonUnit::class)
         );
 
-        self::printLabel("Available Processes", 34);
+        $this->printListLabel("Available Processes", 34);
         if (empty($processes)) {
             self::printWarning("No Process classes found.");
             self::printInfo("Create one that extends Process. (Daemons: 'call daemon list'.)");
@@ -223,13 +243,18 @@ final class Process extends Cmd
 
         echo "\033[34m" . str_pad(" |\t [P] {$dot} ", 72, '.') . " ";
         if (!$info) {
-            echo "\033[31m[○ STOPPED]\033[0m\n";
+            echo "\033[31m[○ STOPPED]" . $this->roleTag($class) . "\033[0m\n";
+            return false;
+        }
+        if ($this->isDownRecord($info)) {
+            echo $this->downTag($class, $info) . "\033[0m\n";
             return false;
         }
 
         $uptime = $this->formatDuration(time() - $info->startedAt);
         echo "\033[32m[● {$info->state->name}]"
             . $this->activityTag($info->activity)
+            . $this->roleTag($class)
             . "\033[90m {$uptime}\033[0m\n";
 
         return true;
@@ -294,13 +319,16 @@ final class Process extends Cmd
         self::printBadge('<dot.notation.Class>', 'start in foreground (default)', $cl, 36);
         self::printBadge('<dot.notation.Class> start -d', 'start detached in background', $cl, 36);
         self::printBadge('<dot.notation.Class> stop', 'send graceful stop signal (SIGTERM)', $cl, 36);
+        self::printBadge('<dot.notation.Class> restart', 'stop and start again', $cl, 36);
         self::printBadge('<dot.notation.Class> status -v', 'detailed: resource usage', $cl, 36);
         self::printBadge('<Socket> start --port=N', 'a WebSocket: port required, --host=…', $cl, 36);
         self::printLabel("Commands", $cl);
 
         self::printDivider($cl);
         self::printInfo("Daemons (supervised fleets) are managed by 'call daemon'.");
-        self::printInfo("Row tags: [P] process | ● running, ○ stopped | [BUSY]/[idle]");
+        self::printInfo("Row tags: [P] process | ● running, ○ stopped, ✕ failed | [BUSY]/[idle]");
+        self::printInfo("While the application runs, it starts every process (start, with or without -d):");
+        self::printInfo("  [boot] declared — its settings; [adopted] not declared — runs once, no restarts.");
 
         self::printDivider($cl);
 
