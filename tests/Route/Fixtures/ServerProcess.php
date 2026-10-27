@@ -20,9 +20,14 @@ final class ServerProcess
     private string $runner = '';
     private string $logFile = '';
 
-    /** @param string $host The interface the server binds: `127.0.0.1`, or `::` for both protocols. */
-    public function __construct(private readonly string $host = '127.0.0.1')
-    {
+    /**
+     * @param string $host The interface the server binds: `127.0.0.1`, or `::` for both protocols.
+     * @param array<string, string> $env Variables the server is started with — `SERVER_TLS_CERT`, say.
+     */
+    public function __construct(
+        private readonly string $host = '127.0.0.1',
+        private readonly array $env = [],
+    ) {
     }
 
     public function port(): int
@@ -59,8 +64,13 @@ final class ServerProcess
             $this->port,
         ));
 
+        $env = '';
+        foreach ($this->env as $name => $value) {
+            $env .= $name . '=' . escapeshellarg($value) . ' ';
+        }
         $this->pid = (int) trim((string) shell_exec(sprintf(
-            'WK_SERVE_STORAGE=%s %s %s >> %s 2>&1 & echo $!',
+            '%sWK_SERVE_STORAGE=%s %s %s >> %s 2>&1 & echo $!',
+            $env,
             escapeshellarg($this->storage),
             escapeshellarg(PHP_BINARY),
             escapeshellarg($this->runner),

@@ -15,7 +15,7 @@ use Flytachi\Winter\Kernel\Kernel;
  *
  * ```
  * $server->maxRequest(5000)
- *        ->set('ssl_cert_file', '/etc/ssl/app.pem');
+ *        ->tls(cert: '/etc/ssl/app.crt', key: '/etc/ssl/app.key');
  * ```
  *
  * The worker count is deliberately absent from that example — see {@see workers()}.
@@ -128,12 +128,7 @@ final class ServerSettings
             'SERVER_IDLE_TIMEOUT'      => 'heartbeat_idle_time',
         ];
         // env() hands `true`/`false` over as booleans and digits as integers.
-        $compression = env('SERVER_COMPRESSION');
-        $compression = match (true) {
-            is_bool($compression), is_int($compression) => (bool) $compression,
-            is_string($compression) => filter_var($compression, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE),
-            default => null,
-        };
+        $compression = self::flag(env('SERVER_COMPRESSION'));
         if ($compression !== null) {
             $options['http_compression'] = $compression;
         }
@@ -144,6 +139,18 @@ final class ServerSettings
         $minLength = self::byteCount(env('SERVER_COMPRESSION_MIN'));
         if ($minLength !== null) {
             $options['http_compression_min_length'] = $minLength;
+        }
+
+        // Where the certificate lives is the deployment's: mounted with the container.
+        foreach (['SERVER_TLS_CERT' => 'ssl_cert_file', 'SERVER_TLS_KEY' => 'ssl_key_file'] as $envKey => $swooleKey) {
+            $path = env($envKey);
+            if (is_string($path) && trim($path) !== '') {
+                $options[$swooleKey] = self::projectPath(trim($path));
+            }
+        }
+        $http2 = self::flag(env('SERVER_HTTP2'));
+        if ($http2 !== null) {
+            $options['open_http2_protocol'] = $http2;
         }
 
         // `SERVER_MEMORY_LIMIT` is handled below — it is a PHP ini, not a Swoole key.
@@ -569,10 +576,7 @@ final class ServerSettings
      */
     public function staticPath(string $path): self
     {
-        $dir = str_starts_with($path, '/')
-            ? $path
-            : rtrim(Kernel::$pathRoot, '/\\') . '/' . ltrim($path, '/\\');
-        $dir = rtrim($dir, '/\\');
+        $dir = rtrim(self::projectPath($path), '/\\');
 
         if (!is_dir($dir)) {
             throw new ApplicationConfigException("Static directory does not exist: {$dir}");
@@ -825,6 +829,132 @@ final class ServerSettings
     public function getCompressionMinLength(): int
     {
         return (int) ($this->options['http_compression_min_length'] ?? self::DEFAULT_COMPRESSION_MIN_LENGTH);
+    }
+
+    /**
+     * Serves HTTPS: the server speaks TLS on its port, and only TLS — a plain `http://`
+     * request to it gets no answer. From `SERVER_TLS_CERT` / `SERVER_TLS_KEY` by default.
+     *
+     * ```
+     * $server->tls(cert: '/etc/ssl/app.crt', key: '/etc/ssl/app.key');
+     * ```
+     *
+     * Usually a proxy in front ends TLS — nginx, Traefik, an ingress, a cloud load
+     * balancer — and renews the certificate there; this is for an application that is
+     * reached directly. The files are read when the server starts: a renewed certificate
+     * takes effect on the next start. TLS 1.2 and 1.3 are accepted, older versions are
+     * not (OpenSSL's defaults, measured); `->set('ssl_protocols', …)` narrows that.
+     *
+     * Both files are checked at boot: a missing or unreadable one stops it there,
+     * instead of the server coming up without TLS.
+     *
+     * @param string $cert The certificate in PEM, the chain after it; relative to the
+     *   project root unless absolute.
+     * @param string $key Its private key in PEM, unencrypted.
+     *
+     * @link https://winterframe.net/docs/web-configuration#https HTTPS
+     */
+    public function tls(string $cert, string $key): self
+    {
+        $this->options['ssl_cert_file'] = self::projectPath($cert);
+        $this->options['ssl_key_file'] = self::projectPath($key);
+        return $this;
+    }
+
+    /** Whether the server speaks TLS — a certificate was given, here or with `set()`. */
+    public function isTls(): bool
+    {
+        return is_string($this->options['ssl_cert_file'] ?? null) && $this->options['ssl_cert_file'] !== '';
+    }
+
+    /** The certificate file, or null without TLS. */
+    public function getTlsCert(): ?string
+    {
+        return $this->isTls() ? (string) $this->options['ssl_cert_file'] : null;
+    }
+
+    /**
+     * Refuses a TLS setup the server could not start with, before anything binds: half
+     * of it given, a file that is not there or not readable, or a Swoole built without
+     * OpenSSL. Without the check a mistake here shows up as a server that does not
+     * answer — or, before TLS was supported, as one quietly serving plain HTTP.
+     *
+     * @internal Called at boot.
+     * @throws ApplicationConfigException
+     */
+    public function assertTls(): void
+    {
+        $cert = $this->options['ssl_cert_file'] ?? null;
+        $key = $this->options['ssl_key_file'] ?? null;
+        if (($cert === null || $cert === '') && ($key === null || $key === '')) {
+            return;
+        }
+        if ($cert === null || $cert === '' || $key === null || $key === '') {
+            throw new ApplicationConfigException(
+                'TLS needs both files: the certificate (SERVER_TLS_CERT) and its key (SERVER_TLS_KEY).'
+            );
+        }
+        foreach (['certificate' => $cert, 'key' => $key] as $what => $file) {
+            if (!is_file($file) || !is_readable($file)) {
+                throw new ApplicationConfigException("The TLS {$what} cannot be read: {$file}");
+            }
+        }
+        // With ext-openssl at hand, a file that is no certificate or a key that is not
+        // its pair is named here; Swoole would only say the server failed to start.
+        if (function_exists('openssl_x509_read')) {
+            $x509 = @openssl_x509_read((string) file_get_contents($cert));
+            if ($x509 === false) {
+                throw new ApplicationConfigException("Not a PEM certificate: {$cert}");
+            }
+            $private = @openssl_pkey_get_private((string) file_get_contents($key));
+            if ($private === false) {
+                throw new ApplicationConfigException("Not an unencrypted PEM private key: {$key}");
+            }
+            if (!openssl_x509_check_private_key($x509, $private)) {
+                throw new ApplicationConfigException("The TLS key does not belong to the certificate: {$key}");
+            }
+        }
+        // Without Swoole at all the boot stops on that first, with its own message.
+        if (extension_loaded('swoole') && !defined('SWOOLE_SSL')) {
+            throw new ApplicationConfigException('TLS needs Swoole built with OpenSSL (--enable-openssl).');
+        }
+    }
+
+    /**
+     * Speaks HTTP/2 to the clients that ask for it, HTTP/1.1 to the rest. Off by
+     * default; `SERVER_HTTP2=true` switches it on.
+     *
+     * Browsers use HTTP/2 over TLS only, so for them it goes with {@see tls()}. Without
+     * TLS it is cleartext HTTP/2 (h2c) — what a proxy or a gRPC client may speak to a
+     * backend.
+     */
+    public function http2(bool $enabled = true): self
+    {
+        return $this->set('open_http2_protocol', $enabled);
+    }
+
+    /** Whether HTTP/2 is on. */
+    public function isHttp2(): bool
+    {
+        return (bool) ($this->options['open_http2_protocol'] ?? false);
+    }
+
+    /** A path as written in config: absolute, or relative to the project root. */
+    private static function projectPath(string $path): string
+    {
+        return str_starts_with($path, '/')
+            ? $path
+            : rtrim((string) Kernel::$pathRoot, '/\\') . '/' . ltrim($path, '/\\');
+    }
+
+    /** `true` / `false` / `on` / `off` / `1` / `0` from env(), which turns some into scalars; null for anything else. */
+    private static function flag(mixed $value): ?bool
+    {
+        return match (true) {
+            is_bool($value), is_int($value) => (bool) $value,
+            is_string($value) => filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE),
+            default => null,
+        };
     }
 
     /** A size in bytes from an integer or '512' / '1K' / '2M'; null when it is none. */

@@ -855,7 +855,7 @@ abstract class WinterApplication
         $web = $settings !== null ? static::prepareHttp($settings, $watch) : null;
 
         if (Banner::isEnabled($args)) {
-            $rows = static::bannerRows($companions, $web?->host(), $web?->port());
+            $rows = static::bannerRows($companions, $web?->host(), $web?->port(), $web?->scheme() ?? 'http');
             if ($web !== null) {
                 // What the profile resolved to, because a limit nobody can see is a limit
                 // nobody thinks of when a request starts queueing or a connection is refused.
@@ -867,7 +867,7 @@ abstract class WinterApplication
         $names = array_map(static fn(Component $c): string => $c->name(), $companions);
         $logger->info(sprintf(
             'Application up%s%s%s',
-            $web !== null ? ': ' . BindAddress::url('http', $web->host(), $web->port()) : ' (headless)',
+            $web !== null ? ': ' . BindAddress::url($web->scheme(), $web->host(), $web->port()) : ' (headless)',
             $names === [] ? '' : ($web !== null ? ' + ' : ': ') . '[' . implode(', ', $names) . ']',
             $watch ? ' (dev/watch)' : ''
         ));
@@ -898,6 +898,7 @@ abstract class WinterApplication
                 '`call run` with an HTTP server needs ext-swoole (pecl install swoole).'
             );
         }
+        $settings->assertTls();
 
         // The same class-list cache the boot scan built a moment ago: without it this
         // walks the whole tree a second time, `require_once`-ing every file again — and
@@ -936,11 +937,13 @@ abstract class WinterApplication
 
         // Swoole binds IPv4 unless told otherwise, and refuses `::` with "Invalid IPv4
         // address"; an IPv6 socket on `::` takes IPv4 clients as well.
+        // TLS is a flag on the socket: the certificate options alone leave it plain HTTP.
+        $tls = $web->settings->isTls();
         $server = new \Swoole\Http\Server(
             $web->host(),
             $web->port(),
             SWOOLE_BASE,
-            BindAddress::isIpv6($web->host()) ? SWOOLE_SOCK_TCP6 : SWOOLE_SOCK_TCP,
+            (BindAddress::isIpv6($web->host()) ? SWOOLE_SOCK_TCP6 : SWOOLE_SOCK_TCP) | ($tls ? SWOOLE_SSL : 0),
         );
         $server->set($web->settings->toArray());
 
@@ -950,11 +953,11 @@ abstract class WinterApplication
         $handler = static function (
             \Swoole\Http\Request $req,
             \Swoole\Http\Response $res
-        ) use ($router, $trimThreshold, $serverHeader): void {
+        ) use ($router, $trimThreshold, $serverHeader, $tls): void {
             // Before the route runs, so a response that sets its own `Server` replaces it;
             // an empty value makes Swoole send no header instead of its own name.
             $res->header('Server', $serverHeader);
-            $request = new SwooleRequest($req);
+            $request = new SwooleRequest($req, $tls);
             $isHead  = strtoupper($request->getMethod()) === 'HEAD';
             $router->handle($request, new SwooleResponse($res, $isHead));
 
@@ -1390,11 +1393,11 @@ abstract class WinterApplication
         );
     }
 
-    private static function bannerRows(array $companions, ?string $host, ?int $port): array
+    private static function bannerRows(array $companions, ?string $host, ?int $port, string $scheme = 'http'): array
     {
         $rows = [];
         if ($host !== null) {
-            $rows[] = ['web', BindAddress::url('http', $host, (int) $port)];
+            $rows[] = ['web', BindAddress::url($scheme, $host, (int) $port)];
         }
         foreach ($companions as $companion) {
             $rows[] = match ($companion->kind) {

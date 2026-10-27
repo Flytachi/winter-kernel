@@ -178,7 +178,8 @@ final class Application extends Cmd
         $timeout = $settings->getRequestTimeout();
         self::printKeyValue(
             "Address",
-            BindAddress::url('http', $settings->getHost(), $settings->getPort()) . "  ({$source})",
+            BindAddress::url($settings->isTls() ? 'https' : 'http', $settings->getHost(), $settings->getPort())
+                . "  ({$source})",
             14,
             self::CL,
             36
@@ -187,6 +188,14 @@ final class Application extends Cmd
         self::printKeyValue("Memory", $settings->getMemoryLimit() ?? 'PHP default (' . ini_get('memory_limit') . ')', 14, self::CL, 36);
         self::printKeyValue("Timeout", $timeout > 0 ? $timeout . 's per request' : 'none', 14, self::CL, 36);
         self::printKeyValue("Profile", WinterApplication::profileSummary($settings), 14, self::CL, 36);
+        try {
+            $settings->assertTls();
+            $tls = $settings->isTls() ? 'cert ' . $settings->getTlsCert() : 'off — plain HTTP (TLS at the proxy)';
+            self::printKeyValue("TLS", $tls, 14, self::CL, $settings->isTls() ? 32 : 90);
+        } catch (\Throwable $e) {
+            self::printKeyValue("TLS", 'invalid — ' . $e->getMessage(), 14, self::CL, 31);
+        }
+        self::printKeyValue("HTTP/2", $settings->isHttp2() ? 'on' : 'off', 14, self::CL, $settings->isHttp2() ? 32 : 90);
         self::printKeyValue("Compression", $settings->isCompressionEnabled()
             ? sprintf('br/gzip · level %d · from %s', $settings->getCompressionLevel(), self::size($settings->getCompressionMinLength()))
             : 'off', 14, self::CL, 36);

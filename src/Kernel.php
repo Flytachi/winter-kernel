@@ -51,6 +51,7 @@ final class Kernel extends KernelStore
             $isTmpVolatile,
         );
 
+        self::importProcessEnvironment();
         Dotenv::createImmutable(self::$pathRoot)
             ->safeLoad();
 
@@ -161,6 +162,31 @@ final class Kernel extends KernelStore
 
         // Same as for the DB pool: release the housekeeping timer when a process ends.
         RuntimeShutdown::register(static fn() => RedisPool::shutdown());
+    }
+
+    /**
+     * Makes the variables the process was started with visible to `env()`, ahead of
+     * `.env`: `LOG_LEVEL=debug php call run` wins over the file, as it does in Docker.
+     *
+     * `env()` reads `$_ENV`, and PHP fills `$_ENV` only when `variables_order` holds an
+     * `E` — the php.ini of most installations says `GPCS`, an image without one says
+     * `EGPCS`. Without the `E` a process variable was invisible, and one that was in
+     * `.env` as well was lost altogether: Dotenv found it in `$_SERVER`, left it there,
+     * and wrote nothing to `$_ENV`. The same application read its settings one way on
+     * a laptop and another in a container.
+     *
+     * CLI only. Under PHP-FPM `getenv()` also carries the request's parameters — its
+     * `HTTP_*` headers among them — and copying those would let a client set
+     * "environment variables" with a header (httpoxy).
+     */
+    private static function importProcessEnvironment(): void
+    {
+        if (PHP_SAPI !== 'cli') {
+            return;
+        }
+        foreach (getenv() as $name => $value) {
+            $_ENV[$name] ??= $value;
+        }
     }
 
     private static function bootLogger(): void

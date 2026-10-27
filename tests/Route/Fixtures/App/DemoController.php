@@ -52,6 +52,13 @@ final class DemoController extends Controller
         return ['method' => $request->getMethod(), 'uri' => $request->getUri()];
     }
 
+    /** How the request arrived, as the application reads it. */
+    #[GetMapping('/scheme')]
+    public function scheme(HttpRequest $request): array
+    {
+        return ['scheme' => $request->getScheme(), 'url' => $request->getUrl(), 'protocol' => $request->getProtocolVersion()];
+    }
+
     /** Who the server thinks is asking. */
     #[GetMapping('/ip')]
     public function ip(HttpRequest $request): array

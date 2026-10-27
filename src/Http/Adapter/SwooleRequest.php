@@ -21,7 +21,11 @@ final class SwooleRequest implements HttpRequest
     /** @var array<string, string>|null Parsed on first use. */
     private ?array $cookies = null;
 
-    public function __construct(private readonly Request $request)
+    /**
+     * @param bool $tls Whether the server it came to speaks TLS — Swoole does not say so
+     *   in the request itself.
+     */
+    public function __construct(private readonly Request $request, private readonly bool $tls = false)
     {
     }
 
@@ -201,9 +205,9 @@ final class SwooleRequest implements HttpRequest
         if ($proto !== null) {
             return $proto;
         }
-        // Swoole does not populate a scheme/https flag; SSL detection relies on
-        // proxy headers or explicit server configuration upstream.
-        return 'http';
+        // Swoole puts no scheme or https flag in the request: the server says whether it
+        // speaks TLS. A proxy's header above still wins — it saw the client's side.
+        return $this->tls ? 'https' : 'http';
     }
 
     /**

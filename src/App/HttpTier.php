@@ -32,4 +32,10 @@ final readonly class HttpTier
     {
         return $this->settings->getPort();
     }
+
+    /** `https` when the server speaks TLS, `http` otherwise. */
+    public function scheme(): string
+    {
+        return $this->settings->isTls() ? 'https' : 'http';
+    }
 }
