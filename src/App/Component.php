@@ -60,6 +60,44 @@ final readonly class Component
         if ($grace < 0) {
             throw new \InvalidArgumentException('grace cannot be negative.');
         }
+        if ($kind === ComponentKind::Http || $kind === ComponentKind::WebSocket) {
+            if ($port < 1 || $port > 65535) {
+                throw new \InvalidArgumentException("port must be 1–65535, {$port} given.");
+            }
+            if (trim($host) === '') {
+                throw new \InvalidArgumentException('host cannot be empty.');
+            }
+        }
+    }
+
+    /**
+     * The same component bound elsewhere — what `--<name>.port` / `--<name>.host` asked
+     * for at launch.
+     *
+     * @throws \InvalidArgumentException The address is out of range.
+     */
+    public function at(string $host, int $port): self
+    {
+        return new self(
+            $this->kind,
+            $this->class,
+            $host,
+            $port,
+            $this->critical,
+            $this->retries,
+            $this->startTimeout,
+            $this->command,
+            $this->label,
+            $this->grace,
+            $this->adopted,
+            $this->args,
+        );
+    }
+
+    /** Whether it binds an address of its own: the HTTP server or a WebSocket. */
+    public function listens(): bool
+    {
+        return $this->kind === ComponentKind::Http || $this->kind === ComponentKind::WebSocket;
     }
 
     /** How logs and the banner name it: the class's short name, or the program's name. */
@@ -153,7 +191,11 @@ final readonly class Component
         );
     }
 
-    /** The main HTTP server — controllers under the app root are scanned automatically. */
+    /**
+     * The main HTTP server — controllers under the app root are scanned automatically.
+     * Its address can be changed at launch with `--http.port` / `--http.host`, and by
+     * a {@see \Flytachi\Winter\Kernel\App\Config\WebConfigurer} after that.
+     */
     public static function http(
         string $host = '0.0.0.0',
         int $port = 8000,

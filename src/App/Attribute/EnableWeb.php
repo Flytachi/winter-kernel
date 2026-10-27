@@ -12,10 +12,8 @@ namespace Flytachi\Winter\Kernel\App\Attribute;
  *
  * @deprecated Use {@see EnableHttp}.
  *
- * A pure capability toggle: it carries no host/port. The bind address is
- * deployment configuration, not a property of the application, so it lives in
- * `.env` / a {@see \Flytachi\Winter\Kernel\App\Config\WebConfigurer} and defaults to
- * `--host`/`--port` (fallback `0.0.0.0:8000`).
+ * It binds `0.0.0.0:8000`, changed at launch with `--http.port` / `--http.host`; the
+ * address in code is a parameter of #[EnableHttp].
  *
  * ```
  * #[EnableWeb]

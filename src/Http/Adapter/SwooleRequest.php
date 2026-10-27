@@ -116,7 +116,8 @@ final class SwooleRequest implements HttpRequest
 
     public function getServerParam(string $key): string|int|float|null
     {
-        return $this->request->server[$key] ?? null;
+        // Swoole names them in lower case; FPM's spelling is accepted as well.
+        return $this->request->server[$key] ?? $this->request->server[strtolower($key)] ?? null;
     }
 
     public function getClientIp(): string
@@ -127,7 +128,7 @@ final class SwooleRequest implements HttpRequest
             if (preg_match('/for=["\']?([^;,"\'\s\]]+)/i', $h['forwarded'], $m)) {
                 $ip = trim($m[1], '"\'[]');
                 if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                    return $ip;
+                    return ClientAddress::unmapped($ip);
                 }
             }
         }
@@ -135,7 +136,7 @@ final class SwooleRequest implements HttpRequest
         if (!empty($h['x-real-ip'])) {
             $ip = trim($h['x-real-ip']);
             if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                return $ip;
+                return ClientAddress::unmapped($ip);
             }
         }
 
@@ -143,12 +144,12 @@ final class SwooleRequest implements HttpRequest
             foreach (explode(',', $h['x-forwarded-for']) as $ip) {
                 $ip = trim($ip);
                 if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-                    return $ip;
+                    return ClientAddress::unmapped($ip);
                 }
             }
         }
 
-        return $this->request->server['remote_addr'] ?? '127.0.0.1';
+        return ClientAddress::unmapped($this->request->server['remote_addr'] ?? '127.0.0.1');
     }
 
     /**

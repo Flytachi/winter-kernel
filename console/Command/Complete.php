@@ -55,17 +55,13 @@ final class Complete extends Cmd
         // --- run ---
         'run' => [
             'dev:with the DevWatcher (memory + hot-reload)',
-            '--host=:bind host (default: 0.0.0.0)',
-            '--port=:bind port (default: 8000)',
-            '--workers=:number of Swoole workers',
-            '--tasks=:number of Swoole task workers',
-            '--max_request=:max requests per worker',
-            '--max_request_grace=:graceful drain count',
+            '--http.port=:the HTTP server port (default: 8000)',
+            '--http.host=:the HTTP server bind host (default: 0.0.0.0)',
             '-w:enable DevWatcher (memory + hot-reload)',
         ],
         'run dev' => [
-            '--host=:bind host (default: 0.0.0.0)',
-            '--port=:bind port (default: 8000)',
+            '--http.port=:the HTTP server port (default: 8000)',
+            '--http.host=:the HTTP server bind host (default: 0.0.0.0)',
         ],
 
         // --- application ---
@@ -77,8 +73,8 @@ final class Complete extends Cmd
         ],
         'application start' => [
             'dev:with the DevWatcher (memory + hot-reload)',
-            '--host=:bind host (default: 0.0.0.0)',
-            '--port=:bind port (default: 8000)',
+            '--http.port=:the HTTP server port (default: 8000)',
+            '--http.host=:the HTTP server bind host (default: 0.0.0.0)',
             '-w:enable DevWatcher (memory + hot-reload)',
         ],
         'application stop' => [

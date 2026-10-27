@@ -9,9 +9,9 @@ use Flytachi\Winter\Kernel\Kernel;
 
 /**
  * Fluent builder for the Swoole HTTP server options — the replacement for the old
- * `swooleConfig()` hook. Base values come from .env (`SERVER_*`), then each
- * {@see WebConfigurer::configureServer()} may tune them further; the result is
- * passed to `\Swoole\Http\Server::set()`.
+ * `swooleConfig()` hook. The address comes from `#[EnableHttp]` and the launch flags,
+ * the tuning from .env (`SERVER_*`); then each {@see WebConfigurer::configureServer()}
+ * may change either. The options are passed to `\Swoole\Http\Server::set()`.
  *
  * ```
  * $server->maxRequest(5000)
@@ -92,9 +92,9 @@ final class ServerSettings
     }
 
     /**
-     * Seeds the bind address and base Swoole options. Host/port are passed in (the
-     * framework's default policy is `--host`/`--port`); tuning options come from the
-     * environment — only variables that are actually set contribute a key (so Swoole
+     * Seeds the bind address and base Swoole options. Host/port are passed in — what
+     * `#[EnableHttp]` and `--http.port` / `--http.host` resolved to; tuning options come
+     * from the environment — only variables that are actually set contribute a key (so Swoole
      * defaults apply otherwise).
      *
      * Nothing the profile decides is seeded here. Those are resolved when read, so a
@@ -176,16 +176,37 @@ final class ServerSettings
         return new self($host, $port, $options, $memoryLimit, $timeout, $trim, $profile, memory_get_usage(true), self::serverHeaderFromEnv());
     }
 
-    /** Bind host (e.g. '0.0.0.0', '127.0.0.1'). */
+    /**
+     * Bind host (e.g. '0.0.0.0', '127.0.0.1'). Overrides `#[EnableHttp(host:)]` and
+     * `--http.host`.
+     *
+     * @throws ApplicationConfigException When it is empty.
+     */
     public function host(string $host): self
     {
-        $this->host = $host;
+        if (trim($host) === '') {
+            throw new ApplicationConfigException('The HTTP host cannot be empty.');
+        }
+        $this->host = trim($host);
         return $this;
     }
 
-    /** Bind port. */
+    /**
+     * Bind port. Overrides `#[EnableHttp(port:)]` and `--http.port` — to keep a launch
+     * flag in force, leave it alone when one was given.
+     *
+     * ```
+     * // A variable of your own, falling back to what was declared or passed:
+     * $server->port((int) env('ORDERS_PORT', $server->getPort()));
+     * ```
+     *
+     * @throws ApplicationConfigException When it is outside 1–65535.
+     */
     public function port(int $port): self
     {
+        if ($port < 1 || $port > 65535) {
+            throw new ApplicationConfigException("The HTTP port must be 1–65535, {$port} given.");
+        }
         $this->port = $port;
         return $this;
     }

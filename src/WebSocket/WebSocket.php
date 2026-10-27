@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\WebSocket;
 
 use Flytachi\Winter\Base\Exception\ExceptionLogLevel;
+use Flytachi\Winter\Kernel\App\BindAddress;
 use Flytachi\Winter\Kernel\App\Config\ServerSettings;
 use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
 use Flytachi\Winter\Kernel\App\Supervision\ComponentChannel;
+use Flytachi\Winter\Kernel\Http\Adapter\ClientAddress;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
 use Flytachi\Winter\Kernel\Http\Response\ExceptionWrapper;
@@ -320,7 +322,7 @@ abstract class WebSocket extends Process
     {
         if ($port === null) {
             throw new WebSocketConfigException(sprintf(
-                '%s needs a port: #[EnableWebSocket(%s::class, port: …)], `--port=…` or dispatch(port: …).',
+                '%s needs a port: #[EnableWebSocket(%s::class, port: …)], `call process … start --port=…` or dispatch(port: …).',
                 static::class,
                 (new \ReflectionClass(static::class))->getShortName(),
             ));
@@ -383,9 +385,8 @@ abstract class WebSocket extends Process
 
         if ($this->isRunning()) {
             $this->logger->info(sprintf(
-                'WebSocket listening on ws://%s:%d%s',
-                self::$bindHost,
-                self::$bindPort,
+                'WebSocket listening on %s%s',
+                BindAddress::url('ws', self::$bindHost, (int) self::$bindPort),
                 $this->path ?? '',
             ));
             // Ready now: the port is bound and onStart() is done.
@@ -439,7 +440,7 @@ abstract class WebSocket extends Process
         $wire = new Wire($response, self::SEND_QUEUE);
         $conn = new Connection(
             ++$this->lastId,
-            ($request->server['remote_addr'] ?? '?') . ':' . ($request->server['remote_port'] ?? '?'),
+            self::remoteAddress($request),
             new SwooleRequest($request),
             $wire,
         );
@@ -621,6 +622,16 @@ abstract class WebSocket extends Process
             'status' => $status,
             'remote' => $conn->remoteAddress,
         ]);
+    }
+
+    /**
+     * The client as `ip:port` — `[ip]:port` for IPv6, and an IPv4 client of a socket on
+     * `::` as the IPv4 address it is.
+     */
+    private static function remoteAddress(Request $request): string
+    {
+        $ip = ClientAddress::unmapped((string) ($request->server['remote_addr'] ?? '?'));
+        return (BindAddress::isIpv6($ip) ? "[{$ip}]" : $ip) . ':' . ($request->server['remote_port'] ?? '?');
     }
 
     /** Whether the handshake's `Origin` passes {@see $allowedOrigins}; compared case-insensitively. */

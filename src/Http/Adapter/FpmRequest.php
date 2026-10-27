@@ -130,7 +130,8 @@ final class FpmRequest implements HttpRequest
 
     public function getServerParam(string $key): string|int|float|null
     {
-        return $_SERVER[$key] ?? null;
+        // FPM names them in upper case; Swoole's spelling is accepted as well.
+        return $_SERVER[$key] ?? $_SERVER[strtoupper($key)] ?? null;
     }
 
     public function getClientIp(): string
@@ -139,7 +140,7 @@ final class FpmRequest implements HttpRequest
             if (preg_match('/for=["\']?([^;,"\'\s\]]+)/i', $_SERVER['HTTP_FORWARDED'], $m)) {
                 $ip = trim($m[1], '"\'[]');
                 if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                    return $ip;
+                    return ClientAddress::unmapped($ip);
                 }
             }
         }
@@ -147,7 +148,7 @@ final class FpmRequest implements HttpRequest
         if (!empty($_SERVER['HTTP_X_REAL_IP'])) {
             $ip = trim($_SERVER['HTTP_X_REAL_IP']);
             if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                return $ip;
+                return ClientAddress::unmapped($ip);
             }
         }
 
@@ -155,12 +156,12 @@ final class FpmRequest implements HttpRequest
             foreach (explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']) as $ip) {
                 $ip = trim($ip);
                 if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-                    return $ip;
+                    return ClientAddress::unmapped($ip);
                 }
             }
         }
 
-        return $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+        return ClientAddress::unmapped($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
     }
 
     /**

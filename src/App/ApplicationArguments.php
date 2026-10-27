@@ -12,8 +12,8 @@ namespace Flytachi\Winter\Kernel\App;
  *   - options     — long form `--key` or `--key=value`;
  *   - flags       — short form `-w`, `-abc` (expanded to a, b, c).
  *
- * Values layer over configuration as overrides, precedence: CLI > .env > default.
- * There are no Spring-style profiles; only real knobs (`--port`, `--host`, ...).
+ * There are no Spring-style profiles; only real knobs. Where a listening component
+ * binds is one of them, named after the component: `--http.port`, `--chat.port`.
  */
 final class ApplicationArguments
 {
@@ -108,6 +108,16 @@ final class ApplicationArguments
     {
         $value = $this->option($key);
         return $value !== null && is_numeric($value) ? (int) $value : $default;
+    }
+
+    /**
+     * Every long option as given.
+     *
+     * @return array<string, string|true> `true` = present, no value.
+     */
+    public function options(): array
+    {
+        return $this->options;
     }
 
     /** The original argv (to hand off to the console dispatcher). */

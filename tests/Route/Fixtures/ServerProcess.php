@@ -20,6 +20,11 @@ final class ServerProcess
     private string $runner = '';
     private string $logFile = '';
 
+    /** @param string $host The interface the server binds: `127.0.0.1`, or `::` for both protocols. */
+    public function __construct(private readonly string $host = '127.0.0.1')
+    {
+    }
+
     public function port(): int
     {
         return $this->port;
@@ -30,9 +35,10 @@ final class ServerProcess
         return (string) @file_get_contents($this->logFile);
     }
 
-    public function url(string $path): string
+    /** @param string $via The address to reach it by: `127.0.0.1`, or `[::1]` over IPv6. */
+    public function url(string $path, string $via = '127.0.0.1'): string
     {
-        return 'http://127.0.0.1:' . $this->port . $path;
+        return 'http://' . $via . ':' . $this->port . $path;
     }
 
     /** Boots the server and returns once it accepts connections, or false on timeout. */
@@ -47,8 +53,9 @@ final class ServerProcess
         $autoload = dirname(__DIR__, 3) . '/vendor/autoload.php';
         file_put_contents($this->runner, sprintf(
             "<?php\nrequire %s;\n\\Flytachi\\Winter\\Kernel\\Tests\\Route\\Fixtures\\App\\ServeApp::main("
-            . "['call', 'run', '--host=127.0.0.1', '--port=%d']);\n",
+            . "['call', 'run', '--http.host=%s', '--http.port=%d']);\n",
             var_export($autoload, true),
+            $this->host,
             $this->port,
         ));
 
@@ -122,7 +129,7 @@ final class ServerProcess
     }
 
     /** @return array{status: int, body: string, headers: list<string>} */
-    public function request(string $method, string $path): array
+    public function request(string $method, string $path, string $via = '127.0.0.1'): array
     {
         $context = stream_context_create(['http' => [
             'method'        => $method,
@@ -130,7 +137,7 @@ final class ServerProcess
             'ignore_errors' => true, // 4xx/5xx must come back as a response, not a warning
         ]]);
 
-        $body    = @file_get_contents($this->url($path), false, $context);
+        $body    = @file_get_contents($this->url($path, $via), false, $context);
         $headers = $http_response_header ?? [];
 
         return [

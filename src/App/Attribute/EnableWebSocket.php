@@ -30,7 +30,8 @@ final class EnableWebSocket
     /**
      * @param class-string<WebSocket> $class The WebSocket class to run.
      * @param int $port The port it listens on.
-     * @param string $host The interface to bind; `127.0.0.1` keeps it local (behind a proxy on the same host).
+     * @param string $host The interface to bind; `127.0.0.1` keeps it local (behind a proxy on the same host),
+     *                     `::` takes IPv6 and IPv4 clients alike.
      * @param bool $critical Whether the application stops when it cannot run (the default);
      *                       false leaves it down, marked failed, while the rest runs on.
      * @param int $retries Restarts after it crashed while running, within 30 minutes.

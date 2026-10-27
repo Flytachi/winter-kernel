@@ -254,6 +254,34 @@ final class EnableManifestTest extends TestCase
         self::assertSame('Http', $http->name());
     }
 
+    public function test_enable_http_binds_every_interface_on_8000_by_default(): void
+    {
+        [$http] = $this->resolve(TunedHttpApp::class);
+
+        self::assertSame(['0.0.0.0', 8000], [$http->host, $http->port]);
+    }
+
+    public function test_enable_http_carries_its_address(): void
+    {
+        [$http] = $this->resolve(AddressedHttpApp::class);
+
+        self::assertSame(['127.0.0.1', 8080], [$http->host, $http->port]);
+    }
+
+    public function test_an_http_port_out_of_range_is_a_boot_error_naming_its_declaration(): void
+    {
+        $this->expectException(ApplicationConfigException::class);
+        $this->expectExceptionMessage('#[EnableHttp]: port must be 1–65535, 70000 given.');
+        $this->resolve(BadPortHttpApp::class);
+    }
+
+    public function test_a_websocket_port_out_of_range_is_a_boot_error(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('port must be 1–65535, 0 given.');
+        Component::websocket(EchoSocket::class, 0);
+    }
+
     public function test_the_deprecated_enable_web_declares_the_same_server(): void
     {
         [$web] = $this->resolve(FullApp::class);
@@ -417,5 +445,15 @@ final class TunedHttpApp extends WinterApplication
 #[EnableHttp]
 #[EnableWeb]
 final class BothServersApp extends WinterApplication
+{
+}
+
+#[EnableHttp(port: 8080, host: '127.0.0.1')]
+final class AddressedHttpApp extends WinterApplication
+{
+}
+
+#[EnableHttp(port: 70000)]
+final class BadPortHttpApp extends WinterApplication
 {
 }

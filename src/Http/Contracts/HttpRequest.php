@@ -88,6 +88,9 @@ interface HttpRequest
     /**
      * Server / environment variable (e.g. 'remote_addr', 'request_method').
      *
+     * The key is case-insensitive: Swoole names these in lower case and PHP-FPM in upper
+     * case, so `remote_addr` and `REMOTE_ADDR` answer the same in either runtime.
+     *
      * Not every one of them is a string, which is why the return type is not `?string`:
      * Swoole stores `server_port`, `remote_port`, `request_time` and `master_time` as
      * integers and `request_time_float` as a float, and PHP does the same for

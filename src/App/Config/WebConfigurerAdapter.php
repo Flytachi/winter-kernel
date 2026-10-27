@@ -16,7 +16,7 @@ use Flytachi\Winter\Kernel\App\ApplicationArguments;
  * {
  *     public function configureServer(ServerSettings $server, ApplicationArguments $args): void
  *     {
- *         $server->port($args->int('port', 8000))->staticPath('resources/static');
+ *         $server->staticPath('resources/static')->compressionMinLength('4K');
  *     }
  * }
  * ```

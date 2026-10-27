@@ -8,8 +8,10 @@ use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\Kernel\App\Attribute\EnableActuator;
 use Flytachi\Winter\Kernel\App\Attribute\EnableAsync;
 use Flytachi\Winter\Kernel\App\Attribute\EnableCaching;
+use Flytachi\Winter\Kernel\App\BindAddress;
 use Flytachi\Winter\Kernel\App\Component;
 use Flytachi\Winter\Kernel\App\ComponentKind;
+use Flytachi\Winter\Kernel\App\Config\ServerSettings;
 use Flytachi\Winter\Kernel\App\Runtime\ApplicationRecord;
 use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
 use Flytachi\Winter\Kernel\Kernel;
@@ -79,6 +81,19 @@ final class Application extends Cmd
             return;
         }
 
+        // Resolved once: the table names the HTTP server's port, the section below explains it.
+        $settings = null;
+        $settingsError = null;
+        foreach ($manifest as $entry) {
+            if ($entry['component']->kind === ComponentKind::Http) {
+                try {
+                    $settings = $app::httpSettings();
+                } catch (\Throwable $e) {
+                    $settingsError = $e->getMessage();
+                }
+            }
+        }
+
         self::printLabel("Components", self::CL);
         if ($manifest === []) {
             self::printWarning("No components declared: `start` would refuse to run.");
@@ -95,7 +110,7 @@ final class Application extends Cmd
                 $component = $entry['component'];
                 self::print(sprintf(
                     "  %-30s %-10s %-20s %-9s %-8s %s",
-                    $this->describe($component),
+                    $this->describe($component, $settings),
                     $component->kind->name,
                     $entry['source'],
                     $component->critical ? 'yes' : 'no',
@@ -113,7 +128,7 @@ final class Application extends Cmd
             $hasHttp = $hasHttp || $entry['component']->kind === ComponentKind::Http;
         }
         if ($hasHttp) {
-            $this->httpInfo($app);
+            $this->httpInfo($manifest, $settings, $settingsError);
         }
 
         self::printLabel("Configuration", self::CL);
@@ -132,25 +147,42 @@ final class Application extends Cmd
     }
 
     /**
-     * The HTTP server's settings as `start` resolves them without flags — the environment
-     * and the application's own configuration.
+     * The HTTP server's settings as `start` resolves them without flags — the declaration,
+     * the environment and the application's own configuration.
      *
-     * @param class-string<WinterApplication> $app
+     * @param list<array{component: Component, source: string}> $manifest
      */
-    private function httpInfo(string $app): void
+    private function httpInfo(array $manifest, ?ServerSettings $settings, ?string $error): void
     {
         self::printLabel("HTTP server", self::CL);
-        try {
-            $settings = $app::httpSettings();
-        } catch (\Throwable $e) {
-            self::printWarning("The server settings cannot be resolved: " . $e->getMessage());
+        if ($settings === null) {
+            self::printWarning("The server settings cannot be resolved: " . $error);
             self::printLabel("HTTP server", self::CL);
             return;
         }
 
+        $declared = null;
+        $source = '';
+        foreach ($manifest as $entry) {
+            if ($entry['component']->kind === ComponentKind::Http) {
+                $declared = $entry['component'];
+                $source = $entry['source'];
+            }
+        }
+        // The configurer has the last word: when it moved the server, it is the source.
+        if ($declared !== null && ($declared->host !== $settings->getHost() || $declared->port !== $settings->getPort())) {
+            $source = 'ServerConfigurer';
+        }
+
         $raw = $settings->toArray();
         $timeout = $settings->getRequestTimeout();
-        self::printKeyValue("Address", sprintf('http://%s:%d', $settings->getHost(), $settings->getPort()), 14, self::CL, 36);
+        self::printKeyValue(
+            "Address",
+            BindAddress::url('http', $settings->getHost(), $settings->getPort()) . "  ({$source})",
+            14,
+            self::CL,
+            36
+        );
         self::printKeyValue("Workers", (string) ($raw['worker_num'] ?? 1), 14, self::CL, 36);
         self::printKeyValue("Memory", $settings->getMemoryLimit() ?? 'PHP default (' . ini_get('memory_limit') . ')', 14, self::CL, 36);
         self::printKeyValue("Timeout", $timeout > 0 ? $timeout . 's per request' : 'none', 14, self::CL, 36);
@@ -158,8 +190,7 @@ final class Application extends Cmd
         self::printKeyValue("Compression", $settings->isCompressionEnabled()
             ? sprintf('br/gzip · level %d · from %s', $settings->getCompressionLevel(), self::size($settings->getCompressionMinLength()))
             : 'off', 14, self::CL, 36);
-        $serverHeader = $settings->getServerHeader();
-        self::printKeyValue("Server header", $serverHeader !== '' ? $serverHeader : 'not sent', 14, self::CL, 36);
+        self::printInfo("At launch: --http.port=… --http.host=…");
         self::printLabel("HTTP server", self::CL);
     }
 
@@ -345,10 +376,11 @@ final class Application extends Cmd
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private function describe(Component $component): string
+    private function describe(Component $component, ?ServerSettings $settings): string
     {
         return match ($component->kind) {
-            // The HTTP server's address is the deployment's (see "HTTP server" below).
+            // Where its configurer leaves it, as the "HTTP server" section below says.
+            ComponentKind::Http => sprintf('%s :%d', $component->name(), $settings?->getPort() ?? $component->port),
             ComponentKind::WebSocket => sprintf('%s :%d', $component->name(), $component->port),
             default => $component->name(),
         };
@@ -437,7 +469,7 @@ final class Application extends Cmd
         self::printLabel("Options", $cl);
         self::print("stop --timeout=<s>   how long to wait for it to stop (default 60)", $cl);
         self::print("stop --force         SIGKILL the application and its components after the timeout", $cl);
-        self::print("start                takes the options of `call run` (--host, --port, -w …)", $cl);
+        self::print("start                takes the options of `call run` (--http.port, -w …)", $cl);
         self::printLabel("Options", $cl);
 
         self::printDivider($cl);

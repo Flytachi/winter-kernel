@@ -55,11 +55,13 @@ final class Run extends Cmd
 
         self::printLabel("Options", $cl);
         self::print("-w / --watcher   force the DevWatcher on (same as `run dev`)", $cl);
-        // Both are accepted by the server and both change where it can be reached, so
-        // leaving them out of the help meant reading the documentation to learn that
-        // `call run` can bind anywhere but 0.0.0.0:8000.
-        self::print("--host=<addr>    bind address (default 0.0.0.0)", $cl);
-        self::print("--port=<n>       port (default 8000)", $cl);
+        // Named after the component: with an HTTP server and a WebSocket, a bare --port
+        // would name neither — so it is refused, and so is a name nobody declared.
+        self::print("--http.port=<n>      the HTTP server's port (declared: #[EnableHttp(port:)], default 8000)", $cl);
+        self::print("--http.host=<addr>   its bind address (default 0.0.0.0)", $cl);
+        self::print("--<name>.port=<n>    a WebSocket's port, by the name `call application info` shows", $cl);
+        self::print("--<name>.host=<addr> a WebSocket's bind address", $cl);
+        self::print("A ServerConfigurer that sets the address in code overrides --http.*.", $cl);
         self::printLabel("Options", $cl);
 
         self::printDivider($cl);
@@ -67,7 +69,8 @@ final class Run extends Cmd
         self::printLabel("Examples", $cl);
         self::printInfo("call run");
         self::printInfo("call run dev");
-        self::printInfo("call run --port=8080");
+        self::printInfo("call run --http.port=8080");
+        self::printInfo("call run --http.port=8080 --chat.port=8081");
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);

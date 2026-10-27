@@ -1,10 +1,11 @@
 # The port lives here and nowhere else. Change this one number and both the published
 # port and the port the application binds follow — they are the same anchor below.
 #
-# The `${SERVER_PORT:-…}` form keeps an escape hatch: set SERVER_PORT in the environment
-# (or in .env) and it wins without this file being touched, which is usually what a
-# production host wants.
-x-port: &port ${SERVER_PORT:-8000}
+# The `${PORT:-…}` form keeps an escape hatch: set PORT in the environment (or in .env)
+# and it wins without this file being touched, which is usually what a production host
+# wants. PORT is this template's variable, not the framework's: the entrypoint hands it
+# to the application as --http.port.
+x-port: &port ${PORT:-8000}
 
 services:
   server:
@@ -16,7 +17,7 @@ services:
       dockerfile: Dockerfile
     environment:
       COMPOSE_BAKE: "true"
-      SERVER_PORT: *port
+      PORT: *port
       DEV: ${DEV:-false}
     ports:
       - target: *port

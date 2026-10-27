@@ -87,4 +87,45 @@ final class ServerParamTypeTest extends TestCase
         self::assertIsFloat($value);
         self::assertSame(0.0, $value - 1_754_500_000.123456);
     }
+
+    /** Swoole names the keys in lower case; code written for FPM asks in upper case. */
+    public function test_swoole_answers_either_case(): void
+    {
+        if (!extension_loaded('swoole')) {
+            self::markTestSkipped('The Swoole adapter needs the extension.');
+        }
+
+        $raw = new \Swoole\Http\Request();
+        $raw->server = ['remote_addr' => '10.0.0.7', 'request_time_float' => 1_754_500_000.5];
+        $request = new SwooleRequest($raw);
+
+        self::assertSame('10.0.0.7', $request->getServerParam('remote_addr'));
+        self::assertSame('10.0.0.7', $request->getServerParam('REMOTE_ADDR'));
+        self::assertSame('10.0.0.7', $request->getServerParam('Remote_Addr'));
+        self::assertSame(1_754_500_000.5, $request->getServerParam('REQUEST_TIME_FLOAT'));
+        self::assertNull($request->getServerParam('ABSENT'));
+    }
+
+    /**
+     * FPM names the keys in upper case; the documented `remote_addr` used to return null.
+     * The router asks for `request_time_float` the same way.
+     */
+    public function test_fpm_answers_either_case(): void
+    {
+        $original = $_SERVER;
+        $_SERVER['REMOTE_ADDR'] = '10.0.0.7';
+        $_SERVER['REQUEST_TIME_FLOAT'] = 1_754_500_000.5;
+
+        try {
+            $request = new FpmRequest();
+
+            self::assertSame('10.0.0.7', $request->getServerParam('REMOTE_ADDR'));
+            self::assertSame('10.0.0.7', $request->getServerParam('remote_addr'));
+            self::assertSame('10.0.0.7', $request->getServerParam('Remote_Addr'));
+            self::assertSame(1_754_500_000.5, $request->getServerParam('request_time_float'));
+            self::assertNull($request->getServerParam('absent'));
+        } finally {
+            $_SERVER = $original;
+        }
+    }
 }

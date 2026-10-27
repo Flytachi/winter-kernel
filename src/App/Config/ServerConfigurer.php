@@ -21,8 +21,10 @@ use Flytachi\Winter\Kernel\App\ApplicationArguments;
  * the project root is refused at boot by name, rather than silently overruling the
  * application that owns the process.
  *
- * Exactly one implementation is allowed. Leave the handle untouched and the framework
- * default stands: `--host`/`--port`, falling back to `0.0.0.0:8000`.
+ * Exactly one implementation is allowed. The handle arrives with the address already
+ * resolved — `#[EnableHttp(port:, host:)]`, then `--http.port` / `--http.host` — and
+ * leaving it untouched keeps that. Setting it here is the last word: it overrides the
+ * launch flags too, which the boot log then says.
  *
  * @link https://winterframe.net/docs/web-configuration The web-layer configuration contracts
  */

@@ -23,6 +23,7 @@ use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
 use Flytachi\Winter\Kernel\App\Attribute\EnableWebSocket;
 use Flytachi\Winter\Kernel\App\Attribute\Import;
 use Flytachi\Winter\Kernel\App\Banner;
+use Flytachi\Winter\Kernel\App\BindAddress;
 use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
 use Flytachi\Winter\Kernel\App\Supervision\ComponentControl;
 use Flytachi\Winter\Kernel\App\Supervision\ComponentRecords;
@@ -30,6 +31,7 @@ use Flytachi\Winter\Kernel\App\Supervision\Supervisor;
 use Flytachi\Winter\Kernel\App\Component;
 use Flytachi\Winter\Kernel\App\Components;
 use Flytachi\Winter\Kernel\App\HttpTier;
+use Flytachi\Winter\Kernel\App\ListenFlags;
 use Flytachi\Winter\Kernel\App\Supervision\ComponentChannel;
 use Flytachi\Winter\Kernel\App\ContributionCollector;
 use Flytachi\Winter\Kernel\App\ComponentKind;
@@ -820,17 +822,23 @@ abstract class WinterApplication
             );
         }
 
+        $logger = LoggerFactory::getLogger(static::class);
+
+        // Where each listening component binds: what it was declared with, then the
+        // launch flags; for the HTTP server its configurer has the last word.
+        $components = ListenFlags::apply($components, $args);
+        $settings = null;
         $http = null;
         $companions = [];
-        foreach ($components as $component) {
+        foreach ($components as $i => $component) {
             if ($component->kind === ComponentKind::Http) {
-                $http = $component;
+                $settings = static::buildServerSettings($component, $args, $logger);
+                $http = $components[$i] = $component->at($settings->getHost(), $settings->getPort());
                 continue;
             }
             $companions[] = $component;
         }
-
-        $logger = LoggerFactory::getLogger(static::class);
+        self::assertFreePorts($companions, $http?->port);
 
         // Before anything binds or forks: a second run of the same application is refused
         // here, and every process forked from now on knows the run it belongs to.
@@ -844,8 +852,7 @@ abstract class WinterApplication
         // which every worker then shares from this process's memory. The server itself is
         // created in its own process: the one Swoole runs threads in must not be the one
         // that forks the rest.
-        $web = $http !== null ? static::prepareHttp($args, $watch) : null;
-        self::assertFreePorts($companions, $web?->port());
+        $web = $settings !== null ? static::prepareHttp($settings, $watch) : null;
 
         if (Banner::isEnabled($args)) {
             $rows = static::bannerRows($companions, $web?->host(), $web?->port());
@@ -860,7 +867,7 @@ abstract class WinterApplication
         $names = array_map(static fn(Component $c): string => $c->name(), $companions);
         $logger->info(sprintf(
             'Application up%s%s%s',
-            $web !== null ? sprintf(': http://%s:%d', $web->host(), $web->port()) : ' (headless)',
+            $web !== null ? ': ' . BindAddress::url('http', $web->host(), $web->port()) : ' (headless)',
             $names === [] ? '' : ($web !== null ? ' + ' : ': ') . '[' . implode(', ', $names) . ']',
             $watch ? ' (dev/watch)' : ''
         ));
@@ -884,15 +891,13 @@ abstract class WinterApplication
      * Prepares the HTTP server in the application's process: its settings, the route scan,
      * the dev watcher — what the server's own process then starts from.
      */
-    private static function prepareHttp(ApplicationArguments $args, bool $watch): HttpTier
+    private static function prepareHttp(ServerSettings $settings, bool $watch): HttpTier
     {
         if (!extension_loaded('swoole')) {
             throw new ApplicationConfigException(
                 '`call run` with an HTTP server needs ext-swoole (pecl install swoole).'
             );
         }
-
-        $settings = static::buildServerSettings($args);
 
         // The same class-list cache the boot scan built a moment ago: without it this
         // walks the whole tree a second time, `require_once`-ing every file again — and
@@ -929,7 +934,14 @@ abstract class WinterApplication
         \Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL);
         Runtime::boot(RuntimeMode::Swoole);
 
-        $server = new \Swoole\Http\Server($web->host(), $web->port());
+        // Swoole binds IPv4 unless told otherwise, and refuses `::` with "Invalid IPv4
+        // address"; an IPv6 socket on `::` takes IPv4 clients as well.
+        $server = new \Swoole\Http\Server(
+            $web->host(),
+            $web->port(),
+            SWOOLE_BASE,
+            BindAddress::isIpv6($web->host()) ? SWOOLE_SOCK_TCP6 : SWOOLE_SOCK_TCP,
+        );
         $server->set($web->settings->toArray());
 
         $router = $web->router;
@@ -1075,22 +1087,38 @@ abstract class WinterApplication
     // ── Internal ──────────────────────────────────────────────────────────────
 
     /**
-     * Builds the server settings: bind address + Swoole options. The default bind
-     * policy is `--host`/`--port` (fallback `0.0.0.0:8000`); base Swoole options come
-     * from .env; every discovered {@see WebConfigurer} may then tune both, re-deriving
-     * host/port from any source (env, a custom flag, a literal) via the handle.
+     * Builds the server settings: bind address + Swoole options. The address arrives
+     * resolved — `#[EnableHttp]`, then `--http.port` / `--http.host`; base Swoole options
+     * come from .env; the application's {@see ServerConfigurer} may then change both,
+     * and has the last word.
+     *
+     * Code that overrides a launch flag does so on purpose, but the operator who typed
+     * the flag is told: the server would otherwise listen somewhere they did not ask for,
+     * and say nothing.
      */
-    private static function buildServerSettings(ApplicationArguments $args): ServerSettings
-    {
-        $settings = ServerSettings::fromEnv(
-            $args->option('host', '0.0.0.0') ?? '0.0.0.0',
-            $args->int('port', 8000),
-        );
+    private static function buildServerSettings(
+        Component $http,
+        ApplicationArguments $args,
+        ?LoggerInterface $logger = null,
+    ): ServerSettings {
+        $settings = ServerSettings::fromEnv($http->host, $http->port);
         $c = self::$container;
         if ($c !== null && self::$serverConfigurer !== null) {
             /** @var ServerConfigurer $configurer */
             $configurer = $c->make(self::$serverConfigurer);
             $configurer->configureServer($settings, $args);
+            foreach (['port' => $settings->getPort(), 'host' => $settings->getHost()] as $field => $value) {
+                $asked = $http->{$field};
+                if ($value !== $asked && ListenFlags::given($args, $http, $field)) {
+                    $logger?->warning(sprintf(
+                        '--http.%s=%s is overridden by %s: binding to %s.',
+                        $field,
+                        $asked,
+                        self::$serverConfigurer,
+                        $value,
+                    ));
+                }
+            }
         }
         return $settings;
     }
@@ -1119,6 +1147,8 @@ abstract class WinterApplication
             $components[] = self::component(
                 '#[EnableHttp]',
                 static fn() => Component::http(
+                    host: $h->host,
+                    port: $h->port,
                     critical: $h->critical,
                     retries: $h->retries,
                     startTimeout: $h->startTimeout,
@@ -1221,12 +1251,18 @@ abstract class WinterApplication
     }
 
     /**
-     * The HTTP server's settings as `call run` would resolve them without flags — from the
-     * environment and the application's ServerConfigurer.
+     * The HTTP server's settings as `call run` would resolve them without flags — from
+     * `#[EnableHttp]`, the environment and the application's ServerConfigurer. Null when
+     * the application has no HTTP server.
      */
-    public static function httpSettings(): ServerSettings
+    public static function httpSettings(): ?ServerSettings
     {
-        return static::buildServerSettings(ApplicationArguments::parse([]));
+        foreach (static::resolveComponents() as $component) {
+            if ($component->kind === ComponentKind::Http) {
+                return static::buildServerSettings($component, ApplicationArguments::parse([]));
+            }
+        }
+        return null;
     }
 
     /**
@@ -1358,16 +1394,15 @@ abstract class WinterApplication
     {
         $rows = [];
         if ($host !== null) {
-            $rows[] = ['web', sprintf('http://%s:%d', $host, $port)];
+            $rows[] = ['web', BindAddress::url('http', $host, (int) $port)];
         }
         foreach ($companions as $companion) {
             $rows[] = match ($companion->kind) {
                 ComponentKind::Scheduler => ['scheduler', 'enabled'],
                 ComponentKind::WebSocket => ['websocket', sprintf(
-                    '%s ws://%s:%d',
+                    '%s %s',
                     $companion->name(),
-                    $companion->host,
-                    $companion->port,
+                    BindAddress::url('ws', $companion->host, $companion->port),
                 )],
                 ComponentKind::Command => ['command', $companion->name()],
                 default => [self::componentLabel($companion->kind), $companion->name()],

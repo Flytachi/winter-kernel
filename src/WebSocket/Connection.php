@@ -38,7 +38,7 @@ final class Connection
 
     /**
      * @param int $id Unique within the process for its whole life.
-     * @param string $remoteAddress The client as `ip:port`.
+     * @param string $remoteAddress The client as `ip:port`, `[ip]:port` for IPv6.
      * @internal Built by the framework for every handshake.
      */
     public function __construct(

@@ -10,7 +10,7 @@
 # The port arrives from compose's `environment:`, holding the same anchor it published
 # with `ports:`. Passing it as a flag keeps the two in step and leaves the application
 # unaware it is running in a container — the framework has no Docker-specific setting.
-PORT="${SERVER_PORT:-8000}"
+PORT="${PORT:-8000}"
 
 # Opcache is toggled here (runtime, as root before su-exec), so switching dev/prod
 # needs no rebuild. Idempotent: safe on a fresh or a restarted container.
@@ -19,7 +19,7 @@ OPCACHE_CONF=/usr/local/etc/php/conf.d/10-opcache.ini
 if [ "${DEV:-false}" = "true" ]; then
     # Development: opcache off (mounted code always live) + DevWatcher hot-reload.
     rm -f "$OPCACHE_CONF"
-    exec su-exec winter php /var/www/html/call run dev --port="$PORT"
+    exec su-exec winter php /var/www/html/call run dev --http.port="$PORT"
 else
     # Production: tuned opcache on.
     cp /opt/winter/php-opcache.ini "$OPCACHE_CONF"
@@ -39,5 +39,5 @@ else
         exit 1
     fi
 
-    exec su-exec winter php /var/www/html/call run --port="$PORT"
+    exec su-exec winter php /var/www/html/call run --http.port="$PORT"
 fi

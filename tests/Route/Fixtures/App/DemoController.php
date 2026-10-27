@@ -52,6 +52,13 @@ final class DemoController extends Controller
         return ['method' => $request->getMethod(), 'uri' => $request->getUri()];
     }
 
+    /** Who the server thinks is asking. */
+    #[GetMapping('/ip')]
+    public function ip(HttpRequest $request): array
+    {
+        return ['ip' => $request->getClientIp()];
+    }
+
     #[PostMapping('/items')]
     public function create(): array
     {
