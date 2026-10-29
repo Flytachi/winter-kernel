@@ -78,7 +78,15 @@ final class ComponentControl
      */
     public static function reply(string $id, int $pid, string $error = ''): void
     {
-        self::replies()->write($id, ['pid' => $pid, 'error' => $error, 'at' => time()]);
+        $store = self::replies();
+        // An answer the caller stopped waiting for is never read, nor deleted: it expires,
+        // and the next answer sweeps away the expired ones.
+        try {
+            $store->gc();
+        } catch (\Throwable) {
+            // Left for the next sweep.
+        }
+        $store->write($id, ['pid' => $pid, 'error' => $error, 'at' => time()], time() + self::TTL);
     }
 
     /**

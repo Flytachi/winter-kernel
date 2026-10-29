@@ -112,8 +112,14 @@ final class ComponentChannel
         if (self::$socket === null) {
             return;
         }
-        // The supervisor may be gone already (the application is stopping): nothing to
-        // tell, and nothing worth failing over.
-        @fwrite(self::$socket, $message);
+        // The supervisor may be gone already (the application is stopping, or was killed):
+        // nothing to tell, and nothing worth failing over. Not even through an error
+        // handler that turns the broken pipe's warning into an exception — this runs in
+        // signal handlers, where an exception ends the process without its hooks.
+        try {
+            @fwrite(self::$socket, $message);
+        } catch (\Throwable) {
+            // The message is lost with the supervisor.
+        }
     }
 }

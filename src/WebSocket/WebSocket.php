@@ -352,7 +352,7 @@ abstract class WebSocket extends Process
         }
         self::$bindTls = static::tlsPair();
         self::$bindPort = $port;
-        self::$bindHost = $host ?? '0.0.0.0';
+        self::$bindHost = $host !== null ? BindAddress::bare($host) : '0.0.0.0';
     }
 
     // -------------------------------------------------------------------------

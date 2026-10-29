@@ -109,6 +109,17 @@ final class HealthThresholdsTest extends TestCase
         self::assertSame(['status' => 'up', 'details' => []], $result);
     }
 
+    /** The thresholds are `protected const` to be overridden — the latency one included. */
+    public function test_a_subclass_sets_its_own_latency_threshold(): void
+    {
+        $status = new ReflectionMethod(HealthIndicator::class, 'pingStatus');
+        $answer = ['status' => true, 'latency' => 50];
+
+        self::assertSame('up', $status->invoke(new HealthIndicator(), $answer));
+        self::assertSame('degraded', $status->invoke(new ImpatientIndicator(), $answer));
+        self::assertSame('down', $status->invoke(new ImpatientIndicator(), ['status' => false]));
+    }
+
     /** The message may name the host, the user or the database: shown only with DEBUG. */
     public function test_a_connection_error_is_shown_only_in_debug(): void
     {
@@ -145,4 +156,10 @@ final class FillingDiskIndicator extends HealthIndicator
 final class HighMemoryIndicator extends HealthIndicator
 {
     protected const int MEMORY_DEGRADED_PERCENT = 0;
+}
+
+/** Takes a datasource slower than a millisecond for degraded. */
+final class ImpatientIndicator extends HealthIndicator
+{
+    protected const int DEGRADED_LATENCY_MS = 1;
 }

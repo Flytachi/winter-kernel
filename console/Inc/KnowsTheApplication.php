@@ -133,6 +133,22 @@ trait KnowsTheApplication
             : "Start it again: `call {$kind} {$dot} start`.");
     }
 
+    /** `status -v`: the process's own CPU and memory, as `ps` sees them. */
+    private function printResources(ProcessStatus $info, int $cl): void
+    {
+        $u = $info->usage;
+        if ($u === null) {
+            return;
+        }
+        self::printDivider();
+        self::printLabel("Resources", $cl);
+        self::printKeyValue("User", $u->user, 12, $cl, 35);
+        self::printKeyValue("PPID", (string) $u->ppid, 12, $cl, 35);
+        self::printKeyValue("CPU", $u->cpu . ' %', 12, $cl, 35);
+        self::printKeyValue("Memory", $u->memory . ' % (' . round($u->rssMb(), 1) . ' MB)', 12, $cl, 35);
+        self::printKeyValue("Elapsed", $u->elapsed, 12, $cl, 35);
+    }
+
     /** `status` lines about whose a running process is. */
     private function printOwnership(string $class, ProcessStatus $info, int $cl): void
     {

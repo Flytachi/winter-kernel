@@ -20,6 +20,16 @@ final class BindAddress
     {
     }
 
+    /**
+     * The host as a socket takes it: `[::1]`, written as in a URL, becomes `::1`. Swoole
+     * refuses the brackets, and a URL built from them had two pairs.
+     */
+    public static function bare(string $host): string
+    {
+        $host = trim($host);
+        return str_starts_with($host, '[') && str_ends_with($host, ']') ? substr($host, 1, -1) : $host;
+    }
+
     /** Whether the host is an IPv6 address — `::`, `::1`, `fd00::5`. */
     public static function isIpv6(string $host): bool
     {
@@ -32,6 +42,7 @@ final class BindAddress
      */
     public static function url(string $scheme, string $host, int $port): string
     {
+        $host = self::bare($host);
         return sprintf('%s://%s:%d', $scheme, self::isIpv6($host) ? "[{$host}]" : $host, $port);
     }
 }

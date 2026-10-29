@@ -135,7 +135,7 @@ trait SupervisesFleet
                 $res = pcntl_waitpid($slot->pid, $status, WNOHANG);
                 if ($res === $slot->pid) {
                     $crashed = !(pcntl_wifexited($status) && pcntl_wexitstatus($status) === 0);
-                    $this->handleExit($slot, $crashed, $onChange);
+                    $this->handleExit($slot, $crashed, $onChange, $status);
                 } elseif ($slot->state === SlotState::RETIRING && $now > $slot->deadline) {
                     // Outlived its drain deadline (or a force-stop collapsed it) — SIGKILL.
                     @posix_kill($slot->pid, SIGKILL);
@@ -153,7 +153,7 @@ trait SupervisesFleet
      * Reacts to a worker exit by slot intent: an intentionally retired worker is
      * freed (never refilled); an unexpected death is restarted per policy.
      */
-    private function handleExit(Slot $slot, bool $crashed, callable $onChange): void
+    private function handleExit(Slot $slot, bool $crashed, callable $onChange, int $status = 0): void
     {
         $idx = $slot->index;
         $pid = $slot->pid;
@@ -170,7 +170,24 @@ trait SupervisesFleet
         }
 
         $restart = $this->restartPolicy();
-        if ($restart->shouldRestart($crashed)) {
+        $replaced = $restart->shouldRestart($crashed);
+        if ($crashed) {
+            // A worker that died unasked: replaced or not, nobody would know otherwise.
+            $exhausted = $restart->maxRestarts > 0 && $this->totalRestarts + 1 >= $restart->maxRestarts;
+            $this->logger->warning(sprintf(
+                // Named as `ps` shows it: worker#1 is slot 0.
+                'worker#%d (PID %d) crashed: %s; %s.',
+                $idx + 1,
+                $pid,
+                self::exitReason($status),
+                match (true) {
+                    !$replaced => 'not restarted (restart policy)',
+                    $exhausted => 'restart limit reached',
+                    default => sprintf('restarting in %ss', round($this->backoff($restart->backoff, $slot->restarts + 1), 1)),
+                },
+            ));
+        }
+        if ($replaced) {
             $this->totalRestarts++;
             $slot->restarts++;
             if ($restart->maxRestarts > 0 && $this->totalRestarts >= $restart->maxRestarts) {
@@ -508,9 +525,12 @@ trait SupervisesFleet
         if ($pid === 0) {
             pcntl_signal(SIGTERM, SIG_DFL);
             pcntl_signal(SIGINT, SIG_DFL);
-            pcntl_signal(SIGHUP, SIG_DFL);
-            pcntl_signal(SIGUSR1, SIG_DFL);
-            pcntl_signal(SIGUSR2, SIG_DFL);
+            // Ignored until the worker sets its own handlers: their default is to end the
+            // process, and a reload (SIGHUP to the application reaches every worker)
+            // arriving while it boots would kill it.
+            pcntl_signal(SIGHUP, SIG_IGN);
+            pcntl_signal(SIGUSR1, SIG_IGN);
+            pcntl_signal(SIGUSR2, SIG_IGN);
 
             $code = 0;
             try {
@@ -763,6 +783,15 @@ trait SupervisesFleet
             $i++;
         }
         return $i;
+    }
+
+    /** How a worker ended, from its wait status. */
+    private static function exitReason(int $status): string
+    {
+        if (pcntl_wifsignaled($status)) {
+            return 'killed by signal ' . pcntl_wtermsig($status);
+        }
+        return 'exit code ' . pcntl_wexitstatus($status);
     }
 
     /**

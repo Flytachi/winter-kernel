@@ -168,6 +168,10 @@ final class Daemon extends Cmd
             self::printKeyValue("Restarts", (string) $info->restarts, 12, 35, 36);
         }
 
+        if ($detailed) {
+            // The master's own: its workers are separate processes, listed below.
+            $this->printResources($info, 35);
+        }
         if ($info instanceof DaemonStatus && $info->workers !== []) {
             $this->printWorkers($info->workers);
         }

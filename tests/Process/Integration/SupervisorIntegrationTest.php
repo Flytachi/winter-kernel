@@ -15,6 +15,7 @@ use Flytachi\Winter\Kernel\Tests\Process\Fixtures\Supervision\CrashingProcess;
 use Flytachi\Winter\Kernel\Tests\Process\Fixtures\Supervision\FinishingProcess;
 use Flytachi\Winter\Kernel\Tests\Process\Fixtures\Supervision\HangingStartProcess;
 use Flytachi\Winter\Kernel\Tests\Process\Fixtures\Supervision\SpawnTimingProcess;
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\Supervision\StubbornProcess;
 use PHPUnit\Framework\Attributes\Group;
 
 /**
@@ -137,6 +138,29 @@ final class SupervisorIntegrationTest extends IntegrationCase
         self::assertSame(0, $this->exitCode($supervisor));
     }
 
+    /**
+     * A body that outlasts its grace is ended by exit(1), which runs no `finally`: the
+     * stop has to be told to the supervisor when it is taken, or it reads as a crash and
+     * the process just stopped comes back.
+     */
+    public function test_a_component_stopped_past_its_grace_is_stopped_not_crashed(): void
+    {
+        $supervisor = $this->supervise([Component::process(StubbornProcess::class)]);
+        self::assertTrue($this->pollUntil(fn() => $this->runTimes('stubborn') !== []));
+        self::assertTrue($this->pollUntil(fn() => StubbornProcess::status() !== null));
+        $pid = StubbornProcess::status()->pid;
+
+        StubbornProcess::stop();
+
+        self::assertTrue($this->pollUntil(fn() => !$this->isAlive($pid), 6.0), 'ended after its grace');
+        self::assertTrue($this->waitLogged('StubbornProcess stopped.'));
+        usleep(1_500_000);
+        self::assertStringNotContainsString('crashed', $this->logged());
+        self::assertCount(1, $this->runTimes('stubborn'), 'not started again');
+        posix_kill($supervisor, SIGTERM);
+        self::assertSame(0, $this->exitCode($supervisor));
+    }
+
     public function test_stopping_the_application_stops_every_component_cleanly(): void
     {
         $supervisor = $this->supervise([
@@ -152,6 +176,64 @@ final class SupervisorIntegrationTest extends IntegrationCase
         self::assertNull(LoopDaemon::status());
         self::assertStringContainsString('Application stopping (SIGTERM): 2 component(s)', $this->logged());
         self::assertMatchesRegularExpression('/Application stopped in \d/', $this->logged());
+    }
+
+    /**
+     * Ctrl+C reaches the application as SIGINT; its components still get SIGTERM — the
+     * one stop signal each of them handles gracefully (a Swoole server has no SIGINT
+     * handler and was killed outright).
+     */
+    public function test_components_are_stopped_with_sigterm_whatever_the_application_received(): void
+    {
+        $marker = $this->storage . '/marker';
+        putenv('WK_MARKER=' . $marker);
+        try {
+            $supervisor = $this->supervise([Component::process(SignalProcess::class)]);
+            self::assertTrue($this->pollUntil(static fn() => str_contains((string) @file_get_contents($marker), 'start')));
+
+            posix_kill($supervisor, SIGINT);
+
+            self::assertSame(0, $this->exitCode($supervisor));
+            $events = (string) file_get_contents($marker);
+            self::assertStringContainsString('terminate', $events);
+            self::assertStringNotContainsString('interrupt', $events);
+            self::assertStringContainsString('Application stopping (SIGINT)', $this->logged());
+        } finally {
+            putenv('WK_MARKER');
+        }
+    }
+
+    /**
+     * SIGHUP to the application reloads every component in its own way and stops none:
+     * a process gets its onReload(), an outside program — for which SIGHUP's default is
+     * the end — gets nothing.
+     */
+    public function test_sighup_reloads_the_components_and_spares_outside_programs(): void
+    {
+        $marker = $this->storage . '/marker';
+        putenv('WK_MARKER=' . $marker);
+        try {
+            $supervisor = $this->supervise([
+                Component::process(SignalProcess::class),
+                Component::command(['sleep', '30'], 'sleeper', critical: false),
+            ]);
+            self::assertTrue($this->pollUntil(static fn() => str_contains((string) @file_get_contents($marker), 'start')));
+            self::assertTrue($this->waitLogged('sleeper is up.'));
+
+            posix_kill($supervisor, SIGHUP);
+
+            self::assertTrue($this->pollUntil(static fn() => str_contains((string) @file_get_contents($marker), 'reload')));
+            self::assertTrue($this->waitLogged('Application reloading (SIGHUP): 1 component(s)'));
+            usleep(500_000);
+            self::assertTrue($this->isAlive($supervisor));
+            self::assertStringNotContainsString('sleeper failed', $this->logged());
+            self::assertStringNotContainsString('stopping', $this->logged());
+
+            posix_kill($supervisor, SIGTERM);
+            self::assertSame(0, $this->exitCode($supervisor));
+        } finally {
+            putenv('WK_MARKER');
+        }
     }
 
     public function test_a_component_runs_its_coroutines_with_the_runtime_hooks_on(): void
@@ -267,6 +349,24 @@ final class SupervisorIntegrationTest extends IntegrationCase
         unset($_ENV['WK_FROM_DOTENV']);
         self::assertSame(realpath($this->storage) . '|loaded|a,b', (string) file_get_contents($this->marker));
         self::assertStringContainsString('probe finished its work.', $this->logged());
+    }
+
+    /**
+     * PHP's CLI ignores SIGPIPE, and an ignored signal survives exec: a script's
+     * `producer | head` got "Broken pipe" errors instead of ending quietly.
+     */
+    public function test_an_outside_program_gets_the_default_sigpipe(): void
+    {
+        $survived = $this->storage . '/survived';
+        $supervisor = $this->supervise([
+            Component::command(['sh', '-c', 'kill -PIPE $$; echo yes > ' . escapeshellarg($survived)], 'piper', critical: false),
+        ]);
+
+        self::assertTrue($this->waitLogged('piper failed'));
+        self::assertFileDoesNotExist($survived, 'SIGPIPE was ignored');
+        self::assertStringContainsString('piper failed: killed by signal ' . SIGPIPE, $this->logged());
+        posix_kill($supervisor, SIGTERM);
+        self::assertSame(0, $this->exitCode($supervisor));
     }
 
     public function test_a_program_that_cannot_be_found_fails(): void

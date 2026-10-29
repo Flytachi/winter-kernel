@@ -915,6 +915,10 @@ abstract class Process
         }
         $this->stopping = true;
         $this->state = ProcessState::STOPPING;
+        // Told now, not on the way out: a body that outlasts its grace is ended by
+        // exit(), which runs no `finally`, and the supervisor then took the stop for a
+        // crash and started the stopped process again.
+        ComponentChannel::stopped();
         $this->requestStop();
         $this->writeStatus();
         $hook();

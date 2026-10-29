@@ -233,7 +233,7 @@ final class Application extends Cmd
             self::printKeyValue("Host", $elsewhere->host, 14, self::CL, 36);
             self::printKeyValue("PID", $elsewhere->pid . ' (there)', 14, self::CL, 36);
             self::printKeyValue("Started", $elsewhere->getStartedAt(), 14, self::CL, 36);
-            self::printInfo("Runs on another host sharing this storage (a container?) — ask it there:");
+            self::printInfo("Runs on another host sharing this project folder (a container?) — ask it there:");
             self::printInfo("docker compose exec <service> php call app status");
             self::printLabel("Application Status", self::CL);
             return;

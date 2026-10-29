@@ -62,6 +62,15 @@ A stop caused by a critical component reads `(critical failure)` in both lines, 
 headless application whose components have all finished logs
 `Application finished: every component has done its work.`
 
+**SIGHUP reloads the whole application.** `kill -HUP` on the application — `docker kill -s HUP`
+— now reaches every component, each reloading in its own way, and stops none: the HTTP
+server restarts its workers gracefully (it is sent SIGUSR1; Swoole has no SIGHUP handler),
+a Process gets `onReload()`, a scheduler re-reads its schedule, a daemon its `onReload()`
+and passes SIGHUP to its workers. An outside program (`command()`, `script()`) gets nothing,
+since SIGHUP's default would end it. The log says `Application reloading (SIGHUP): N
+component(s)`. Before, SIGHUP went to the HTTP server only, which ignored it. SIGUSR1 and
+SIGUSR2 still go to the HTTP server only; a process gets them on its own PID.
+
 **`call application` (alias `app`).** The subcommands:
 - `info` shows the manifest, where each component came from, the listen addresses and the
   server profile;
@@ -203,6 +212,55 @@ boot.
   now creates its own folder.
 - `call run --help` (and `-h`, `application start --help`) started the application instead of
   showing the help.
+- Ctrl+C on `call run` killed the HTTP server outright. Its components were sent the signal
+  the application got, and a Swoole server has no SIGINT handler: requests in flight were
+  cut and the workers' pools never closed. Every component now gets SIGTERM on a stop,
+  whatever the application received.
+- A stop that arrived while the components were being started reached only those already
+  running. The rest were started anyway, never heard of the stop, and the application
+  waited for them for good — `docker stop` in the first seconds of a container ended in
+  SIGKILL. Nothing more is started once a stop has begun, and the stop signals are held
+  around each fork so that none is lost or runs in the child.
+- An application killed outright on a host — `kill -9`, the OOM killer — left its components
+  running: each lives in a process group of its own, and nothing stopped them. An orphaned
+  HTTP server kept its port, and since every component had inherited the application's
+  lock, the next `call run` refused to start ("already running" for a dead PID) and
+  `app status` read RUNNING. The application now forks a small `winter-sentinel` that is
+  told the group of every component; when the application dies without stopping them, it
+  sends them SIGTERM, SIGKILL after 10 s, and exits — without running the application's
+  shutdown functions it inherited. If the sentinel itself dies first, the application logs a
+  warning. Components no longer hold the lock.
+  (In a container the whole container went with its PID 1, so this showed on hosts only.)
+- A component told the supervisor of its stop through an error handler that turns warnings
+  into exceptions — the supervisor already gone — died in the signal handler without its
+  hooks. A message to the supervisor can no longer fail the component.
+- A component stopped on request (`X::stop()`, `call process X stop`) whose body outlasted
+  its grace was ended with exit 1 and taken for a crash, so the supervisor started it
+  again. The stop is now reported when it is taken, not on the way out.
+- A `.winter/` that could not be written — a project folder owned by root, mounted into the
+  image that runs as `winter` — failed the start far from the cause: `di build` said a cache
+  file "was not produced", and in development the application came up and lost its
+  components one by one. The start and `di build` now stop at once, naming the folder and
+  the user (`chown -R 1000:1000` the project in that case).
+- `HealthIndicator::DEGRADED_LATENCY_MS` could not be overridden: it was read through
+  `self::`, so a subclass's value was ignored, unlike the disk and memory thresholds.
+- `#[EnableWebSocket]` on a parent class of the application was silently ignored — the
+  socket never started — while every other `#[Enable*]` there stops the boot with an
+  error. It stops the boot too now.
+- `call daemon X status -v` promised the master's CPU and memory and did not print them; it
+  does now, and so does `call schedule status -v`.
+- A daemon worker that crashed was replaced without a word. The daemon now logs
+  `worker#N (PID n) crashed: killed by signal 9; restarting in 1s.` (or why it is not
+  restarted).
+- Answers to `dispatch()` that the caller stopped waiting for stayed in `.winter/runnable`
+  for good; they expire now.
+- A host given in brackets (`[::1]`, as in a URL) failed to bind and was printed with two
+  pairs of brackets; it is taken as `::1`.
+- An outside program (`command()`, `script()`) started with SIGPIPE ignored, inherited from
+  PHP's CLI: `producer | head` in a script ended in "Broken pipe" errors. It gets the
+  default now.
+- A daemon worker still booting died on SIGHUP, now that a reload of the application reaches
+  every worker; a worker ignores the reload signals until it sets its own handlers.
 - `ServerSettings` suggested `ssl_cert_file` for HTTPS. The server was built without TLS, so
   the handshake failed and it kept serving plain HTTP.
 

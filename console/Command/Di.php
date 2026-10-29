@@ -192,6 +192,12 @@ final class Di extends Cmd
     private function buildArg(): bool
     {
         $cachePath = self::cachePath();
+        try {
+            Kernel::assertWinterDirectory();
+        } catch (\RuntimeException $e) {
+            self::printWarning($e->getMessage());
+            return false;
+        }
 
         // Force a rebuild: both caches short-circuit when their file exists.
         self::forget($cachePath);

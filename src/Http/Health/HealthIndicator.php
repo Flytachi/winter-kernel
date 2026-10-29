@@ -236,6 +236,23 @@ class HealthIndicator implements HealthIndicatorInterface
         );
     }
 
+    /**
+     * What a datasource's ping says: `down` when it failed, `degraded` when it answered
+     * slower than {@see DEGRADED_LATENCY_MS} — read through `static::`, so a subclass
+     * that overrides the constant is heard.
+     *
+     * @param array{status: bool, latency?: float|int|null} $result
+     */
+    private function pingStatus(array $result): string
+    {
+        $latency = $result['latency'] ?? null;
+        return match (true) {
+            !$result['status'] => 'down',
+            $latency !== null && $latency >= static::DEGRADED_LATENCY_MS => 'degraded',
+            default => 'up',
+        };
+    }
+
     final protected function dbHealth(string $rootDir): array
     {
         $interface = 'Flytachi\Winter\Cdo\Config\Common\DbConfigInterface';
@@ -255,14 +272,7 @@ class HealthIndicator implements HealthIndicatorInterface
                     $config->setUp();
                     $result  = $config->pingDetail();
                     $latency = $result['latency'] ?? null;
-
-                    if (!$result['status']) {
-                        $status = 'down';
-                    } elseif ($latency !== null && $latency >= self::DEGRADED_LATENCY_MS) {
-                        $status = 'degraded';
-                    } else {
-                        $status = 'up';
-                    }
+                    $status  = $this->pingStatus($result);
 
                     $details[$ref->getName()] = [
                         'status'     => $status,
@@ -369,12 +379,7 @@ class HealthIndicator implements HealthIndicatorInterface
                 $config->setUp();
                 $result  = $config->pingDetail();
                 $latency = $result['latency'] ?? null;
-
-                $status = match (true) {
-                    !$result['status']                                          => 'down',
-                    $latency !== null && $latency >= self::DEGRADED_LATENCY_MS => 'degraded',
-                    default                                                     => 'up',
-                };
+                $status  = $this->pingStatus($result);
 
                 if ($status === 'down' || ($status === 'degraded' && $worstStatus === 'up')) {
                     $worstStatus = $status;

@@ -260,9 +260,53 @@ final class Kernel extends KernelStore
                 'LOG_OUTPUT=file, but the log directory %s cannot be written by this user (%s). '
                 . 'Create it with the right owner, or point LOG_DIR elsewhere.',
                 self::$pathLogs,
-                function_exists('posix_geteuid') ? (posix_getpwuid(posix_geteuid())['name'] ?? 'uid ' . posix_geteuid()) : get_current_user(),
+                self::currentUser(),
             ));
         }
+    }
+
+    /**
+     * Makes `.winter/`, or stops with why it cannot be written. The framework keeps
+     * everything it writes there — process records and locks, the class-list and proxy
+     * caches, the file cache — and without it a start failed far from the cause: `di
+     * build` said a cache file "was not produced", and an application came up and lost
+     * its components one by one.
+     *
+     * Usually the project folder belongs to another user than the one the application
+     * runs as: a checkout owned by root, mounted into a container that runs as `winter`.
+     *
+     * @internal Called where the framework first writes: the application's start, `di build`.
+     * @throws \RuntimeException
+     */
+    public static function assertWinterDirectory(): void
+    {
+        $dir = self::$pathWinter;
+        try {
+            self::ensureDirectory($dir);
+        } catch (\Throwable) {
+            // Reported below together with an existing but read-only folder.
+        }
+        if (is_dir($dir) && is_writable($dir)) {
+            return;
+        }
+        throw new \RuntimeException(sprintf(
+            'The framework cannot write %s as this user (%s): it keeps its process records, '
+            . 'locks and caches there. Give the user the project folder (chown -R), '
+            . 'or create .winter/ owned by it.',
+            $dir,
+            self::currentUser(),
+        ));
+    }
+
+    /** Who this process runs as, for messages about permissions. */
+    private static function currentUser(): string
+    {
+        if (!function_exists('posix_geteuid')) {
+            return get_current_user();
+        }
+        $uid = posix_geteuid();
+        $name = posix_getpwuid($uid)['name'] ?? null;
+        return $name !== null ? "{$name}, uid {$uid}" : "uid {$uid}";
     }
 
     /**

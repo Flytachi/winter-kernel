@@ -552,6 +552,7 @@ abstract class WinterApplication
             EnableScheduler::class,
             EnableProcess::class,
             EnableDaemon::class,
+            EnableWebSocket::class,
             EnableActuator::class,
             EnableAsync::class,
             EnableCaching::class,
@@ -852,6 +853,8 @@ abstract class WinterApplication
         self::assertFreePorts($companions, $http?->port);
         self::assertWebSocketTls($companions);
 
+        // The first thing written below — the record and the lock — goes into .winter/.
+        Kernel::assertWinterDirectory();
         // Before anything binds or forks: a second run of the same application is refused
         // here, and every process forked from now on knows the run it belongs to.
         ApplicationRuntime::claim(static::class, $components);

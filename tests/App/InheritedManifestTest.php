@@ -7,6 +7,7 @@ namespace Flytachi\Winter\Kernel\Tests\App;
 use Flytachi\Winter\Kernel\App\Attribute\EnableActuator;
 use Flytachi\Winter\Kernel\App\Attribute\EnableAsync;
 use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
+use Flytachi\Winter\Kernel\App\Attribute\EnableWebSocket;
 use Flytachi\Winter\Kernel\App\Attribute\Import;
 use Flytachi\Winter\Kernel\App\ApplicationConfigException;
 use Flytachi\Winter\Kernel\WinterApplication;
@@ -89,6 +90,15 @@ final class InheritedManifestTest extends TestCase
         $this->check(InheritsAsyncApp::class);
     }
 
+    /** A socket declared on the parent did not start, and nothing said why. */
+    public function test_a_websocket_counts_too(): void
+    {
+        $this->expectException(ApplicationConfigException::class);
+        $this->expectExceptionMessage('#[EnableWebSocket]');
+
+        $this->check(InheritsSocketApp::class);
+    }
+
     /** Imports are part of the manifest: an inherited one would import nothing, quietly. */
     public function test_import_counts_too(): void
     {
@@ -152,5 +162,15 @@ abstract class ImportBaseApp extends WinterApplication
 }
 
 final class InheritsImportApp extends ImportBaseApp
+{
+}
+
+#[EnableWebSocket(\Flytachi\Winter\Kernel\Tests\WebSocket\Fixtures\EchoSocket::class, port: 8001)]
+abstract class SocketBaseApp extends WinterApplication
+{
+}
+
+#[EnableWeb]
+final class InheritsSocketApp extends SocketBaseApp
 {
 }

@@ -186,21 +186,8 @@ final class Process extends Cmd
             self::printKeyValue("Concurrency", (string) $info->concurrency, 12, 34, 36);
         }
 
-        if ($detailed && $info->usage) {
-            $u = $info->usage;
-            self::printDivider();
-            self::printLabel("Resources", 34);
-            self::printKeyValue("User", $u->user, 12, 34, 35);
-            self::printKeyValue("PPID", (string) $u->ppid, 12, 34, 35);
-            self::printKeyValue("CPU", $u->cpu . ' %', 12, 34, 35);
-            self::printKeyValue(
-                "Memory",
-                $u->memory . ' % (' . round($u->rssMb(), 1) . ' MB)',
-                12,
-                34,
-                35
-            );
-            self::printKeyValue("Elapsed", $u->elapsed, 12, 34, 35);
+        if ($detailed) {
+            $this->printResources($info, 34);
         }
 
         self::printLabel("Process Status", 34);

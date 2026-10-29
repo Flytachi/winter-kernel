@@ -81,7 +81,7 @@ final readonly class Component
         return new self(
             $this->kind,
             $this->class,
-            $host,
+            BindAddress::bare($host),
             $port,
             $this->critical,
             $this->retries,
@@ -177,7 +177,7 @@ final readonly class Component
                 throw new \InvalidArgumentException("{$class} is a WebSocket: it needs a port.");
             }
             $port = (int) $args['port'];
-            $host = ($args['host'] ?? '') !== '' ? $args['host'] : $host;
+            $host = ($args['host'] ?? '') !== '' ? BindAddress::bare($args['host']) : $host;
         }
         return new self(
             $kind,
@@ -205,7 +205,7 @@ final readonly class Component
     ): self {
         return new self(
             ComponentKind::Http,
-            host: $host,
+            host: BindAddress::bare($host),
             port: $port,
             critical: $critical,
             retries: $retries,
@@ -228,7 +228,7 @@ final readonly class Component
         int $retries = self::RETRIES,
         int $startTimeout = self::START_TIMEOUT,
     ): self {
-        return new self(ComponentKind::WebSocket, $class, $host, $port, $critical, $retries, $startTimeout);
+        return new self(ComponentKind::WebSocket, $class, BindAddress::bare($host), $port, $critical, $retries, $startTimeout);
     }
 
     /**

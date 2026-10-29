@@ -20,10 +20,10 @@ use Flytachi\Winter\Kernel\WinterApplication;
  * The claim is an application lock plus a status record, the same pair a process keeps:
  * the lock says whether the master is alive (the OS releases it with the master, however
  * it died), the record says who it is and what it runs. One application runs once per
- * storage: a second `call run` is refused while the first holds the lock.
+ * project — per `.winter/`: a second `call run` is refused while the first holds the lock.
  *
  * A record from another host — a container's record read from the host through a mounted
- * storage — cannot be checked from here: its PIDs belong to another process namespace.
+ * project folder — cannot be checked from here: its PIDs belong to another process namespace.
  * {@see isAlive()} answers null for it, and nobody may signal by its PIDs.
  *
  * @internal The application's own machinery; components and the console read it.
@@ -65,7 +65,7 @@ final class ApplicationRuntime
             $running = $previous !== null ? " [PID {$previous->pid}] (since {$previous->getStartedAt()})" : '';
             throw new ApplicationConfigException(
                 "{$appClass} is already running{$running}. Stop it before starting it again — "
-                . 'one application runs once per storage.'
+                . 'one application runs once per project (.winter/).'
             );
         }
 
@@ -100,6 +100,23 @@ final class ApplicationRuntime
         });
 
         return $record;
+    }
+
+    /**
+     * In a process forked from the application: lets go of the inherited lock
+     * descriptor, leaving the lock to the application alone. A component that kept it
+     * held the lock after the application had died — `call run` refused to start,
+     * status read "running" for a dead PID.
+     *
+     * @internal Called by the supervisor in every child it forks.
+     */
+    public static function dropInheritedLock(): void
+    {
+        if (self::$lock === null || self::$current?->pid === getmypid()) {
+            return;
+        }
+        self::$lock->abandon();
+        self::$lock = null;
     }
 
     /**
@@ -215,7 +232,7 @@ final class ApplicationRuntime
 
     /**
      * The application of this project when it runs in another environment sharing this
-     * storage — a container, seen from the host. Nothing is started here then: it would
+     * project folder — a container, seen from the host. Nothing is started here then: it would
      * run beside the application, outside it. Known only while the application keeps
      * saying it is there ({@see seenAt()}); a record from a host that went silent is a
      * leftover.
@@ -251,7 +268,7 @@ final class ApplicationRuntime
      * application is not running, or does not run this class.
      *
      * The application is this process's own: the one the kernel was booted for. A process
-     * of another project sharing the storage would be another class.
+     * of another project sharing the folder would be another class.
      *
      * @param class-string $componentClass
      */

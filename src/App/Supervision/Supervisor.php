@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Kernel\App\Supervision;
 
 use Flytachi\Winter\Kernel\App\Component;
 use Flytachi\Winter\Kernel\App\ComponentKind;
+use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
 use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Kernel\Process\BeforeFork;
 use Flytachi\Winter\Kernel\Process\Internal\Termination;
@@ -13,9 +14,9 @@ use Flytachi\Winter\Kernel\Process\ProcessAlreadyRunningException;
 use Psr\Log\LoggerInterface;
 
 /**
- * Runs an application's background components and keeps them running — the same in
- * both shapes of `call run`: inside the master when there is no web tier, inside one
- * process of the Swoole server when there is.
+ * Runs an application's components and keeps them running: the HTTP server, processes,
+ * daemons, the scheduler, WebSocket servers and outside programs. It is the application
+ * itself — PID 1 in a container — with or without an HTTP server.
  *
  * Each component runs in a process of its own, and its life has two phases:
  *
@@ -69,7 +70,18 @@ final class Supervisor
     /** Why the application is stopping — a signal's name, a critical failure, a reload. */
     private string $stopReason = '';
     private float $stopAt = 0.0;
+    /** How many components were running when the stop began. */
+    private int $stopCount = 0;
+    /** Stops the components if the application dies without stopping them. */
+    private ?Sentinel $sentinel = null;
+    /** How many components a SIGHUP reached, until the loop logs it. */
+    private ?int $reloadedCount = null;
     private bool $stopAnnounced = false;
+    /** The signal mask from before a fork, restored on both sides once it is safe. */
+    private array $maskBeforeFork = [];
+
+    /** The signals the supervisor handles — and holds back around a fork. */
+    private const array SIGNALS = [SIGTERM, SIGINT, SIGHUP, SIGUSR1, SIGUSR2];
 
     /**
      * @param list<Component> $components
@@ -102,9 +114,9 @@ final class Supervisor
     /**
      * Runs until the application is stopped, or a critical component fails.
      *
-     * @param bool $untilDone Also return once every component has finished its work
-     *                        (headless): nothing is left to run. Under the web tier the
-     *                        supervisor stays as long as the server does.
+     * @param bool $untilDone Also return once every component has finished its work and
+     *   nothing is left to run. A component that runs for good — the HTTP server among
+     *   them — keeps it up until a stop.
      * @return int 0 when stopped, 1 when a critical component failed.
      */
     public function run(bool $untilDone): int
@@ -116,12 +128,17 @@ final class Supervisor
         // process that ran hooked I/O outside a coroutine — a daemon's master — hands its
         // workers a half-built async runtime, and their coroutines stall.
 
+        // Forked before anything else, with nothing of the supervisor's to inherit.
+        $this->sentinel = Sentinel::spawn();
+
         pcntl_async_signals(true);
-        pcntl_signal(SIGTERM, fn() => $this->stop(SIGTERM, 'SIGTERM'));
-        pcntl_signal(SIGINT, fn() => $this->stop(SIGINT, 'SIGINT'));
+        pcntl_signal(SIGTERM, fn() => $this->stop('SIGTERM'));
+        pcntl_signal(SIGINT, fn() => $this->stop('SIGINT'));
+        pcntl_signal(SIGHUP, fn() => $this->reload());
         // What a Swoole server answers to — a graceful reload of its workers — reaches the
-        // HTTP server, as it did when the server was this process.
-        foreach ([SIGHUP, SIGUSR1, SIGUSR2] as $signal) {
+        // HTTP server, as it did when the server was this process. To a process they mean
+        // what its own onUser1()/onUser2() make of them: sent to its own PID.
+        foreach ([SIGUSR1, SIGUSR2] as $signal) {
             pcntl_signal($signal, fn() => $this->forward($signal, ComponentKind::Http));
         }
 
@@ -131,6 +148,10 @@ final class Supervisor
             // opcodes, the middle of another log write among them.
             if ($this->stopping && !$this->stopAnnounced) {
                 $this->announceStop();
+            }
+            if ($this->reloadedCount !== null) {
+                $this->logger->info(sprintf('Application reloading (SIGHUP): %d component(s)', $this->reloadedCount));
+                $this->reloadedCount = null;
             }
             if (!$this->stopping) {
                 $this->takeCommands($now);
@@ -145,6 +166,7 @@ final class Supervisor
             if ($this->alive() === 0 && ($this->stopping || ($untilDone && $this->done()))) {
                 $this->forgetAll();
                 $this->announceEnd();
+                $this->sentinel?->done();
                 return $this->exitCode;
             }
         }
@@ -162,7 +184,7 @@ final class Supervisor
             $this->logger->info('Application reloading.');
             return;
         }
-        $this->logger->info(sprintf('Application stopping (%s): %d component(s)', $this->stopReason, $this->alive()));
+        $this->logger->info(sprintf('Application stopping (%s): %d component(s)', $this->stopReason, $this->stopCount));
     }
 
     /** The last line: how the stop went, or that the work is done. */
@@ -192,6 +214,29 @@ final class Supervisor
         return $this->reloadRequested;
     }
 
+    /**
+     * SIGHUP: every component reloads in its own way, and the application stays up. The
+     * HTTP server is sent SIGUSR1, a graceful restart of its workers — a Swoole server
+     * has no SIGHUP handler. A process gets SIGHUP: its onReload(), a scheduler's
+     * re-read of the schedule, a daemon's restart of its workers. An outside program
+     * gets nothing: SIGHUP's default is to end it.
+     */
+    private function reload(): void
+    {
+        if ($this->stopping) {
+            return;
+        }
+        $count = 0;
+        foreach ($this->units as $unit) {
+            if ($unit->pid <= 0 || $unit->component->kind === ComponentKind::Command) {
+                continue;
+            }
+            @posix_kill($unit->pid, $unit->component->kind === ComponentKind::Http ? SIGUSR1 : SIGHUP);
+            $count++;
+        }
+        $this->reloadedCount = $count;
+    }
+
     /** Passes a signal on to the running components of one kind. */
     private function forward(int $signal, ComponentKind $kind): void
     {
@@ -205,20 +250,26 @@ final class Supervisor
     /**
      * Stops every component: the application is shutting down.
      *
+     * Every component gets SIGTERM, whatever the application received. SIGTERM is the
+     * one stop signal each of them handles gracefully; a Swoole server has no handler
+     * for SIGINT, so Ctrl+C passed on as it came killed it outright — requests in
+     * flight cut, the workers' pools never closed.
+     *
      * @param string $reason Why, for the log: a signal's name, `critical failure`, `reload`.
      */
-    private function stop(int $signal, string $reason): void
+    private function stop(string $reason): void
     {
         if ($this->stopping) {
             return;
         }
         $this->stopping = true;
         $this->stopReason = $reason;
+        $this->stopCount = $this->alive();
         $now = microtime(true);
         $this->stopAt = $now;
         foreach ($this->units as $unit) {
             if ($unit->pid > 0) {
-                @posix_kill($unit->pid, $signal);
+                @posix_kill($unit->pid, SIGTERM);
                 // A framework component ends within its own grace; an outside program
                 // may ignore the signal altogether.
                 if ($unit->component->kind === ComponentKind::Command) {
@@ -233,6 +284,11 @@ final class Supervisor
     private function startDue(float $now): void
     {
         foreach ($this->units as $unit) {
+            // A stop that arrived while the components before this one were starting:
+            // nothing more is started — it would never be told to stop.
+            if ($this->stopping) {
+                return;
+            }
             if ($unit->state === UnitState::Waiting && $now >= $unit->startAt) {
                 $this->start($unit);
             }
@@ -269,8 +325,22 @@ final class Supervisor
             return;
         }
 
+        // The stop and reload signals wait until the parent knows the child's pid and the
+        // child has dropped the supervisor's handlers. Delivered in between, a stop would
+        // miss the new component — or run the supervisor's own stop inside the child,
+        // which then carried on as the component and never stopped.
+        pcntl_sigprocmask(SIG_BLOCK, self::SIGNALS, $this->maskBeforeFork);
+        // Checked with the signals held: a stop that came while this start was being
+        // prepared leaves the component unstarted, with no window left for another.
+        if ($this->stopping) {
+            pcntl_sigprocmask(SIG_SETMASK, $this->maskBeforeFork);
+            fclose($pair[0]);
+            fclose($pair[1]);
+            return;
+        }
         $pid = pcntl_fork();
         if ($pid === -1) {
+            pcntl_sigprocmask(SIG_SETMASK, $this->maskBeforeFork);
             fclose($pair[0]);
             fclose($pair[1]);
             $this->answer($unit, 0, 'could not be forked');
@@ -294,8 +364,11 @@ final class Supervisor
         fclose($pair[1]);
         stream_set_blocking($pair[0], false);
         $unit->pid = $pid;
+        $this->sentinel?->track($pid);
         $unit->socket = $pair[0];
         $unit->state = UnitState::Starting;
+        // A stop held back by the fork is delivered here, and now reaches this one too.
+        pcntl_sigprocmask(SIG_SETMASK, $this->maskBeforeFork);
         $this->answer($unit, $pid);
         $unit->startedAt = microtime(true);
         $timeout = $unit->component->startTimeout;
@@ -314,9 +387,7 @@ final class Supervisor
      */
     private function becomeProgram(Unit $unit): never
     {
-        foreach ([SIGTERM, SIGINT, SIGHUP, SIGUSR1, SIGUSR2] as $signal) {
-            pcntl_signal($signal, SIG_DFL);
-        }
+        $this->dropSupervisorSignals(program: true);
         foreach ($this->units as $other) {
             if ($other->socket !== null) {
                 @fclose($other->socket);
@@ -339,6 +410,35 @@ final class Supervisor
         throw new \LogicException('unreachable');
     }
 
+    /**
+     * The child's first step: the supervisor's handlers go, then the signals held back
+     * around the fork are let through. In that order — let through first, a stop would
+     * run the supervisor's handler in the child. And they must be let through: the mask
+     * survives exec, and a program started with SIGTERM blocked could never be stopped.
+     *
+     * A component ignores SIGHUP/SIGUSR1/SIGUSR2 until it sets its own handlers: their
+     * default is to end the process, and a reload arriving that early would kill it. An
+     * outside program gets the defaults, SIGPIPE included — an ignored signal stays
+     * ignored across exec.
+     */
+    private function dropSupervisorSignals(bool $program): void
+    {
+        foreach (self::SIGNALS as $signal) {
+            $stop = $signal === SIGTERM || $signal === SIGINT;
+            pcntl_signal($signal, $program || $stop ? SIG_DFL : SIG_IGN);
+        }
+        if ($program) {
+            // PHP's CLI ignores SIGPIPE, and an ignored signal survives exec: a script's
+            // `producer | head` would end in "Broken pipe" errors instead of quietly.
+            pcntl_signal(SIGPIPE, SIG_DFL);
+        }
+        pcntl_sigprocmask(SIG_SETMASK, $this->maskBeforeFork);
+        // What only the application may hold: its lock, and its end of the sentinel's
+        // link — kept here, either would outlive the application with this child.
+        ApplicationRuntime::dropInheritedLock();
+        $this->sentinel?->forget();
+    }
+
     /** @return array<string, string> The environment, with what `.env` put in $_ENV. */
     private static function environment(): array
     {
@@ -359,9 +459,7 @@ final class Supervisor
      */
     private function becomeComponent(Unit $unit, mixed $socket): never
     {
-        foreach ([SIGTERM, SIGINT, SIGHUP, SIGUSR1, SIGUSR2] as $signal) {
-            pcntl_signal($signal, SIG_DFL);
-        }
+        $this->dropSupervisorSignals(program: false);
         foreach ($this->units as $other) {
             if ($other->socket !== null) {
                 @fclose($other->socket);
@@ -429,7 +527,7 @@ final class Supervisor
             if (str_contains($data, ComponentChannel::RELOAD) && !$this->stopping) {
                 $this->logger->info("{$unit->name} asked for a restart of the application.");
                 $this->reloadRequested = true;
-                $this->stop(SIGTERM, 'reload');
+                $this->stop('reload');
             }
         }
     }
@@ -450,6 +548,16 @@ final class Supervisor
     private function reap(): void
     {
         while (($pid = pcntl_waitpid(-1, $status, WNOHANG)) > 0) {
+            if ($this->sentinel !== null && $pid === $this->sentinel->pid) {
+                // Gone before the application (the OOM killer, a stray kill): the run goes
+                // on, but no longer covered — said once, so it is not a surprise later.
+                $this->logger->warning(
+                    "The sentinel (PID {$pid}) is gone: if the application dies now without "
+                    . 'stopping its components, nothing will stop them.'
+                );
+                $this->sentinel = null;
+                continue;
+            }
             foreach ($this->units as $unit) {
                 if ($unit->pid === $pid) {
                     $this->exited($unit, $status);
@@ -488,6 +596,7 @@ final class Supervisor
         // worker still holding the port — goes now: they would outlive it unwatched, and a
         // restart would meet them.
         @posix_kill(-$unit->pid, SIGKILL);
+        $this->sentinel?->untrack($unit->pid);
 
         if ($unit->socket !== null) {
             // Whatever it said last may still be unread.
@@ -500,7 +609,7 @@ final class Supervisor
             $unit->held = $unit->held || str_contains($tail, ComponentChannel::HELD);
             if (str_contains($tail, ComponentChannel::RELOAD) && !$this->stopping) {
                 $this->reloadRequested = true;
-                $this->stop(SIGTERM, 'reload');
+                $this->stop('reload');
             }
             @fclose($unit->socket);
         }
@@ -611,7 +720,7 @@ final class Supervisor
             ($this->announce)("{$unit->name} failed: {$reason}. It is critical: the application stops.");
             $unit->state = UnitState::Failed;
             $this->exitCode = 1;
-            $this->stop(SIGTERM, 'critical failure');
+            $this->stop('critical failure');
             return;
         }
         $unit->state = UnitState::Failed;

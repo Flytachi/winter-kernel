@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\App\Config;
 
 use Flytachi\Winter\Kernel\App\ApplicationConfigException;
+use Flytachi\Winter\Kernel\App\BindAddress;
 use Flytachi\Winter\Kernel\Kernel;
 
 /**
@@ -194,7 +195,7 @@ final class ServerSettings
         if (trim($host) === '') {
             throw new ApplicationConfigException('The HTTP host cannot be empty.');
         }
-        $this->host = trim($host);
+        $this->host = BindAddress::bare($host);
         return $this;
     }
 

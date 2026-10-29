@@ -150,6 +150,9 @@ final class Schedule extends Cmd
         self::printKeyValue("Started", $info->getStartedAt(), 12, self::CL, 36);
         self::printKeyValue("Uptime", $this->formatDuration(time() - $info->startedAt), 12, self::CL, 36);
         self::printKeyValue("Tasks", (string) count($this->discover()), 12, self::CL, 36);
+        if ($detailed) {
+            $this->printResources($info, self::CL);
+        }
 
         self::printLabel("Scheduler Status", self::CL);
     }
@@ -216,6 +219,7 @@ final class Schedule extends Cmd
         self::printBadge('stop', 'send a graceful stop signal (SIGTERM)', $cl, 36);
         self::printBadge('restart', 'stop and start again', $cl, 36);
         self::printBadge('status', 'scheduler run state + task count', $cl, 36);
+        self::printBadge('status -v', 'also its CPU and memory', $cl, 36);
         self::printLabel("Commands", $cl);
 
         self::printDivider($cl);

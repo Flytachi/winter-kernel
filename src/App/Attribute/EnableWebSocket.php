@@ -13,7 +13,7 @@ use Flytachi\Winter\Kernel\WebSocket\WebSocket;
  * on the {@see \Flytachi\Winter\Kernel\WinterApplication} class; repeatable.
  *
  * ```
- * #[EnableWeb]
+ * #[EnableHttp]
  * #[EnableWebSocket(ChatSocket::class, port: 8001)]
  * #[EnableWebSocket(NotifySocket::class, port: 8002, host: '127.0.0.1')]
  * final class App extends WinterApplication { ... }

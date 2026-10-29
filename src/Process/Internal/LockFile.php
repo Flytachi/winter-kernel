@@ -107,6 +107,19 @@ final class LockFile
         }
     }
 
+    /**
+     * Lets go of an inherited descriptor without touching the lock: for a forked child,
+     * whose copy otherwise keeps the parent's lock alive after the parent has died.
+     * Never {@see release()} there — `LOCK_UN` would free the parent's lock as well.
+     */
+    public function abandon(): void
+    {
+        if ($this->handle !== null) {
+            fclose($this->handle);
+            $this->handle = null;
+        }
+    }
+
     /** Releases the lock. The OS also releases it when the holder dies. */
     public function release(): void
     {

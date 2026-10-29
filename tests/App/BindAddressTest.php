@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Tests\App;
 
 use Flytachi\Winter\Kernel\App\BindAddress;
+use Flytachi\Winter\Kernel\App\Component;
+use Flytachi\Winter\Kernel\App\Config\ServerSettings;
 use Flytachi\Winter\Kernel\Http\Adapter\ClientAddress;
 use Flytachi\Winter\Kernel\Http\Adapter\FpmRequest;
 use PHPUnit\Framework\TestCase;
@@ -29,6 +31,18 @@ final class BindAddressTest extends TestCase
         self::assertSame('http://[::]:8000', BindAddress::url('http', '::', 8000));
         self::assertSame('ws://[::1]:8001', BindAddress::url('ws', '::1', 8001));
         self::assertSame('http://0.0.0.0:8000', BindAddress::url('http', '0.0.0.0', 8000));
+    }
+
+    /** `[::1]` written as in a URL: Swoole refuses the brackets, and the URL had two pairs. */
+    public function test_a_host_given_in_brackets_is_taken_bare(): void
+    {
+        self::assertSame('::1', BindAddress::bare('[::1]'));
+        self::assertSame('::1', BindAddress::bare(' ::1 '));
+        self::assertSame('0.0.0.0', BindAddress::bare('0.0.0.0'));
+        self::assertSame('http://[::1]:8000', BindAddress::url('http', '[::1]', 8000));
+        self::assertSame('::1', Component::http('[::1]')->host);
+        self::assertSame('::', Component::http()->at('[::]', 8001)->host);
+        self::assertSame('::1', ServerSettings::fromEnv()->host('[::1]')->getHost());
     }
 
     public function test_an_ipv4_mapped_address_is_unmapped(): void
