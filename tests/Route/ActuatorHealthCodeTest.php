@@ -25,21 +25,29 @@ use ReflectionMethod;
  */
 final class ActuatorHealthCodeTest extends TestCase
 {
-    private function actuator(): Router
+    /** @param list<string> $expose */
+    private function actuator(array $expose = ['*'], ?string $guard = null, bool $guardHealth = false): Router
     {
         $router = new Router();
         new ReflectionMethod(Router::class, 'registerHealth')
-            ->invoke($router, StubIndicator::class, null);
+            ->invoke($router, StubIndicator::class, $guard, $expose, $guardHealth);
 
         return $router;
     }
 
-    private function get(string $uri): FakeResponse
+    /** @param list<string> $expose */
+    private function get(string $uri, array $expose = ['*'], ?string $guard = null, bool $guardHealth = false): FakeResponse
     {
         $response = new FakeResponse();
-        $this->actuator()->handle(new FakeRequest('GET', $uri), $response);
+        $this->actuator($expose, $guard, $guardHealth)->handle(new FakeRequest('GET', $uri), $response);
 
         return $response;
+    }
+
+    /** The guard middleware is built by the container, as in an application. */
+    protected function setUp(): void
+    {
+        \Flytachi\Winter\DI\Container::init();
     }
 
     protected function tearDown(): void
@@ -97,6 +105,86 @@ final class ActuatorHealthCodeTest extends TestCase
         self::assertSame(503, $this->get('/actuator/health')->status);
     }
 
+    /**
+     * PHP finds a method in any letter case: `/actuator/HEALTH` ran health(), and a check
+     * that compared names answered 200 for an application that was down.
+     */
+    public function test_health_in_another_case_still_answers_503(): void
+    {
+        StubIndicator::$report = ['status' => 'down', 'components' => []];
+
+        self::assertSame(503, $this->get('/actuator/HEALTH')->status);
+        self::assertSame(503, $this->get('/actuator/Health')->status);
+    }
+
+    /** @return array<string, array{string}> */
+    public static function notEndpoints(): array
+    {
+        return [
+            'protected helper' => ['helperProtected'],
+            'private helper'   => ['helperPrivate'],
+            'static method'    => ['helperStatic'],
+            'magic method'     => ['__toString'],
+            'unknown'          => ['nope'],
+        ];
+    }
+
+    /**
+     * Only a public instance method is an endpoint. A protected or private helper used to
+     * answer 500 with "Call to protected method …" and an error in the log.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('notEndpoints')]
+    public function test_what_is_not_an_endpoint_answers_404(string $name): void
+    {
+        self::assertSame(404, $this->get('/actuator/' . $name)->status);
+    }
+
+    // ── What answers ───────────────────────────────────────────────────────────
+
+    /** Only health answers unless more are named: the others draw a map of the application. */
+    public function test_by_default_only_health_answers(): void
+    {
+        self::assertSame(200, $this->get('/actuator/health', ['health'])->status);
+        self::assertSame(200, $this->get('/actuator', ['health'])->status);
+        foreach (['info', 'metrics', 'mappings', 'loggers', 'pools', 'env'] as $endpoint) {
+            self::assertSame(404, $this->get('/actuator/' . $endpoint, ['health'])->status, $endpoint);
+        }
+    }
+
+    public function test_the_named_endpoints_answer(): void
+    {
+        self::assertSame(200, $this->get('/actuator/info', ['health', 'info'])->status);
+        self::assertSame(404, $this->get('/actuator/mappings', ['health', 'info'])->status);
+    }
+
+    /** A typo in the list would answer 404 for good, and nobody would know why. */
+    public function test_an_exposed_name_without_an_endpoint_stops_the_boot(): void
+    {
+        $this->expectException(\Flytachi\Winter\Kernel\App\ApplicationConfigException::class);
+        $this->expectExceptionMessage("names 'metrcs'");
+        $this->actuator(['health', 'metrcs']);
+    }
+
+    public function test_a_helper_cannot_be_exposed(): void
+    {
+        $this->expectException(\Flytachi\Winter\Kernel\App\ApplicationConfigException::class);
+        $this->actuator(['helperProtected']);
+    }
+
+    /** Probes do not pass a guard: it leaves health open, and closes the rest. */
+    public function test_the_guard_leaves_health_open(): void
+    {
+        self::assertSame(200, $this->get('/actuator/health', ['*'], DenyAll::class)->status);
+        self::assertSame(200, $this->get('/actuator', ['*'], DenyAll::class)->status);
+        self::assertSame(403, $this->get('/actuator/info', ['*'], DenyAll::class)->status);
+    }
+
+    public function test_guard_health_puts_health_behind_the_guard_too(): void
+    {
+        self::assertSame(403, $this->get('/actuator/health', ['*'], DenyAll::class, true)->status);
+        self::assertSame(403, $this->get('/actuator', ['*'], DenyAll::class, true)->status);
+    }
+
     public function test_a_report_without_a_status_stays_200(): void
     {
         StubIndicator::$report = ['components' => []];
@@ -106,6 +194,15 @@ final class ActuatorHealthCodeTest extends TestCase
 }
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
+
+/** A guard that lets nobody through. */
+final class DenyAll extends \Flytachi\Winter\Kernel\Http\Stereotype\Middleware
+{
+    public function before(\Flytachi\Winter\Kernel\Http\Contracts\HttpRequest $request, \Flytachi\Winter\Kernel\Http\Contracts\HttpResponse $response): void
+    {
+        throw new \Flytachi\Winter\Kernel\Http\Response\ResponseException('denied', \Flytachi\Winter\Base\HttpCode::FORBIDDEN);
+    }
+}
 
 /** An indicator whose health report the test dictates. */
 final class StubIndicator implements HealthIndicatorInterface
@@ -144,6 +241,26 @@ final class StubIndicator implements HealthIndicatorInterface
     }
 
     public function mappings(): array
+    {
+        return [];
+    }
+
+    public static function helperStatic(): array
+    {
+        return [];
+    }
+
+    public function __toString(): string
+    {
+        return 'stub';
+    }
+
+    protected function helperProtected(): array
+    {
+        return [];
+    }
+
+    private function helperPrivate(): array
     {
         return [];
     }

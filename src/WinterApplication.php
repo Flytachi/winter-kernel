@@ -792,7 +792,12 @@ abstract class WinterApplication
             static fn(\ReflectionClass $ref): string => $ref->getName(),
             $contributors,
         ));
-        Health::configure($actuator->indicator ?? HealthIndicator::class, $actuator->middleware);
+        Health::configure(
+            $actuator->indicator ?? HealthIndicator::class,
+            $actuator->middleware,
+            $actuator->expose,
+            $actuator->guardHealth,
+        );
     }
 
     // ── Serve ─────────────────────────────────────────────────────────────────

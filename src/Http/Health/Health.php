@@ -22,13 +22,22 @@ final class Health
      * Enable the /actuator/* endpoints. Called once in bootstrap.php.
      *
      * @param class-string<HealthIndicatorInterface> $indicator
-     * @param class-string<Middleware>|null          $middleware  Optional guard middleware.
+     * @param class-string<Middleware>|null $middleware Optional guard middleware.
+     * @param list<string> $expose The endpoints that answer; `['*']` for all.
+     * @param bool $guardHealth Whether `health` is behind the guard as well.
      */
     public static function configure(
         string $indicator = HealthIndicator::class,
         ?string $middleware = null,
+        array $expose = ['health'],
+        bool $guardHealth = false,
     ): void {
-        self::$config = ['indicator' => $indicator, 'middleware' => $middleware];
+        self::$config = [
+            'indicator'   => $indicator,
+            'middleware'  => $middleware,
+            'expose'      => array_values($expose),
+            'guardHealth' => $guardHealth,
+        ];
     }
 
     public static function getConfig(): ?array
@@ -102,10 +111,11 @@ final class Health
         ];
     }
 
-    public static function disk(): array
+    /** @param string $path Any path on the volume to measure. */
+    public static function disk(string $path = '/'): array
     {
-        $free  = (float) disk_free_space('/');
-        $total = (float) disk_total_space('/');
+        $free  = (float) @disk_free_space($path);
+        $total = (float) @disk_total_space($path);
         return [
             'free'          => $free,
             'total'         => $total,

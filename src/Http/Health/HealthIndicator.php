@@ -14,15 +14,20 @@ use Flytachi\Winter\Kernel\Collector\ImplementorCollector;
 use Flytachi\Winter\DI\Scanner;
 use Flytachi\Winter\Kernel\Http\Header;
 use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\Ppa\Pool\PpaConnectionPool;
 use Flytachi\Winter\Redis\RedisPool;
 
 /**
  * The built-in `/actuator/*` report.
  *
- * `health()` aggregates four components — database, cache, disk and memory — plus
- * every discovered {@see HealthContributor}; the worst component decides the overall
- * status. The remaining methods are plain reads of runtime state.
+ * `health()` aggregates the built-in components — database and Redis when the
+ * application has them, disk and memory always — plus every discovered
+ * {@see HealthContributor}; the worst component decides the overall status. The
+ * remaining methods are plain reads of runtime state.
+ *
+ * The thresholds are constants read through `static::`: a subclass overrides one to
+ * move it.
  *
  * Extend it to change one endpoint and inherit the rest: a public method's name is
  * its endpoint, so adding `queues()` publishes `/actuator/queues`.
@@ -31,19 +36,54 @@ use Flytachi\Winter\Redis\RedisPool;
  */
 class HealthIndicator implements HealthIndicatorInterface
 {
-    private const int DEGRADED_THRESHOLD_PERCENT = 80;
-    private const int DOWN_THRESHOLD_PERCENT      = 90;
-    private const int DEGRADED_LATENCY_MS         = 500;
+    /** Latency of a database or Redis answer, in ms, from which it counts as slow. */
+    protected const int DEGRADED_LATENCY_MS = 500;
+
+    /** Disk use, in %, from which the disk is `degraded`: filling up, still writable. */
+    protected const int DISK_DEGRADED_PERCENT = 90;
+
+    /**
+     * Free space, in bytes, below which the disk is `down`. Spring's own default: 10 MB is
+     * where writing logs, cache and uploads starts to fail — the application is about to
+     * stop working, not merely filling up. A percentage cannot say that: 10 % of a 2 TB
+     * volume is 200 GB.
+     */
+    protected const int DISK_DOWN_FREE_BYTES = 10 * 1024 * 1024;
+
+    /**
+     * Worker memory, in % of its limit, from which memory is `degraded`. Never `down`:
+     * the figure is of the one worker that answered the probe, and a 503 would take the
+     * whole instance out of rotation over it — while its other workers are fine and this
+     * one is replaced on its own at its next recycle.
+     */
+    protected const int MEMORY_DEGRADED_PERCENT = 90;
+
+    /**
+     * Seconds a database or Redis check stands before it is run again, per worker. A
+     * probe every few seconds used to open a new connection to every datasource each
+     * time — two databases and a 5-second probe are 24 connections a minute per instance.
+     */
+    protected const int CHECK_CACHE_SECONDS = 5;
+
+    /** @var array<string, array{at: float, result: array}> Checks per component, per worker. */
+    private static array $checked = [];
 
     public function health(): array
     {
         $rootDir    = Health::getRootDir();
-        $components = [
-            'db'     => $this->dbHealth($rootDir),
-            'redis'  => $this->redisHealth($rootDir),
-            'disk'   => $this->diskHealth(),
-            'memory' => $this->memoryHealth(),
-        ];
+        $components = [];
+        // A datasource the application does not have is not reported: `up` with nothing
+        // checked said something that was not true.
+        $db = self::cached('db', fn(): array => $this->dbHealth($rootDir));
+        if ($db['details'] !== []) {
+            $components['db'] = $db;
+        }
+        $redis = self::cached('redis', fn(): array => $this->redisHealth($rootDir));
+        if ($redis['details'] !== []) {
+            $components['redis'] = $redis;
+        }
+        $components['disk']   = $this->diskHealth();
+        $components['memory'] = $this->memoryHealth();
 
         // Merge every discovered HealthContributor, keyed by its name(). A contributor
         // may override a built-in component by reusing its key.
@@ -207,11 +247,13 @@ class HealthIndicator implements HealthIndicatorInterface
             self::scanner($rootDir)->collect($collector)->execute();
 
             foreach ($collector->getResult() as $ref) {
-                /** @var \Flytachi\Winter\Cdo\Config\Common\DbConfigInterface $config */
-                $config = $ref->newInstance();
-                $config->setUp();
-
+                // Inside the try with the ping: a configuration that cannot even be set up
+                // is that datasource down, not a 500 for the whole report.
+                $config = null;
                 try {
+                    /** @var \Flytachi\Winter\Cdo\Config\Common\DbConfigInterface $config */
+                    $config = $ref->newInstance();
+                    $config->setUp();
                     $result  = $config->pingDetail();
                     $latency = $result['latency'] ?? null;
 
@@ -224,17 +266,19 @@ class HealthIndicator implements HealthIndicatorInterface
                     }
 
                     $details[$ref->getName()] = [
-                        'status'  => $status,
-                        'driver'  => $config->getDriver(),
-                        'latency' => $latency,
-                        'error'   => $result['error'] ?? null,
+                        'status'     => $status,
+                        'driver'     => $config->getDriver(),
+                        'latency'    => $latency,
+                        'error'      => self::connectionError($ref->getName(), $result['error'] ?? null),
+                        'checked_at' => date(DATE_ATOM),
                     ];
                 } catch (\Throwable $e) {
                     $details[$ref->getName()] = [
-                        'status'  => 'down',
-                        'driver'  => $config->getDriver(),
-                        'latency' => null,
-                        'error'   => $e->getMessage(),
+                        'status'     => 'down',
+                        'driver'     => self::driverOf($config),
+                        'latency'    => null,
+                        'error'      => self::connectionError($ref->getName(), $e->getMessage()),
+                        'checked_at' => date(DATE_ATOM),
                     ];
                 }
             }
@@ -320,11 +364,10 @@ class HealthIndicator implements HealthIndicatorInterface
         $worstStatus = 'up';
 
         foreach ($collector->getResult() as $ref) {
-            /** @var \Flytachi\Winter\Redis\Config\Common\RedisConfigInterface $config */
-            $config = $ref->newInstance();
-            $config->setUp();
-
             try {
+                /** @var \Flytachi\Winter\Redis\Config\Common\RedisConfigInterface $config */
+                $config = $ref->newInstance();
+                $config->setUp();
                 $result  = $config->pingDetail();
                 $latency = $result['latency'] ?? null;
 
@@ -339,14 +382,16 @@ class HealthIndicator implements HealthIndicatorInterface
                 }
 
                 $details[$ref->getName()] = [
-                    'status'  => $status,
-                    'latency' => $latency,
-                    'error'   => $result['error'] ?? null,
+                    'status'     => $status,
+                    'latency'    => $latency,
+                    'error'      => self::connectionError($ref->getName(), $result['error'] ?? null),
+                    'checked_at' => date(DATE_ATOM),
                 ];
             } catch (\Throwable $e) {
                 $details[$ref->getName()] = [
-                    'status' => 'down',
-                    'error'  => $e->getMessage(),
+                    'status'     => 'down',
+                    'error'      => self::connectionError($ref->getName(), $e->getMessage()),
+                    'checked_at' => date(DATE_ATOM),
                 ];
                 $worstStatus = 'down';
             }
@@ -357,18 +402,34 @@ class HealthIndicator implements HealthIndicatorInterface
 
     // ── Disk / Memory ─────────────────────────────────────────────────────────
 
+    /**
+     * The disk the application writes to — its storage: logs, cache, uploads. The root
+     * of the machine, measured before, can be another volume entirely in a container.
+     */
     private function diskHealth(): array
     {
-        $info    = Health::disk();
+        $path    = isset(Kernel::$pathStorage) && is_dir(Kernel::$pathStorage) ? Kernel::$pathStorage : '/';
+        $info    = Health::disk($path);
         $percent = $info['usage_percent'];
-        [$status, $warning] = $this->thresholdStatus($percent, 'Disk');
+        [$status, $warning] = match (true) {
+            $info['free'] < static::DISK_DOWN_FREE_BYTES => [
+                'down',
+                'Less than ' . self::megabytes(static::DISK_DOWN_FREE_BYTES) . ' free',
+            ],
+            $percent >= static::DISK_DEGRADED_PERCENT => [
+                'degraded',
+                'Disk usage above ' . static::DISK_DEGRADED_PERCENT . '%',
+            ],
+            default => ['up', null],
+        };
 
         return ['status' => $status, 'details' => array_filter([
+            'path'          => $path,
             'free'          => $info['free'],
             'total'         => $info['total'],
             'usage_percent' => $percent,
             'warning'       => $warning,
-        ])];
+        ], static fn($value): bool => $value !== null)];
     }
 
     private function memoryHealth(): array
@@ -376,26 +437,62 @@ class HealthIndicator implements HealthIndicatorInterface
         $info    = Health::memory();
         $limit   = $info['limit'];
         $percent = $limit > 0 ? round(($info['usage'] / $limit) * 100, 2) : 0;
-        [$status, $warning] = $this->thresholdStatus($percent, 'Memory');
+        $high    = $percent >= static::MEMORY_DEGRADED_PERCENT;
 
-        return ['status' => $status, 'details' => array_filter([
+        return ['status' => $high ? 'degraded' : 'up', 'details' => array_filter([
             'usage'         => $info['usage'],
             'peak'          => $info['peak'],
             'limit'         => $limit,
             'usage_percent' => $percent,
-            'warning'       => $warning,
-        ])];
+            'warning'       => $high ? 'Memory usage above ' . static::MEMORY_DEGRADED_PERCENT . '%' : null,
+        ], static fn($value): bool => $value !== null)];
     }
 
-    private function thresholdStatus(float $percent, string $label): array
+    /**
+     * A component's check as it was run within the last {@see CHECK_CACHE_SECONDS}, or
+     * run now.
+     *
+     * @param \Closure(): array $check
+     */
+    private static function cached(string $component, \Closure $check): array
     {
-        if ($percent >= self::DOWN_THRESHOLD_PERCENT) {
-            return ['down', "{$label} usage above " . self::DOWN_THRESHOLD_PERCENT . '%'];
+        $now = microtime(true);
+        $hit = self::$checked[$component] ?? null;
+        if ($hit !== null && $now - $hit['at'] < static::CHECK_CACHE_SECONDS) {
+            return $hit['result'];
         }
-        if ($percent >= self::DEGRADED_THRESHOLD_PERCENT) {
-            return ['degraded', "{$label} usage above " . self::DEGRADED_THRESHOLD_PERCENT . '%'];
+        $result = $check();
+        self::$checked[$component] = ['at' => $now, 'result' => $result];
+        return $result;
+    }
+
+    /**
+     * What the report says about a failed connection. The full message goes to the log:
+     * it may name the host, the user or the database, and the endpoint is open unless
+     * guarded. With `DEBUG=true` the report carries it too, as error responses do.
+     */
+    private static function connectionError(string $config, ?string $message): ?string
+    {
+        if ($message === null || $message === '') {
+            return null;
         }
-        return ['up', null];
+        LoggerFactory::getLogger(static::class)->warning("Health check of {$config} failed: {$message}");
+        return env('DEBUG', false) ? $message : 'connection failed';
+    }
+
+    /** The driver a configuration names, or null when it is broken before it could say. */
+    private static function driverOf(?object $config): ?string
+    {
+        try {
+            return $config !== null && method_exists($config, 'getDriver') ? (string) $config->getDriver() : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private static function megabytes(int $bytes): string
+    {
+        return round($bytes / 1048576) . ' MB';
     }
 
     // ── Custom health checks (discovered HealthContributor implementations) ────
@@ -404,6 +501,15 @@ class HealthIndicator implements HealthIndicatorInterface
      * Resolves every registered {@see HealthContributor} from the container and runs
      * it live. Keyed by {@see HealthContributor::name()}.
      *
+     * A check that throws is that component `down` — not the whole report. An escaping
+     * exception used to turn `/actuator/health` into a 500: a probe saw an error page
+     * instead of which component failed, and every other component's state was lost.
+     *
+     * The exception itself goes to the log. The report says only `check failed`: the
+     * endpoint is open unless guarded, and an exception's message may carry a host, a
+     * user or a path. With `DEBUG=true` the message and the class are in the details,
+     * as error responses carry their trace only then.
+     *
      * @return array<string, array{status: string, details: array<string, mixed>}>
      */
     private function contributors(): array
@@ -411,9 +517,26 @@ class HealthIndicator implements HealthIndicatorInterface
         $container = Container::getInstance();
         $out       = [];
         foreach (Health::getContributors() as $class) {
-            /** @var HealthContributor $contributor */
-            $contributor = $container->make($class);
-            $out[$contributor->name()] = $contributor->check()->toArray();
+            // The class's short name stands in when the check cannot even say its own.
+            $name = substr((string) strrchr('\\' . $class, '\\'), 1);
+            try {
+                /** @var HealthContributor $contributor */
+                $contributor = $container->make($class);
+                $name = $contributor->name();
+                $out[$name] = $contributor->check()->toArray();
+            } catch (\Throwable $e) {
+                LoggerFactory::getLogger(static::class)->warning(
+                    "Health check {$name} failed: {$e->getMessage()}",
+                    ['contributor' => $class, 'exception' => $e::class],
+                );
+                $status = HealthStatus::down();
+                if (env('DEBUG', false)) {
+                    $status->withDetail('error', $e->getMessage())->withDetail('exception', $e::class);
+                } else {
+                    $status->withDetail('error', 'check failed');
+                }
+                $out[$name] = $status->toArray();
+            }
         }
 
         return $out;

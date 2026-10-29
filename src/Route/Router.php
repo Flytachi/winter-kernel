@@ -11,6 +11,7 @@ use Flytachi\Winter\DI\ReflectionCache;
 use Flytachi\Winter\Base\Runtime;
 use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\Kernel\Core\ClassScanner;
+use Flytachi\Winter\Kernel\App\ApplicationConfigException;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
 use Flytachi\Winter\Kernel\Http\Cookie\Cookie;
@@ -200,7 +201,12 @@ final class Router
         if ($health = Health::getConfig()) {
             Health::setRootDir($rootDir);
             Health::setMappings($router->getRoutesSummary());
-            $router->registerHealth($health['indicator'], $health['middleware']);
+            $router->registerHealth(
+                $health['indicator'],
+                $health['middleware'],
+                $health['expose'] ?? ['health'],
+                $health['guardHealth'] ?? false,
+            );
         }
 
         ExceptionWrapper::setHandlers($exceptionCollector->getHandlers());
@@ -219,23 +225,52 @@ final class Router
 
     // ── Health / Actuator ─────────────────────────────────────────────────────
 
-    private function registerHealth(string $indicatorClass, ?string $middlewareClass): void
-    {
+    /**
+     * The `/actuator` routes: `health` on routes of its own, so the guard can leave it open
+     * to probes, and every other exposed endpoint behind the guard.
+     *
+     * @param list<string> $expose The endpoints that answer; `['*']` for all.
+     * @throws ApplicationConfigException An exposed name the indicator has no endpoint for.
+     */
+    private function registerHealth(
+        string $indicatorClass,
+        ?string $middlewareClass,
+        array $expose = ['health'],
+        bool $guardHealth = false,
+    ): void {
         $middlewares = $middlewareClass !== null
             ? [['class' => $middlewareClass, 'args' => []]]
             : [];
+
+        // A name with a typo would answer 404 for good, and nobody would know why.
+        $exposeAll = in_array('*', $expose, true);
+        $exposed = [];
+        if (!$exposeAll) {
+            $reflection = new \ReflectionClass($indicatorClass);
+            foreach ($expose as $name) {
+                $method = $reflection->hasMethod($name) ? $reflection->getMethod($name) : null;
+                if ($method === null || !$method->isPublic() || $method->isStatic() || str_starts_with($name, '__')) {
+                    throw new ApplicationConfigException(sprintf(
+                        "#[EnableActuator(expose:)] names '%s', which %s has no endpoint for.",
+                        $name,
+                        $indicatorClass,
+                    ));
+                }
+                $exposed[] = $method->getName();
+            }
+        }
 
         $handler = static function (
             HttpRequest $req,
             HttpResponse $res,
             array $params
-        ) use ($indicatorClass): ResponseEntity {
-            $method = $params['method'] ?? 'health';
-
+        ) use ($indicatorClass, $exposeAll, $exposed): ResponseEntity {
             /** @var HealthIndicatorInterface $indicator */
             $indicator = new $indicatorClass();
 
-            if (!method_exists($indicator, $method)) {
+            // Not exposed answers as not there: 404 does not say the endpoint exists.
+            $method = self::endpoint($indicator, (string) ($params['method'] ?? 'health'));
+            if ($method === null || (!$exposeAll && !in_array($method, $exposed, true))) {
                 throw new ResponseException('Actuator endpoint not found', HttpCode::NOT_FOUND);
             }
 
@@ -244,8 +279,34 @@ final class Router
             return ResponseEntity::status(self::healthCode($method, $body))->body($body);
         };
 
-        $this->add('GET', '/actuator', $handler, $middlewares);
+        $healthMiddlewares = $guardHealth ? $middlewares : [];
+        $this->add('GET', '/actuator', $handler, $healthMiddlewares);
+        $this->add('GET', '/actuator/health', $handler, $healthMiddlewares);
         $this->add('GET', '/actuator/{method}', $handler, $middlewares);
+    }
+
+    /**
+     * The indicator method a path names, under its declared name; null when it names none.
+     *
+     * Only a public instance method is an endpoint. `method_exists()` alone also finds
+     * protected and private helpers — `/actuator/dbHealth` answered 500 with "Call to
+     * protected method …" and an error in the log — and static or magic methods are not
+     * reports either.
+     *
+     * The declared name matters because PHP finds a method in any letter case:
+     * `/actuator/HEALTH` ran health(), and the verdict check below, which compares names,
+     * answered 200 for an application that was down.
+     */
+    private static function endpoint(object $indicator, string $name): ?string
+    {
+        if ($name === '' || !method_exists($indicator, $name)) {
+            return null;
+        }
+        $method = new \ReflectionMethod($indicator, $name);
+        if (!$method->isPublic() || $method->isStatic() || str_starts_with($method->getName(), '__')) {
+            return null;
+        }
+        return $method->getName();
     }
 
     /**

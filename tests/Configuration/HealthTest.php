@@ -43,7 +43,7 @@ final class HealthTest extends TestCase
         Health::configure();
 
         self::assertSame(
-            ['indicator' => HealthIndicator::class, 'middleware' => null],
+            ['indicator' => HealthIndicator::class, 'middleware' => null, 'expose' => ['health'], 'guardHealth' => false],
             Health::getConfig()
         );
     }

@@ -138,8 +138,18 @@ final class Application extends Cmd
             'caching'  => EnableCaching::class,
             'actuator' => EnableActuator::class,
         ] as $name => $attribute) {
-            $on = $reflection->getAttributes($attribute) !== [];
-            self::printKeyValue(ucfirst($name), $on ? 'enabled' : 'off', 14, self::CL, $on ? 32 : 90);
+            $found = $reflection->getAttributes($attribute);
+            $on = $found !== [];
+            $value = $on ? 'enabled' : 'off';
+            if ($on && $attribute === EnableActuator::class) {
+                // What answers is what an operator needs to know: the rest is 404.
+                $actuator = $found[0]->newInstance();
+                $value .= ' · ' . (in_array('*', $actuator->expose, true) ? 'all endpoints' : implode(', ', $actuator->expose))
+                    . ($actuator->middleware !== null
+                        ? ' · guarded' . ($actuator->guardHealth ? '' : ' (health open)')
+                        : '');
+            }
+            self::printKeyValue(ucfirst($name), $value, 14, self::CL, $on ? 32 : 90);
         }
         self::printKeyValue("DEBUG", $this->env('DEBUG'), 14, self::CL, 36);
         self::printKeyValue("LOG_LEVEL", $this->env('LOG_LEVEL'), 14, self::CL, 36);

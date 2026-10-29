@@ -74,6 +74,73 @@ final class ActuatorTest extends TestCase
         self::assertSame('down', $report['status']);
     }
 
+    /**
+     * A check that throws is that component down — not a 500 for the whole report, which
+     * hid which component failed and every other component's state with it.
+     */
+    public function test_a_throwing_contributor_is_down_and_the_rest_still_report(): void
+    {
+        Health::setContributors([ThrowingContributor::class, UpContributor::class]);
+
+        $report = $this->healthWithDebug(false);
+
+        self::assertSame('down', $report['status']);
+        self::assertSame('up', $report['components']['up-check']['status']);
+        self::assertArrayHasKey('disk', $report['components']);
+    }
+
+    /**
+     * The endpoint is open unless guarded, and an exception's message may carry a host, a
+     * user or a path: outside DEBUG the report says only that the check failed.
+     */
+    public function test_a_failed_check_hides_the_exception_outside_debug(): void
+    {
+        Health::setContributors([ThrowingContributor::class]);
+
+        self::assertSame(
+            ['status' => 'down', 'details' => ['error' => 'check failed']],
+            $this->healthWithDebug(false)['components']['broker'],
+        );
+    }
+
+    public function test_a_failed_check_shows_the_exception_in_debug(): void
+    {
+        Health::setContributors([ThrowingContributor::class]);
+
+        self::assertSame(
+            ['status' => 'down', 'details' => ['error' => 'broker unreachable', 'exception' => \RuntimeException::class]],
+            $this->healthWithDebug(true)['components']['broker'],
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private function healthWithDebug(bool $debug): array
+    {
+        $had = array_key_exists('DEBUG', $_ENV);
+        $previous = $_ENV['DEBUG'] ?? null;
+        $_ENV['DEBUG'] = $debug ? 'true' : 'false';
+        try {
+            return (new HealthIndicator())->health();
+        } finally {
+            if ($had) {
+                $_ENV['DEBUG'] = $previous;
+            } else {
+                unset($_ENV['DEBUG']);
+            }
+        }
+    }
+
+    /** One that cannot even be built is named after its class. */
+    public function test_a_contributor_that_cannot_be_built_is_down_under_its_class_name(): void
+    {
+        Health::setContributors([UnbuildableContributor::class]);
+
+        $report = (new HealthIndicator())->health();
+
+        self::assertSame('down', $report['components']['UnbuildableContributor']['status']);
+        self::assertSame('down', $report['status']);
+    }
+
     public function test_contributor_may_override_a_builtin_component(): void
     {
         Health::setContributors([DbOverrideContributor::class]);
@@ -106,7 +173,7 @@ final class ActuatorTest extends TestCase
             ->invoke(null, [new ReflectionClass(UpContributor::class)]);
 
         self::assertSame(
-            ['indicator' => HealthIndicator::class, 'middleware' => 'Acme\\Guard'],
+            ['indicator' => HealthIndicator::class, 'middleware' => 'Acme\\Guard', 'expose' => ['health'], 'guardHealth' => false],
             Health::getConfig(),
         );
         self::assertSame([UpContributor::class], Health::getContributors());
@@ -139,6 +206,41 @@ final class DownContributor implements HealthContributor
     {
         return HealthStatus::down();
     }
+}
+
+final class ThrowingContributor implements HealthContributor
+{
+    public function name(): string
+    {
+        return 'broker';
+    }
+
+    public function check(): HealthStatus
+    {
+        throw new \RuntimeException('broker unreachable');
+    }
+}
+
+final class UnbuildableContributor implements HealthContributor
+{
+    public function __construct(private readonly NotABinding $missing)
+    {
+    }
+
+    public function name(): string
+    {
+        return 'unbuildable';
+    }
+
+    public function check(): HealthStatus
+    {
+        return HealthStatus::up();
+    }
+}
+
+/** An interface nothing implements: the container cannot build what needs it. */
+interface NotABinding
+{
 }
 
 final class DbOverrideContributor implements HealthContributor
