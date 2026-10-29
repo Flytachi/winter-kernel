@@ -4,7 +4,7 @@
 /*
     PHP version guard
     -----------------
-    The framework requires PHP 8.3+ (named arguments, readonly properties, etc.).
+    The framework requires PHP 8.4+.
     If the requirement is not met the script exits with a human-readable message
     instead of a cryptic parse error.
 */

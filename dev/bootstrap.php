@@ -3,8 +3,13 @@
 declare(strict_types=1);
 
 use Flytachi\Winter\Kernel\App\Attribute\EnableActuator;
+use Flytachi\Winter\Kernel\App\Attribute\EnableAsync;
+use Flytachi\Winter\Kernel\App\Attribute\EnableCaching;
+use Flytachi\Winter\Kernel\App\Attribute\EnableDaemon;
+use Flytachi\Winter\Kernel\App\Attribute\EnableHttp;
+use Flytachi\Winter\Kernel\App\Attribute\EnableProcess;
 use Flytachi\Winter\Kernel\App\Attribute\EnableScheduler;
-use Flytachi\Winter\Kernel\App\Attribute\EnableWeb;
+use Flytachi\Winter\Kernel\App\Components;
 use Flytachi\Winter\Kernel\WinterApplication;
 
 require __DIR__ . '/vendor/autoload.php';
@@ -12,31 +17,32 @@ require __DIR__ . '/vendor/autoload.php';
 /**
  * The dev playground application.
  *
- * This file is the whole bootstrap: load the autoloader, declare what the application
- * contains. There are no configuration hooks to override any more — everything else is
- * an ordinary class the scanner finds:
+ * The kernel is installed from `../` as a symlink, so every change in the repository is
+ * live here without `composer update`. Uncomment what you want to try; see README.md.
  *
- *   #[Configuration] / #[Bean]  → DI factories
- *   WebConfigurer               → host, port, Swoole tuning, CORS, static files
- *   LoggingConfigurer           → extra log channels
- *   #[Import('pkg', '/prefix')] → plugin packages
- *
- * Entry points:
- *   php call                      → console (bare = help)
- *   php call run [dev]            → bring the application up (Swoole; `dev` = watcher)
- *   php call daemon  <dot.Class> start [-d] | stop | status
- *   php call process <dot.Class> start [-d] | stop | status
+ *   php call                     console (bare = help)
+ *   php call run [dev]           bring the application up as PID 1 (`dev` = watcher)
+ *   php call app info|status|stop
+ *   php call process|daemon|schedule …
  */
-#[EnableWeb]
-#[EnableActuator]
-// #[EnableAsync]                                    // proxy #[Async] methods
-// #[EnableScheduler]                                // run Main\Schedule\DemoTasks beside the server
-// #[EnableProcess(\Main\Process\SendProc::class)]    // a worker running beside the server
-// #[EnableDaemon(\Main\Process\StableDaemon::class)] // a supervised fleet beside the server
+#[EnableHttp(port: 8000)]
+#[EnableActuator(expose: ['*'])]
+// #[EnableAsync]
+// #[EnableCaching]
+// #[EnableScheduler]
+// #[EnableProcess(\Main\Process\SendProc::class)]
+// #[EnableDaemon(\Main\Process\StableDaemon::class)]
 final class Application extends WinterApplication
 {
     public static function main(array $argv): never
     {
         parent::run($argv);
+    }
+
+    protected static function components(Components $components): void
+    {
+        // $components->process(\Main\Process\LongDemo::class, critical: false);
+        // $components->daemon(\Main\Process\FleetDaemon::class);
+        // $components->command(['sleep', '30'], name: 'sleeper', critical: false);
     }
 }
