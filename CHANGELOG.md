@@ -51,6 +51,17 @@ the container available, and takes the same parameters as the attributes. It acc
 Attributes and the hook add up, and the same class or program name declared twice stops the
 boot.
 
+**The application says how it ends.** Next to `Application up: …` at the start, the log now
+gets a line when a stop begins and one when it is done:
+```
+Application stopping (SIGTERM): 4 component(s)
+Application stopped in 1.8s
+```
+A stop caused by a critical component reads `(critical failure)` in both lines, and
+`call run dev` reloading after a code change logs `Application reloading.` instead. A
+headless application whose components have all finished logs
+`Application finished: every component has done its work.`
+
 **`call application` (alias `app`).** The subcommands:
 - `info` shows the manifest, where each component came from, the listen addresses and the
   server profile;
@@ -190,6 +201,8 @@ boot.
   project now has its own cache in `.winter/build/`.
 - A fresh project could run without a working process lock, and nothing reported it. The lock
   now creates its own folder.
+- `call run --help` (and `-h`, `application start --help`) started the application instead of
+  showing the help.
 - `ServerSettings` suggested `ssl_cert_file` for HTTPS. The server was built without TLS, so
   the handshake failed and it kept serving plain HTTP.
 

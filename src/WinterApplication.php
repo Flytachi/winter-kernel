@@ -270,6 +270,11 @@ abstract class WinterApplication
      */
     private static function startsTheApplication(ApplicationArguments $args): bool
     {
+        // `run --help` is a question, not a start: the console answers it with the
+        // command's own help.
+        if ($args->flag('h') || $args->has('help')) {
+            return false;
+        }
         return $args->command() === 'run'
             || (in_array($args->command(), ['application', 'app'], true) && $args->sub() === 'start');
     }

@@ -159,5 +159,3 @@ reading and its queue (1024 messages) is full — the message is dropped.
 Decided against: several processes behind one declaration (a Daemon with
 `ports: [...]`) and the connection count in `call process … status`. A port from `.env`
 is `components()` with `env()`.
-
-Design and the experiments behind it: `docs/2026-10-15-websocket-design.md`.

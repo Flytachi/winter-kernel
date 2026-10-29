@@ -59,6 +59,8 @@ final class SupervisorIntegrationTest extends IntegrationCase
         self::assertStringContainsString('BrokenStartProcess failed: did not start: exit code 1', $this->announced());
         $reason = 'BrokenStartProcess failed — RuntimeException: cannot be built';
         self::assertSame(1, substr_count($this->reports(), $reason), 'tried once');
+        self::assertStringContainsString('Application stopping (critical failure)', $this->logged());
+        self::assertStringContainsString('Application stopped (critical failure) in', $this->logged());
     }
 
     public function test_not_ready_within_its_start_timeout_is_a_failure_to_start(): void
@@ -110,6 +112,8 @@ final class SupervisorIntegrationTest extends IntegrationCase
 
         self::assertSame(0, $this->exitCode($supervisor), 'nothing is left to run: the application ends');
         self::assertCount(1, $this->runTimes('finishing'));
+        self::assertStringContainsString('Application finished: every component has done its work.', $this->logged());
+        self::assertStringNotContainsString('Application stopping', $this->logged());
     }
 
     public function test_a_component_stopped_on_request_is_not_restarted(): void
@@ -146,6 +150,8 @@ final class SupervisorIntegrationTest extends IntegrationCase
         self::assertSame(0, $this->exitCode($supervisor));
         self::assertNull(SignalProcess::status());
         self::assertNull(LoopDaemon::status());
+        self::assertStringContainsString('Application stopping (SIGTERM): 2 component(s)', $this->logged());
+        self::assertMatchesRegularExpression('/Application stopped in \d/', $this->logged());
     }
 
     public function test_a_component_runs_its_coroutines_with_the_runtime_hooks_on(): void

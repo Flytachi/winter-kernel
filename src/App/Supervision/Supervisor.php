@@ -66,6 +66,10 @@ final class Supervisor
     private float $publishedAt = 0.0;
     /** A component asked for the whole application to restart in place (`call run dev`). */
     private bool $reloadRequested = false;
+    /** Why the application is stopping — a signal's name, a critical failure, a reload. */
+    private string $stopReason = '';
+    private float $stopAt = 0.0;
+    private bool $stopAnnounced = false;
 
     /**
      * @param list<Component> $components
@@ -113,8 +117,8 @@ final class Supervisor
         // workers a half-built async runtime, and their coroutines stall.
 
         pcntl_async_signals(true);
-        pcntl_signal(SIGTERM, fn() => $this->stop(SIGTERM));
-        pcntl_signal(SIGINT, fn() => $this->stop(SIGINT));
+        pcntl_signal(SIGTERM, fn() => $this->stop(SIGTERM, 'SIGTERM'));
+        pcntl_signal(SIGINT, fn() => $this->stop(SIGINT, 'SIGINT'));
         // What a Swoole server answers to — a graceful reload of its workers — reaches the
         // HTTP server, as it did when the server was this process.
         foreach ([SIGHUP, SIGUSR1, SIGUSR2] as $signal) {
@@ -123,6 +127,11 @@ final class Supervisor
 
         while (true) {
             $now = microtime(true);
+            // Said here, not in the signal handler: a handler runs between any two
+            // opcodes, the middle of another log write among them.
+            if ($this->stopping && !$this->stopAnnounced) {
+                $this->announceStop();
+            }
             if (!$this->stopping) {
                 $this->takeCommands($now);
                 $this->watchHeld($now);
@@ -135,9 +144,46 @@ final class Supervisor
 
             if ($this->alive() === 0 && ($this->stopping || ($untilDone && $this->done()))) {
                 $this->forgetAll();
+                $this->announceEnd();
                 return $this->exitCode;
             }
         }
+    }
+
+    /**
+     * The first line of a stop: why, and how many components it waits for. A container's
+     * log otherwise ended on whatever a component said last, and a stop could not be told
+     * from a crash.
+     */
+    private function announceStop(): void
+    {
+        $this->stopAnnounced = true;
+        if ($this->reloadRequested) {
+            $this->logger->info('Application reloading.');
+            return;
+        }
+        $this->logger->info(sprintf('Application stopping (%s): %d component(s)', $this->stopReason, $this->alive()));
+    }
+
+    /** The last line: how the stop went, or that the work is done. */
+    private function announceEnd(): void
+    {
+        if (!$this->stopping) {
+            $this->logger->info('Application finished: every component has done its work.');
+            return;
+        }
+        if (!$this->stopAnnounced) {
+            $this->announceStop();
+        }
+        if ($this->reloadRequested) {
+            return;
+        }
+        $took = microtime(true) - $this->stopAt;
+        $this->logger->info(sprintf(
+            'Application stopped%s in %s',
+            $this->exitCode !== 0 ? ' (critical failure)' : '',
+            $took < 1.0 ? sprintf('%d ms', (int) round($took * 1000)) : sprintf('%.1fs', $took),
+        ));
     }
 
     /** Whether a component asked for the application to restart in place. */
@@ -156,14 +202,20 @@ final class Supervisor
         }
     }
 
-    /** Stops every component: the application is shutting down. */
-    private function stop(int $signal): void
+    /**
+     * Stops every component: the application is shutting down.
+     *
+     * @param string $reason Why, for the log: a signal's name, `critical failure`, `reload`.
+     */
+    private function stop(int $signal, string $reason): void
     {
         if ($this->stopping) {
             return;
         }
         $this->stopping = true;
+        $this->stopReason = $reason;
         $now = microtime(true);
+        $this->stopAt = $now;
         foreach ($this->units as $unit) {
             if ($unit->pid > 0) {
                 @posix_kill($unit->pid, $signal);
@@ -377,7 +429,7 @@ final class Supervisor
             if (str_contains($data, ComponentChannel::RELOAD) && !$this->stopping) {
                 $this->logger->info("{$unit->name} asked for a restart of the application.");
                 $this->reloadRequested = true;
-                $this->stop(SIGTERM);
+                $this->stop(SIGTERM, 'reload');
             }
         }
     }
@@ -448,7 +500,7 @@ final class Supervisor
             $unit->held = $unit->held || str_contains($tail, ComponentChannel::HELD);
             if (str_contains($tail, ComponentChannel::RELOAD) && !$this->stopping) {
                 $this->reloadRequested = true;
-                $this->stop(SIGTERM);
+                $this->stop(SIGTERM, 'reload');
             }
             @fclose($unit->socket);
         }
@@ -559,7 +611,7 @@ final class Supervisor
             ($this->announce)("{$unit->name} failed: {$reason}. It is critical: the application stops.");
             $unit->state = UnitState::Failed;
             $this->exitCode = 1;
-            $this->stop(SIGTERM);
+            $this->stop(SIGTERM, 'critical failure');
             return;
         }
         $unit->state = UnitState::Failed;
