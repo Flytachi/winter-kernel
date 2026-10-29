@@ -70,6 +70,7 @@ use Flytachi\Winter\Kernel\Route\DevWatcher;
 use Flytachi\Winter\Kernel\Route\RequestWatchdog;
 use Flytachi\Winter\Kernel\Route\Router;
 use Flytachi\Winter\Kernel\WebSocket\WebSocket;
+use Flytachi\Winter\Kernel\WebSocket\WebSocketConfigException;
 use Flytachi\Winter\Logger\Context\CoroutineContext;
 use Flytachi\Winter\Logger\Context\ProcessContext;
 use Flytachi\Winter\Logger\LoggerFactory;
@@ -844,6 +845,7 @@ abstract class WinterApplication
             $companions[] = $component;
         }
         self::assertFreePorts($companions, $http?->port);
+        self::assertWebSocketTls($companions);
 
         // Before anything binds or forks: a second run of the same application is refused
         // here, and every process forked from now on knows the run it belongs to.
@@ -1410,7 +1412,11 @@ abstract class WinterApplication
                 ComponentKind::WebSocket => ['websocket', sprintf(
                     '%s %s',
                     $companion->name(),
-                    BindAddress::url('ws', $companion->host, $companion->port),
+                    BindAddress::url(
+                        $companion->class::speaksTls() ? 'wss' : 'ws',
+                        $companion->host,
+                        $companion->port,
+                    ),
                 )],
                 ComponentKind::Command => ['command', $companion->name()],
                 default => [self::componentLabel($companion->kind), $companion->name()],
@@ -1497,6 +1503,27 @@ abstract class WinterApplication
                 ));
             }
             $taken[$companion->port] = $name;
+        }
+    }
+
+    /**
+     * A WebSocket with `$tls` on checks its certificate at boot, as the HTTP server does:
+     * a missing or mismatched file stops the application here, naming the class, instead
+     * of the socket failing to start once everything else is up.
+     *
+     * @param list<Component> $companions
+     */
+    private static function assertWebSocketTls(array $companions): void
+    {
+        foreach ($companions as $companion) {
+            if ($companion->kind !== ComponentKind::WebSocket) {
+                continue;
+            }
+            try {
+                $companion->class::tlsPair();
+            } catch (WebSocketConfigException $e) {
+                throw new ApplicationConfigException($e->getMessage(), 0, $e);
+            }
         }
     }
 

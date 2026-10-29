@@ -894,6 +894,23 @@ final class ServerSettings
                 'TLS needs both files: the certificate (SERVER_TLS_CERT) and its key (SERVER_TLS_KEY).'
             );
         }
+        self::assertTlsFiles($cert, $key);
+    }
+
+    /**
+     * Refuses a certificate pair a TLS server could not start with: a file that is not
+     * there or not readable, one that is not PEM, a key of another certificate, or a
+     * Swoole built without OpenSSL. Shared by the HTTP server and
+     * {@see \Flytachi\Winter\Kernel\WebSocket\WebSocket}.
+     *
+     * @param string $cert The certificate file, already resolved.
+     * @param string $key Its key file, already resolved.
+     *
+     * @internal
+     * @throws ApplicationConfigException
+     */
+    public static function assertTlsFiles(string $cert, string $key): void
+    {
         foreach (['certificate' => $cert, 'key' => $key] as $what => $file) {
             if (!is_file($file) || !is_readable($file)) {
                 throw new ApplicationConfigException("The TLS {$what} cannot be read: {$file}");
@@ -939,8 +956,12 @@ final class ServerSettings
         return (bool) ($this->options['open_http2_protocol'] ?? false);
     }
 
-    /** A path as written in config: absolute, or relative to the project root. */
-    private static function projectPath(string $path): string
+    /**
+     * A path as written in config: absolute, or relative to the project root.
+     *
+     * @internal
+     */
+    public static function projectPath(string $path): string
     {
         return str_starts_with($path, '/')
             ? $path

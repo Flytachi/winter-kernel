@@ -10,8 +10,8 @@ All notable changes to this project are documented here. The format follows
 
 The application becomes a supervisor: `call run` is PID 1, and it starts, watches and restarts
 every component it declares. `storage/` is gone. The HTTP server learns its address from the
-code, and gets IPv6, TLS, HTTP/2, a `Server` header and compression settings. The actuator shows
-only `health` by default.
+code, and gets IPv6, TLS, HTTP/2, a `Server` header and compression settings. A WebSocket can
+serve `wss://`. The actuator shows only `health` by default.
 
 Several changes break existing projects. **Upgrading from 4.3** at the end lists what to do.
 
@@ -95,6 +95,14 @@ these cases:
 - Swoole was built without OpenSSL.
 
 Under TLS, `getScheme()` returns `https`, and `X-Forwarded-Proto` still wins.
+
+**`wss://` for WebSocket.** `protected bool $tls = true` on a `WebSocket` class makes it
+serve TLS on its port, and only TLS. The certificate is the HTTP server's
+(`SERVER_TLS_CERT` / `SERVER_TLS_KEY`) unless `protected static function tlsFiles()` names
+another. The files get the same checks as the HTTP server's: a declared socket is checked
+at boot, and the error names the class. A socket started on its own is checked when it
+starts. `getScheme()` in `onHandshake()` returns `https`, and the log, the banner and
+`app info` show `wss://`. HTTPS on the HTTP server never switches it on.
 
 **The `Server` header and compression.** Responses carry `Server: Winter` instead of
 `swoole-http-server`. Change it with `SERVER_HEADER` or `serverHeader()`; an empty value or

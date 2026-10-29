@@ -76,6 +76,7 @@ location /ws/chat {
 | `int $maxConnections` | `0` | open connections allowed; one more gets 503 before the upgrade. `0` = no limit |
 | `int $maxFrameSize` | `1048576` | largest message in bytes; bigger → close 1009 |
 | `float $grace` | from Process | seconds the stop waits for running hooks; `0` = for good |
+| `bool $tls` | `false` | speak `wss://` itself. Certificate: `static tlsFiles()`, by default `SERVER_TLS_CERT` / `SERVER_TLS_KEY` (the HTTP server's); checked at boot for a declared socket, at start otherwise. Read from the class declaration, never switched on by HTTPS |
 
 ## Hooks
 
@@ -153,10 +154,10 @@ reading and its queue (1024 messages) is full — the message is dropped.
   stalling every connection. It is ready — for the supervisor's `startTimeout` — once the
   port is bound and `onStart()` is done (see `docs/process/04-supervision.md`).
 
-## Not here (yet)
+## Not here
 
-- several processes behind one declaration (Daemon, `ports: [...]`);
-- port from `.env`;
-- connection count in `call process … status`.
+Decided against: several processes behind one declaration (a Daemon with
+`ports: [...]`) and the connection count in `call process … status`. A port from `.env`
+is `components()` with `env()`.
 
 Design and the experiments behind it: `docs/2026-10-15-websocket-design.md`.

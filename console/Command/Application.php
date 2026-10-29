@@ -400,7 +400,12 @@ final class Application extends Cmd
         return match ($component->kind) {
             // Where its configurer leaves it, as the "HTTP server" section below says.
             ComponentKind::Http => sprintf('%s :%d', $component->name(), $settings?->getPort() ?? $component->port),
-            ComponentKind::WebSocket => sprintf('%s :%d', $component->name(), $component->port),
+            ComponentKind::WebSocket => sprintf(
+                '%s :%d%s',
+                $component->name(),
+                $component->port,
+                $component->class::speaksTls() ? ' wss' : '',
+            ),
             default => $component->name(),
         };
     }

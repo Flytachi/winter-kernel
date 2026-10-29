@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\WebSocket;
 
 use Flytachi\Winter\Base\Exception\ExceptionLogLevel;
+use Flytachi\Winter\Kernel\App\ApplicationConfigException;
 use Flytachi\Winter\Kernel\App\BindAddress;
 use Flytachi\Winter\Kernel\App\Config\ServerSettings;
 use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
@@ -101,6 +102,20 @@ abstract class WebSocket extends Process
      */
     protected ?string $serverHeader = null;
 
+    /**
+     * Serves `wss://`: the server speaks TLS on its port, and only TLS — a plain `ws://`
+     * client gets no answer. The certificate is the HTTP server's (`SERVER_TLS_CERT` /
+     * `SERVER_TLS_KEY`) unless {@see tlsFiles()} names another. Turning HTTPS on for the
+     * HTTP server never turns this on.
+     *
+     * Declare it on the class, not in a hook: the application reads it before the
+     * process starts, to check the files at boot and to show `wss://`. A proxy in front
+     * usually ends TLS instead; this is for a socket reached directly.
+     *
+     * @link https://winterframe.net/docs/websockets#tls TLS
+     */
+    protected bool $tls = false;
+
     /** Messages queued for one client before {@see Connection::send()} starts dropping them. */
     private const int SEND_QUEUE = 1024;
     /** Room for the frame header on top of the payload (at most 14 bytes). */
@@ -110,6 +125,8 @@ abstract class WebSocket extends Process
 
     private static ?int $bindPort = null;
     private static string $bindHost = '0.0.0.0';
+    /** @var array{string, string}|null The checked certificate and key, when {@see $tls} is on. */
+    private static ?array $bindTls = null;
 
     private ?Server $server = null;
     private ?WaitGroup $handlers = null;
@@ -333,8 +350,86 @@ abstract class WebSocket extends Process
         if (!extension_loaded('swoole')) {
             throw new WebSocketConfigException(static::class . ' needs ext-swoole (pecl install swoole).');
         }
+        self::$bindTls = static::tlsPair();
         self::$bindPort = $port;
         self::$bindHost = $host ?? '0.0.0.0';
+    }
+
+    // -------------------------------------------------------------------------
+    // TLS
+    // -------------------------------------------------------------------------
+
+    /**
+     * The certificate and key {@see $tls} serves with, each absolute or relative to the
+     * project root. By default the HTTP server's: `SERVER_TLS_CERT` and `SERVER_TLS_KEY`.
+     *
+     * ```
+     * protected static function tlsFiles(): array
+     * {
+     *     return ['cert' => env('CHAT_TLS_CERT'), 'key' => env('CHAT_TLS_KEY')];
+     * }
+     * ```
+     *
+     * Static, because it is read before an instance exists: at boot, when the
+     * application checks the files.
+     *
+     * @return array{cert: ?string, key: ?string}
+     *
+     * @link https://winterframe.net/docs/websockets#tls TLS
+     */
+    protected static function tlsFiles(): array
+    {
+        $cert = env('SERVER_TLS_CERT');
+        $key = env('SERVER_TLS_KEY');
+        return [
+            'cert' => is_string($cert) ? $cert : null,
+            'key' => is_string($key) ? $key : null,
+        ];
+    }
+
+    /**
+     * Whether this class serves `wss://` — {@see $tls} as the class declares it.
+     *
+     * @internal
+     */
+    final public static function speaksTls(): bool
+    {
+        return (bool) (new \ReflectionClass(static::class)->getDefaultProperties()['tls'] ?? false);
+    }
+
+    /**
+     * The certificate and key this class serves with, resolved and checked; null when
+     * {@see $tls} is off. Half a pair, an unreadable file, a file that is not PEM or a
+     * key of another certificate is refused here, before anything binds.
+     *
+     * @return array{string, string}|null
+     * @throws WebSocketConfigException
+     *
+     * @internal
+     */
+    final public static function tlsPair(): ?array
+    {
+        if (!static::speaksTls()) {
+            return null;
+        }
+        $files = static::tlsFiles();
+        $cert = trim((string) ($files['cert'] ?? ''));
+        $key = trim((string) ($files['key'] ?? ''));
+        if ($cert === '' || $key === '') {
+            throw new WebSocketConfigException(sprintf(
+                '%s has $tls on, but %s: set SERVER_TLS_CERT and SERVER_TLS_KEY, or override tlsFiles().',
+                static::class,
+                $cert === '' && $key === '' ? 'no certificate' : 'only half of the certificate pair',
+            ));
+        }
+        $cert = ServerSettings::projectPath($cert);
+        $key = ServerSettings::projectPath($key);
+        try {
+            ServerSettings::assertTlsFiles($cert, $key);
+        } catch (ApplicationConfigException $e) {
+            throw new WebSocketConfigException(static::class . ': ' . $e->getMessage(), 0, $e);
+        }
+        return [$cert, $key];
     }
 
     // -------------------------------------------------------------------------
@@ -357,7 +452,8 @@ abstract class WebSocket extends Process
      */
     final public function run(): void
     {
-        $server = new Server(self::$bindHost, (int) self::$bindPort);
+        $tls = self::$bindTls;
+        $server = new Server(self::$bindHost, (int) self::$bindPort, $tls !== null);
         $server->set([
             // Every frame comes to the reader, nothing is answered behind its back:
             // Swoole's automatic pong would write from the reader while the writer
@@ -366,7 +462,7 @@ abstract class WebSocket extends Process
             'open_websocket_ping_frame'  => true,
             'open_websocket_pong_frame'  => true,
             'package_max_length'         => $this->maxFrameSize + self::FRAME_HEADER,
-        ]);
+        ] + ($tls === null ? [] : ['ssl_cert_file' => $tls[0], 'ssl_key_file' => $tls[1]]));
         $serverHeader = trim($this->serverHeader ?? ServerSettings::serverHeaderFromEnv());
         $server->handle('/', function (Request $request, Response $response) use ($serverHeader): void {
             // An empty value makes Swoole send no header instead of its own name.
@@ -386,7 +482,7 @@ abstract class WebSocket extends Process
         if ($this->isRunning()) {
             $this->logger->info(sprintf(
                 'WebSocket listening on %s%s',
-                BindAddress::url('ws', self::$bindHost, (int) self::$bindPort),
+                BindAddress::url(self::$bindTls === null ? 'ws' : 'wss', self::$bindHost, (int) self::$bindPort),
                 $this->path ?? '',
             ));
             // Ready now: the port is bound and onStart() is done.
@@ -441,7 +537,7 @@ abstract class WebSocket extends Process
         $conn = new Connection(
             ++$this->lastId,
             self::remoteAddress($request),
-            new SwooleRequest($request),
+            new SwooleRequest($request, self::$bindTls !== null),
             $wire,
         );
 
