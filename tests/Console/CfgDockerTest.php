@@ -60,11 +60,13 @@ final class CfgDockerTest extends TestCase
         [$code, $output] = $this->call();
 
         self::assertSame(0, $code, $output);
-        foreach (['Dockerfile', 'docker-compose.yml', '.dockerignore', 'docker/entrypoint.sh'] as $file) {
+        foreach (['Dockerfile', 'docker-compose.yml', '.dockerignore'] as $file) {
             self::assertFileExists($this->project . '/' . $file);
             self::assertMatchesRegularExpression('#' . preg_quote($file, '#') . ' \.+ \[CREATED\]#', $output);
         }
-        self::assertTrue(is_executable($this->project . '/docker/entrypoint.sh'));
+        // The runtime — Swoole, extensions, user, entrypoint — comes with the image.
+        self::assertStringContainsString('FROM flytachi/winter:', (string) file_get_contents($this->project . '/Dockerfile'));
+        self::assertDirectoryDoesNotExist($this->project . '/docker');
     }
 
     public function test_a_second_run_keeps_what_was_edited(): void

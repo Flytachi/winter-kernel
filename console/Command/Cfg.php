@@ -199,8 +199,9 @@ final class Cfg extends Cmd
     }
 
     /**
-     * Copies the Docker template into the project: Dockerfile, docker-compose.yml,
-     * .dockerignore and docker/ (entrypoint.sh, php-*.ini, dependencies/*.sh).
+     * Copies the Docker template into the project: Dockerfile, docker-compose.yml and
+     * .dockerignore. The Dockerfile builds on flytachi/winter, which brings Swoole, the
+     * extensions, the user and the entrypoint — the project adds its vendor/ and code.
      *
      * A file that is already there is left alone — it is likely edited, and running the
      * command again must not wipe that out. `-f` overwrites. Every file says which it was.
@@ -247,7 +248,7 @@ final class Cfg extends Cmd
             self::printInfo("{$skipped} file(s) already there were kept. `call cfg docker -f` overwrites them.");
         }
         self::printInfo("Run:  docker compose up  (prod)  |  DEV=true docker compose up  (dev, hot-reload)");
-        self::printInfo("DB drivers / extensions: keep or remove docker/dependencies/*.sh");
+        self::printInfo("Built on flytachi/winter — an extension it lacks: see the commented lines in the Dockerfile");
     }
 
     private function completionArg(): void
@@ -373,11 +374,12 @@ final class Cfg extends Cmd
 
         // docker
         self::printLabel("docker — scaffold Docker files", $cl);
-        self::print("Swoole image. dev vs prod = DEV in docker-compose.yml:", $cl);
+        self::print("Dockerfile on flytachi/winter + docker-compose.yml + .dockerignore.", $cl);
+        self::print("dev vs prod = DEV in docker-compose.yml:", $cl);
         self::print("  docker compose up            prod (opcache on, no watcher)", $cl);
         self::print("  DEV=true docker compose up   dev (hot-reload, opcache off)", $cl);
-        self::print("DB drivers / extensions / cron → docker/dependencies/*.sh", $cl);
-        self::print("  (keep or remove; bcmath, pgsql, mysql, redis shipped)", $cl);
+        self::print("The image has pgsql, mysql, redis, bcmath; another extension:", $cl);
+        self::print("  the commented USER root / RUN … / USER winter lines in the Dockerfile", $cl);
         self::print("Files already there are kept; -f overwrites them.", $cl);
         self::printLabel("docker — scaffold Docker files", $cl);
 
