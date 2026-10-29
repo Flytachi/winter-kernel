@@ -198,18 +198,54 @@ final class Cfg extends Cmd
         }
     }
 
+    /**
+     * Copies the Docker template into the project: Dockerfile, docker-compose.yml,
+     * .dockerignore and docker/ (entrypoint.sh, php-*.ini, dependencies/*.sh).
+     *
+     * A file that is already there is left alone — it is likely edited, and running the
+     * command again must not wipe that out. `-f` overwrites. Every file says which it was.
+     */
     private function dockerArg(): void
     {
-        // Flat Swoole template: Dockerfile + docker-compose.yml + docker/
-        // (entrypoint.sh, php-opcache.ini, dependencies/*.sh). dev vs prod is the
-        // DEV var in compose; DB drivers / extensions are the dependencies/ scripts.
-        multiCopy($this->templatePath . '/Docker', Kernel::$pathRoot);
+        $force = in_array('f', $this->args['flags']);
+        $source = $this->templatePath . '/Docker';
+        $skipped = 0;
 
-        self::printBadge('docker/', 'CREATED', 34, 32);
-        self::printBadge('docker/dependencies/', 'CREATED', 34, 32);
-        self::printBadge('.dockerignore', 'CREATED', 34, 32);
-        self::printBadge('docker-compose.yml', 'CREATED', 34, 32);
-        self::printBadge('Dockerfile', 'CREATED', 34, 32);
+        $files = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($source, \FilesystemIterator::SKIP_DOTS),
+        );
+        $paths = [];
+        foreach ($files as $file) {
+            $paths[] = substr($file->getPathname(), strlen($source) + 1);
+        }
+        sort($paths);
+
+        foreach ($paths as $relative) {
+            $target = Kernel::$pathRoot . '/' . $relative;
+            $exists = is_file($target);
+            if ($exists && !$force) {
+                self::printBadge($relative, 'EXISTS', 34, 33);
+                $skipped++;
+                continue;
+            }
+            if (!is_dir(dirname($target))) {
+                mkdir(dirname($target), 0777, true);
+            }
+            $copied = @copy($source . '/' . $relative, $target);
+            if ($copied && str_ends_with($relative, '.sh')) {
+                @chmod($target, 0755);
+            }
+            self::printBadge(
+                $relative,
+                !$copied ? 'FAILED' : ($exists ? 'OVERWRITTEN' : 'CREATED'),
+                34,
+                !$copied ? 31 : 32,
+            );
+        }
+
+        if ($skipped > 0) {
+            self::printInfo("{$skipped} file(s) already there were kept. `call cfg docker -f` overwrites them.");
+        }
         self::printInfo("Run:  docker compose up  (prod)  |  DEV=true docker compose up  (dev, hot-reload)");
         self::printInfo("DB drivers / extensions: keep or remove docker/dependencies/*.sh");
     }
@@ -342,6 +378,7 @@ final class Cfg extends Cmd
         self::print("  DEV=true docker compose up   dev (hot-reload, opcache off)", $cl);
         self::print("DB drivers / extensions / cron → docker/dependencies/*.sh", $cl);
         self::print("  (keep or remove; bcmath, pgsql, mysql, redis shipped)", $cl);
+        self::print("Files already there are kept; -f overwrites them.", $cl);
         self::printLabel("docker — scaffold Docker files", $cl);
 
         // examples

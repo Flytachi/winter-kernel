@@ -1,26 +1,13 @@
-# The port lives here and nowhere else. Change this one number and both the published
-# port and the port the application binds follow — they are the same anchor below.
-#
-# The `${PORT:-…}` form keeps an escape hatch: set PORT in the environment (or in .env)
-# and it wins without this file being touched, which is usually what a production host
-# wants. PORT is this template's variable, not the framework's: the entrypoint hands it
-# to the application as --http.port.
-x-port: &port ${PORT:-8000}
-
 services:
   server:
     tty: true
     container_name: ${COMPOSE_PROJECT_NAME:-app}
-    network_mode: bridge
     build:
       context: .
       dockerfile: Dockerfile
     environment:
-      COMPOSE_BAKE: "true"
-      PORT: *port
       DEV: ${DEV:-false}
     ports:
-      - target: *port
-        published: *port
+      - "8000:8000"
     volumes:
       - ./:/var/www/html/

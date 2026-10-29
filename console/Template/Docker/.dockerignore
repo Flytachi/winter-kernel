@@ -19,9 +19,9 @@ vendor
 # Environment & secrets
 .env
 
-# Storage (logs, cache)
-storage/logs
-storage/cache
+# What the framework writes at runtime (process state, caches, build), and file logs
+.winter
+logs
 
 # Tests
 phpunit.xml

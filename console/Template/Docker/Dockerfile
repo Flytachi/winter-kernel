@@ -2,7 +2,7 @@
 # =============================================================================
 # Winter — Swoole image.
 # -----------------------------------------------------------------------------
-# One runtime (Swoole HTTP server). You should not need to edit this file:
+# One runtime: the Winter application on Swoole. You should not need to edit this file:
 #   - DB drivers / PHP extensions / cron → docker/dependencies/*.sh
 #     (delete the ones you don't need; they run in filename order)
 #   - dev vs prod                        → DEV in docker-compose.yml
@@ -68,18 +68,17 @@ COPY --from=builder /var/www/html/vendor ./vendor
 # Application code
 COPY . /var/www/html
 
-# chown covers the whole tree; storage additionally needs to be group-writable.
-# No separate mode for web assets: Swoole serves them from the worker itself, so
-# there is no second process that has to be able to read them.
-RUN chown -R winter:winter /var/www/html \
-    && chmod -R 775 /var/www/html/storage
+# The application writes .winter/ (and logs/, with LOG_OUTPUT=file) at runtime as
+# `winter`: owning the tree is what lets it create them. No separate mode for web
+# assets: Swoole serves them from the worker itself, so there is no second process
+# that has to be able to read them.
+RUN chown -R winter:winter /var/www/html
 
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # No EXPOSE on purpose. It publishes nothing — `ports:` in docker-compose.yml does that,
-# and the port itself is decided there too. Baking a number in here would only add one
-# that can disagree: `docker compose up` without `--build` reuses the existing image, so
-# the recorded port would be whatever the last build happened to use. A metadata line
-# that quietly lies is worse than no metadata line.
+# and the port itself is declared in the code (#[EnableHttp(port:)]). Baking a number in
+# here would only add one that can disagree with both. A metadata line that quietly lies
+# is worse than no metadata line.
 ENTRYPOINT ["/entrypoint.sh"]
