@@ -75,6 +75,6 @@ trait SingletonLock
      */
     private static function lockPath(): string
     {
-        return Kernel::$pathStorageRunnable . '/' . str_replace('\\', '.', static::class) . '.lock';
+        return Kernel::$pathRunnable . '/' . str_replace('\\', '.', static::class) . '.lock';
     }
 }

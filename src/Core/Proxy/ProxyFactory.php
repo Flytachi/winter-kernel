@@ -19,11 +19,8 @@ use Flytachi\Winter\Kernel\Kernel;
  * set of interceptors it was built with, so switching `#[EnableCaching]` on does
  * not leave an old async-only proxy in place.
  *
- * They live next to the DI cache, in volatile storage, because they are the same
- * kind of artefact: derived from one scan, disposable, rebuilt on demand. That
- * also means they follow `Kernel::init(isTmpVolatile:)` — a project that wants
- * them inside the image only has to move volatile storage, not configure this
- * separately.
+ * They live next to the DI cache, in `.winter/build`, because they are the same
+ * kind of artefact: derived from one scan, disposable, rebuilt on demand.
  *
  * @see ProxyGenerator
  */
@@ -56,7 +53,7 @@ final class ProxyFactory
     public static function forKernel(array $interceptors, ?bool $refresh = null): self
     {
         return new self(
-            Kernel::$pathStorageVolatile . DIRECTORY_SEPARATOR . self::DIRECTORY,
+            Kernel::$pathBuild . DIRECTORY_SEPARATOR . self::DIRECTORY,
             $interceptors,
             $refresh ?? (bool) env('DEBUG', false)
         );

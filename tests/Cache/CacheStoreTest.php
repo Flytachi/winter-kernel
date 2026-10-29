@@ -238,7 +238,7 @@ final class CacheStoreTest extends TestCase
 
         self::assertNull(self::file(version: 'v2')->get('token'));
         self::assertSame('old', self::file(version: 'v1')->get('token'));
-        self::assertStringEndsWith('/winter-cache/f/v2', self::file(version: 'v2')->location());
+        self::assertStringEndsWith('/f/v2', self::file(version: 'v2')->location());
     }
 
     public function test_a_sweep_removes_expired_files_only(): void
@@ -264,7 +264,7 @@ final class CacheStoreTest extends TestCase
         self::assertSame('cache:products:', $plain->redisPrefix());
         self::assertSame('cache:products:v2:', $versioned->redisPrefix());
         self::assertSame('shop:v2:', $custom->redisPrefix());
-        self::assertSame('winter-cache/tokens/v3', $file->fileFolder());
+        self::assertSame('tokens/v3', $file->fileFolder());
         self::assertTrue(CacheType::File->isPersistent());
         self::assertFalse(CacheType::Table->isPersistent());
     }

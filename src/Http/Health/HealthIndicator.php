@@ -181,7 +181,6 @@ class HealthIndicator implements HealthIndicatorInterface
             $level    = env($prefix . 'LEVEL')  ?? $globalLevel;
             $output   = env($prefix . 'OUTPUT') ?? $globalOutput;
             $format   = env($prefix . 'FORMAT') ?? $globalFormat;
-            $file     = env($prefix . 'FILE')   ?? env('LOG_FILE');
             $fileMax  = (int) (env($prefix . 'FILE_MAX') ?? env('LOG_FILE_MAX', 30));
 
             $entry = [
@@ -190,12 +189,12 @@ class HealthIndicator implements HealthIndicatorInterface
                 'format' => $format,
             ];
 
-            if ($output === 'file' || $file) {
-                $root   = \Flytachi\Winter\Kernel\Kernel::$pathRoot;
-                $logDir = \Flytachi\Winter\Kernel\Kernel::$pathStorageLog;
+            if ($output === 'file') {
+                $root   = Kernel::$pathRoot;
+                $logDir = Kernel::$pathLogs;
                 $entry['file'] = [
-                    'path'     => $file ?? (str_starts_with($logDir, $root)
-                        ? ltrim(substr($logDir, strlen($root)), DIRECTORY_SEPARATOR)
+                    'path'     => (str_starts_with($logDir, $root . '/')
+                        ? substr($logDir, strlen($root) + 1)
                         : $logDir) . '/' . $name . '.log',
                     'max_files' => $fileMax,
                 ];
@@ -233,7 +232,7 @@ class HealthIndicator implements HealthIndicatorInterface
     {
         return ClassScanner::scanner(
             rootDir: $rootDir,
-            cache: env('DEBUG', false) ? null : Kernel::$pathStorageVolatile . '/di.php',
+            cache: env('DEBUG', false) ? null : Kernel::$pathBuild . '/di.php',
         );
     }
 
@@ -403,12 +402,12 @@ class HealthIndicator implements HealthIndicatorInterface
     // ── Disk / Memory ─────────────────────────────────────────────────────────
 
     /**
-     * The disk the application writes to — its storage: logs, cache, uploads. The root
+     * The disk the project is on — where `.winter`, logs and uploads are written. The root
      * of the machine, measured before, can be another volume entirely in a container.
      */
     private function diskHealth(): array
     {
-        $path    = isset(Kernel::$pathStorage) && is_dir(Kernel::$pathStorage) ? Kernel::$pathStorage : '/';
+        $path    = isset(Kernel::$pathRoot) && is_dir(Kernel::$pathRoot) ? Kernel::$pathRoot : '/';
         $info    = Health::disk($path);
         $percent = $info['usage_percent'];
         [$status, $warning] = match (true) {

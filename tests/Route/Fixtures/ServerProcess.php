@@ -121,7 +121,7 @@ final class ServerProcess
         self::removeTree($this->storage);
     }
 
-    /** The storage tree nests (storage/runnable/<name>/…), so it has to go depth-first. */
+    /** The storage tree nests (.winter/runnable/<name>/…), so it has to go depth-first. */
     private static function removeTree(string $path): void
     {
         if ($path === '' || !is_dir($path)) {

@@ -30,11 +30,11 @@ final class AsyncContractTest extends TestCase
 
     protected function setUp(): void
     {
-        $prop = new ReflectionProperty(KernelConfig::class, 'pathStorageVolatile');
+        $prop = new ReflectionProperty(KernelConfig::class, 'pathBuild');
         $this->originalVolatile = $prop->isInitialized() ? $prop->getValue() : null;
 
         $this->volatile = sys_get_temp_dir() . '/wk_async_' . getmypid() . '_' . bin2hex(random_bytes(4));
-        KernelConfig::$pathStorageVolatile = $this->volatile;
+        KernelConfig::$pathBuild = $this->volatile;
     }
 
     protected function tearDown(): void
@@ -48,7 +48,7 @@ final class AsyncContractTest extends TestCase
         @rmdir($this->volatile);
 
         if ($this->originalVolatile !== null) {
-            KernelConfig::$pathStorageVolatile = $this->originalVolatile;
+            KernelConfig::$pathBuild = $this->originalVolatile;
         }
     }
 

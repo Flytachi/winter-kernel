@@ -33,7 +33,7 @@ final class InheritedShutdownTest extends TestCase
     {
         $root = dirname(__DIR__, 2);
         $tmp = sys_get_temp_dir() . '/wk_shutdown_' . getmypid() . '_' . bin2hex(random_bytes(4));
-        @mkdir($tmp . '/runnable', 0777, true);
+        @mkdir($tmp, 0777, true);
         $marker = $tmp . '/shutdown.log';
 
         $script = $tmp . '/child.php';
@@ -43,7 +43,6 @@ final class InheritedShutdownTest extends TestCase
 
         Flytachi\\Winter\\Kernel\\Kernel::init(
             pathRoot: {$this->quote($tmp)},
-            pathStorageRunnable: {$this->quote($tmp . '/runnable')},
         );
         Flytachi\\Winter\\DI\\Container::init();
 

@@ -108,14 +108,6 @@ final class Complete extends Cmd
         'cache show'  => ['--all:every entry instead of the first 100'],
         'cache clear' => ['--all:every file and redis cache'],
 
-        // --- storage ---
-        'storage' => [
-            'init:create storage folders',
-            'clean:delete contents of storage folders',
-        ],
-        'storage init'  => ['-s:storage', '-c:storage/cache', '-l:storage/logs'],
-        'storage clean' => ['-s:storage', '-c:storage/cache', '-l:storage/logs'],
-
         // --- process ---
         'process' => [
             'list:list all processes with live state',

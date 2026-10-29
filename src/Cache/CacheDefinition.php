@@ -24,8 +24,6 @@ final readonly class CacheDefinition
      */
     public const float CONFLICT_PROPORTION = 0.5;
 
-    /** Directory under `storage/cache` the file caches live in. */
-    public const string FILE_ROOT = 'winter-cache';
 
     /**
      * @param string $name Name the attributes refer to.
@@ -60,11 +58,12 @@ final readonly class CacheDefinition
     }
 
     /**
-     * The folder of a file cache under `storage/cache`, the version as a subfolder.
+     * The folder of a file cache under `.winter/cache`, the version as a subfolder. The
+     * folder holds these caches only, so the name alone keeps them apart.
      */
     public function fileFolder(): string
     {
-        return self::FILE_ROOT . '/' . $this->name . ($this->version === null ? '' : '/' . $this->version);
+        return $this->name . ($this->version === null ? '' : '/' . $this->version);
     }
 
     /**

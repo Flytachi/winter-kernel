@@ -33,22 +33,12 @@ final class Kernel extends KernelStore
         ?string $pathRoot = null,
         ?string $pathEnv = null,
         ?string $pathResource = null,
-        ?string $pathStorage = null,
-        ?string $pathStorageLog = null,
-        ?string $pathStorageCache = null,
-        ?string $pathStorageRunnable = null,
-        bool $isTmpVolatile = true,
     ): void {
         defined('WINTER_STARTUP_TIME') or define('WINTER_STARTUP_TIME', microtime(true));
         parent::init(
             $pathRoot,
             $pathEnv,
             $pathResource,
-            $pathStorage,
-            $pathStorageLog,
-            $pathStorageCache,
-            $pathStorageRunnable,
-            $isTmpVolatile,
         );
 
         self::importProcessEnvironment();
@@ -67,6 +57,7 @@ final class Kernel extends KernelStore
             ini_set('display_startup_errors', 0);
         }
 
+        self::resolveLogDirectory();
         self::bootLogger();
 
         // thread — both backends spawn the same `php <runnerPath>` child; only the way
@@ -211,15 +202,67 @@ final class Kernel extends KernelStore
             return;
         }
 
+        $channels = [
+            'sys'  => self::buildChannelConfig('sys'),
+            'http' => self::buildChannelConfig('http'),
+        ];
+        if (in_array('file', array_column($channels, 'output'), true)) {
+            self::assertLogDirectory();
+        }
+
         LoggerFactory::setManager(new LoggerManager(
             contextStorage: new ProcessContext(),
-            channels: [
-                'sys'  => self::buildChannelConfig('sys'),
-                'http' => self::buildChannelConfig('http'),
-            ],
+            channels: $channels,
         ));
 
         LoggerFactory::setDefaultChannel('sys');
+    }
+
+    /**
+     * Where file logs go: `LOG_DIR`, relative to the project root unless absolute,
+     * `<root>/logs` without it. One directory, a file per channel in it — `sys.log`,
+     * `http.log`.
+     *
+     * `LOG_FILE` and `LOG_<CHANNEL>_FILE` named a file, and one `LOG_FILE` sent both
+     * channels into it interleaved. They are refused by name rather than ignored: logs
+     * quietly going somewhere else after an upgrade are logs nobody finds.
+     */
+    private static function resolveLogDirectory(): void
+    {
+        foreach (['LOG_FILE', 'LOG_SYS_FILE', 'LOG_HTTP_FILE'] as $name) {
+            if (env($name) !== null) {
+                throw new \RuntimeException(
+                    "{$name} is no longer read: set LOG_DIR to the directory the logs go to "
+                    . '(a file per channel in it: sys.log, http.log).'
+                );
+            }
+        }
+        $dir = trim((string) env('LOG_DIR', ''));
+        if ($dir !== '') {
+            self::$pathLogs = rtrim(str_starts_with($dir, '/') ? $dir : self::$pathRoot . '/' . $dir, '/');
+        }
+    }
+
+    /**
+     * Makes the log directory, or stops the boot saying why it cannot be written: a
+     * directory under `/var/log` usually needs to be made for the application's user
+     * first, and the first log line is the wrong place to find that out.
+     */
+    private static function assertLogDirectory(): void
+    {
+        try {
+            self::ensureDirectory(self::$pathLogs);
+        } catch (\Throwable) {
+            // Reported below together with an existing but read-only directory.
+        }
+        if (!is_dir(self::$pathLogs) || !is_writable(self::$pathLogs)) {
+            throw new \RuntimeException(sprintf(
+                'LOG_OUTPUT=file, but the log directory %s cannot be written by this user (%s). '
+                . 'Create it with the right owner, or point LOG_DIR elsewhere.',
+                self::$pathLogs,
+                function_exists('posix_geteuid') ? (posix_getpwuid(posix_geteuid())['name'] ?? 'uid ' . posix_geteuid()) : get_current_user(),
+            ));
+        }
     }
 
     /**
@@ -242,10 +285,7 @@ final class Kernel extends KernelStore
         $output    = self::resolveOutput($rawOutput);
         $format    = (string) (env($prefix . 'FORMAT') ?? env('LOG_FORMAT', 'line'));
 
-        $filePath = env($prefix . 'FILE') ?? env('LOG_FILE');
-        if ($output === 'file' && empty($filePath)) {
-            $filePath = self::$pathStorageLog . '/' . $channel . '.log';
-        }
+        $filePath = $output === 'file' ? self::$pathLogs . '/' . $channel . '.log' : null;
 
         // ANSI colour — line format only, never JSON. LOG_COLOR = auto|always|never
         // (auto = colour only when the output is an interactive terminal, mirroring

@@ -65,7 +65,7 @@ final class Di extends Cmd
      */
     private static function cachePath(): string
     {
-        return Kernel::$pathStorageVolatile . '/di.php';
+        return Kernel::$pathBuild . '/di.php';
     }
 
     /**
@@ -73,18 +73,7 @@ final class Di extends Cmd
      */
     private static function proxyCachePath(): string
     {
-        return Kernel::$pathStorageVolatile . '/proxy.php';
-    }
-
-    /**
-     * Where releases before the shared proxy generator kept their artefacts; removed
-     * on build and clean so an upgraded project does not keep stale files around.
-     *
-     * @return array{string, string} The class-list file and the proxy directory.
-     */
-    private static function legacyPaths(): array
-    {
-        return [Kernel::$pathStorageVolatile . '/async.php', Kernel::$pathStorageVolatile . '/async'];
+        return Kernel::$pathBuild . '/proxy.php';
     }
 
     /**
@@ -121,20 +110,6 @@ final class Di extends Cmd
         }
 
         return false;
-    }
-
-    /**
-     * Removes the artefacts of releases before the shared proxy generator.
-     */
-    private static function forgetLegacy(): void
-    {
-        [$list, $directory] = self::legacyPaths();
-        self::forget($list);
-
-        if (is_dir($directory)) {
-            new ProxyFactory($directory, [])->clear();
-            @rmdir($directory);
-        }
     }
 
     /**
@@ -221,7 +196,6 @@ final class Di extends Cmd
         // Force a rebuild: both caches short-circuit when their file exists.
         self::forget($cachePath);
         self::forget(self::proxyCachePath());
-        self::forgetLegacy();
 
         // Proxying is opt-in per feature (WinterApplication reads #[EnableAsync] and
         // #[EnableCaching] at boot); build the proxies only for what the app enables,
@@ -386,8 +360,7 @@ final class Di extends Cmd
     private static function bypassExcludes(): array
     {
         return [
-            Kernel::$pathStorage,
-            Kernel::$pathStorageVolatile,
+            Kernel::$pathBuild,
             Kernel::$pathRoot . '/tests',
             Kernel::$pathRoot . '/test',
         ];
@@ -408,7 +381,6 @@ final class Di extends Cmd
         try {
             $cleaned = self::forget(self::cachePath());
             self::forget(self::proxyCachePath());
-            self::forgetLegacy();
             self::printBadge("di cache", $cleaned ? 'CLEANED' : 'NOT FOUND', 34, $cleaned ? 32 : 33);
 
             $removed = ProxyFactory::forKernel([])->clear();
@@ -613,8 +585,8 @@ final class Di extends Cmd
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);
-        self::printInfo("Cache file: " . Kernel::$pathStorageVolatile . '/di.php');
-        self::printInfo("Proxy dir:  " . Kernel::$pathStorageVolatile . '/' . ProxyFactory::DIRECTORY);
+        self::printInfo("Cache file: " . Kernel::$pathBuild . '/di.php');
+        self::printInfo("Proxy dir:  " . Kernel::$pathBuild . '/' . ProxyFactory::DIRECTORY);
         self::printInfo("DEBUG=true disables the cache entirely (always live scan).");
         self::printInfo("build doubles as a contract check — an invalid #[Async] or cache method, or an");
         self::printInfo("undeclared cache name, fails here, not in prod.");

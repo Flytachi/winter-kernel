@@ -112,7 +112,7 @@ final class Caches
     }
 
     /**
-     * Declares a cache kept in files under `storage/cache/winter-cache/<name>`.
+     * Declares a cache kept in files under `.winter/cache/<name>`.
      *
      * Every worker and every process reads the same files, the entries survive a
      * restart, and a console command can list and clear them (`call cache`). A read

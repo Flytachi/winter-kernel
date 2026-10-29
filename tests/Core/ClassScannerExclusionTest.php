@@ -11,12 +11,12 @@ use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 
 /**
- * The storage directory is never scanned.
+ * The framework's own folder is never scanned.
  *
- * `Scanner` excludes `vendor/` on its own, but storage is just as wrong to walk: it
- * holds generated code — the DI cache and the `#[Async]` proxies — so scanning it is
- * self-referential. Under `isTmpVolatile: false` storage sits inside the project root,
- * which is exactly when the scan reaches it.
+ * `Scanner` excludes `vendor/` on its own, but `.winter` is just as wrong to walk: it
+ * holds generated code — the class list and the `#[Async]` / `#[Cacheable]` proxies in
+ * `.winter/build` — so scanning it is self-referential. It sits inside the project root,
+ * which is exactly where the scan reaches.
  */
 final class ClassScannerExclusionTest extends TestCase
 {
@@ -25,24 +25,24 @@ final class ClassScannerExclusionTest extends TestCase
     protected function setUp(): void
     {
         $this->root = sys_get_temp_dir() . '/wk-scan-' . getmypid();
-        @mkdir($this->root . '/storage/volatile', 0777, true);
-        Kernel::init(pathRoot: $this->root, isTmpVolatile: false);
+        @mkdir($this->root . '/.winter/build', 0777, true);
+        Kernel::init(pathRoot: $this->root);
     }
 
     protected function tearDown(): void
     {
-        @unlink($this->root . '/storage/volatile/di.php');
-        @rmdir($this->root . '/storage/volatile');
-        @rmdir($this->root . '/storage');
+        @unlink($this->root . '/.winter/build/di.php');
+        @rmdir($this->root . '/.winter/build');
+        @rmdir($this->root . '/.winter');
         @rmdir($this->root);
     }
 
-    public function test_the_storage_directory_is_excluded(): void
+    public function test_the_winter_directory_is_excluded(): void
     {
         self::assertContains(
-            rtrim(Kernel::$pathStorage, '/\\'),
+            rtrim(Kernel::$pathWinter, '/\\'),
             $this->exclusionsOf(ClassScanner::scanner($this->root)),
-            'Storage holds the DI cache and generated proxies — walking it is self-referential.',
+            '.winter holds the class list and generated proxies — walking it is self-referential.',
         );
     }
 

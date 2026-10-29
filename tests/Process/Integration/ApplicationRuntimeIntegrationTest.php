@@ -51,8 +51,8 @@ final class ApplicationRuntimeIntegrationTest extends IntegrationCase
     {
         // No runnable directory yet: the lock file must not be tried before it exists, or
         // the first master runs without a lock and the second is not refused.
-        rmdir($this->storage . '/runnable/app');
-        rmdir($this->storage . '/runnable');
+        rmdir($this->storage . '/.winter/runnable/app');
+        rmdir($this->storage . '/.winter/runnable');
         (new \ReflectionProperty(\Flytachi\Winter\Kernel\Core\KernelStore::class, 'runnable'))->setValue(null, []);
 
         // Nothing here may touch the store until the master has claimed: reading it would

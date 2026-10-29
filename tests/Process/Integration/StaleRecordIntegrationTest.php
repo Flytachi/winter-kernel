@@ -327,7 +327,7 @@ final class StaleRecordIntegrationTest extends IntegrationCase
 
     private function lockFile(string $class): string
     {
-        return $this->storage . '/runnable/' . str_replace('\\', '.', $class) . '.lock';
+        return $this->storage . '/.winter/runnable/' . str_replace('\\', '.', $class) . '.lock';
     }
 
     private static function store(string $class): \Flytachi\FileStore\FileStorage

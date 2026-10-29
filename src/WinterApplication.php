@@ -440,7 +440,7 @@ abstract class WinterApplication
 
         $shared(ClassScanner::scanner(
             rootDir: Kernel::$pathRoot,
-            cache: $debug ? null : Kernel::$pathStorageVolatile . '/di.php',
+            cache: $debug ? null : Kernel::$pathBuild . '/di.php',
         ))->collect($serverCollector)->execute();
 
         // Before anything is resolved: a #[Singleton] holding a #[Request] bean would
@@ -488,7 +488,7 @@ abstract class WinterApplication
         return new ProxyCollector(
             $c,
             ProxyFactory::forKernel($interceptors, $debug),
-            $debug ? null : Kernel::$pathStorageVolatile . '/proxy.php',
+            $debug ? null : Kernel::$pathBuild . '/proxy.php',
         );
     }
 
@@ -910,7 +910,7 @@ abstract class WinterApplication
         // this process's memory is what every worker forks from.
         $router = Router::fromScan(
             Kernel::$pathRoot,
-            cache: env('DEBUG', false) ? null : Kernel::$pathStorageVolatile . '/di.php',
+            cache: env('DEBUG', false) ? null : Kernel::$pathBuild . '/di.php',
         );
 
         // Says the arithmetic out loud before any worker exists: the memory limit is per

@@ -57,11 +57,10 @@ final class ClassScanner
      * reads every `.php` file looking for a class declaration, then `require_once`s
      * whatever it finds.
      *
-     * - **storage** holds *generated* code: the DI cache and the `#[Async]` proxies are
-     *   written there, so scanning it is at best wasted work and at worst
-     *   self-referential — a scan reading what the previous scan produced. Under the
-     *   default `isTmpVolatile: true` it lives in the system temp directory and the scan
-     *   never reaches it; under `false` it sits inside the project root.
+     * - **.winter** holds *generated* code: the class list and the `#[Async]` /
+     *   `#[Cacheable]` proxies are written to `.winter/build`, so scanning it is at best
+     *   wasted work and at worst self-referential — a scan reading what the previous
+     *   scan produced.
      * - **resources** holds *views*, which are PHP files by nature and classes by
      *   accident. A template that happens to declare a helper class matches the
      *   scanner's regex, gets required at boot, and **executes** — echoing into the
@@ -85,8 +84,10 @@ final class ClassScanner
     {
         // Kernel::init() may not have run yet — a bare Scanner is still correct then,
         // it simply has fewer exclusions.
+        // `.winter/` holds what the framework writes for itself — generated proxies among
+        // it, which must never be read back as the project's code.
         return array_values(array_filter([
-            isset(Kernel::$pathStorage) ? Kernel::$pathStorage : null,
+            isset(Kernel::$pathWinter) ? Kernel::$pathWinter : null,
             isset(Kernel::$pathResource) ? Kernel::$pathResource : null,
         ]));
     }

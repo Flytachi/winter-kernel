@@ -15,7 +15,7 @@ enum CacheType: string
     /** A PHP array inside each worker: no sizes to plan, but one copy per worker. */
     case Memory = 'memory';
 
-    /** Files under `storage/cache`: survive restarts and are seen by console commands. */
+    /** Files under `.winter/cache`: survive restarts and are seen by console commands. */
     case File = 'file';
 
     /** A Redis database: shared by every instance of the application. */

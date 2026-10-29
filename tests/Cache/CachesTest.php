@@ -105,7 +105,7 @@ final class CachesTest extends TestCase
         self::assertSame(CacheType::File, $definitions['tokens']->type);
         self::assertSame(3300, $definitions['tokens']->ttl);
         self::assertNull($definitions['tokens']->version, 'the version is optional');
-        self::assertSame('winter-cache/settings/v2', $definitions['settings']->fileFolder());
+        self::assertSame('settings/v2', $definitions['settings']->fileFolder());
         self::assertSame(TestRedisEndpoint::class, $definitions['products']->redisConfig);
         self::assertSame('cache:products:', $definitions['products']->redisPrefix());
         self::assertSame('shop:2026-10:', $definitions['shared']->redisPrefix());

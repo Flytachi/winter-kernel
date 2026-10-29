@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Process\Internal;
 
+use Flytachi\Winter\Kernel\Core\KernelStore;
+
 /**
  * A crash-safe advisory `flock` on a file — "one at a time" that the operating system
  * cleans up: the lock goes with the process that held it, however it died.
@@ -54,6 +56,13 @@ final class LockFile
     public static function take(string $path): ?self
     {
         if (!is_file($path)) {
+            // A fresh project has no `.winter/runnable` yet: without its folder the file
+            // cannot be made, and the lock would quietly hold nothing.
+            try {
+                KernelStore::ensureDirectory(dirname($path));
+            } catch (\Throwable) {
+                // Left to fopen() below: an unreliable lock rather than a blocked start.
+            }
             @touch($path);
         }
         $handle = @fopen($path, 'ce');

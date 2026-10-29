@@ -67,7 +67,7 @@ final class DevWatcher
     public function __construct(
         private readonly array $watchPaths,
         private readonly float $interval = 1.0,
-        private readonly array $exclude = ['vendor', 'storage', '.git', 'node_modules'],
+        private readonly array $exclude = ['vendor', 'logs', '.winter', '.git', 'node_modules'],
     ) {
         $this->color = self::wantsColor();
         // Constructed in the process that calls start(); every child inherits the value,

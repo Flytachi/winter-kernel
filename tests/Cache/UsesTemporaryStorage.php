@@ -8,7 +8,7 @@ use Flytachi\Winter\Kernel\Core\KernelConfig;
 use ReflectionProperty;
 
 /**
- * Points `storage/cache` at a throw-away directory, so a file cache under test never
+ * Points `.winter/cache` at a throw-away directory, so a file cache under test never
  * touches the project's own storage.
  */
 trait UsesTemporaryStorage
@@ -18,12 +18,12 @@ trait UsesTemporaryStorage
 
     private function useTemporaryStorage(): void
     {
-        $property = new ReflectionProperty(KernelConfig::class, 'pathStorageCache');
+        $property = new ReflectionProperty(KernelConfig::class, 'pathCache');
         $this->originalStorageCache = $property->isInitialized() ? $property->getValue() : null;
 
         $this->storageCache = sys_get_temp_dir() . '/wk_cache_storage_' . getmypid() . '_' . bin2hex(random_bytes(4));
         mkdir($this->storageCache);
-        KernelConfig::$pathStorageCache = $this->storageCache;
+        KernelConfig::$pathCache = $this->storageCache;
     }
 
     private function dropTemporaryStorage(): void
@@ -34,7 +34,7 @@ trait UsesTemporaryStorage
         }
 
         if ($this->originalStorageCache !== null) {
-            KernelConfig::$pathStorageCache = $this->originalStorageCache;
+            KernelConfig::$pathCache = $this->originalStorageCache;
         }
     }
 

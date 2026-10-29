@@ -28,15 +28,15 @@ abstract class IntegrationCase extends TestCase
         }
 
         $this->storage = sys_get_temp_dir() . '/wk_it_' . getmypid() . '_' . bin2hex(random_bytes(4));
-        @mkdir($this->storage . '/runnable', 0777, true);
+        @mkdir($this->storage . '/.winter/runnable', 0777, true);
 
-        Kernel::init(pathRoot: $this->storage, pathStorageRunnable: $this->storage . '/runnable');
+        Kernel::init(pathRoot: $this->storage);
         Container::init();
 
         // Kernel caches FileStorage by name against the path it was first built
         // with. Each test uses a fresh temp dir, so drop the cache or a reused
         // fixture class would read a previous test's (deleted) directory.
-        foreach (['runnable', 'storages', 'volatiles'] as $cache) {
+        foreach (['runnable'] as $cache) {
             (new \ReflectionProperty(KernelStore::class, $cache))->setValue(null, []);
         }
     }

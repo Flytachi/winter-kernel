@@ -52,13 +52,10 @@ final class DispatchRunnerTest extends TestCase
         $this->originalKey = $_ENV['WINTER_KEY'] ?? null;
         $_ENV['WINTER_KEY'] = self::SECRET;
 
-        Kernel::init(
-            pathRoot: $this->project,
-            pathStorageRunnable: $this->project . '/storage/runnable',
-        );
+        Kernel::init(pathRoot: $this->project);
 
         // Kernel caches FileStorage by name against the path it was first built with.
-        foreach (['runnable', 'storages', 'volatiles'] as $cache) {
+        foreach (['runnable'] as $cache) {
             (new \ReflectionProperty(KernelStore::class, $cache))->setValue(null, []);
         }
 
@@ -119,7 +116,7 @@ final class DispatchRunnerTest extends TestCase
         $stale->locked = true;
         $store = (new \ReflectionMethod(DispatchMarkerProcess::class, 'store'))->invoke(null);
         $store->write((new \ReflectionMethod(DispatchMarkerProcess::class, 'key'))->invoke(null), $stale);
-        touch($this->project . '/storage/runnable/' . str_replace('\\', '.', DispatchMarkerProcess::class) . '.lock');
+        touch($this->project . '/.winter/runnable/' . str_replace('\\', '.', DispatchMarkerProcess::class) . '.lock');
 
         $log = $this->project . '/runner.log';
         DispatchMarkerProcess::dispatch(output: $log);
@@ -147,7 +144,7 @@ final class DispatchRunnerTest extends TestCase
 
         @mkdir($this->project . '/vendor/bin', 0777, true);
         @mkdir($pkg, 0777, true);
-        @mkdir($this->project . '/storage/runnable', 0777, true);
+        @mkdir($this->project . '/.winter/runnable', 0777, true);
 
         // Copied, never symlinked: PHP resolves __DIR__ through symlinks, which would
         // point the runner at this repository instead of the throwaway project.

@@ -41,7 +41,6 @@ final class BootFailureTest extends TestCase
     {
         $this->remove($this->project);
         // The boot also wrote its volatile store beside the system temp dir, named after the project.
-        $this->remove(sys_get_temp_dir() . '/flytachi.winter.volatile.' . basename($this->project));
     }
 
     /**

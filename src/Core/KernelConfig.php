@@ -9,32 +9,53 @@ abstract class KernelConfig
     public static string $pathRoot;
     public static string $pathEnv;
     public static string $pathResource;
-    public static string $pathStorage;
-    public static string $pathStorageLog;
-    public static string $pathStorageCache;
-    public static string $pathStorageRunnable;
-    public static string $pathStorageVolatile;
+    /**
+     * Where logs go when they are written to files (`LOG_OUTPUT=file`): `LOG_DIR`,
+     * relative to the project root unless absolute — `<root>/logs` without it. Resolved
+     * once the environment is read, and created at boot only when logs go to files — so
+     * a directory that cannot be written stops the boot instead of the first log line.
+     */
+    public static string $pathLogs;
+
+    /**
+     * The framework's own folder in the project root: what it writes for itself, none of
+     * it the application's to edit or to commit. Fixed — no setting moves it — so every
+     * process of the project, the console on the host and the application in a container
+     * alike, finds the same files. One line ignores it: `/.winter`.
+     */
+    public static string $pathWinter;
+
+    /** `#[Cacheable]` values kept in files (the `file` store). */
+    public static string $pathCache;
+
+    /**
+     * The state of the project's running processes: their records, the locks that keep
+     * one process per class and one run per application, and what the console and the
+     * application's supervisor say to each other. Shared by every process of the
+     * project — the console on the host reads what the application in a container
+     * writes — so it lives in the project, not in a temp directory.
+     */
+    public static string $pathRunnable;
+
+    /**
+     * What the framework builds from the project's code to start faster: the class list
+     * (`di.php`) and the `#[Async]` / `#[Cacheable]` proxies. Safe to delete at any time —
+     * `call di build` or the next start writes it again. It used to sit in the system
+     * temp directory under the project folder's *name*, so two projects named alike
+     * read each other's class list.
+     */
+    public static string $pathBuild;
 
     /**
      * @param string|null $pathRoot
      * @param string|null $pathEnv
      * @param string|null $pathResource
-     * @param string|null $pathStorage
-     * @param string|null $pathStorageLog
-     * @param string|null $pathStorageCache
-     * @param string|null $pathStorageRunnable
-     * @param bool $isTmpVolatile
      * @return void
      */
     public static function init(
         ?string $pathRoot = null,
         ?string $pathEnv = null,
         ?string $pathResource = null,
-        ?string $pathStorage = null,
-        ?string $pathStorageLog = null,
-        ?string $pathStorageCache = null,
-        ?string $pathStorageRunnable = null,
-        bool $isTmpVolatile = true
     ): void {
         // root
         if ($pathRoot === null) {
@@ -51,59 +72,13 @@ abstract class KernelConfig
             $pathResource = $pathRoot . '/resources';
         }
 
-        // storage
-        if ($pathStorage === null) {
-            $pathStorage = $pathRoot . '/storage';
-        }
-
-        // storage log
-        if ($pathStorageLog === null) {
-            $pathStorageLog = $pathStorage . '/logs';
-        }
-
-        // storage cache
-        if ($pathStorageCache === null) {
-            $pathStorageCache = $pathStorage . '/cache';
-        }
-
-        // storage runnable
-        if ($pathStorageRunnable === null) {
-            $pathStorageRunnable = $pathStorage . '/runnable';
-        }
-
         self::$pathRoot = $pathRoot;
         self::$pathEnv = $pathEnv;
         self::$pathResource = $pathResource;
-        self::$pathStorage = $pathStorage;
-        self::$pathStorageLog = $pathStorageLog;
-        self::$pathStorageCache = $pathStorageCache;
-        self::$pathStorageRunnable = $pathStorageRunnable;
-        self::$pathStorageVolatile = self::changeVolatile($isTmpVolatile);
-    }
-
-    /**
-     * Resolves the volatile-storage path **without** creating the directory.
-     *
-     * Eager mkdir during Kernel::init() used to cause two operational issues:
-     *   1. Maintenance commands that never touch storage (e.g. `cfg completion`,
-     *      `make`, completion installers) would still create the dir.
-     *   2. In Docker builds those commands run as root, so the dir ended up
-     *      owned by root. Runtime PHP-FPM workers running as a non-privileged
-     *      user could not write to it later — Job dispatch, route cache and
-     *      di cache all failed with EACCES.
-     *
-     * The directory is now created lazily by the consumer (`KernelStore::volatile`,
-     * `Router::dumpCache`, `Scanner::writeCache`) — at that point the process is
-     * already the runtime user, ownership is correct, and `KernelStore::ensureDirectory`
-     * applies a permissive 0777 mode regardless of the current umask.
-     */
-    private static function changeVolatile(bool $isTmpVolatile): string
-    {
-        if ($isTmpVolatile) {
-            return sys_get_temp_dir()
-                . '/flytachi.winter.volatile.'
-                . basename(self::$pathRoot);
-        }
-        return self::$pathStorage . '/volatile';
+        self::$pathLogs = $pathRoot . '/logs';
+        self::$pathWinter = $pathRoot . '/.winter';
+        self::$pathCache = self::$pathWinter . '/cache';
+        self::$pathBuild = self::$pathWinter . '/build';
+        self::$pathRunnable = self::$pathWinter . '/runnable';
     }
 }

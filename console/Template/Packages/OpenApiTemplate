@@ -32,7 +32,7 @@ class OpenApiController extends RestController
         ];
         $spl->servers[] = new ServerObject('http://localhost:8000', 'Dev Server');
 //        \Flytachi\Winter\Kernel\File\JSON::write(
-//            Kernel::$pathStorage . '/' . basename(Kernel::$pathRoot) . '.openApi-collection.json',
+//            Kernel::$pathRoot . '/' . basename(Kernel::$pathRoot) . '.openApi-collection.json',
 //            json_decode(json_encode($spl), true)
 //        );
         return ResponseContent::json(

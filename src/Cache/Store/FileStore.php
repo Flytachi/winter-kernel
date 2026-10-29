@@ -9,7 +9,7 @@ use Flytachi\Winter\Kernel\Cache\CacheDefinition;
 use Flytachi\Winter\Kernel\Kernel;
 
 /**
- * Entries kept as files under `storage/cache/winter-cache/<name>`, through the
+ * Entries kept as files under `.winter/cache/<name>`, through the
  * kernel's own file-store.
  *
  * Writes are atomic — a temporary file renamed into place — so a reader in another
@@ -29,27 +29,22 @@ final class FileStore implements ListableStore
     /** Marks the deadline line file-store writes in front of an expiring value. */
     private const string EXPIRY_MARK = '#^e:';
 
-    private readonly FileStorage $files;
+    private ?FileStorage $files = null;
     private readonly string $directory;
 
+    /**
+     * Touches nothing on disk: the folder is made by the first write. A cache declared
+     * but never written — or only read, swept or counted — leaves no folder behind, and
+     * a missing folder reads as an empty cache.
+     */
     public function __construct(private readonly CacheDefinition $definition)
     {
-        Kernel::ensureDirectory(Kernel::$pathStorageCache);
-        $this->directory = rtrim(Kernel::$pathStorageCache, '/') . '/' . $definition->fileFolder();
-
-        // Created here, tolerating a race: under coroutine hooks `mkdir` yields, and two
-        // first calls in one worker would both find the folder missing — the second
-        // mkdir fails with "File exists", and file-store treats that as fatal.
-        if (!is_dir($this->directory)) {
-            @mkdir($this->directory, self::DIRECTORY_MODE, true);
-        }
-
-        $this->files = new FileStorage(Kernel::$pathStorageCache, $definition->fileFolder());
+        $this->directory = rtrim(Kernel::$pathCache, '/') . '/' . $definition->fileFolder();
     }
 
     public function get(string $key): ?string
     {
-        $entry = $this->files->read($key);
+        $entry = $this->files()?->read($key);
 
         return is_array($entry) && is_string($entry['v'] ?? null) ? $entry['v'] : null;
     }
@@ -60,24 +55,24 @@ final class FileStore implements ListableStore
 
         // file-store keeps an entry while its deadline is not yet *past*, a second longer
         // than the other stores, which drop it once the deadline is reached.
-        $this->files->write($key, ['k' => $key, 'v' => $value], $ttl > 0 ? time() + $ttl - 1 : null);
+        $this->files(create: true)?->write($key, ['k' => $key, 'v' => $value], $ttl > 0 ? time() + $ttl - 1 : null);
 
         return true;
     }
 
     public function evict(string $key): void
     {
-        $this->files->del($key);
+        $this->files()?->del($key);
     }
 
     public function clear(): void
     {
-        $this->files->clear();
+        $this->files()?->clear();
     }
 
     public function count(): int
     {
-        return count($this->files->keys());
+        return count($this->files()?->keys() ?? []);
     }
 
     /**
@@ -87,7 +82,7 @@ final class FileStore implements ListableStore
      */
     public function sweep(): int
     {
-        return $this->files->gc();
+        return $this->files()?->gc() ?? 0;
     }
 
     public function entries(?int $limit = null): array
@@ -95,7 +90,7 @@ final class FileStore implements ListableStore
         $entries = [];
         $now = time();
 
-        foreach ($this->files->keys() as $name) {
+        foreach ($this->files()?->keys() ?? [] as $name) {
             if ($limit !== null && count($entries) >= $limit) {
                 break;
             }
@@ -131,5 +126,28 @@ final class FileStore implements ListableStore
     public function location(): string
     {
         return $this->directory;
+    }
+
+    /**
+     * The folder's storage, opened once. Null while the folder does not exist and the
+     * caller only reads: there is nothing in it to find.
+     */
+    private function files(bool $create = false): ?FileStorage
+    {
+        if ($this->files !== null) {
+            return $this->files;
+        }
+        if (!is_dir($this->directory)) {
+            if (!$create) {
+                return null;
+            }
+            Kernel::ensureDirectory(Kernel::$pathCache);
+            // Tolerating a race: under coroutine hooks `mkdir` yields, and two first
+            // writes in one worker would both find the folder missing — the second mkdir
+            // fails with "File exists", and file-store treats that as fatal.
+            @mkdir($this->directory, self::DIRECTORY_MODE, true);
+        }
+
+        return $this->files = new FileStorage(Kernel::$pathCache, $this->definition->fileFolder());
     }
 }

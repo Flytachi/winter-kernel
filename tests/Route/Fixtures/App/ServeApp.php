@@ -23,13 +23,19 @@ final class ServeApp extends WinterApplication
 {
     protected static function configure(ApplicationArguments $args): void
     {
-        Kernel::init(
-            pathRoot: __DIR__,
-            // The test passes the path so it can clean up afterwards; the fallback
-            // keeps the fixture runnable by hand.
-            pathStorage: getenv('WK_SERVE_STORAGE')
-                ?: sys_get_temp_dir() . '/wk_serve_' . getmypid(),
-        );
+        Kernel::init(pathRoot: __DIR__);
+
+        // Fixture only: no setting moves `.winter`, but this server must not write into
+        // the repository, and each test's server needs state of its own — a previous one
+        // that did not stop would otherwise refuse the next as "already running". The
+        // test passes the directory so it can clean up; the fallback keeps the fixture
+        // runnable by hand.
+        $state = getenv('WK_SERVE_STORAGE') ?: sys_get_temp_dir() . '/wk_serve_' . getmypid();
+        Kernel::$pathWinter = $state . '/.winter';
+        Kernel::$pathCache = Kernel::$pathWinter . '/cache';
+        Kernel::$pathBuild = Kernel::$pathWinter . '/build';
+        Kernel::$pathRunnable = Kernel::$pathWinter . '/runnable';
+        Kernel::$pathLogs = $state . '/logs';
     }
 
     public static function main(array $argv): never

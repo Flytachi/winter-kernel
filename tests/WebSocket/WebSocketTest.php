@@ -415,7 +415,7 @@ final class WebSocketTest extends TestCase
     private function startServer(array $env = []): void
     {
         $this->root = sys_get_temp_dir() . '/wk_ws_' . getmypid() . '_' . bin2hex(random_bytes(4));
-        mkdir($this->root . '/runnable', 0777, true);
+        mkdir($this->root, 0777, true);
         $this->log = $this->root . '/events.log';
         $this->port = self::freePort();
 
@@ -423,12 +423,11 @@ final class WebSocketTest extends TestCase
         $script = $this->root . '/server.php';
         file_put_contents($script, sprintf(
             "<?php\nrequire %s;\n"
-            . "Flytachi\\Winter\\Kernel\\Kernel::init(pathRoot: %s, pathStorageRunnable: %s);\n"
+            . "Flytachi\\Winter\\Kernel\\Kernel::init(pathRoot: %s);\n"
             . "Flytachi\\Winter\\DI\\Container::init();\n"
             . "%s::start(%d);\n",
             var_export($autoload, true),
             var_export($this->root, true),
-            var_export($this->root . '/runnable', true),
             EchoSocket::class,
             $this->port,
         ));

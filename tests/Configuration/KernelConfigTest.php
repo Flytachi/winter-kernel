@@ -42,40 +42,28 @@ final class KernelConfigTest extends TestCase
      * Regression: Kernel::init() used to mkdir() the volatile directory
      * eagerly, even when the calling command never touched storage. In Docker
      * builds that left the directory owned by root with mode 0755 and
-     * downstream FPM workers (running as a non-privileged user) failed with
-     * EACCES on every Job dispatch / route-cache write.
+     * downstream workers (running as a non-privileged user) failed with
+     * EACCES on every cache write.
      */
-    public function test_init_does_not_create_volatile_directory(): void
+    public function test_init_does_not_create_the_build_directory(): void
     {
-        $expectedVolatile = $this->tmpDir . '/storage/volatile';
+        KernelConfig::init(pathRoot: $this->tmpDir);
 
-        KernelConfig::init(
-            pathRoot:    $this->tmpDir,
-            pathStorage: $this->tmpDir . '/storage',
-            // isTmpVolatile defaults to true on KernelConfig, but the Kernel
-            // wrapper passes false. We explicitly pass false here to mimic the
-            // production-FPM scenario where the bug bit hardest.
-            isTmpVolatile: false,
-        );
-
-        self::assertSame($expectedVolatile, KernelConfig::$pathStorageVolatile);
+        self::assertSame($this->tmpDir . '/.winter/build', KernelConfig::$pathBuild);
         self::assertDirectoryDoesNotExist(
-            $expectedVolatile,
-            'Kernel::init() must not create the volatile directory eagerly — '
-            . 'creation is deferred to KernelStore::ensureDirectory() at the moment of first use.'
+            KernelConfig::$pathBuild,
+            'Kernel::init() must not create the build directory eagerly — '
+            . 'creation is deferred to the moment of first use.'
         );
     }
 
     public function test_init_does_not_create_other_storage_directories(): void
     {
-        KernelConfig::init(
-            pathRoot:    $this->tmpDir,
-            pathStorage: $this->tmpDir . '/storage',
-        );
+        KernelConfig::init(pathRoot: $this->tmpDir);
 
-        self::assertDirectoryDoesNotExist(KernelConfig::$pathStorageCache);
-        self::assertDirectoryDoesNotExist(KernelConfig::$pathStorageRunnable);
-        self::assertDirectoryDoesNotExist(KernelConfig::$pathStorageLog);
+        self::assertDirectoryDoesNotExist(KernelConfig::$pathWinter);
+        self::assertDirectoryDoesNotExist(KernelConfig::$pathRunnable);
+        self::assertDirectoryDoesNotExist(KernelConfig::$pathLogs);
     }
 
     public function test_init_resolves_default_paths_under_root(): void
@@ -85,25 +73,11 @@ final class KernelConfigTest extends TestCase
         self::assertSame($this->tmpDir,                       KernelConfig::$pathRoot);
         self::assertSame($this->tmpDir . '/.env',             KernelConfig::$pathEnv);
         self::assertSame($this->tmpDir . '/resources',        KernelConfig::$pathResource);
-        self::assertSame($this->tmpDir . '/storage',          KernelConfig::$pathStorage);
-        self::assertSame($this->tmpDir . '/storage/logs',     KernelConfig::$pathStorageLog);
-        self::assertSame($this->tmpDir . '/storage/cache',    KernelConfig::$pathStorageCache);
-        self::assertSame($this->tmpDir . '/storage/runnable', KernelConfig::$pathStorageRunnable);
-    }
-
-    /**
-     * `$pathResource` used to be derived under `if ($pathStorageLog === null)`, so
-     * passing a log path alone left it unassigned and init died on the typed property.
-     */
-    public function test_an_explicit_log_path_does_not_break_resource_resolution(): void
-    {
-        KernelConfig::init(
-            pathRoot:       $this->tmpDir,
-            pathStorageLog: $this->tmpDir . '/var/log',
-        );
-
-        self::assertSame($this->tmpDir . '/resources', KernelConfig::$pathResource);
-        self::assertSame($this->tmpDir . '/var/log',   KernelConfig::$pathStorageLog);
+        self::assertSame($this->tmpDir . '/logs',             KernelConfig::$pathLogs);
+        self::assertSame($this->tmpDir . '/.winter',          KernelConfig::$pathWinter);
+        self::assertSame($this->tmpDir . '/.winter/cache',    KernelConfig::$pathCache);
+        self::assertSame($this->tmpDir . '/.winter/build',    KernelConfig::$pathBuild);
+        self::assertSame($this->tmpDir . '/.winter/runnable', KernelConfig::$pathRunnable);
     }
 
     /** The mirror case: an explicit resource path used to be silently overwritten. */
@@ -117,20 +91,4 @@ final class KernelConfigTest extends TestCase
         self::assertSame($this->tmpDir . '/app/views', KernelConfig::$pathResource);
     }
 
-    public function test_volatile_path_uses_temp_dir_when_isTmpVolatile_is_true(): void
-    {
-        KernelConfig::init(pathRoot: $this->tmpDir, isTmpVolatile: true);
-        $expected = sys_get_temp_dir() . '/flytachi.winter.volatile.' . basename($this->tmpDir);
-        self::assertSame($expected, KernelConfig::$pathStorageVolatile);
-    }
-
-    public function test_volatile_path_uses_storage_subdir_when_isTmpVolatile_is_false(): void
-    {
-        KernelConfig::init(
-            pathRoot: $this->tmpDir,
-            pathStorage: $this->tmpDir . '/storage',
-            isTmpVolatile: false,
-        );
-        self::assertSame($this->tmpDir . '/storage/volatile', KernelConfig::$pathStorageVolatile);
-    }
 }

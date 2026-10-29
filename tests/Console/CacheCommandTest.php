@@ -26,7 +26,7 @@ final class CacheCommandTest extends TestCase
     protected function setUp(): void
     {
         $this->project = sys_get_temp_dir() . '/wk_cachecmd_' . getmypid() . '_' . bin2hex(random_bytes(4));
-        mkdir($this->project . '/storage/cache', 0777, true);
+        mkdir($this->project . '/.winter/cache', 0777, true);
         file_put_contents($this->project . '/.env', "DEBUG=false\n");
         file_put_contents($this->project . '/bootstrap.php', sprintf(<<<'PHP'
             <?php
@@ -49,18 +49,17 @@ final class CacheCommandTest extends TestCase
             PHP, var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true)));
 
         // The test process writes entries where the child will look for them.
-        $property = new ReflectionProperty(KernelConfig::class, 'pathStorageCache');
+        $property = new ReflectionProperty(KernelConfig::class, 'pathCache');
         $this->originalStorageCache = $property->isInitialized() ? $property->getValue() : null;
-        KernelConfig::$pathStorageCache = $this->project . '/storage/cache';
+        KernelConfig::$pathCache = $this->project . '/.winter/cache';
     }
 
     protected function tearDown(): void
     {
         if ($this->originalStorageCache !== null) {
-            KernelConfig::$pathStorageCache = $this->originalStorageCache;
+            KernelConfig::$pathCache = $this->originalStorageCache;
         }
         self::remove($this->project);
-        self::remove(sys_get_temp_dir() . '/flytachi.winter.volatile.' . basename($this->project));
     }
 
     private function seed(string ...$keys): void

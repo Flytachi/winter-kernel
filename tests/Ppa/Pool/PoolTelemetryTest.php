@@ -27,12 +27,12 @@ final class PoolTelemetryTest extends TestCase
     {
         $this->originalEnv = $_ENV['PPA_POOL_TELEMETRY'] ?? null;
 
-        $prop = new ReflectionProperty(KernelConfig::class, 'pathStorageRunnable');
+        $prop = new ReflectionProperty(KernelConfig::class, 'pathRunnable');
         $this->originalPath = $prop->isInitialized() ? $prop->getValue() : null;
 
         $this->storage = sys_get_temp_dir() . '/wk_pool_' . getmypid() . '_' . bin2hex(random_bytes(4));
         @mkdir($this->storage, 0777, true);
-        KernelConfig::$pathStorageRunnable = $this->storage;
+        KernelConfig::$pathRunnable = $this->storage;
 
         // Kernel caches FileStorage by name against the path it was first built with.
         $this->clearRunnableCache();
@@ -58,7 +58,7 @@ final class PoolTelemetryTest extends TestCase
         }
 
         if ($this->originalPath !== null) {
-            KernelConfig::$pathStorageRunnable = $this->originalPath;
+            KernelConfig::$pathRunnable = $this->originalPath;
         }
         $this->clearRunnableCache();
 

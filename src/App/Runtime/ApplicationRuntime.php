@@ -351,6 +351,6 @@ final class ApplicationRuntime
 
     private static function lockPath(string $appClass): string
     {
-        return Kernel::$pathStorageRunnable . '/app.' . self::key($appClass) . '.lock';
+        return Kernel::$pathRunnable . '/app.' . self::key($appClass) . '.lock';
     }
 }
