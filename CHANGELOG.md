@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-## [4.4.0] — 2026-10-29
+## [4.4.0] — 2026-10-30
 
 The application becomes a supervisor: `call run` is PID 1, and it starts, watches and restarts
 every component it declares. `storage/` is gone. The HTTP server learns its address from the
