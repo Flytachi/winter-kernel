@@ -74,6 +74,10 @@ final class Supervisor
     private int $stopCount = 0;
     /** Stops the components if the application dies without stopping them. */
     private ?Sentinel $sentinel = null;
+    /** A second stop signal arrived: what is left is killed at once. */
+    private bool $forceRequested = false;
+    /** What is left was killed — by a second signal or the stop budget. */
+    private bool $forced = false;
     /** How many components a SIGHUP reached, until the loop logs it. */
     private ?int $reloadedCount = null;
     private bool $stopAnnounced = false;
@@ -94,6 +98,8 @@ final class Supervisor
      *     ({@see ComponentControl::pending()}); none are taken when absent.
      * @param (\Closure(list<array<string, mixed>>): void)|null $publish Receives where every
      *     component stands whenever that changes — see {@see snapshot()}.
+     * @param float|null $stopBudget Seconds a stop waits for the components before it
+     *     kills what is left; null waits for good.
      */
     public function __construct(
         array $components,
@@ -105,6 +111,7 @@ final class Supervisor
         private readonly LoggerInterface $logger,
         private readonly ?\Closure $commands = null,
         private readonly ?\Closure $publish = null,
+        private readonly ?float $stopBudget = null,
     ) {
         foreach ($components as $component) {
             $this->units[] = new Unit($component, $name($component));
@@ -149,6 +156,13 @@ final class Supervisor
             if ($this->stopping && !$this->stopAnnounced) {
                 $this->announceStop();
             }
+            if ($this->stopping && !$this->forced) {
+                if ($this->forceRequested) {
+                    $this->killWhatIsLeft('a second stop signal');
+                } elseif ($this->stopBudget !== null && $now - $this->stopAt >= $this->stopBudget) {
+                    $this->killWhatIsLeft(sprintf('not stopped within %ss', $this->stopBudget));
+                }
+            }
             if ($this->reloadedCount !== null) {
                 $this->logger->info(sprintf('Application reloading (SIGHUP): %d component(s)', $this->reloadedCount));
                 $this->reloadedCount = null;
@@ -187,6 +201,26 @@ final class Supervisor
         $this->logger->info(sprintf('Application stopping (%s): %d component(s)', $this->stopReason, $this->stopCount));
     }
 
+    /**
+     * The end of a stop that waits no longer: SIGKILL to the components still running,
+     * their whole groups, named in the log so it is known whose work was cut.
+     */
+    private function killWhatIsLeft(string $why): void
+    {
+        $this->forced = true;
+        $left = [];
+        foreach ($this->units as $unit) {
+            if ($unit->pid > 0) {
+                $left[] = $unit->name;
+                @posix_kill(-$unit->pid, SIGKILL);
+                @posix_kill($unit->pid, SIGKILL);
+            }
+        }
+        if ($left !== []) {
+            $this->logger->warning(sprintf('Application stop: %s — killing %s.', $why, implode(', ', $left)));
+        }
+    }
+
     /** The last line: how the stop went, or that the work is done. */
     private function announceEnd(): void
     {
@@ -202,8 +236,9 @@ final class Supervisor
         }
         $took = microtime(true) - $this->stopAt;
         $this->logger->info(sprintf(
-            'Application stopped%s in %s',
+            'Application stopped%s%s in %s',
             $this->exitCode !== 0 ? ' (critical failure)' : '',
+            $this->forced ? ' (forced)' : '',
             $took < 1.0 ? sprintf('%d ms', (int) round($took * 1000)) : sprintf('%.1fs', $took),
         ));
     }
@@ -260,6 +295,10 @@ final class Supervisor
     private function stop(string $reason): void
     {
         if ($this->stopping) {
+            // Ctrl+C again, a second `kill`: whoever sends it does not want to wait.
+            if ($reason === 'SIGTERM' || $reason === 'SIGINT') {
+                $this->forceRequested = true;
+            }
             return;
         }
         $this->stopping = true;

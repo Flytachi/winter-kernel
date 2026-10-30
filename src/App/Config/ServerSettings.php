@@ -660,6 +660,21 @@ final class ServerSettings
         return $this;
     }
 
+    /**
+     * How long a stop waits for the requests in flight, in whole seconds: as long as a
+     * request may run ({@see requestTimeout()}), 30 when requests have no deadline.
+     * Swoole's own default is 3 seconds, so a stop cut off any request longer than
+     * that — the client got a dropped connection. `->set('max_wait_time', …)` sets it
+     * apart. A route with a longer `#[Timeout]` is still cut at this value on a stop.
+     */
+    public function getStopWait(): int
+    {
+        if (isset($this->options['max_wait_time'])) {
+            return (int) $this->options['max_wait_time'];
+        }
+        return $this->requestTimeout > 0 ? (int) ceil($this->requestTimeout) : 30;
+    }
+
     /** The configured request deadline in seconds; `0.0` when disabled. */
     public function getRequestTimeout(): float
     {
@@ -1018,6 +1033,7 @@ final class ServerSettings
             'max_connection'         => $this->getMaxConnections(),
             'max_request'            => $this->getMaxRequest(),
             'max_request_grace'      => $this->getMaxRequestGrace(),
+            'max_wait_time'          => $this->getStopWait(),
         ], static fn(int $value): bool => $value > 0);
 
         return $this->options + $derived;

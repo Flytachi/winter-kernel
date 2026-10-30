@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\Process\Integration;
 
+use Flytachi\Winter\Kernel\Tests\Process\Fixtures\BusyThenSleepProcess;
 use Flytachi\Winter\Kernel\Tests\Process\Fixtures\SignalProcess;
 use PHPUnit\Framework\Attributes\Group;
 
@@ -47,6 +48,41 @@ final class ProcessSignalIntegrationTest extends IntegrationCase
             'the process should reach its run loop'
         );
         return $pid;
+    }
+
+    /**
+     * A stop during a unit lets the unit finish — and then the wait after it was slept
+     * in full: the work was done, and the process sat out its sleep(60), or its grace.
+     */
+    public function test_a_stop_during_work_does_not_sit_out_the_sleep_after_it(): void
+    {
+        $pid = $this->fork(static fn() => BusyThenSleepProcess::start());
+        self::assertTrue($this->pollUntil(fn() => $this->hasMarker('unit start')));
+        usleep(300_000);
+
+        $sent = microtime(true);
+        posix_kill(BusyThenSleepProcess::status()->pid, SIGTERM);
+
+        self::assertTrue($this->waitExit($pid, 6.0), 'it slept out the sleep after the unit');
+        self::assertLessThan(4.0, microtime(true) - $sent);
+        self::assertSame(['unit start', 'unit done', 'shutdown'], $this->markers(), 'the unit finished, the exit was clean');
+    }
+
+    /** The body's wait is interrupted, a spawned task's waits are not: it is drained. */
+    public function test_a_spawned_task_still_finishes_its_own_waits(): void
+    {
+        putenv('WK_SPAWN=1');
+        try {
+            $pid = $this->fork(static fn() => BusyThenSleepProcess::start());
+            self::assertTrue($this->pollUntil(fn() => $this->hasMarker('unit start') && $this->hasMarker('task start')));
+            posix_kill(BusyThenSleepProcess::status()->pid, SIGTERM);
+
+            self::assertTrue($this->waitExit($pid, 6.0));
+            self::assertContains('task done', $this->markers(), 'the task was cut short');
+            self::assertContains('unit done', $this->markers());
+        } finally {
+            putenv('WK_SPAWN');
+        }
     }
 
     public function test_sigterm_stops_and_fires_on_terminate(): void

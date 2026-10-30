@@ -117,7 +117,7 @@ final class Components
         array $args = [],
         ?string $name = null,
         bool $critical = true,
-        float $grace = 10.0,
+        float $grace = 30.0,
     ): self {
         $file = str_starts_with($path, '/') ? $path : rtrim($this->root, '/') . '/' . $path;
         if (!is_file($file)) {
@@ -144,7 +144,7 @@ final class Components
      * @param float $grace Seconds it has to stop after SIGTERM before SIGKILL.
      * @link https://winterframe.net/docs/components#command Running an outside program beside the application
      */
-    public function command(array $command, ?string $name = null, bool $critical = true, float $grace = 10.0): self
+    public function command(array $command, ?string $name = null, bool $critical = true, float $grace = 30.0): self
     {
         $this->components[] = Component::command($command, $name, $critical, $grace);
         return $this;

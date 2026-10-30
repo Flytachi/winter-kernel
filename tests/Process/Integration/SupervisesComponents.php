@@ -35,14 +35,14 @@ trait SupervisesComponents
     /**
      * @param list<Component> $components
      */
-    private function supervise(array $components, bool $asApplication = false): int
+    private function supervise(array $components, bool $asApplication = false, ?float $stopBudget = null): int
     {
         $storage = $this->storage;
         $app = self::$testApp;
         if ($asApplication) {
             $this->actAsApplication($app);
         }
-        return $this->fork(static function () use ($components, $storage, $asApplication, $app): void {
+        return $this->fork(static function () use ($components, $storage, $asApplication, $app, $stopBudget): void {
             $write = static fn(string $file, string $line) =>
                 file_put_contents("{$storage}/{$file}", $line . "\n", FILE_APPEND);
             $logger = new class ($write) extends AbstractLogger {
@@ -92,6 +92,7 @@ trait SupervisesComponents
                 publish: $run === null
                     ? null
                     : static fn(array $units) => ApplicationRuntime::publishUnits($app, $units),
+                stopBudget: $stopBudget,
             ))->run(untilDone: !$asApplication);
             file_put_contents("{$storage}/exit", (string) $code);
         });

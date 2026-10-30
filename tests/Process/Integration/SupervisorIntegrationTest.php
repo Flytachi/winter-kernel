@@ -236,6 +236,44 @@ final class SupervisorIntegrationTest extends IntegrationCase
         }
     }
 
+    /** A component that does not stop is killed once the stop has waited its budget. */
+    public function test_a_stop_kills_what_is_left_after_its_budget(): void
+    {
+        $supervisor = $this->supervise(
+            [Component::command(['sh', '-c', 'trap "" TERM; sleep 60'], 'deaf', critical: false, grace: 60.0)],
+            stopBudget: 1.5,
+        );
+        self::assertTrue($this->waitLogged('deaf is up.'));
+
+        $sent = microtime(true);
+        posix_kill($supervisor, SIGTERM);
+
+        self::assertSame(0, $this->exitCode($supervisor));
+        self::assertLessThan(5.0, microtime(true) - $sent, 'the budget was not kept');
+        self::assertStringContainsString('Application stop: not stopped within 1.5s — killing deaf.', $this->logged());
+        self::assertStringContainsString('Application stopped (forced) in', $this->logged());
+    }
+
+    /** Ctrl+C twice: the second one does not wait. */
+    public function test_a_second_stop_signal_kills_what_is_left_at_once(): void
+    {
+        $supervisor = $this->supervise(
+            [Component::command(['sh', '-c', 'trap "" TERM; sleep 60'], 'deaf', critical: false, grace: 60.0)],
+        );
+        self::assertTrue($this->waitLogged('deaf is up.'));
+
+        posix_kill($supervisor, SIGINT);
+        self::assertTrue($this->waitLogged('Application stopping (SIGINT)'));
+        usleep(300_000);
+        self::assertTrue($this->isAlive($supervisor), 'the first signal waits');
+        $sent = microtime(true);
+        posix_kill($supervisor, SIGINT);
+
+        self::assertSame(0, $this->exitCode($supervisor));
+        self::assertLessThan(3.0, microtime(true) - $sent);
+        self::assertStringContainsString('a second stop signal — killing deaf.', $this->logged());
+    }
+
     public function test_a_component_runs_its_coroutines_with_the_runtime_hooks_on(): void
     {
         if (!extension_loaded('swoole')) {

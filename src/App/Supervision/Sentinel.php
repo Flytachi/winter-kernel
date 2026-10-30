@@ -30,8 +30,8 @@ use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
  */
 final class Sentinel
 {
-    /** Seconds the components get to stop before SIGKILL. */
-    private const float GRACE = 10.0;
+    /** Seconds the components get to stop before SIGKILL — the components' own grace. */
+    private const float GRACE = 30.0;
     /** The signals the sentinel ignores. */
     private const array SIGNALS = [SIGTERM, SIGINT, SIGHUP, SIGUSR1, SIGUSR2];
 

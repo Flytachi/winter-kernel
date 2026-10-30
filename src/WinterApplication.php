@@ -1111,7 +1111,36 @@ abstract class WinterApplication
             publish: $run === null
                 ? null
                 : static fn(array $units) => ApplicationRuntime::publishUnits($run->appClass, $units),
+            stopBudget: self::stopBudget($components, $web),
         );
+    }
+
+    /**
+     * How long a stop of the application waits for its components: 35 seconds, or 5
+     * more than the longest grace among them — each gets its own in full, and a
+     * component stuck past it is killed rather than holding the stop for good. Null
+     * when a component waits for good (`$grace = 0`): that choice is respected.
+     *
+     * @param list<Component> $components
+     */
+    private static function stopBudget(array $components, ?HttpTier $web): ?float
+    {
+        $longest = $web !== null ? (float) $web->settings->getStopWait() : 0.0;
+        foreach ($components as $component) {
+            $grace = match (true) {
+                $component->kind === ComponentKind::Command => $component->grace,
+                $component->class !== null => (float) (new \ReflectionClass($component->class)->getDefaultProperties()['grace'] ?? 0.0),
+                default => null,
+            };
+            if ($grace === null) {
+                continue;
+            }
+            if ($grace <= 0.0) {
+                return null;
+            }
+            $longest = max($longest, $grace);
+        }
+        return max(35.0, $longest + 5.0);
     }
 
     // ── Internal ──────────────────────────────────────────────────────────────

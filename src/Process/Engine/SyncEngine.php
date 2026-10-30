@@ -121,6 +121,11 @@ final class SyncEngine implements ProcessEngine
      */
     public function sleep(float $seconds): void
     {
+        // Interrupted before it starts: a stop is pending for an idle body.
+        if ($this->interruptRequested && !$this->interruptDelivered) {
+            $this->interruptDelivered = true;
+            throw new InterruptedException();
+        }
         $remaining = $seconds;
         while ($remaining > 0) {
             $step = min($remaining, self::SLEEP_STEP);
@@ -161,6 +166,16 @@ final class SyncEngine implements ProcessEngine
     public function running(): bool
     {
         return !$this->stop;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function interruptIdle(): void
+    {
+        if ($this->stop) {
+            $this->interruptRequested = true;
+        }
     }
 
     /**

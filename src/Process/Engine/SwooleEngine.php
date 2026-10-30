@@ -28,6 +28,8 @@ final class SwooleEngine implements ProcessEngine
     private ?int $graceTimerId = null;
     private ?int $heartbeatTimerId = null;
     private bool $interruptDelivered = false;
+    /** A stop is pending for the body, now idle: its next wait is interrupted. */
+    private bool $interruptPending = false;
     /** @var callable|null */
     private $onForceExit = null;
 
@@ -144,6 +146,12 @@ final class SwooleEngine implements ProcessEngine
      */
     public function sleep(float $seconds): void
     {
+        // The body's wait after a unit the stop let finish: interrupted at once. Only the
+        // body's — a spawned task is drained, never interrupted.
+        if ($this->interruptPending && !$this->interruptDelivered && \Swoole\Coroutine::getCid() === $this->bodyCid) {
+            $this->interruptDelivered = true;
+            throw new InterruptedException();
+        }
         \Swoole\Coroutine::sleep($seconds);
         // Throw only if this coroutine was cancelled (an IDLE wait woken by a stop).
         // A BUSY unit is not cancelled, so its sleeps return normally.
@@ -159,6 +167,16 @@ final class SwooleEngine implements ProcessEngine
     public function running(): bool
     {
         return !$this->stop;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function interruptIdle(): void
+    {
+        if ($this->stop) {
+            $this->interruptPending = true;
+        }
     }
 
     /**

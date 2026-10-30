@@ -69,10 +69,10 @@ abstract class Daemon extends Process
     protected ?string $workerClass = null;
     /**
      * How long the master waits for a worker to drain on stop / scale-down before
-     * SIGKILL, in seconds. Overrides {@see Process::$grace} (0) with a bounded,
-     * deploy-safe default: a stuck worker can never hang the whole fleet's
-     * shutdown — mirroring Kubernetes' 30s terminationGracePeriodSeconds. Set to
-     * 0 to wait forever (never cut off in-flight work).
+     * SIGKILL, in seconds — the same bounded default as {@see Process::$grace}: a
+     * stuck worker can never hang the whole fleet's shutdown, mirroring Kubernetes'
+     * 30s terminationGracePeriodSeconds. Set to 0 to wait forever (never cut off
+     * in-flight work).
      */
     protected float $grace = 30.0;
     /**

@@ -7,6 +7,7 @@ services:
       dockerfile: Dockerfile
     environment:
       DEV: ${DEV:-false}
+    stop_grace_period: 40s
     ports:
       - "8000:8000"
     volumes:

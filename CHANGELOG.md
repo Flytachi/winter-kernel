@@ -51,6 +51,24 @@ the container available, and takes the same parameters as the attributes. It acc
 Attributes and the hook add up, and the same class or program name declared twice stops the
 boot.
 
+**Bounded, canonical stop times.** Every level of a stop now has a finite wait, each one
+inside the next:
+
+| Level | Waits | Before |
+| --- | --- | --- |
+| Process, Scheduler, WebSocket (`$grace`) | 30 s, then forced down | 0 = for good |
+| Daemon workers (`$grace`) | 30 s, then SIGKILL | 30 s |
+| HTTP requests in flight | as long as a request may run (`requestTimeout`, 30 s) | 3 s (Swoole's default) — longer requests were cut |
+| Outside programs (`script()`, `command()`) | 30 s, then SIGKILL | 10 s |
+| The application | 35 s, or 5 s past the longest grace; then SIGKILL to what is left, named in the log | for good |
+| A second stop signal (Ctrl+C twice) | kills what is left at once | ignored |
+| The sentinel | 30 s, then SIGKILL | 10 s |
+| `docker stop` (generated compose) | `stop_grace_period: 40s` | Docker's 10 s |
+
+30 seconds is the usual bound (Kubernetes' grace period, Spring Boot's shutdown phase). A
+`$grace` of 0 still waits for good, and then the application sets no budget of its own.
+For Kubernetes, set `terminationGracePeriodSeconds: 40`.
+
 **The application says how it ends.** Next to `Application up: …` at the start, the log now
 gets a line when a stop begins and one when it is done:
 ```
@@ -285,6 +303,10 @@ boot.
   unnamed bean of the type owns the type; otherwise a lone named bean is its type too; two or
   more named beans make injecting the type an error that names them. A class registered by
   its own `#[Singleton]`/`#[Request]`/`#[Transient]` keeps its type.
+- A stop that arrived during a unit of work (`markBusy()` … `markIdle()`) let the unit finish
+  — and then the body's next `sleep()` was slept in full: work done in 5 s, and the process
+  sat out its `sleep(60)`, or was forced down by its grace. That sleep is now interrupted
+  at once. A spawned task is still drained, not interrupted.
 - `ServerSettings` suggested `ssl_cert_file` for HTTPS. The server was built without TLS, so
   the handshake failed and it kept serving plain HTTP.
 
@@ -295,7 +317,9 @@ boot.
 2. In scripts, Docker and process managers, replace `call run --port=N` with
    `call run --http.port=N`, or declare the port in code with `#[EnableHttp(port: N)]`.
 3. Replace `LOG_FILE` / `LOG_*_FILE` with `LOG_DIR`, if they were set.
-4. Add `/.winter` and `/logs` to `.gitignore`. Remove `storage/` once nothing points at it.
+4. Add `/.winter` and `/logs` to `.gitignore`. A process that relied on the old `$grace`
+   of 0 (wait for good) gets 30 s now: set `protected float $grace = 0.0;` to keep it. In
+   your own `docker-compose.yml`, add `stop_grace_period: 40s`. Remove `storage/` once nothing points at it.
 5. Remove the `storage` path arguments and `pathEnv` from any custom `Kernel::init()`
    call. Call it with named arguments (`pathRoot:`, `pathResource:`): a positional call
    written for the old signature would put its second argument into `pathResource`.

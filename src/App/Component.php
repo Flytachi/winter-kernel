@@ -50,7 +50,7 @@ final readonly class Component
         public int $startTimeout = self::START_TIMEOUT,
         public array $command = [],
         public ?string $label = null,
-        public float $grace = 10.0,
+        public float $grace = 30.0,
         public bool $adopted = false,
         public array $args = [],
     ) {
@@ -129,7 +129,7 @@ final readonly class Component
         array $command,
         ?string $name = null,
         bool $critical = true,
-        float $grace = 10.0,
+        float $grace = 30.0,
     ): self {
         $command = array_values($command);
         $strings = array_filter($command, static fn($part): bool => is_string($part)) === $command;

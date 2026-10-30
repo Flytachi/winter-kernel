@@ -69,8 +69,14 @@ abstract class Process
 
     /** Maximum simultaneous {@see spawn()} tasks; 0 means unlimited. */
     protected int $concurrency = 0;
-    /** Seconds to wait for a BUSY unit / in-flight spawns to drain on stop before forcing. 0 = wait forever. */
-    protected float $grace = 0.0;
+    /**
+     * Seconds a stop waits for a BUSY unit and in-flight spawns to finish before it
+     * forces the process down. 30 by default, the usual bound (Kubernetes' grace
+     * period, Spring Boot's shutdown phase): long enough to finish ordinary work, short
+     * enough that a stuck process never hangs a stop. 0 waits for good — a choice to
+     * make on purpose.
+     */
+    protected float $grace = 30.0;
     /** Title shown in `ps` / status; defaults to the short class name. */
     protected ?string $processTitle = null;
 
@@ -198,6 +204,11 @@ abstract class Process
     final protected function markIdle(): void
     {
         $this->inlineBusy = false;
+        // A stop that came during the unit let it finish; the wait after it must not
+        // outlast it.
+        if (isset($this->engine) && !$this->engine->running()) {
+            $this->engine->interruptIdle();
+        }
     }
 
     /**

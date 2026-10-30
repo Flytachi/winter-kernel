@@ -69,6 +69,14 @@ interface ProcessEngine
     public function requestStop(bool $interrupt): void;
 
     /**
+     * The body has finished the unit a stop arrived during: its next wait is
+     * interrupted as an IDLE one would have been. Without it, a stop left the unit to
+     * finish and then slept the body's whole sleep() after it — the work was done, and
+     * the process waited out the sleep, or its grace.
+     */
+    public function interruptIdle(): void;
+
+    /**
      * Number of dispatched tasks that have not settled yet.
      */
     public function inFlight(): int;
