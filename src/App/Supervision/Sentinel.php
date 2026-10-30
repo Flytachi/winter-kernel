@@ -51,7 +51,17 @@ final class Sentinel
         if (!function_exists('pcntl_fork') || !function_exists('posix_kill')) {
             return null;
         }
+        // A plain socket, not Swoole's: one made while the runtime hooks are on stays a
+        // coroutine socket in the sentinel too, and reading it outside a coroutine is a
+        // fatal error there.
+        $hooks = extension_loaded('swoole') ? \Swoole\Runtime::getHookFlags() : 0;
+        if ($hooks !== 0) {
+            \Swoole\Runtime::enableCoroutine(0);
+        }
         $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        if ($hooks !== 0) {
+            \Swoole\Runtime::enableCoroutine($hooks);
+        }
         if ($pair === false) {
             return null;
         }
@@ -140,14 +150,36 @@ final class Sentinel
         }
         pcntl_sigprocmask(SIG_SETMASK, $mask);
         ApplicationRuntime::dropInheritedLock();
+        // Plain blocking I/O, whatever the application set: under Swoole's runtime hooks
+        // stream_select() outside a coroutine is a fatal error.
+        if (extension_loaded('swoole') && \Swoole\Runtime::getHookFlags() !== 0) {
+            \Swoole\Runtime::enableCoroutine(0);
+        }
 
         $groups = [];
         $buffer = '';
         $done = false;
         while (true) {
+            // Waits with no time limit. A blocking fread() gives up after
+            // `default_socket_timeout` (60 s) and returns false — taken for the end of
+            // the link, that stopped a live application's components a minute after
+            // its last start. Only the link's real end (EOF) means the application is gone.
+            $read = [$link];
+            $write = $except = null;
+            if (@stream_select($read, $write, $except, null) === false) {
+                if (feof($link)) {
+                    break;
+                }
+                // Not to spin if select keeps failing.
+                usleep(100_000);
+                continue;
+            }
             $chunk = @fread($link, 8192);
-            if ($chunk === false || ($chunk === '' && feof($link))) {
-                break;
+            if ($chunk === false || $chunk === '') {
+                if (feof($link)) {
+                    break;
+                }
+                continue;
             }
             $buffer .= $chunk;
             while (($eol = strpos($buffer, "\n")) !== false) {

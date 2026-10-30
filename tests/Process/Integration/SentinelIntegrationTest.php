@@ -134,6 +134,33 @@ final class SentinelIntegrationTest extends IntegrationCase
         }
     }
 
+    /**
+     * The sentinel waited in a blocking read, and a socket read gives up after
+     * `default_socket_timeout` (60 s): the timeout read as the end of the link, and a
+     * minute after the last start the sentinel stopped the components of a live
+     * application. Shortened here to a second.
+     */
+    public function test_a_quiet_link_is_not_taken_for_a_dead_application(): void
+    {
+        $previous = ini_set('default_socket_timeout', '1');
+        try {
+            $supervisor = $this->supervise([Component::process(SignalProcess::class)], asApplication: true);
+            self::assertTrue($this->pollUntil(fn() => $this->started() && $this->sentinels($supervisor) !== []));
+            $process = SignalProcess::status()->pid;
+            $sentinel = $this->sentinels($supervisor)[0];
+
+            sleep(3);
+
+            self::assertTrue($this->isAlive($process), 'the component was stopped');
+            self::assertTrue($this->isAlive($sentinel), 'the sentinel left');
+            self::assertStringNotContainsString('terminate', (string) file_get_contents($this->marker));
+            posix_kill($supervisor, SIGTERM);
+            self::assertSame(0, $this->exitCode($supervisor));
+        } finally {
+            ini_set('default_socket_timeout', (string) $previous);
+        }
+    }
+
     public function test_a_sentinel_that_dies_first_is_reported(): void
     {
         $supervisor = $this->supervise([Component::process(SignalProcess::class)], asApplication: true);
