@@ -264,7 +264,11 @@ final class Router
             HttpRequest $req,
             HttpResponse $res,
             array $params
-        ) use ($indicatorClass, $exposeAll, $exposed): ResponseEntity {
+        ) use (
+            $indicatorClass,
+            $exposeAll,
+            $exposed
+        ): ResponseEntity {
             /** @var HealthIndicatorInterface $indicator */
             $indicator = new $indicatorClass();
 
@@ -454,7 +458,8 @@ final class Router
                     LoggerFactory::contextStorage()->set('method', $request->getMethod());
                     LoggerFactory::contextStorage()->set('path', $request->getPath());
                     if (env('DEBUG', false)) {
-                        throw new ResponseException('Not Found [ '
+                        throw new ResponseException(
+                            'Not Found [ '
                             . $request->getMethod() . ' '
                             . $request->getPath() . ' ]',
                             HttpCode::NOT_FOUND

@@ -972,7 +972,12 @@ abstract class WinterApplication
         $handler = static function (
             \Swoole\Http\Request $req,
             \Swoole\Http\Response $res
-        ) use ($router, $trimThreshold, $serverHeader, $tls): void {
+        ) use (
+            $router,
+            $trimThreshold,
+            $serverHeader,
+            $tls
+        ): void {
             // Before the route runs, so a response that sets its own `Server` replaces it;
             // an empty value makes Swoole send no header instead of its own name.
             $res->header('Server', $serverHeader);
@@ -994,7 +999,10 @@ abstract class WinterApplication
         $workerStart = static function (
             \Swoole\Http\Server $server,
             int $workerId
-        ) use ($memoryLimit, $requestTimeout): void {
+        ) use (
+            $memoryLimit,
+            $requestTimeout
+        ): void {
             cli_set_process_title("winter-http: Worker $workerId");
             // Per worker, because the limit is a property of this process — and a no-op
             // when nothing was configured, so PHP's own value stands.

@@ -103,7 +103,12 @@ final class Application extends Cmd
         } else {
             self::print(sprintf(
                 "  %-30s %-10s %-20s %-9s %-8s %s",
-                'COMPONENT', 'KIND', 'SOURCE', 'CRITICAL', 'RETRIES', 'START TIMEOUT'
+                'COMPONENT',
+                'KIND',
+                'SOURCE',
+                'CRITICAL',
+                'RETRIES',
+                'START TIMEOUT'
             ), 90);
             foreach ($manifest as $entry) {
                 /** @var Component $component */
@@ -133,11 +138,12 @@ final class Application extends Cmd
 
         self::printLabel("Configuration", self::CL);
         $reflection = new \ReflectionClass($app);
-        foreach ([
+        $features = [
             'async'    => EnableAsync::class,
             'caching'  => EnableCaching::class,
             'actuator' => EnableActuator::class,
-        ] as $name => $attribute) {
+        ];
+        foreach ($features as $name => $attribute) {
             $found = $reflection->getAttributes($attribute);
             $on = $found !== [];
             $value = $on ? 'enabled' : 'off';
