@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Collector;
 
+use Flytachi\Winter\DI\Attribute\Inject;
+use Flytachi\Winter\DI\Attribute\Request;
+use Flytachi\Winter\DI\Attribute\Singleton;
+use Flytachi\Winter\DI\Attribute\Transient;
 use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\DI\Contract\CollectorInterface;
 use Flytachi\Winter\Kernel\App\Attribute\Bean;
@@ -26,15 +30,26 @@ use ReflectionParameter;
  *     bean's explicit name), scoped per {@see Bean::$scope}.
  *
  * A bean method's parameters are resolved lazily at build time: a #[Value]
- * parameter reads from .env, any other parameter is autowired from the container.
+ * parameter reads from .env, an #[Inject] one resolves what it names, any other is
+ * autowired from the container by its type.
+ *
+ * A bean with a name is keyed by the name, and is reachable by its type as well
+ * when that does not take the type from anything else — see {@see finish()}.
  *
  * ```
- *   Scanner::run($rootDir)->collect(new ConfigurationCollector($container))->execute();
+ *   $config = new ConfigurationCollector($container);
+ *   Scanner::run($rootDir)->collect($config)->execute();
+ *   $config->finish();   // named beans by type, once every bean is known
  * ```
  */
-final readonly class ConfigurationCollector implements CollectorInterface
+final class ConfigurationCollector implements CollectorInterface
 {
-    public function __construct(private Container $container)
+    /** @var array<class-string, list<string>> Names of the named beans, per return type. */
+    private array $named = [];
+    /** @var array<class-string, true> Return types an unnamed bean is keyed by. */
+    private array $unnamed = [];
+
+    public function __construct(private readonly Container $container)
     {
     }
 
@@ -57,6 +72,13 @@ final readonly class ConfigurationCollector implements CollectorInterface
             $bean = $attributes[0]->newInstance();
             $key = $bean->name ?? self::returnTypeOf($method, $class);
             self::assertObjectReturn($method, $class);
+            /** @var ReflectionNamedType $returns checked just above */
+            $returns = $method->getReturnType();
+            if ($bean->name !== null) {
+                $this->named[$returns->getName()][] = $bean->name;
+            } else {
+                $this->unnamed[$returns->getName()] = true;
+            }
             $factory = $this->factoryFor($class, $method->getName());
 
             match ($bean->scope) {
@@ -65,6 +87,57 @@ final readonly class ConfigurationCollector implements CollectorInterface
                 Scope::Request   => $this->container->request($key, $factory),
             };
         }
+    }
+
+    /**
+     * Makes the named beans reachable by their type, once every bean is known — so the
+     * outcome does not depend on the order the scan met the configuration classes:
+     *
+     * - an unnamed bean of the type owns it: by type comes that one, the named ones by
+     *   name only;
+     * - so does a class registered by its own scope attribute (#[Singleton] and the
+     *   like);
+     * - otherwise one named bean of the type is that type too;
+     * - otherwise, two or more named beans make injecting the type an error naming them
+     *   — without it the container would quietly build a new object of the type, one
+     *   that is none of the beans.
+     *
+     * @internal Called by the application after the scan.
+     */
+    public function finish(): void
+    {
+        foreach ($this->named as $type => $names) {
+            if (isset($this->unnamed[$type]) || self::scopedByAttribute($type) || in_array($type, $names, true)) {
+                continue;
+            }
+            $names = array_values(array_unique($names));
+            if (count($names) === 1) {
+                $name = $names[0];
+                $this->container->bind($type, static fn(Container $c): mixed => $c->make($name));
+                continue;
+            }
+            $this->container->bind($type, static function () use ($type, $names): never {
+                throw new \RuntimeException(sprintf(
+                    'There are %d beans of type %s: %s. Inject one by its name: #[Inject(\'%s\')].',
+                    count($names),
+                    $type,
+                    implode(', ', $names),
+                    $names[0],
+                ));
+            });
+        }
+    }
+
+    /** Whether the class is registered by its own #[Singleton], #[Request] or #[Transient]. */
+    private static function scopedByAttribute(string $type): bool
+    {
+        if (!class_exists($type)) {
+            return false;
+        }
+        $ref = new ReflectionClass($type);
+        return $ref->getAttributes(Singleton::class) !== []
+            || $ref->getAttributes(Request::class) !== []
+            || $ref->getAttributes(Transient::class) !== [];
     }
 
     /**
@@ -98,6 +171,17 @@ final readonly class ConfigurationCollector implements CollectorInterface
             /** @var Value $value */
             $value = $valueAttributes[0]->newInstance();
             return env($value->key, $value->default);
+        }
+
+        // As everywhere else in the container: a name or a class to resolve instead of
+        // the type. Ignored here before, so a named bean asked for by name came by type.
+        $injectAttributes = $parameter->getAttributes(Inject::class);
+        if ($injectAttributes !== []) {
+            /** @var Inject $inject */
+            $inject = $injectAttributes[0]->newInstance();
+            if ($inject->id !== null) {
+                return $c->make($inject->id);
+            }
         }
 
         $type = $parameter->getType();

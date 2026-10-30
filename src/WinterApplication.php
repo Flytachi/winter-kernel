@@ -449,6 +449,10 @@ abstract class WinterApplication
             cache: $debug ? null : Kernel::$pathBuild . '/di.php',
         ))->collect($serverCollector)->execute();
 
+        // Every bean is known now, the packages' and the application's: what a named
+        // bean's type resolves to is decided once, whatever order the scan went in.
+        $config->finish();
+
         // Before anything is resolved: a #[Singleton] holding a #[Request] bean would
         // freeze the first request's instance for the worker's lifetime, and say nothing.
         $scopeGraph->assertNoFrozenRequestScope();

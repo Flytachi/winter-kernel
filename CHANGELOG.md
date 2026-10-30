@@ -278,6 +278,13 @@ boot.
   (`Договор №14.pdf` → `_______ _14.pdf`).
 - `ProcessStatus` as JSON now carries `host` and `managed_by`, as the object does.
 - `call daemon --help` listed the worker states without `retired`.
+- `#[Inject('name')]` on a parameter of a `#[Bean]` method was ignored: the parameter was
+  resolved by its type, so a named bean asked for by name came as another one.
+- A bean with a name (`#[Bean(name: …)]`) was reachable by the name only. Injecting its type
+  quietly built a new object that was none of the beans. Now, once every bean is known: an
+  unnamed bean of the type owns the type; otherwise a lone named bean is its type too; two or
+  more named beans make injecting the type an error that names them. A class registered by
+  its own `#[Singleton]`/`#[Request]`/`#[Transient]` keeps its type.
 - `ServerSettings` suggested `ssl_cert_file` for HTTPS. The server was built without TLS, so
   the handshake failed and it kept serving plain HTTP.
 

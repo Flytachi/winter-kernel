@@ -36,7 +36,10 @@ final class Bean
 {
     /**
      * @param Scope $scope Lifetime of the produced instance (default: singleton).
-     * @param string|null $name Explicit binding key; defaults to the return type.
+     * @param string|null $name Explicit binding key; defaults to the return type. A
+     *   named bean is reached by the name — `#[Inject('name')]` — and also by its type
+     *   when no unnamed bean of the type exists and it is the only named one; two named
+     *   beans of a type make injecting the type an error that names them.
      */
     public function __construct(
         public Scope $scope = Scope::Singleton,
