@@ -80,6 +80,22 @@ final class KernelConfigTest extends TestCase
         self::assertSame($this->tmpDir . '/.winter/runnable', KernelConfig::$pathRunnable);
     }
 
+    /**
+     * `.env` is always `<root>/.env`: a `pathEnv` used to be accepted and kept for
+     * `call cfg`, while the application went on loading the root's file.
+     */
+    public function test_the_env_file_is_not_configurable(): void
+    {
+        $params = array_map(
+            static fn(\ReflectionParameter $p): string => $p->getName(),
+            (new \ReflectionMethod(\Flytachi\Winter\Kernel\Kernel::class, 'init'))->getParameters(),
+        );
+
+        self::assertSame(['pathRoot', 'pathResource'], $params);
+        KernelConfig::init(pathRoot: $this->tmpDir);
+        self::assertSame($this->tmpDir . '/.env', KernelConfig::$pathEnv);
+    }
+
     /** The mirror case: an explicit resource path used to be silently overwritten. */
     public function test_an_explicit_resource_path_is_kept(): void
     {

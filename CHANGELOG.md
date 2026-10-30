@@ -199,7 +199,10 @@ boot.
 - **`LOG_FILE`, `LOG_SYS_FILE` and `LOG_HTTP_FILE`.** Each now stops the boot with a hint to
   use `LOG_DIR`.
 - **From `Kernel::init()`:** the parameters `pathStorage`, `pathStorageLog`,
-  `pathStorageCache`, `pathStorageRunnable` and `isTmpVolatile`.
+  `pathStorageCache`, `pathStorageRunnable` and `isTmpVolatile`, and `pathEnv`. The
+  application always loaded `<root>/.env` whatever `pathEnv` said — only `call cfg` used
+  it — so `.env` is now always `<root>/.env`, and `Kernel::$pathEnv` says so.
+  `Kernel::init()` takes `pathRoot` and `pathResource`.
 - **From `Kernel`:** the properties `$pathStorage*`. Use `$pathWinter`, `$pathCache`,
   `$pathBuild`, `$pathRunnable` and `$pathLogs` instead.
 - **From `KernelStore`:** `store()`, `volatile()`, `showStorages()` and `showVolatiles()`.
@@ -272,7 +275,9 @@ boot.
    `call run --http.port=N`, or declare the port in code with `#[EnableHttp(port: N)]`.
 3. Replace `LOG_FILE` / `LOG_*_FILE` with `LOG_DIR`, if they were set.
 4. Add `/.winter` and `/logs` to `.gitignore`. Remove `storage/` once nothing points at it.
-5. Remove the `storage` path arguments from any custom `Kernel::init()` call.
+5. Remove the `storage` path arguments and `pathEnv` from any custom `Kernel::init()`
+   call. Call it with named arguments (`pathRoot:`, `pathResource:`): a positional call
+   written for the old signature would put its second argument into `pathResource`.
 6. If the actuator served more than `health`, list those endpoints in
    `#[EnableActuator(expose: [...])]`.
 7. Optionally, regenerate the Docker files with `call cfg docker -f` to move to the

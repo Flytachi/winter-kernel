@@ -31,13 +31,11 @@ final class Kernel extends KernelStore
 {
     public static function init(
         ?string $pathRoot = null,
-        ?string $pathEnv = null,
         ?string $pathResource = null,
     ): void {
         defined('WINTER_STARTUP_TIME') or define('WINTER_STARTUP_TIME', microtime(true));
         parent::init(
             $pathRoot,
-            $pathEnv,
             $pathResource,
         );
 

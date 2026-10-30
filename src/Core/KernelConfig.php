@@ -7,6 +7,10 @@ namespace Flytachi\Winter\Kernel\Core;
 abstract class KernelConfig
 {
     public static string $pathRoot;
+    /**
+     * The project's `.env`: always `<root>/.env`, the file the application loads and
+     * `call cfg` edits. Not configurable — a path given apart was never loaded.
+     */
     public static string $pathEnv;
     public static string $pathResource;
     /**
@@ -48,23 +52,16 @@ abstract class KernelConfig
 
     /**
      * @param string|null $pathRoot
-     * @param string|null $pathEnv
      * @param string|null $pathResource
      * @return void
      */
     public static function init(
         ?string $pathRoot = null,
-        ?string $pathEnv = null,
         ?string $pathResource = null,
     ): void {
         // root
         if ($pathRoot === null) {
             $pathRoot = dirname(__DIR__, 5);
-        }
-
-        // env
-        if ($pathEnv === null) {
-            $pathEnv = $pathRoot . '/.env';
         }
 
         // resource
@@ -73,7 +70,7 @@ abstract class KernelConfig
         }
 
         self::$pathRoot = $pathRoot;
-        self::$pathEnv = $pathEnv;
+        self::$pathEnv = $pathRoot . '/.env';
         self::$pathResource = $pathResource;
         self::$pathLogs = $pathRoot . '/logs';
         self::$pathWinter = $pathRoot . '/.winter';
