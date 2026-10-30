@@ -49,9 +49,16 @@ final class Schedule extends Cmd
      */
     private function listArg(): void
     {
-        $tasks = $this->discover();
+        $scheduler = $this->scheduler();
+        $tasks = $this->tasksOf($scheduler);
 
         $this->printListLabel("Scheduled Tasks", self::CL);
+        if ($tasks === null) {
+            self::printWarning("The tasks of {$scheduler} come from its discover(), not from #[Scheduled].");
+            self::printInfo("They can be listed while it runs: call schedule start.");
+            self::printLabel("Scheduled Tasks", self::CL);
+            return;
+        }
         if ($tasks === []) {
             self::printWarning("No #[Scheduled] methods found.");
             self::printInfo("Annotate a public, no-argument method with #[Scheduled].");
@@ -61,12 +68,39 @@ final class Schedule extends Cmd
 
         self::print(sprintf("  %-46s %s", 'TASK', 'TRIGGER'), 90);
         foreach ($tasks as $task) {
-            self::print(sprintf("  %-46s %s", $task->id(), $task->trigger->describe()), 32);
+            self::print(sprintf("  %-46s %s", $task['id'], $task['trigger']), 32);
         }
 
         self::printDivider();
         self::printInfo(count($tasks) . " task(s) defined.");
         self::printLabel("Scheduled Tasks", self::CL);
+    }
+
+    /**
+     * The tasks of a scheduler: the ones it published if it runs; the `#[Scheduled]`
+     * scan if it is the built-in one; null for a scheduler that sources its tasks
+     * itself (an overridden discover()) and is not running — the console cannot know
+     * them without running its code.
+     *
+     * @param class-string<Scheduler> $scheduler
+     * @return list<array{id: string, trigger: string}>|null
+     */
+    private function tasksOf(string $scheduler): ?array
+    {
+        $info = $scheduler::status();
+        if ($info !== null && !$this->isDownRecord($info)) {
+            $published = $scheduler::published($info->pid);
+            if ($published !== null) {
+                return $published;
+            }
+        }
+        if ((new \ReflectionMethod($scheduler, 'discover'))->getDeclaringClass()->getName() !== Scheduler::class) {
+            return null;
+        }
+        return array_map(
+            static fn($task): array => ['id' => $task->id(), 'trigger' => $task->trigger->describe()],
+            $this->discover(),
+        );
     }
 
     private function startArg(): void
@@ -149,7 +183,14 @@ final class Schedule extends Cmd
         );
         self::printKeyValue("Started", $info->getStartedAt(), 12, self::CL, 36);
         self::printKeyValue("Uptime", $this->formatDuration(time() - $info->startedAt), 12, self::CL, 36);
-        self::printKeyValue("Tasks", (string) count($this->discover()), 12, self::CL, 36);
+        $tasks = $this->tasksOf($scheduler);
+        self::printKeyValue(
+            "Tasks",
+            $tasks !== null ? (string) count($tasks) : 'from ' . $scheduler . '::discover()',
+            12,
+            self::CL,
+            36
+        );
         if ($detailed) {
             $this->printResources($info, self::CL);
         }

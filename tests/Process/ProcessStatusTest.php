@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\Process;
 
+use Flytachi\Winter\Kernel\App\Runtime\ManagedBy;
 use Flytachi\Winter\Kernel\Process\Activity;
 use Flytachi\Winter\Kernel\Process\ProcessState;
 use Flytachi\Winter\Kernel\Process\ProcessStatus;
@@ -40,7 +41,7 @@ final class ProcessStatusTest extends TestCase
         ))->jsonSerialize();
 
         self::assertSame(
-            ['pid', 'class', 'state', 'activity', 'started_at', 'uptime', 'concurrency', 'heartbeat_at', 'usage'],
+            ['pid', 'class', 'state', 'activity', 'started_at', 'uptime', 'concurrency', 'heartbeat_at', 'usage', 'host', 'managed_by'],
             array_keys($json)
         );
         self::assertSame(200, $json['pid']);
@@ -52,6 +53,24 @@ final class ProcessStatusTest extends TestCase
         self::assertSame(8, $json['concurrency']);
         self::assertSame($started + 3, $json['heartbeat_at']);
         self::assertNull($json['usage']);
+        self::assertNull($json['host']);
+        self::assertNull($json['managed_by']);
+    }
+
+    /** Whose a process is travels with it: read as JSON, it was lost. */
+    public function test_json_says_where_it_runs_and_which_run_it_belongs_to(): void
+    {
+        $status = new ProcessStatus(7, 'App\\Worker', ProcessState::RUNNING, Activity::IDLE, time());
+        $status->host = 'web-1';
+        $status->managedBy = new ManagedBy('App\\Application', 1, 1_700_000_000, 'web-1');
+
+        $json = json_decode((string) json_encode($status), true);
+
+        self::assertSame('web-1', $json['host']);
+        self::assertSame(
+            ['app' => 'App\\Application', 'pid' => 1, 'started_at' => 1_700_000_000, 'host' => 'web-1'],
+            $json['managed_by'],
+        );
     }
 
     /**

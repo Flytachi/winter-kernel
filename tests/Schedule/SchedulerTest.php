@@ -101,6 +101,52 @@ final class SchedulerTest extends TestCase
         self::assertSame(0.05, $this->untilNext($scheduler, 100.0));
     }
 
+    /**
+     * A reload used to drop the runs in flight: the task, fresh in the new registry, was
+     * free to start again while its run went on — two at once.
+     */
+    public function test_a_reload_keeps_a_run_in_flight_with_its_task(): void
+    {
+        $kept = new ScheduledTask('App\\Svc', 'kept', new FixedDelayTrigger(5.0));
+        $kept->inFlight = true;
+        $kept->lastStartAt = 100.0;
+        $gone = new ScheduledTask('App\\Svc', 'gone', new FixedDelayTrigger(5.0));
+        $gone->inFlight = true;
+
+        $scheduler = new class extends Scheduler {
+            protected function discover(): array
+            {
+                // The new registry: `kept` again (at another index), `gone` removed.
+                return [
+                    new ScheduledTask('App\\Svc', 'added', new FixedDelayTrigger(5.0)),
+                    new ScheduledTask('App\\Svc', 'kept', new FixedDelayTrigger(5.0)),
+                ];
+            }
+        };
+        new ReflectionProperty(Scheduler::class, 'tasks')->setValue($scheduler, [$kept, $gone]);
+        new ReflectionProperty(Scheduler::class, 'logger')->setValue($scheduler, new \Psr\Log\NullLogger());
+        $keptRun = new CompletableFuture();
+        $goneRun = new CompletableFuture();
+        new ReflectionProperty(Scheduler::class, 'running')->setValue($scheduler, [0 => $keptRun, 1 => $goneRun]);
+
+        new ReflectionMethod(Scheduler::class, 'onReload')->invoke($scheduler);
+
+        $tasks = new ReflectionProperty(Scheduler::class, 'tasks')->getValue($scheduler);
+        $running = new ReflectionProperty(Scheduler::class, 'running')->getValue($scheduler);
+        $detached = new ReflectionProperty(Scheduler::class, 'detached')->getValue($scheduler);
+        self::assertTrue($tasks[1]->inFlight, 'the kept task does not start again');
+        self::assertSame(100.0, $tasks[1]->lastStartAt);
+        self::assertSame($keptRun, $running[1]);
+        self::assertFalse($tasks[0]->inFlight);
+        self::assertSame([$goneRun], $detached, "the removed task's run is reaped apart");
+
+        // The removed task's run is let go once it ends.
+        $goneRun->complete(null);
+        new ReflectionMethod(Scheduler::class, 'reap')->invoke($scheduler);
+        self::assertSame([], new ReflectionProperty(Scheduler::class, 'detached')->getValue($scheduler));
+        self::assertTrue($tasks[1]->inFlight, 'still running');
+    }
+
     public function test_reap_finalizes_only_settled_runs(): void
     {
         // Task 0's run has completed; task 1's is still in flight.

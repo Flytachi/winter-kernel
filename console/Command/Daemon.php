@@ -215,7 +215,7 @@ final class Daemon extends Cmd
             SlotState::KILLING    => 31, // red
             SlotState::RESTARTING => 35, // magenta
             SlotState::RETIRED    => 90, // dim
-            SlotState::EMPTY      => 90, // dim
+            SlotState::EMPTY      => 90, // free slots are not listed; here for an exhaustive match
         };
     }
 
@@ -341,7 +341,7 @@ final class Daemon extends Cmd
         self::printLabel("Commands", $cl);
 
         self::printDivider($cl);
-        self::printInfo("Worker states: running / starting / retiring / killing / restarting");
+        self::printInfo("Worker states: running / starting / retiring / killing / restarting / retired");
         self::printInfo("Bare processes are managed by 'call process'.");
         self::printInfo("While the application runs, it starts every daemon (start, with or without -d):");
         self::printInfo("  [boot] declared — its settings; [adopted] not declared — runs once, not critical.");

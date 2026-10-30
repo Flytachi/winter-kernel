@@ -87,7 +87,11 @@ trait FileResponseHeaders
     {
         // Anything outside printable ASCII becomes an underscore, quotes and backslashes
         // included — a control character would otherwise let the name inject a header.
-        $ascii = preg_replace('/[^\x20-\x7E]/', '_', $fileName) ?? '';
+        // One per character (`Договор` → 7, not 14): a name that is not valid UTF-8 has
+        // no characters to count, and gets one per byte.
+        $ascii = preg_replace('/[^\x20-\x7E]/u', '_', $fileName)
+            ?? preg_replace('/[^\x20-\x7E]/', '_', $fileName)
+            ?? '';
         $ascii = str_replace(['"', '\\'], '_', $ascii);
         if (trim($ascii, '_ ') === '') {
             $ascii = 'file';

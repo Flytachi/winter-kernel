@@ -205,7 +205,7 @@ final class Make extends Cmd
             return;
         }
 
-        $info = $this->getInfo($name, '', 'EntityTemplate');
+        $info = $this->getInfo($name, '', 'EntityTemplate', category: 'Entity');
         $this->smartInfo(
             $info,
             'Entity',
@@ -357,7 +357,12 @@ final class Make extends Cmd
         }
     }
 
-    private function getInfo(string $way, string $prefix, string $templateName): array
+    /**
+     * @param string $prefix The class name's suffix (`UserController`), empty for none.
+     * @param string|null $category What `--mvc` files it under, when it is not the
+     *   suffix — an entity has no suffix, but its own folder.
+     */
+    private function getInfo(string $way, string $prefix, string $templateName, ?string $category = null): array
     {
         if (!$this->loader) {
             $loaders = ClassLoader::getRegisteredLoaders();
@@ -375,7 +380,7 @@ final class Make extends Cmd
 
         // Step 2: apply --mvc option (prepend category folder to inputPath)
         if (isset($this->args['options']['mvc'])) {
-            $mvcFolder = match ($prefix) {
+            $mvcFolder = match ($category ?? $prefix) {
                 'Controller'          => 'Controllers',
                 'Service'             => 'Services',
                 'Middleware'          => 'Middlewares',

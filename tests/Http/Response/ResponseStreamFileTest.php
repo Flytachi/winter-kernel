@@ -247,6 +247,27 @@ final class ResponseStreamFileTest extends TestCase
         );
     }
 
+    /** One underscore per character, not per byte: `Договор` is 7 letters, 14 bytes. */
+    public function test_the_ascii_fallback_replaces_characters_not_bytes(): void
+    {
+        $res = $this->send(
+            ResponseStreamFile::open($this->path)->fileName('Договор №14.pdf')->attachment(),
+            new StubRequest(),
+        );
+
+        self::assertStringContainsString('filename="_______ _14.pdf"', $res->headers['Content-Disposition']);
+    }
+
+    public function test_a_name_that_is_not_utf8_falls_back_to_bytes(): void
+    {
+        $res = $this->send(
+            ResponseStreamFile::open($this->path)->fileName("\xFF\xFEab.txt")->attachment(),
+            new StubRequest(),
+        );
+
+        self::assertStringContainsString('filename="__ab.txt"', $res->headers['Content-Disposition']);
+    }
+
     /** A newline in the name would otherwise let it inject a header of its own. */
     public function test_a_control_character_in_the_name_is_neutralised(): void
     {

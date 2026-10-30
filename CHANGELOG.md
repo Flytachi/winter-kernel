@@ -264,6 +264,20 @@ boot.
   default now.
 - A daemon worker still booting died on SIGHUP, now that a reload of the application reaches
   every worker; a worker ignores the reload signals until it sets its own handlers.
+- A reload of the scheduler (SIGHUP) dropped the runs in flight: a task still in the new
+  schedule could start again while its previous run went on — the one thing a task never
+  does. A run now stays with its task across a reload; the run of a task the reload removed
+  is waited for, and not started again.
+- `call schedule list` and `status` read the tasks from the `#[Scheduled]` scan, so a
+  scheduler with its own `discover()` (tasks from a database) showed none. A running
+  scheduler now publishes what it runs; one of your own that is not running is named as
+  such.
+- `call make --mvc` filed an entity under `Utils/` instead of `Entities/`.
+- The ASCII fallback of a download's file name (`filename=`, for old clients) replaced every
+  byte outside ASCII with `_`, two per Cyrillic letter; it replaces characters now
+  (`Договор №14.pdf` → `_______ _14.pdf`).
+- `ProcessStatus` as JSON now carries `host` and `managed_by`, as the object does.
+- `call daemon --help` listed the worker states without `retired`.
 - `ServerSettings` suggested `ssl_cert_file` for HTTPS. The server was built without TLS, so
   the handshake failed and it kept serving plain HTTP.
 

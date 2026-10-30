@@ -56,4 +56,27 @@ final class SchedulerIntegrationTest extends IntegrationCase
         self::assertTrue($this->waitExit($pid), 'SIGTERM stops the scheduler');
         self::assertNull(MarkerScheduler::status(), 'the record is removed on exit');
     }
+
+    /**
+     * A scheduler with its own discover() — tasks from a database, say — was listed by
+     * the console from the #[Scheduled] scan: no tasks. It publishes what it runs.
+     */
+    public function test_a_running_scheduler_publishes_its_tasks_for_the_console(): void
+    {
+        $pid = $this->fork(static fn() => MarkerScheduler::start());
+        self::assertTrue($this->pollUntil(fn() => MarkerScheduler::status() !== null && $this->tickCount() >= 1));
+        $running = MarkerScheduler::status()->pid;
+
+        $tasks = MarkerScheduler::published($running);
+        self::assertSame(
+            [['id' => \Flytachi\Winter\Kernel\Tests\Schedule\Fixtures\MarkerTask::class . '::tick', 'trigger' => $tasks[0]['trigger'] ?? '']],
+            $tasks,
+        );
+        self::assertNotSame('', $tasks[0]['trigger']);
+        self::assertNull(MarkerScheduler::published($running + 1), 'only for the process that wrote it');
+
+        posix_kill($pid, SIGTERM);
+        self::assertTrue($this->waitExit($pid));
+        self::assertNull(MarkerScheduler::published($running), 'withdrawn when it stops');
+    }
 }

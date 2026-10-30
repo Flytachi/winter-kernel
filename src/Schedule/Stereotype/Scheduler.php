@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Schedule\Stereotype;
 
+use Flytachi\FileStore\FileStorage;
 use Flytachi\Winter\DI\Container;
 use Flytachi\Winter\Kernel\Concurrent\Future;
 use Flytachi\Winter\Kernel\Core\ClassScanner;
+use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Kernel\Process\Stereotype\Process;
 use Flytachi\Winter\Kernel\Schedule\ScheduledCollector;
 use Flytachi\Winter\Kernel\Schedule\ScheduledTask;
@@ -47,6 +49,8 @@ class Scheduler extends Process
     private array $tasks = [];
     /** @var array<int, Future> In-flight run per task index; reaped when the future settles. */
     private array $running = [];
+    /** @var list<Future> Runs of tasks a reload removed: reaped, never rescheduled. */
+    private array $detached = [];
 
     /**
      * Discovers the annotated methods and drives their triggers until stopped.
@@ -55,6 +59,7 @@ class Scheduler extends Process
     {
         $this->tasks = $this->discover();
         $this->seed(microtime(true));
+        $this->publish();
 
         if ($this->tasks === []) {
             $this->logger->warning('Scheduler: no #[Scheduled] methods found; idling.');
@@ -62,28 +67,104 @@ class Scheduler extends Process
             $this->logger->info('Scheduler: ' . count($this->tasks) . ' scheduled task(s) registered.');
         }
 
-        while ($this->isRunning()) {
-            $this->reap();
-            $now = microtime(true);
-            foreach ($this->tasks as $index => $task) {
-                if (!$task->inFlight && $task->nextFireAt <= $now) {
-                    $this->fire($index, $task);
+        try {
+            while ($this->isRunning()) {
+                $this->reap();
+                $now = microtime(true);
+                foreach ($this->tasks as $index => $task) {
+                    if (!$task->inFlight && $task->nextFireAt <= $now) {
+                        $this->fire($index, $task);
+                    }
                 }
+                $this->sleep($this->untilNext(microtime(true)));
             }
-            $this->sleep($this->untilNext(microtime(true)));
+        } finally {
+            // A stop interrupts the sleep with an exception: withdrawn either way. A
+            // leftover from a process killed outright is ignored — it is read only for a
+            // running scheduler of the same PID.
+            try {
+                self::registry()->del(static::class);
+            } catch (\Throwable) {
+                // Best effort, see above.
+            }
         }
     }
 
     /**
+     * The tasks a running scheduler of this class has, as it published them — what
+     * `call schedule list|status` show. Null when it does not run, or ran under another
+     * PID than the one given: a scheduler that sources its tasks elsewhere (an
+     * overridden {@see discover()}) can be listed only while it runs.
+     *
+     * @return list<array{id: string, trigger: string}>|null
+     *
+     * @internal
+     */
+    final public static function published(int $pid): ?array
+    {
+        try {
+            $entry = self::registry()->read(static::class);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (!is_array($entry) || ($entry['pid'] ?? null) !== $pid || !is_array($entry['tasks'] ?? null)) {
+            return null;
+        }
+        return $entry['tasks'];
+    }
+
+    /** What the scheduler runs, for the console: at start and after every reload. */
+    private function publish(): void
+    {
+        $tasks = array_map(
+            static fn(ScheduledTask $task): array => ['id' => $task->id(), 'trigger' => $task->trigger->describe()],
+            array_values($this->tasks),
+        );
+        try {
+            self::registry()->write(static::class, ['pid' => getmypid(), 'tasks' => $tasks]);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Scheduler: its task list could not be published for the console: ' . $e->getMessage());
+        }
+    }
+
+    private static function registry(): FileStorage
+    {
+        return Kernel::runnable('schedule');
+    }
+
+    /**
      * SIGHUP: re-scan the annotated methods so newly added or removed tasks take
-     * effect without a restart. Any in-flight runs are detached (they finish on
-     * their own and harmlessly); the fresh registry seeds from now.
+     * effect without a restart; the fresh registry seeds from now.
+     *
+     * A run in flight stays with its task: a task still in the registry keeps it, and
+     * does not start again until it ends — dropping it let the same task run twice at
+     * once, the one thing a task never does. The run of a task the reload removed is
+     * kept apart, reaped when it ends and never rescheduled.
      */
     protected function onReload(): void
     {
+        $previous = $this->tasks;
+        $running = $this->running;
         $this->tasks = $this->discover();
         $this->running = [];
         $this->seed(microtime(true));
+
+        $byId = [];
+        foreach ($this->tasks as $index => $task) {
+            $byId[$task->id()] ??= $index;
+        }
+        foreach ($running as $oldIndex => $future) {
+            $old = $previous[$oldIndex] ?? null;
+            $index = $old !== null ? ($byId[$old->id()] ?? null) : null;
+            if ($index === null || isset($this->running[$index])) {
+                $this->detached[] = $future;
+                continue;
+            }
+            $this->tasks[$index]->inFlight = true;
+            $this->tasks[$index]->lastStartAt = $old->lastStartAt;
+            $this->running[$index] = $future;
+        }
+        $this->publish();
         $this->logger->info('Scheduler: reloaded, ' . count($this->tasks) . ' scheduled task(s).');
     }
 
@@ -146,6 +227,7 @@ class Scheduler extends Process
             }
             unset($this->running[$index]);
         }
+        $this->detached = array_values(array_filter($this->detached, static fn(Future $f): bool => !$f->isDone()));
     }
 
     /**
@@ -194,7 +276,7 @@ class Scheduler extends Process
             ? self::MAX_SLEEP
             : max(self::MIN_SLEEP, min($soonest - $now, self::MAX_SLEEP));
 
-        if ($this->running !== []) {
+        if ($this->running !== [] || $this->detached !== []) {
             $wait = min($wait, self::REAP_POLL);
         }
         return $wait;

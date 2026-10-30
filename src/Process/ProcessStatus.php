@@ -31,15 +31,17 @@ class ProcessStatus implements \JsonSerializable
 
     /**
      * Where the instance runs — {@see \Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime::host()}.
-     * A record from another host (a container's, read through a mounted storage) names
+     * A record from another host (a container's, read through a mounted project folder) names
      * PIDs of another process namespace: nobody may signal by them from here. Null in a
      * record written before the field existed.
      */
     public ?string $host = null;
 
     /**
-     * The application run that started this instance as one of its components — null
-     * for a process started on its own (`call process … start`, `dispatch()`).
+     * The application run this instance belongs to — declared as one of its components,
+     * or adopted: started with `dispatch()` or `call process … start` while the
+     * application runs here. Null for a process started on its own, with no application
+     * running.
      */
     public ?ManagedBy $managedBy = null;
 
@@ -78,6 +80,8 @@ class ProcessStatus implements \JsonSerializable
             'concurrency' => $this->concurrency,
             'heartbeat_at' => $this->heartbeatAt,      // last liveness beat (0 = none)
             'usage'       => $this->usage,             // ResourceUsage|null (also JsonSerializable)
+            'host'        => $this->host,              // where it runs (null in an old record)
+            'managed_by'  => $this->managedBy,         // ManagedBy|null: the application run it belongs to
         ];
     }
 }
