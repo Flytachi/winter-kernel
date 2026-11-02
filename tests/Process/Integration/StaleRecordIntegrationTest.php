@@ -120,6 +120,56 @@ final class StaleRecordIntegrationTest extends IntegrationCase
         );
     }
 
+    // ── A record from another environment ─────────────────────────────────────
+
+    /** @param class-string<Process> $class */
+    #[DataProvider('stereotypes')]
+    public function test_a_dead_container_record_does_not_block_its_recreated_container(string $class): void
+    {
+        // `docker kill`, then the container recreated on the same mounted tree: the
+        // record names the old container's hostname, and nobody holds its lock.
+        $this->touchLockFile($class);
+        $this->writeRecord($class, 1, host: 'dead-container');
+
+        self::assertNull($class::status(), 'a free lock: the writer is gone');
+
+        $starter = $this->starter($class);
+        $pid = $this->fork($starter);
+        self::assertTrue(
+            $this->pollUntil(fn() => $this->freshlyStarted($class, $pid)),
+            "{$class} starts over a dead container's record"
+        );
+    }
+
+    public function test_a_live_container_record_is_still_left_alone(): void
+    {
+        // Another container on the same machine runs it: its lock is held.
+        $this->touchLockFile(SignalProcess::class);
+        $holder = $this->fork(function (): void {
+            $handle = fopen($this->lockFile(SignalProcess::class), 'c');
+            flock($handle, LOCK_EX);
+            sleep(30);
+        });
+        self::assertTrue($this->pollUntil(fn() => !$this->lockIsFree(SignalProcess::class)), 'the lock is taken');
+        $this->writeRecord(SignalProcess::class, 1, host: 'live-container');
+
+        self::assertSame('live-container', SignalProcess::status()?->host, 'shown as it is');
+        self::assertFalse(SignalProcess::stop(), 'its PID means nothing here');
+
+        posix_kill($holder, SIGKILL);
+        pcntl_waitpid($holder, $status);
+        self::assertNull(SignalProcess::status(), 'gone once its lock is free');
+    }
+
+    public function test_a_foreign_record_without_a_working_lock_is_left_alone(): void
+    {
+        // Written where `flock` does not exclude: a free lock proves nothing.
+        $this->touchLockFile(SignalProcess::class);
+        $this->writeRecord(SignalProcess::class, 1, locked: false, host: 'other-container');
+
+        self::assertSame('other-container', SignalProcess::status()?->host);
+    }
+
     // ── stop() and status() ───────────────────────────────────────────────────
 
     public function test_stop_does_not_signal_a_stranger_that_got_the_stale_pid(): void
@@ -301,7 +351,7 @@ final class StaleRecordIntegrationTest extends IntegrationCase
      * A record as a dead instance left it. $locked as the instance found its lock: true
      * on a filesystem where `flock` works, which is what a running instance writes here.
      */
-    private function writeRecord(string $class, int $pid, bool $locked = true): void
+    private function writeRecord(string $class, int $pid, bool $locked = true, ?string $host = null): void
     {
         $status = new ProcessStatus(
             pid: $pid,
@@ -311,6 +361,7 @@ final class StaleRecordIntegrationTest extends IntegrationCase
             startedAt: time() - 3600,
         );
         $status->locked = $locked;
+        $status->host = $host;
         self::store($class)->write(self::key($class), $status);
     }
 
@@ -318,6 +369,20 @@ final class StaleRecordIntegrationTest extends IntegrationCase
     private function readRecord(string $class): mixed
     {
         return self::store($class)->read(self::key($class));
+    }
+
+    private function lockIsFree(string $class): bool
+    {
+        $handle = fopen($this->lockFile($class), 'r');
+        try {
+            $free = flock($handle, LOCK_SH | LOCK_NB);
+            if ($free) {
+                flock($handle, LOCK_UN);
+            }
+            return $free;
+        } finally {
+            fclose($handle);
+        }
     }
 
     private function touchLockFile(string $class): void

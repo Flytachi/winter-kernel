@@ -106,7 +106,9 @@ SIGUSR2 still go to the HTTP server only; a process gets them on its own PID.
 A process the application does not declare is *adopted* when it is started with `dispatch()`.
 It runs as a non-critical component without retries. Starting a component of an application
 that runs on another host (another container) throws `ProcessManagedException`, which suggests
-`docker exec`. `ProcessStatus` gained `host` and `managedBy`.
+`docker exec`. A record from another host whose lock is free is a dead one — a container
+killed outright (`docker kill`, OOM) and recreated on the same mounted tree — and does not
+hold its component. `ProcessStatus` gained `host` and `managedBy`.
 
 **Listen addresses in the code.** `#[EnableHttp(port: 8000, host: '0.0.0.0')]` declares the
 HTTP address. The launch flags are named after the component: `--http.port` and `--http.host`,

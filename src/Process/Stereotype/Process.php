@@ -445,10 +445,18 @@ abstract class Process
                 return null;
             }
             // Written in another environment (a container's record read through a mounted
-            // storage): its PID belongs to another process namespace, so nothing here can
-            // confirm or deny it. Returned as it is; nobody may signal by it.
+            // storage): its PID belongs to another process namespace, and nobody may
+            // signal by it. Its lock, though, is the same file here, and containers on one
+            // machine share it: a free lock in a record that trusts its lock means the
+            // writer died without cleanup (`docker kill`, OOM) and the container was
+            // recreated under a new hostname. Without that, the record would hold its
+            // component outside the application for good. A record without a working
+            // lock cannot be confirmed or denied, and is returned as it is.
+            //
+            // A macOS host and a container on the same tree do not see each other's
+            // locks — the same limit as the application's own lock.
             if (self::isForeign($status)) {
-                return $status;
+                return $status->locked && self::probeLock() === false ? null : $status;
             }
             // Written by the application's supervisor for a component that is down: it
             // holds as long as that run of the application does.

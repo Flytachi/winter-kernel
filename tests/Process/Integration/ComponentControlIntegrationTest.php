@@ -157,6 +157,25 @@ final class ComponentControlIntegrationTest extends IntegrationCase
         SignalProcess::start();
     }
 
+    public function test_a_dead_container_record_does_not_hold_the_component(): void
+    {
+        // `docker kill`, then the container recreated on the same mounted tree: the old
+        // container's record and a lock nobody holds. Held for good before.
+        $status = new ProcessStatus(1, SignalProcess::class, ProcessState::RUNNING, Activity::IDLE, time() - 60);
+        $status->host = 'dead-container';
+        $status->locked = true;
+        (new \ReflectionMethod(SignalProcess::class, 'store'))->invoke(null)
+            ->write((new \ReflectionMethod(SignalProcess::class, 'key'))->invoke(null), $status);
+        touch($this->storage . '/.winter/runnable/' . str_replace('\\', '.', SignalProcess::class) . '.lock');
+
+        $this->supervise([Component::process(SignalProcess::class)], asApplication: true);
+
+        self::assertTrue($this->pollUntil(
+            fn() => ($s = SignalProcess::status()) !== null && $s->host !== 'dead-container' && $s->managedBy !== null
+        ), 'the application runs it');
+        self::assertStringNotContainsString('runs outside the application', $this->logged(), 'not held');
+    }
+
     public function test_a_request_for_another_run_of_the_application_is_dropped(): void
     {
         $previous = new ManagedBy(self::$testApp, 111, time() - 600, ApplicationRuntime::host());
