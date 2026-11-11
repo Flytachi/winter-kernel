@@ -10,12 +10,13 @@ use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Kernel\Plugin;
 
 /**
- * Project-wide class discovery — runs a {@see Scanner} pass over the project
- * root and every registered plugin, feeding each discovered class to the
+ * Project-wide class discovery — runs a {@see Scanner} pass over the project's
+ * code and every registered plugin, feeding each discovered class to the
  * given collectors.
  *
- * Mirrors the scan pattern used by the router/DI bootstrap: the project root
- * (vendor excluded automatically) plus each plugin's `src` directory.
+ * The project's code is what its `composer.json` autoloads (`main/` in the
+ * skeleton), not everything under its root: tests, scripts and data folders are
+ * no part of the application. Each plugin is scanned by its own roots.
  *
  * Usage:
  *   $collector = new ImplementorCollector(HealthContributor::class);
@@ -24,8 +25,23 @@ use Flytachi\Winter\Kernel\Plugin;
  */
 final class ClassScanner
 {
+    /** The file declaring the application class — scanned with the project's code. */
+    private static ?string $entry = null;
+
     private function __construct()
     {
+    }
+
+    /**
+     * Names the file that declares the application class (`bootstrap.php` in the
+     * skeleton). It is the application's code by definition, autoloaded or not, and a
+     * configurer declared beside the application class must keep being found.
+     *
+     * @internal Called by {@see \Flytachi\Winter\Kernel\WinterApplication} at boot.
+     */
+    public static function entry(?string $file): void
+    {
+        self::$entry = $file;
     }
 
     /**
@@ -52,10 +68,16 @@ final class ClassScanner
      * A {@see Scanner} carrying the project's standard exclusions.
      *
      * Use this instead of {@see Scanner::run()} anywhere the scan starts at the project
-     * root. `Scanner` drops `vendor/` on its own; the two directories named here hold
-     * PHP that is not application code, and the scanner cannot tell the difference — it
-     * reads every `.php` file looking for a class declaration, then `require_once`s
-     * whatever it finds.
+     * root. Given the root, it scans the directories the project's `composer.json`
+     * autoloads ({@see Scanner::composer()}): walking the root itself treated every
+     * `.php` under it as code — a test class without its dev dependencies stopped the
+     * boot, a script's top-level code ran, and a folder nobody may open (a database
+     * volume) was fatal. Given any other directory, it scans that directory.
+     *
+     * `Scanner` drops `vendor/` on its own; the two directories named here hold PHP that
+     * is not application code, and matter when the project autoloads from its root
+     * (`"App\\": ""`). The scanner cannot tell the difference — it reads every `.php`
+     * file looking for a class declaration, then `require_once`s whatever it finds.
      *
      * - **.winter** holds *generated* code: the class list and the `#[Async]` /
      *   `#[Cacheable]` proxies are written to `.winter/build`, so scanning it is at best
@@ -69,10 +91,28 @@ final class ClassScanner
      *   scan for nothing.
      *
      * @param string|null $cache Cache file path, or null to always walk the filesystem.
+     * @throws \Flytachi\Winter\DI\Exception\ScanException The project root has no
+     *                                                       `composer.json` autoload.
      */
     public static function scanner(string $rootDir, ?string $cache = null): Scanner
     {
-        return Scanner::run($rootDir, $cache)->exclude(self::excluded());
+        if (!self::isProjectRoot($rootDir)) {
+            return Scanner::run($rootDir, $cache)->exclude(self::excluded());
+        }
+        $roots = Scanner::composerRoots($rootDir);
+        if (self::$entry !== null && is_file(self::$entry)) {
+            $roots[] = self::$entry;
+        }
+        return Scanner::run($roots, $cache)->exclude(self::excluded());
+    }
+
+    private static function isProjectRoot(string $dir): bool
+    {
+        if (!isset(Kernel::$pathRoot)) {
+            return false;
+        }
+        $root = realpath(Kernel::$pathRoot);
+        return $root !== false && realpath($dir) === $root;
     }
 
     /**

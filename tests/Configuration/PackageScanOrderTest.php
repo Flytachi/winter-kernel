@@ -38,6 +38,8 @@ final class PackageScanOrderTest extends TestCase
 
         $this->appRoot = sys_get_temp_dir() . '/wk_scan_' . bin2hex(random_bytes(4));
         @mkdir($this->appRoot, 0777, true);
+        // The project's code is what composer.json autoloads — here, the root itself.
+        file_put_contents($this->appRoot . '/composer.json', '{"autoload":{"psr-4":{"Fixture\\\\":""}}}');
         file_put_contents(
             $this->appRoot . '/ProjectOnly.php',
             "<?php namespace WkScanFixture; final class ProjectOnly {}",

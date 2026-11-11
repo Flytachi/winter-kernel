@@ -20,6 +20,7 @@ final class CfgDockerTest extends TestCase
     {
         $this->project = sys_get_temp_dir() . '/wk_cfgdocker_' . getmypid() . '_' . bin2hex(random_bytes(4));
         mkdir($this->project, 0777, true);
+        file_put_contents($this->project . '/composer.json', '{"autoload":{"psr-4":{"Main\\\\":"main/"}}}');
         file_put_contents($this->project . '/.env', "DEBUG=true\n");
         file_put_contents($this->project . '/bootstrap.php', sprintf(<<<'PHP'
             <?php

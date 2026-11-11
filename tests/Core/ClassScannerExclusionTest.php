@@ -26,12 +26,15 @@ final class ClassScannerExclusionTest extends TestCase
     {
         $this->root = sys_get_temp_dir() . '/wk-scan-' . getmypid();
         @mkdir($this->root . '/.winter/build', 0777, true);
+        // Autoloaded from the root itself: what the exclusions are there for.
+        file_put_contents($this->root . '/composer.json', '{"autoload":{"psr-4":{"Fixture\\\\":""}}}');
         Kernel::init(pathRoot: $this->root);
     }
 
     protected function tearDown(): void
     {
         @unlink($this->root . '/.winter/build/di.php');
+        @unlink($this->root . '/composer.json');
         @rmdir($this->root . '/.winter/build');
         @rmdir($this->root . '/.winter');
         @rmdir($this->root);

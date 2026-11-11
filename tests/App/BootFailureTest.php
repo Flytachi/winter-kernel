@@ -23,6 +23,7 @@ final class BootFailureTest extends TestCase
     {
         $this->project = sys_get_temp_dir() . '/wk_boot_' . getmypid() . '_' . bin2hex(random_bytes(4));
         mkdir($this->project);
+        file_put_contents($this->project . '/composer.json', '{"autoload":{"psr-4":{"Main\\\\":"main/"}}}');
 
         // No #[Enable*] at all: `run` refuses to start an application that does nothing.
         file_put_contents($this->project . '/bootstrap.php', sprintf(<<<'PHP'

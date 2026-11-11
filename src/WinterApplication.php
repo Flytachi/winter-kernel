@@ -367,6 +367,7 @@ abstract class WinterApplication
     protected static function bootstrap(ApplicationArguments $args): void
     {
         self::$appClass = static::class;
+        ClassScanner::entry((new \ReflectionClass(static::class))->getFileName() ?: null);
         static::configure($args);
 
         $c = Container::init();
@@ -444,10 +445,11 @@ abstract class WinterApplication
             $contributed[$plugin->package] = $contributions;
         }
 
-        $shared(ClassScanner::scanner(
+        $projectScan = $shared(ClassScanner::scanner(
             rootDir: Kernel::$pathRoot,
             cache: $debug ? null : Kernel::$pathBuild . '/di.php',
-        ))->collect($serverCollector)->execute();
+        ))->collect($serverCollector);
+        $projectScan->execute();
 
         // Every bean is known now, the packages' and the application's: what a named
         // bean's type resolves to is decided once, whatever order the scan went in.
@@ -467,6 +469,13 @@ abstract class WinterApplication
         );
 
         static::applyLogging($c, $logCollector->getResult());
+        // Said once logging is set up: a folder under the code that nobody may open is
+        // left out of the scan, and whatever classes it holds are not registered.
+        foreach ($projectScan->skipped() as $dir) {
+            LoggerFactory::getLogger(static::class)->warning(
+                "Class scan skipped {$dir}: it cannot be opened (permissions?). Its classes are not registered."
+            );
+        }
         static::reportImports($imports, $contributed);
         static::applyCors($c, $webCollector->getResult());
         static::applyActuator($actuatorCollector->getResult());

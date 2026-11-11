@@ -6,6 +6,75 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [4.4.1] — unreleased
+
+The class scan reads the project's code, not everything under its root. A stop has a finite,
+canonical wait at every level.
+
+### Changed
+
+- **Bounded, canonical stop times.** Every level of a stop has a finite wait now, each one
+  inside the next:
+
+  | Level | Waits | Before |
+  | --- | --- | --- |
+  | Process, Scheduler, WebSocket (`$grace`) | 30 s, then forced down | 0 = for good |
+  | Daemon workers (`$grace`) | 30 s, then SIGKILL | 30 s |
+  | HTTP requests in flight | as long as a request may run (`requestTimeout`, 30 s) | 3 s (Swoole's default) — longer requests were cut |
+  | Outside programs (`script()`, `command()`) | 30 s, then SIGKILL | 10 s |
+  | The application | 35 s, or 5 s past the longest grace; then SIGKILL to what is left, named in the log | for good |
+  | A second stop signal (Ctrl+C twice) | kills what is left at once | ignored |
+  | The sentinel | 30 s, then SIGKILL | 10 s |
+  | `docker stop` (generated compose) | `stop_grace_period: 40s` | Docker's 10 s |
+
+  30 seconds is the usual bound (Kubernetes' grace period, Spring Boot's shutdown phase). A
+  `$grace` of 0 still waits for good, and then the application sets no budget of its own.
+  For Kubernetes, set `terminationGracePeriodSeconds: 40`.
+
+- **The scan covers what `composer.json` autoloads.** The project's classes are looked for in
+  the folders of its `autoload` section — `psr-4`, `psr-0` and `classmap`, not `autoload-dev`
+  — and in the file that declares the application class (`bootstrap.php`), so a class
+  declared there is still found. Before, the scan walked the whole root: every folder
+  (`.git`, `vendor/`, `tests/`, `scripts/`, data folders), every `.php` in them read, and
+  every class file the autoloader did not know `require_once`d. That made three things
+  fail at boot:
+  - a test class without its dev dependencies (`composer install --no-dev`): `Class
+    "…\TestCase" not found`;
+  - a folder nobody may open — a database volume (`./pgdata`), another user's folder, a
+    folder renamed by case on a macOS Docker mount: `Failed to open directory`;
+  - and a script's top-level code ran at every boot.
+
+  A folder inside the code that cannot be opened is skipped now, and the log says so:
+  `Class scan skipped <dir>: it cannot be opened (permissions?). Its classes are not
+  registered.` A project with no `autoload` folder stops at boot with the line to add.
+- Requires `flytachi/winter-di` 2.3: several scan roots in one pass, `Scanner::composer()`,
+  excluded folders are no longer entered, and an exclusion stops at the folder boundary
+  (`vendor` no longer hides `vendor-tools/`).
+
+### Fixed
+
+- A stop that arrived during a unit of work (`markBusy()` … `markIdle()`) let the unit finish
+  — and then the body's next `sleep()` was slept in full: work done in 5 s, and the process
+  sat out its `sleep(60)`, or was forced down by its grace. That sleep is now interrupted
+  at once. A spawned task is still drained, not interrupted.
+- A container killed outright (`docker kill`, OOM) and recreated on the same mounted tree held
+  its components for good: their records named the old container's hostname, and a record
+  from another host was taken for a process running there without asking its lock. A record
+  from another host whose lock is free is a dead one now, and does not hold its component.
+
+### Upgrading from 4.4.0
+
+1. A class outside the `autoload` folders and outside `bootstrap.php` is no longer found.
+   Move it into an autoloaded folder (`main/` in the skeleton), or add its folder to
+   `autoload`, then run `composer dump-autoload`.
+2. A project without an `autoload` section needs one:
+   `"autoload": {"psr-4": {"Main\\": "main/"}}`.
+3. A process, scheduler or WebSocket that relied on the old `$grace` of 0 (wait for good)
+   gets 30 s now: set `protected float $grace = 0.0;` to keep it. Outside programs get 30 s
+   instead of 10 before SIGKILL.
+4. In your own `docker-compose.yml`, add `stop_grace_period: 40s`; on Kubernetes, set
+   `terminationGracePeriodSeconds: 40`.
+
 ## [4.4.0] — 2026-10-30
 
 The application becomes a supervisor: `call run` is PID 1, and it starts, watches and restarts
@@ -51,24 +120,6 @@ the container available, and takes the same parameters as the attributes. It acc
 Attributes and the hook add up, and the same class or program name declared twice stops the
 boot.
 
-**Bounded, canonical stop times.** Every level of a stop now has a finite wait, each one
-inside the next:
-
-| Level | Waits | Before |
-| --- | --- | --- |
-| Process, Scheduler, WebSocket (`$grace`) | 30 s, then forced down | 0 = for good |
-| Daemon workers (`$grace`) | 30 s, then SIGKILL | 30 s |
-| HTTP requests in flight | as long as a request may run (`requestTimeout`, 30 s) | 3 s (Swoole's default) — longer requests were cut |
-| Outside programs (`script()`, `command()`) | 30 s, then SIGKILL | 10 s |
-| The application | 35 s, or 5 s past the longest grace; then SIGKILL to what is left, named in the log | for good |
-| A second stop signal (Ctrl+C twice) | kills what is left at once | ignored |
-| The sentinel | 30 s, then SIGKILL | 10 s |
-| `docker stop` (generated compose) | `stop_grace_period: 40s` | Docker's 10 s |
-
-30 seconds is the usual bound (Kubernetes' grace period, Spring Boot's shutdown phase). A
-`$grace` of 0 still waits for good, and then the application sets no budget of its own.
-For Kubernetes, set `terminationGracePeriodSeconds: 40`.
-
 **The application says how it ends.** Next to `Application up: …` at the start, the log now
 gets a line when a stop begins and one when it is done:
 ```
@@ -106,9 +157,7 @@ SIGUSR2 still go to the HTTP server only; a process gets them on its own PID.
 A process the application does not declare is *adopted* when it is started with `dispatch()`.
 It runs as a non-critical component without retries. Starting a component of an application
 that runs on another host (another container) throws `ProcessManagedException`, which suggests
-`docker exec`. A record from another host whose lock is free is a dead one — a container
-killed outright (`docker kill`, OOM) and recreated on the same mounted tree — and does not
-hold its component. `ProcessStatus` gained `host` and `managedBy`.
+`docker exec`. `ProcessStatus` gained `host` and `managedBy`.
 
 **Listen addresses in the code.** `#[EnableHttp(port: 8000, host: '0.0.0.0')]` declares the
 HTTP address. The launch flags are named after the component: `--http.port` and `--http.host`,
@@ -305,10 +354,6 @@ boot.
   unnamed bean of the type owns the type; otherwise a lone named bean is its type too; two or
   more named beans make injecting the type an error that names them. A class registered by
   its own `#[Singleton]`/`#[Request]`/`#[Transient]` keeps its type.
-- A stop that arrived during a unit of work (`markBusy()` … `markIdle()`) let the unit finish
-  — and then the body's next `sleep()` was slept in full: work done in 5 s, and the process
-  sat out its `sleep(60)`, or was forced down by its grace. That sleep is now interrupted
-  at once. A spawned task is still drained, not interrupted.
 - `ServerSettings` suggested `ssl_cert_file` for HTTPS. The server was built without TLS, so
   the handshake failed and it kept serving plain HTTP.
 
@@ -319,9 +364,7 @@ boot.
 2. In scripts, Docker and process managers, replace `call run --port=N` with
    `call run --http.port=N`, or declare the port in code with `#[EnableHttp(port: N)]`.
 3. Replace `LOG_FILE` / `LOG_*_FILE` with `LOG_DIR`, if they were set.
-4. Add `/.winter` and `/logs` to `.gitignore`. A process that relied on the old `$grace`
-   of 0 (wait for good) gets 30 s now: set `protected float $grace = 0.0;` to keep it. In
-   your own `docker-compose.yml`, add `stop_grace_period: 40s`. Remove `storage/` once nothing points at it.
+4. Add `/.winter` and `/logs` to `.gitignore`. Remove `storage/` once nothing points at it.
 5. Remove the `storage` path arguments and `pathEnv` from any custom `Kernel::init()`
    call. Call it with named arguments (`pathRoot:`, `pathResource:`): a positional call
    written for the old signature would put its second argument into `pathResource`.

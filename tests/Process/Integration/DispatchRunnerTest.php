@@ -170,6 +170,7 @@ final class DispatchRunnerTest extends TestCase
             }
             PHP);
 
+        file_put_contents($this->project . '/composer.json', '{"autoload":{"psr-4":{"Main\\\\":"main/"}}}');
         file_put_contents($this->project . '/.env', "WINTER_KEY=" . self::SECRET . "\nLOG_LEVEL=\n");
     }
 
