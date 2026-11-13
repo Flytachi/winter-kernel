@@ -11,11 +11,13 @@
  *   --touch=FILE      ready means: this file exists
  *   --stop-delay=S    seconds it takes to stop once asked
  *   --after=S --exit=C  ends by itself after S seconds with exit code C
+ *   --close-after=S   stops answering on its port after S seconds, and keeps running
+ *   --deaf            says it was asked to stop, and does not stop
  */
 
 declare(strict_types=1);
 
-$o = getopt('', ['name:', 'log:', 'delay:', 'listen:', 'touch:', 'stop-delay:', 'after:', 'exit:']);
+$o = getopt('', ['name:', 'log:', 'delay:', 'listen:', 'touch:', 'stop-delay:', 'after:', 'exit:', 'close-after:', 'deaf']);
 $name = $o['name'] ?? 'program';
 $say = static function (string $event) use ($o, $name): void {
     if (isset($o['log'])) {
@@ -27,6 +29,9 @@ pcntl_async_signals(true);
 foreach ([SIGTERM => 'TERM', SIGINT => 'INT'] as $signal => $signalName) {
     pcntl_signal($signal, static function () use ($say, $signalName, $o): void {
         $say("stop-{$signalName}");
+        if (isset($o['deaf'])) {
+            return;
+        }
         usleep((int) ((float) ($o['stop-delay'] ?? 0) * 1_000_000));
         $say('stopped');
         exit(0);
@@ -46,7 +51,13 @@ if (isset($o['touch'])) {
 }
 
 $end = isset($o['after']) ? microtime(true) + (float) $o['after'] : INF;
+$closeAt = isset($o['close-after']) ? microtime(true) + (float) $o['close-after'] : INF;
 while (microtime(true) < $end) {
+    if ($server !== null && microtime(true) >= $closeAt) {
+        fclose($server);
+        $server = null;
+        $say('closed');
+    }
     if ($server !== null) {
         $connection = @stream_socket_accept($server, 0.1);
         if ($connection !== false) {

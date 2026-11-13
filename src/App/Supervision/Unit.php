@@ -38,6 +38,19 @@ final class Unit
     /** When the readiness check is asked next. */
     public float $probeAt = 0.0;
 
+    /** The alive check of an outside program running now; 0 when none is. */
+    public int $alivePid = 0;
+    /** When that check was started. */
+    public float $aliveStartedAt = 0.0;
+    /** When the alive check is asked next. */
+    public float $aliveAt = 0.0;
+    /** Alive checks failed in a row. */
+    public int $aliveFailed = 0;
+    /** It stopped answering its alive check: it is being stopped, and its end is a crash. */
+    public bool $hung = false;
+    /** When a hung program that has not ended on its stop signal gets SIGTERM; 0 when not due. */
+    public float $termAt = 0.0;
+
     /** The process said it ends because it was asked to stop. */
     public bool $stopRequested = false;
     /** The process said it gave up by its own rules. */
@@ -85,6 +98,12 @@ final class Unit
         $this->probePid = 0;
         $this->probeStartedAt = 0.0;
         $this->probeAt = 0.0;
+        $this->alivePid = 0;
+        $this->aliveStartedAt = 0.0;
+        $this->aliveAt = 0.0;
+        $this->aliveFailed = 0;
+        $this->hung = false;
+        $this->termAt = 0.0;
         $this->stopRequested = false;
         $this->gaveUp = false;
         $this->held = false;

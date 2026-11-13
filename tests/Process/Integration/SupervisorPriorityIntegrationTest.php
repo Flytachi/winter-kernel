@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Kernel\Tests\Process\Integration;
 
 use Flytachi\Winter\Kernel\App\Component;
 use Flytachi\Winter\Kernel\App\Priority;
+use Flytachi\Winter\Kernel\App\Probe;
 use PHPUnit\Framework\Attributes\Group;
 
 /**
@@ -220,6 +221,90 @@ final class SupervisorPriorityIntegrationTest extends IntegrationCase
         self::assertSame(0, $this->exitCode($supervisor));
     }
 
+    // ── Alive ─────────────────────────────────────────────────────────────────
+
+    /** It runs, but no longer answers: stopped with its own signal, and restarted as crashed. */
+    public function test_a_program_that_stops_answering_is_restarted_as_crashed(): void
+    {
+        $port = self::freePort();
+        $supervisor = $this->supervise([
+            $this->program(
+                'db',
+                ["--listen={$port}", '--close-after=1'],
+                ready: "tcp://127.0.0.1:{$port}",
+                stopSignal: SIGINT,
+                retries: 1,
+                critical: false,
+                alive: Probe::tcp("127.0.0.1:{$port}", every: 0.3, timeout: 0.5, failures: 2),
+            ),
+        ]);
+
+        self::assertTrue($this->waitLogged('db alive check failed (1/2): exit code 1.'));
+        self::assertTrue($this->waitLogged('db is not answering (2 checks in a row): stopping it with SIGINT.'));
+        self::assertTrue($this->waitLogged('db crashed: was not answering; restart 1 of 1 in 1s.'));
+        self::assertTrue($this->waitLogged('db failed: was not answering, after 1 restarts'), 'it hung again');
+        self::assertSame(2, substr_count((string) @file_get_contents($this->events), 'db stop-INT'));
+
+        posix_kill($supervisor, SIGTERM);
+        self::assertSame(0, $this->exitCode($supervisor));
+    }
+
+    /** Its stop signal, SIGTERM halfway through its grace, SIGKILL at the end of it. */
+    public function test_a_hung_program_that_ignores_its_signals_is_stopped_step_by_step(): void
+    {
+        $port = self::freePort();
+        $supervisor = $this->supervise([
+            $this->program(
+                'db',
+                ["--listen={$port}", '--close-after=0.5', '--deaf'],
+                ready: "tcp://127.0.0.1:{$port}",
+                stopSignal: SIGINT,
+                critical: false,
+                alive: Probe::tcp("127.0.0.1:{$port}", every: 0.3, timeout: 0.5, failures: 1),
+                grace: 2.0,
+            ),
+        ]);
+
+        self::assertTrue($this->waitLogged('db is not answering (1 checks in a row): stopping it with SIGINT.'));
+        self::assertTrue($this->waitLogged('db still running: SIGTERM.'));
+        self::assertTrue($this->waitLogged('db still running: SIGKILL.'));
+        self::assertTrue($this->waitLogged('db failed: was not answering.'));
+        $int = $this->at('db', 'stop-INT');
+        $term = $this->at('db', 'stop-TERM');
+        self::assertNotNull($int);
+        self::assertNotNull($term);
+        self::assertGreaterThanOrEqual(0.8, $term - $int, 'SIGTERM came about halfway through the 2 s grace');
+
+        posix_kill($supervisor, SIGTERM);
+        self::assertSame(0, $this->exitCode($supervisor));
+    }
+
+    /** Failures count only in a row: one pass starts the count over. */
+    public function test_one_passing_check_resets_the_count(): void
+    {
+        $flag = $this->storage . '/alive';
+        $supervisor = $this->supervise([
+            $this->program(
+                'db',
+                ["--touch={$flag}"],
+                ready: ['test', '-f', $flag],
+                alive: Probe::command(['test', '-f', $flag], every: 0.3, timeout: 1.0, failures: 3),
+            ),
+        ]);
+        self::assertTrue($this->waitLogged('db is up.'));
+
+        unlink($flag);
+        self::assertTrue($this->waitLogged('db alive check failed (1/3)'));
+        touch($flag);
+        self::assertTrue($this->waitLogged('db answers its alive check again.'));
+        usleep(1_200_000);
+        self::assertStringNotContainsString('not answering', $this->logged());
+        self::assertNull($this->at('db', 'stop-TERM'), 'still running, never stopped');
+
+        posix_kill($supervisor, SIGTERM);
+        self::assertSame(0, $this->exitCode($supervisor));
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /**
@@ -235,12 +320,15 @@ final class SupervisorPriorityIntegrationTest extends IntegrationCase
         int $retries = 0,
         int $startTimeout = 10,
         bool $critical = true,
+        ?Probe $alive = null,
+        float $grace = 5.0,
     ): Component {
         return Component::command(
             [PHP_BINARY, self::PROGRAM, "--name={$name}", "--log={$this->events}", ...$options],
             $name,
             critical: $critical,
-            grace: 5.0,
+            grace: $grace,
+            alive: $alive,
             priority: $priority,
             ready: $ready,
             stopSignal: $stopSignal,

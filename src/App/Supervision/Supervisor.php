@@ -7,6 +7,7 @@ namespace Flytachi\Winter\Kernel\App\Supervision;
 use Flytachi\Winter\Kernel\App\Component;
 use Flytachi\Winter\Kernel\App\ComponentKind;
 use Flytachi\Winter\Kernel\App\Priority;
+use Flytachi\Winter\Kernel\App\Probe;
 use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
 use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Kernel\Process\BeforeFork;
@@ -209,6 +210,7 @@ final class Supervisor
                 $this->advanceStartup();
                 $this->startDue($now);
                 $this->probeReadiness($now);
+                $this->probeAlive($now);
             }
             $this->listen();
             $this->reap();
@@ -350,8 +352,10 @@ final class Supervisor
         // What was only on its way goes at once: a readiness check, and onStarting() —
         // the components it prepared for will not start.
         foreach ($this->units as $unit) {
-            if ($unit->probePid > 0) {
-                @posix_kill($unit->probePid, SIGKILL);
+            foreach ([$unit->probePid, $unit->alivePid] as $check) {
+                if ($check > 0) {
+                    @posix_kill($check, SIGKILL);
+                }
             }
         }
         if ($this->startingPid > 0) {
@@ -692,31 +696,147 @@ final class Supervisor
                 }
                 continue;
             }
-            $this->spawnProbe($unit, $ready, $now);
+            $pid = $this->spawnCheck("{$unit->name}'s ready check", $ready);
+            if ($pid > 0) {
+                $unit->probePid = $pid;
+                $unit->probeStartedAt = $now;
+            }
         }
     }
 
-    /** @param list<string> $command */
-    private function spawnProbe(Unit $unit, array $command, float $now): void
+    /**
+     * Runs a check in a process of its own, its output discarded: only its exit is the
+     * answer. Reaped like a component, by {@see reap()}.
+     *
+     * @param list<string> $command
+     * @return int Its PID; 0 when it could not be started.
+     */
+    private function spawnCheck(string $name, array $command): int
     {
         pcntl_sigprocmask(SIG_BLOCK, self::SIGNALS, $this->maskBeforeFork);
         if ($this->stopping) {
             pcntl_sigprocmask(SIG_SETMASK, $this->maskBeforeFork);
-            return;
+            return 0;
         }
         $pid = pcntl_fork();
         if ($pid === 0) {
-            // Its output says nothing the log needs: only its exit is the answer.
-            $this->becomeProgram(
-                "{$unit->name}'s ready check",
-                ['/bin/sh', '-c', 'exec "$@" >/dev/null 2>&1', 'ready', ...$command],
-            );
+            $this->becomeProgram($name, ['/bin/sh', '-c', 'exec "$@" >/dev/null 2>&1', 'check', ...$command]);
         }
         pcntl_sigprocmask(SIG_SETMASK, $this->maskBeforeFork);
-        if ($pid > 0) {
-            $unit->probePid = $pid;
-            $unit->probeStartedAt = $now;
+        return max(0, $pid);
+    }
+
+    /**
+     * Asks the alive check of every outside program that is running and has one
+     * ({@see Probe}): every `every` seconds, one at a time. A port is tried from a process
+     * of its own too — a connect may take the check's whole timeout, and the loop must
+     * not wait for it. A check past its timeout is killed and counts as a failure.
+     */
+    private function probeAlive(float $now): void
+    {
+        foreach ($this->units as $unit) {
+            $probe = $unit->component->alive;
+            if ($probe === null || $unit->state !== UnitState::Running || $unit->hung) {
+                continue;
+            }
+            if ($unit->alivePid > 0) {
+                if ($now - $unit->aliveStartedAt >= $probe->timeout) {
+                    @posix_kill($unit->alivePid, SIGKILL);
+                }
+                continue;
+            }
+            if ($now < $unit->aliveAt) {
+                continue;
+            }
+            $unit->aliveAt = $now + $probe->every;
+            $command = $probe->address !== null
+                ? [
+                    PHP_BINARY,
+                    '-n',
+                    '-r',
+                    '$c = @stream_socket_client($argv[1], $e, $m, (float) $argv[2]); exit($c === false ? 1 : 0);',
+                    $probe->address,
+                    (string) $probe->timeout,
+                ]
+                : $probe->command;
+            $pid = $this->spawnCheck("{$unit->name}'s alive check", $command);
+            if ($pid > 0) {
+                $unit->alivePid = $pid;
+                $unit->aliveStartedAt = $now;
+            }
         }
+    }
+
+    /**
+     * An alive check ended. A pass resets the count; a failure adds to it, and as many
+     * in a row as the probe allows mean the program hangs.
+     */
+    private function aliveEnded(Unit $unit, int $status): void
+    {
+        $unit->alivePid = 0;
+        $probe = $unit->component->alive;
+        if ($probe === null || $unit->state !== UnitState::Running || $unit->hung || $this->stopping) {
+            return;
+        }
+        if (pcntl_wifexited($status) && pcntl_wexitstatus($status) === 0) {
+            if ($unit->aliveFailed > 0) {
+                $this->logger->info("{$unit->name} answers its alive check again.");
+            }
+            $unit->aliveFailed = 0;
+            return;
+        }
+        $unit->aliveFailed++;
+        $why = pcntl_wifsignaled($status) && pcntl_wtermsig($status) === SIGKILL
+            ? "no answer in {$probe->timeout}s"
+            : self::describe($status, false);
+        $this->logger->warning(sprintf(
+            '%s alive check failed (%d/%d): %s.',
+            $unit->name,
+            $unit->aliveFailed,
+            $probe->failures,
+            $why,
+        ));
+        if ($unit->aliveFailed >= $probe->failures) {
+            $this->hangUp($unit);
+        }
+    }
+
+    /**
+     * A program that stopped answering is stopped, gently first: its own stop signal,
+     * then SIGTERM halfway through its grace, then SIGKILL at the end of it. However it
+     * ends, it is a crash — restarted by its retries, or failed.
+     */
+    private function hangUp(Unit $unit): void
+    {
+        $unit->hung = true;
+        $now = microtime(true);
+        $signal = $unit->component->stopSignal;
+        $grace = $unit->component->grace;
+        $this->logger->error(sprintf(
+            '%s is not answering (%d checks in a row): stopping it with %s.',
+            $unit->name,
+            $unit->component->alive?->failures,
+            self::signalName($signal),
+        ));
+        @posix_kill($unit->pid, $signal);
+        if ($signal !== SIGTERM) {
+            $unit->termAt = $now + $grace / 2;
+        }
+        $unit->killAt = $now + $grace;
+    }
+
+    private static function signalName(int $signal): string
+    {
+        return match ($signal) {
+            SIGTERM => 'SIGTERM',
+            SIGINT => 'SIGINT',
+            SIGQUIT => 'SIGQUIT',
+            SIGHUP => 'SIGHUP',
+            SIGUSR1 => 'SIGUSR1',
+            SIGUSR2 => 'SIGUSR2',
+            SIGKILL => 'SIGKILL',
+            default => "signal {$signal}",
+        };
     }
 
     /** A readiness check ended: exit 0 makes its program ready, anything else is asked again. */
@@ -893,6 +1013,10 @@ final class Supervisor
         $unit->everReady = true;
         $unit->readyDeadline = 0.0;
         $unit->heldTold = false;
+        if ($unit->component->alive !== null) {
+            $unit->aliveAt = microtime(true) + $unit->component->alive->every;
+            $unit->aliveFailed = 0;
+        }
         $this->logger->info("{$unit->name} is up.");
     }
 
@@ -922,6 +1046,10 @@ final class Supervisor
                     $this->probeEnded($unit, $status);
                     break;
                 }
+                if ($unit->alivePid === $pid) {
+                    $this->aliveEnded($unit, $status);
+                    break;
+                }
             }
         }
     }
@@ -929,7 +1057,15 @@ final class Supervisor
     private function enforceStartTimeouts(float $now): void
     {
         foreach ($this->units as $unit) {
+            if ($unit->termAt > 0.0 && $unit->pid > 0 && $now >= $unit->termAt) {
+                $this->logger->warning("{$unit->name} still running: SIGTERM.");
+                @posix_kill($unit->pid, SIGTERM);
+                $unit->termAt = 0.0;
+            }
             if ($unit->killAt > 0.0 && $unit->pid > 0 && $now >= $unit->killAt) {
+                if ($unit->hung) {
+                    $this->logger->warning("{$unit->name} still running: SIGKILL.");
+                }
                 @posix_kill($unit->pid, SIGKILL);
                 $unit->killAt = 0.0;
             }
@@ -956,8 +1092,10 @@ final class Supervisor
         // restart would meet them.
         @posix_kill(-$unit->pid, SIGKILL);
         $this->sentinel?->untrack($unit->pid);
-        if ($unit->probePid > 0) {
-            @posix_kill($unit->probePid, SIGKILL);
+        foreach ([$unit->probePid, $unit->alivePid] as $check) {
+            if ($check > 0) {
+                @posix_kill($check, SIGKILL);
+            }
         }
 
         if ($unit->socket !== null) {
@@ -980,10 +1118,17 @@ final class Supervisor
         $stopRequested = $unit->stopRequested;
         $gaveUp = $unit->gaveUp;
         $held = $unit->held;
+        $hung = $unit->hung;
         $unit->resetRun();
 
         if ($this->stopping) {
             $unit->state = UnitState::Stopped;
+            return;
+        }
+        // Stopped because it hung: however it ended — a clean exit on its stop signal
+        // among them — it is a crash.
+        if ($hung) {
+            $this->crashed($unit, 'was not answering', true);
             return;
         }
         if ($unit->restartPending) {
@@ -1339,12 +1484,26 @@ final class Supervisor
                 'retries'  => $unit->component->retries,
                 'critical' => $unit->component->critical,
                 'retryAt'  => $unit->state === UnitState::Waiting && $unit->startAt > $now ? (int) $unit->startAt : 0,
-                'reason'   => $unit->reason !== '' ? $unit->reason : $this->waitsFor($unit),
+                'reason'   => $unit->reason !== '' ? $unit->reason : $this->waitsFor($unit) . self::aliveNote($unit),
                 'adopted'  => $unit->component->adopted,
                 'priority' => $unit->component->priority->name,
             ];
         }
         return $units;
+    }
+
+    /** Alive checks failing in a row, while the program still runs; '' when none fail. */
+    private static function aliveNote(Unit $unit): string
+    {
+        if ($unit->state !== UnitState::Running || $unit->component->alive === null) {
+            return '';
+        }
+        if ($unit->hung) {
+            return 'not answering: being stopped';
+        }
+        return $unit->aliveFailed > 0
+            ? "alive check failed {$unit->aliveFailed}/{$unit->component->alive->failures}"
+            : '';
     }
 
     /** What a component held back by the start order waits for; '' when it is not. */

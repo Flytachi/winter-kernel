@@ -26,8 +26,6 @@ final readonly class Component
     public const int START_TIMEOUT = 60;
     /** Seconds over which restarts are counted: a component up this long starts afresh. */
     public const int RETRY_WINDOW = 1800;
-    /** The scheme of a readiness check that connects to a port: `tcp://host:port`. */
-    private const string TCP = 'tcp://';
 
     /**
      * @param class-string|null $class Process/Daemon/Scheduler/WebSocket class
@@ -46,6 +44,7 @@ final readonly class Component
      *     command that succeeds once it is, or `tcp://host:port` that accepts a connection
      *     once it is. Null: ready as soon as it runs (Command).
      * @param int $stopSignal The signal that asks it to stop (Command).
+     * @param Probe|null $alive How an outside program is checked to be alive once ready (Command).
      */
     private function __construct(
         public ComponentKind $kind,
@@ -63,6 +62,7 @@ final readonly class Component
         public Priority $priority = Priority::Normal,
         public array|string|null $ready = null,
         public int $stopSignal = SIGTERM,
+        public ?Probe $alive = null,
     ) {
         if ($retries < 0 || $startTimeout < 0) {
             throw new \InvalidArgumentException('retries and startTimeout cannot be negative.');
@@ -89,25 +89,7 @@ final readonly class Component
     /** @param list<string>|string $ready */
     private static function assertReadyCheck(array|string $ready): void
     {
-        if (is_string($ready)) {
-            $at = strrpos($ready, ':');
-            $port = $at === false ? '' : substr($ready, $at + 1);
-            $host = $at === false ? '' : substr($ready, strlen(self::TCP), $at - strlen(self::TCP));
-            $valid = str_starts_with($ready, self::TCP) && $host !== '' && ctype_digit($port)
-                && (int) $port >= 1 && (int) $port <= 65535;
-            if (!$valid) {
-                throw new \InvalidArgumentException(
-                    "ready must be a command (a list) or tcp://host:port, \"{$ready}\" given."
-                );
-            }
-            return;
-        }
-        $strings = array_filter($ready, static fn($part): bool => is_string($part)) === $ready;
-        if ($ready === [] || !$strings || !array_is_list($ready) || $ready[0] === '') {
-            throw new \InvalidArgumentException(
-                'a ready command is a non-empty list of strings: the program, then its arguments.'
-            );
-        }
+        is_string($ready) ? Probe::assertAddress($ready) : Probe::assertCommand($ready);
     }
 
     /**
@@ -134,6 +116,7 @@ final readonly class Component
             $this->priority,
             $this->ready,
             $this->stopSignal,
+            $this->alive,
         );
     }
 
@@ -163,7 +146,8 @@ final readonly class Component
      * It is ready as soon as it starts, unless `$ready` says how to tell: a command that
      * succeeds once it is (`['pg_isready', '-q']`), or `tcp://host:port` that accepts a
      * connection once it is — asked every half second, for up to `$startTimeout` seconds.
-     * It is not restarted unless `$retries` says so.
+     * It is not restarted unless `$retries` says so. Once ready, `$alive` checks that it
+     * still answers ({@see Probe}): one that hangs is stopped and restarted as crashed.
      *
      * The program is looked up on PATH, and runs in the project's root with the
      * application's environment.
@@ -173,6 +157,9 @@ final readonly class Component
      * @param list<string>|string|null $ready How it is known to be ready; null: once it runs.
      * @param int $stopSignal The signal that asks it to stop: SIGINT for PostgreSQL's fast shutdown.
      * @param int $startTimeout Seconds `$ready` has to succeed; 0 waits for good.
+     * @param list<string>|string|Probe|null $alive How it is checked to be alive once
+     *     ready: a command, `tcp://host:port`, or a {@see Probe} with its own timing; null:
+     *     not checked.
      * @link https://winterframe.net/docs/components#command Outside programs
      */
     public static function command(
@@ -185,6 +172,7 @@ final readonly class Component
         int $stopSignal = SIGTERM,
         int $retries = 0,
         int $startTimeout = self::START_TIMEOUT,
+        array|string|Probe|null $alive = null,
     ): self {
         $command = array_values($command);
         $strings = array_filter($command, static fn($part): bool => is_string($part)) === $command;
@@ -205,6 +193,7 @@ final readonly class Component
             priority: $priority,
             ready: $ready,
             stopSignal: $stopSignal,
+            alive: $alive !== null ? Probe::of($alive) : null,
         );
     }
 

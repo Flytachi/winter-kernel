@@ -121,6 +121,7 @@ final class Components
      * @param int $stopSignal The signal that asks it to stop.
      * @param int $retries Restarts after a crash within {@see Component::RETRY_WINDOW}.
      * @param int $startTimeout Seconds `$ready` has to succeed; 0 waits for good.
+     * @param list<string>|string|Probe|null $alive How it is checked to be alive once ready.
      * @throws ApplicationConfigException No such file.
      * @link https://winterframe.net/docs/components#script Running a PHP script beside the application
      */
@@ -135,6 +136,7 @@ final class Components
         int $stopSignal = SIGTERM,
         int $retries = 0,
         int $startTimeout = Component::START_TIMEOUT,
+        array|string|Probe|null $alive = null,
     ): self {
         $file = str_starts_with($path, '/') ? $path : rtrim($this->root, '/') . '/' . $path;
         if (!is_file($file)) {
@@ -150,6 +152,7 @@ final class Components
             $stopSignal,
             $retries,
             $startTimeout,
+            $alive,
         );
         return $this;
     }
@@ -168,6 +171,7 @@ final class Components
      * $components->command(['bin/postgres.sh'], name: 'postgres',
      *     priority: Priority::High,
      *     ready: ['pg_isready', '-q', '-h', '/run/postgresql'],
+     *     alive: Probe::command(['pg_isready', '-q', '-h', '/run/postgresql']),
      *     stopSignal: SIGINT,
      *     retries: 3);
      * ```
@@ -181,6 +185,8 @@ final class Components
      * @param int $stopSignal The signal that asks it to stop.
      * @param int $retries Restarts after a crash within {@see Component::RETRY_WINDOW}.
      * @param int $startTimeout Seconds `$ready` has to succeed; 0 waits for good.
+     * @param list<string>|string|Probe|null $alive How it is checked to be alive once ready: a
+     *     command, `tcp://host:port`, or a {@see Probe} with its own timing; null: not checked.
      * @link https://winterframe.net/docs/components#command Running an outside program beside the application
      */
     public function command(
@@ -193,6 +199,7 @@ final class Components
         int $stopSignal = SIGTERM,
         int $retries = 0,
         int $startTimeout = Component::START_TIMEOUT,
+        array|string|Probe|null $alive = null,
     ): self {
         $this->components[] = Component::command(
             $command,
@@ -204,6 +211,7 @@ final class Components
             $stopSignal,
             $retries,
             $startTimeout,
+            $alive,
         );
         return $this;
     }
