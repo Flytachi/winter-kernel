@@ -256,7 +256,8 @@ final class SupervisorPriorityIntegrationTest extends IntegrationCase
         $supervisor = $this->supervise([
             $this->program(
                 'db',
-                ["--listen={$port}", '--close-after=0.5', '--deaf'],
+                // Open long enough for the ready check, asked every half second, to see it.
+                ["--listen={$port}", '--close-after=1.5', '--deaf'],
                 ready: "tcp://127.0.0.1:{$port}",
                 stopSignal: SIGINT,
                 critical: false,

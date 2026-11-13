@@ -643,10 +643,17 @@ final class Supervisor
         // Set from both sides: whichever runs first, the group exists before it is needed.
         @posix_setpgid($pid, $pid);
         fclose($pair[1]);
-        stream_set_blocking($pair[0], false);
         $unit->pid = $pid;
         $this->sentinel?->track($pid);
-        $unit->socket = $pair[0];
+        // An outside program says nothing over a channel: it closes its end on exec. Kept
+        // open here, that end would be at EOF for good — readable at once on every look,
+        // and the loop's wait would turn into a spin at full CPU.
+        if ($unit->component->kind === ComponentKind::Command) {
+            fclose($pair[0]);
+        } else {
+            stream_set_blocking($pair[0], false);
+            $unit->socket = $pair[0];
+        }
         $unit->state = UnitState::Starting;
         // A stop held back by the fork is delivered here, and now reaches this one too.
         pcntl_sigprocmask(SIG_SETMASK, $this->maskBeforeFork);
@@ -983,6 +990,14 @@ final class Supervisor
                 continue;
             }
             $data = (string) @fread($unit->socket, 64);
+            // Closed on the other side: nothing more will come. Still listened to, it would
+            // be readable at once on every look, and the loop would spin; the exit itself
+            // is reaped as usual.
+            if ($data === '' && feof($unit->socket)) {
+                @fclose($unit->socket);
+                $unit->socket = null;
+                continue;
+            }
             if (str_contains($data, ComponentChannel::READY)) {
                 $this->ready($unit);
             }

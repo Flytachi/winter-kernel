@@ -327,6 +327,31 @@ final class SupervisorIntegrationTest extends IntegrationCase
 
     // ── Outside programs ──────────────────────────────────────────────────────
 
+    /**
+     * An outside program closes its end of the channel on exec. The supervisor kept its
+     * own end, at EOF for good — readable at once on every look — and its loop spun at
+     * full CPU for as long as the program ran.
+     */
+    public function test_an_outside_program_leaves_the_supervisor_idle(): void
+    {
+        $before = self::childrenCpu();
+        $supervisor = $this->supervise([Component::command(['sleep', '30'], 'sleeper')]);
+        self::assertTrue($this->waitLogged('sleeper is up.'));
+        sleep(2);
+
+        posix_kill($supervisor, SIGTERM);
+        self::assertSame(0, $this->exitCode($supervisor));
+        self::assertLessThan(0.5, self::childrenCpu() - $before, 'the supervisor spun instead of waiting');
+    }
+
+    /** CPU seconds of every child reaped so far — the supervisor, once it has exited. */
+    private static function childrenCpu(): float
+    {
+        $usage = getrusage(1);
+        return $usage['ru_utime.tv_sec'] + $usage['ru_utime.tv_usec'] / 1e6
+            + $usage['ru_stime.tv_sec'] + $usage['ru_stime.tv_usec'] / 1e6;
+    }
+
     public function test_a_program_that_exits_zero_has_done_its_work(): void
     {
         $supervisor = $this->supervise([Component::command(['sh', '-c', 'exit 0'], name: 'job')]);

@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [4.4.4] — 2026-11-13
+
+An application with an outside program no longer keeps a CPU core busy.
+
+### Fixed
+
+- The application spun at full CPU for as long as an outside program (`command()`,
+  `script()`) ran. The supervisor opened a channel to every component, a program among
+  them; a program closes its end on exec, and the supervisor's end, at EOF for good, was
+  readable at once on every look — the loop's 0.1 s wait never waited. A program gets no
+  channel now, and a channel closed on the other side is no longer listened to.
+
 ## [4.4.3] — 2026-11-13
 
 The application starts and stops its components in order, and gets two hooks of its own:
