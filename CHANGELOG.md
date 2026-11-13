@@ -52,7 +52,7 @@ application, as a component the rest waits for.
   `stop_grace_period` (Docker) or `terminationGracePeriodSeconds` (Kubernetes) to match
   when a High component has a long grace.
 
-## [4.4.1] — unreleased
+## [4.4.1] — 2026-11-11
 
 The class scan reads the project's code, not everything under its root. A stop has a finite,
 canonical wait at every level.
