@@ -118,10 +118,10 @@ final class Components
      * @param float $grace Seconds it has to stop after its stop signal before SIGKILL.
      * @param Priority $priority When it starts and stops relative to the others.
      * @param list<string>|string|null $ready How it is known to be ready — see {@see command()}.
+     * @param list<string>|string|Probe|null $alive How it is checked to be alive once ready.
      * @param int $stopSignal The signal that asks it to stop.
      * @param int $retries Restarts after a crash within {@see Component::RETRY_WINDOW}.
      * @param int $startTimeout Seconds `$ready` has to succeed; 0 waits for good.
-     * @param list<string>|string|Probe|null $alive How it is checked to be alive once ready.
      * @throws ApplicationConfigException No such file.
      * @link https://winterframe.net/docs/components#script Running a PHP script beside the application
      */
@@ -133,10 +133,10 @@ final class Components
         float $grace = 30.0,
         Priority $priority = Priority::Normal,
         array|string|null $ready = null,
+        array|string|Probe|null $alive = null,
         int $stopSignal = SIGTERM,
         int $retries = 0,
         int $startTimeout = Component::START_TIMEOUT,
-        array|string|Probe|null $alive = null,
     ): self {
         $file = str_starts_with($path, '/') ? $path : rtrim($this->root, '/') . '/' . $path;
         if (!is_file($file)) {
@@ -149,10 +149,10 @@ final class Components
             $grace,
             $priority,
             $ready,
+            $alive,
             $stopSignal,
             $retries,
             $startTimeout,
-            $alive,
         );
         return $this;
     }
@@ -182,11 +182,11 @@ final class Components
      * @param Priority $priority When it starts and stops relative to the others.
      * @param list<string>|string|null $ready A command that succeeds once it is ready, or
      *     `tcp://host:port`; asked every half second. Null: ready once it runs.
+     * @param list<string>|string|Probe|null $alive How it is checked to be alive once ready: a
+     *     command, `tcp://host:port`, or a {@see Probe} with its own timing; null: not checked.
      * @param int $stopSignal The signal that asks it to stop.
      * @param int $retries Restarts after a crash within {@see Component::RETRY_WINDOW}.
      * @param int $startTimeout Seconds `$ready` has to succeed; 0 waits for good.
-     * @param list<string>|string|Probe|null $alive How it is checked to be alive once ready: a
-     *     command, `tcp://host:port`, or a {@see Probe} with its own timing; null: not checked.
      * @link https://winterframe.net/docs/components#command Running an outside program beside the application
      */
     public function command(
@@ -196,10 +196,10 @@ final class Components
         float $grace = 30.0,
         Priority $priority = Priority::Normal,
         array|string|null $ready = null,
+        array|string|Probe|null $alive = null,
         int $stopSignal = SIGTERM,
         int $retries = 0,
         int $startTimeout = Component::START_TIMEOUT,
-        array|string|Probe|null $alive = null,
     ): self {
         $this->components[] = Component::command(
             $command,
@@ -208,10 +208,10 @@ final class Components
             $grace,
             $priority,
             $ready,
+            $alive,
             $stopSignal,
             $retries,
             $startTimeout,
-            $alive,
         );
         return $this;
     }

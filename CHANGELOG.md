@@ -28,15 +28,15 @@ application, as a component the rest waits for.
     (`['pg_isready', '-q']`, its output discarded) or `tcp://host:port`; asked every half
     second for up to `startTimeout` (60 s). Without it a program is ready once it runs, as
     before;
-  - `stopSignal:` — what asks it to stop: SIGINT for PostgreSQL's fast shutdown;
-  - `retries:` — restarts after a crash, as for processes. 0 by default, as before;
   - `alive:` — a check that the program still answers once it is ready: a command or
     `tcp://host:port` with the default timing, or a `Probe` with its own —
     `Probe::command([...], every: 10, timeout: 5, failures: 6)` by default. Failures count
     only in a row (one pass resets the count), each is logged and shown in `app status`;
     `failures` in a row mean the program hangs, and it is stopped step by step — its
     `stopSignal`, then SIGTERM halfway through its `grace`, then SIGKILL at the end of it —
-    and restarted as crashed. Off unless set.
+    and restarted as crashed. Off unless set;
+  - `stopSignal:` — what asks it to stop: SIGINT for PostgreSQL's fast shutdown;
+  - `retries:` — restarts after a crash, as for processes. 0 by default, as before.
 - **`onStarting()` and `onStopped()` on the application.** `onStarting()` runs once the High
   components are ready and before the rest starts — migrations, with the container and the
   database layer there. It runs in a process of its own (what it opens is not inherited

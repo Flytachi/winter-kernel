@@ -43,8 +43,8 @@ final readonly class Component
      * @param list<string>|string|null $ready How an outside program is known to be ready: a
      *     command that succeeds once it is, or `tcp://host:port` that accepts a connection
      *     once it is. Null: ready as soon as it runs (Command).
-     * @param int $stopSignal The signal that asks it to stop (Command).
      * @param Probe|null $alive How an outside program is checked to be alive once ready (Command).
+     * @param int $stopSignal The signal that asks it to stop (Command).
      */
     private function __construct(
         public ComponentKind $kind,
@@ -61,8 +61,8 @@ final readonly class Component
         public array $args = [],
         public Priority $priority = Priority::Normal,
         public array|string|null $ready = null,
-        public int $stopSignal = SIGTERM,
         public ?Probe $alive = null,
+        public int $stopSignal = SIGTERM,
     ) {
         if ($retries < 0 || $startTimeout < 0) {
             throw new \InvalidArgumentException('retries and startTimeout cannot be negative.');
@@ -115,8 +115,8 @@ final readonly class Component
             $this->args,
             $this->priority,
             $this->ready,
-            $this->stopSignal,
             $this->alive,
+            $this->stopSignal,
         );
     }
 
@@ -155,11 +155,11 @@ final readonly class Component
      * @param list<string> $command The program and its arguments: `['node', 'bridge.js']`.
      * @param string|null $name How logs name it; the program's name by default.
      * @param list<string>|string|null $ready How it is known to be ready; null: once it runs.
-     * @param int $stopSignal The signal that asks it to stop: SIGINT for PostgreSQL's fast shutdown.
-     * @param int $startTimeout Seconds `$ready` has to succeed; 0 waits for good.
      * @param list<string>|string|Probe|null $alive How it is checked to be alive once
      *     ready: a command, `tcp://host:port`, or a {@see Probe} with its own timing; null:
      *     not checked.
+     * @param int $stopSignal The signal that asks it to stop: SIGINT for PostgreSQL's fast shutdown.
+     * @param int $startTimeout Seconds `$ready` has to succeed; 0 waits for good.
      * @link https://winterframe.net/docs/components#command Outside programs
      */
     public static function command(
@@ -169,10 +169,10 @@ final readonly class Component
         float $grace = 30.0,
         Priority $priority = Priority::Normal,
         array|string|null $ready = null,
+        array|string|Probe|null $alive = null,
         int $stopSignal = SIGTERM,
         int $retries = 0,
         int $startTimeout = self::START_TIMEOUT,
-        array|string|Probe|null $alive = null,
     ): self {
         $command = array_values($command);
         $strings = array_filter($command, static fn($part): bool => is_string($part)) === $command;
@@ -192,8 +192,8 @@ final readonly class Component
             grace: $grace,
             priority: $priority,
             ready: $ready,
-            stopSignal: $stopSignal,
             alive: $alive !== null ? Probe::of($alive) : null,
+            stopSignal: $stopSignal,
         );
     }
 
