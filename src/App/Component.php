@@ -26,6 +26,8 @@ final readonly class Component
     public const int START_TIMEOUT = 60;
     /** Seconds over which restarts are counted: a component up this long starts afresh. */
     public const int RETRY_WINDOW = 1800;
+    /** The scheme of a readiness check that connects to a port: `tcp://host:port`. */
+    private const string TCP = 'tcp://';
 
     /**
      * @param class-string|null $class Process/Daemon/Scheduler/WebSocket class
@@ -39,6 +41,11 @@ final readonly class Component
      * @param float $grace Seconds an outside program has to stop before SIGKILL (Command).
      * @param bool $adopted Not declared: started while the application runs, and taken in.
      * @param array<string, string> $args What it was started with ({@see Process::startWith()}).
+     * @param Priority $priority When it starts and stops relative to the others.
+     * @param list<string>|string|null $ready How an outside program is known to be ready: a
+     *     command that succeeds once it is, or `tcp://host:port` that accepts a connection
+     *     once it is. Null: ready as soon as it runs (Command).
+     * @param int $stopSignal The signal that asks it to stop (Command).
      */
     private function __construct(
         public ComponentKind $kind,
@@ -53,6 +60,9 @@ final readonly class Component
         public float $grace = 30.0,
         public bool $adopted = false,
         public array $args = [],
+        public Priority $priority = Priority::Normal,
+        public array|string|null $ready = null,
+        public int $stopSignal = SIGTERM,
     ) {
         if ($retries < 0 || $startTimeout < 0) {
             throw new \InvalidArgumentException('retries and startTimeout cannot be negative.');
@@ -67,6 +77,36 @@ final readonly class Component
             if (trim($host) === '') {
                 throw new \InvalidArgumentException('host cannot be empty.');
             }
+        }
+        if ($ready !== null) {
+            self::assertReadyCheck($ready);
+        }
+        if ($stopSignal < 1 || $stopSignal > 64) {
+            throw new \InvalidArgumentException("stopSignal must be a signal number, {$stopSignal} given.");
+        }
+    }
+
+    /** @param list<string>|string $ready */
+    private static function assertReadyCheck(array|string $ready): void
+    {
+        if (is_string($ready)) {
+            $at = strrpos($ready, ':');
+            $port = $at === false ? '' : substr($ready, $at + 1);
+            $host = $at === false ? '' : substr($ready, strlen(self::TCP), $at - strlen(self::TCP));
+            $valid = str_starts_with($ready, self::TCP) && $host !== '' && ctype_digit($port)
+                && (int) $port >= 1 && (int) $port <= 65535;
+            if (!$valid) {
+                throw new \InvalidArgumentException(
+                    "ready must be a command (a list) or tcp://host:port, \"{$ready}\" given."
+                );
+            }
+            return;
+        }
+        $strings = array_filter($ready, static fn($part): bool => is_string($part)) === $ready;
+        if ($ready === [] || !$strings || !array_is_list($ready) || $ready[0] === '') {
+            throw new \InvalidArgumentException(
+                'a ready command is a non-empty list of strings: the program, then its arguments.'
+            );
         }
     }
 
@@ -91,6 +131,9 @@ final readonly class Component
             $this->grace,
             $this->adopted,
             $this->args,
+            $this->priority,
+            $this->ready,
+            $this->stopSignal,
         );
     }
 
@@ -113,16 +156,23 @@ final readonly class Component
 
     /**
      * An outside program the application starts and watches — a script, a binary, a
-     * tool written in another language. It is ready as soon as it starts; it is never
-     * restarted: exit 0 means its work is done, any other exit that it failed. Stopped
-     * with SIGTERM, then SIGKILL after `$grace` seconds. Its output goes to the
-     * application's.
+     * tool written in another language, a database. Exit 0 means its work is done, any
+     * other exit that it failed. Stopped with `$stopSignal` (SIGTERM), then SIGKILL after
+     * `$grace` seconds. Its output goes to the application's.
+     *
+     * It is ready as soon as it starts, unless `$ready` says how to tell: a command that
+     * succeeds once it is (`['pg_isready', '-q']`), or `tcp://host:port` that accepts a
+     * connection once it is — asked every half second, for up to `$startTimeout` seconds.
+     * It is not restarted unless `$retries` says so.
      *
      * The program is looked up on PATH, and runs in the project's root with the
      * application's environment.
      *
      * @param list<string> $command The program and its arguments: `['node', 'bridge.js']`.
      * @param string|null $name How logs name it; the program's name by default.
+     * @param list<string>|string|null $ready How it is known to be ready; null: once it runs.
+     * @param int $stopSignal The signal that asks it to stop: SIGINT for PostgreSQL's fast shutdown.
+     * @param int $startTimeout Seconds `$ready` has to succeed; 0 waits for good.
      * @link https://winterframe.net/docs/components#command Outside programs
      */
     public static function command(
@@ -130,6 +180,11 @@ final readonly class Component
         ?string $name = null,
         bool $critical = true,
         float $grace = 30.0,
+        Priority $priority = Priority::Normal,
+        array|string|null $ready = null,
+        int $stopSignal = SIGTERM,
+        int $retries = 0,
+        int $startTimeout = self::START_TIMEOUT,
     ): self {
         $command = array_values($command);
         $strings = array_filter($command, static fn($part): bool => is_string($part)) === $command;
@@ -141,11 +196,15 @@ final readonly class Component
         return new self(
             ComponentKind::Command,
             critical: $critical,
-            retries: 0,
-            startTimeout: 0,
+            retries: $retries,
+            // Without a check it is ready the moment it runs: there is nothing to time.
+            startTimeout: $ready === null ? 0 : $startTimeout,
             command: $command,
             label: $name ?? basename($command[0]),
             grace: $grace,
+            priority: $priority,
+            ready: $ready,
+            stopSignal: $stopSignal,
         );
     }
 
@@ -202,6 +261,7 @@ final readonly class Component
         bool $critical = true,
         int $retries = self::RETRIES,
         int $startTimeout = self::START_TIMEOUT,
+        Priority $priority = Priority::Normal,
     ): self {
         return new self(
             ComponentKind::Http,
@@ -211,6 +271,7 @@ final readonly class Component
             retries: $retries,
             startTimeout: $startTimeout,
             label: 'Http',
+            priority: $priority,
         );
     }
 
@@ -227,8 +288,18 @@ final readonly class Component
         bool $critical = true,
         int $retries = self::RETRIES,
         int $startTimeout = self::START_TIMEOUT,
+        Priority $priority = Priority::Normal,
     ): self {
-        return new self(ComponentKind::WebSocket, $class, BindAddress::bare($host), $port, $critical, $retries, $startTimeout);
+        return new self(
+            ComponentKind::WebSocket,
+            $class,
+            BindAddress::bare($host),
+            $port,
+            $critical,
+            $retries,
+            $startTimeout,
+            priority: $priority,
+        );
     }
 
     /**
@@ -241,6 +312,7 @@ final readonly class Component
         bool $critical = true,
         int $retries = self::RETRIES,
         int $startTimeout = self::START_TIMEOUT,
+        Priority $priority = Priority::Normal,
     ): self {
         return new self(
             ComponentKind::Process,
@@ -248,6 +320,7 @@ final readonly class Component
             critical: $critical,
             retries: $retries,
             startTimeout: $startTimeout,
+            priority: $priority,
         );
     }
 
@@ -256,10 +329,21 @@ final readonly class Component
      *
      * @param class-string<\Flytachi\Winter\Kernel\Process\Stereotype\Daemon> $class
      */
-    public static function daemon(string $class, bool $critical = true, int $startTimeout = self::START_TIMEOUT): self
-    {
+    public static function daemon(
+        string $class,
+        bool $critical = true,
+        int $startTimeout = self::START_TIMEOUT,
+        Priority $priority = Priority::Normal,
+    ): self {
         // A daemon supervises its own workers: when it fails itself, it is not restarted.
-        return new self(ComponentKind::Daemon, $class, critical: $critical, retries: 0, startTimeout: $startTimeout);
+        return new self(
+            ComponentKind::Daemon,
+            $class,
+            critical: $critical,
+            retries: 0,
+            startTimeout: $startTimeout,
+            priority: $priority,
+        );
     }
 
     /**
@@ -273,6 +357,7 @@ final readonly class Component
         bool $critical = true,
         int $retries = self::RETRIES,
         int $startTimeout = self::START_TIMEOUT,
+        Priority $priority = Priority::Normal,
     ): self {
         return new self(
             ComponentKind::Scheduler,
@@ -280,6 +365,7 @@ final readonly class Component
             critical: $critical,
             retries: $retries,
             startTimeout: $startTimeout,
+            priority: $priority,
         );
     }
 }

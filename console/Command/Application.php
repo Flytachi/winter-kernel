@@ -12,6 +12,7 @@ use Flytachi\Winter\Kernel\App\BindAddress;
 use Flytachi\Winter\Kernel\App\Component;
 use Flytachi\Winter\Kernel\App\ComponentKind;
 use Flytachi\Winter\Kernel\App\Config\ServerSettings;
+use Flytachi\Winter\Kernel\App\Priority;
 use Flytachi\Winter\Kernel\App\Runtime\ApplicationRecord;
 use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
 use Flytachi\Winter\Kernel\Kernel;
@@ -101,11 +102,18 @@ final class Application extends Cmd
             self::printInfo("or override components(Components \$components) on {$app}.");
             self::printLabel("Components", self::CL);
         } else {
+            // The priority is shown once one is set: an application without them looks as it did.
+            $priorities = array_filter(
+                $manifest,
+                static fn(array $e): bool => $e['component']->priority !== Priority::Normal,
+            ) !== [];
+            $line = $priorities ? "  %-30s %-10s %-20s %-8s %-9s %-8s %s" : "  %-30s %-10s %-20s%s %-9s %-8s %s";
             self::print(sprintf(
-                "  %-30s %-10s %-20s %-9s %-8s %s",
+                $line,
                 'COMPONENT',
                 'KIND',
                 'SOURCE',
+                $priorities ? 'PRIORITY' : '',
                 'CRITICAL',
                 'RETRIES',
                 'START TIMEOUT'
@@ -114,13 +122,15 @@ final class Application extends Cmd
                 /** @var Component $component */
                 $component = $entry['component'];
                 self::print(sprintf(
-                    "  %-30s %-10s %-20s %-9s %-8s %s",
+                    $line,
                     $this->describe($component, $settings),
                     $component->kind->name,
                     $entry['source'],
+                    $priorities ? $component->priority->name : '',
                     $component->critical ? 'yes' : 'no',
                     $this->retries($component),
-                    $component->kind === ComponentKind::Command ? '-' : $component->startTimeout . 's',
+                    // A program without a readiness check is ready the moment it runs.
+                    $component->startTimeout > 0 ? $component->startTimeout . 's' : '-',
                 ), $component->critical ? 32 : 36);
             }
             self::printDivider();
@@ -287,22 +297,27 @@ final class Application extends Cmd
      */
     private function printUnits(array $units, bool $restarts): void
     {
+        // The priority is shown once one is set: an application without them looks as it did.
+        $priorities = array_filter($units, static fn(array $u): bool => ($u['priority'] ?? 'Normal') !== 'Normal') !== [];
+        $kind = $priorities ? '%-10s %-8s' : '%-10s%s';
+        $columns = ['COMPONENT', 'KIND', $priorities ? 'PRIORITY' : '', 'STATE', 'PID', 'FOR'];
         $head = $restarts
-            ? sprintf("  %-30s %-10s %-10s %-8s %-10s %s", 'COMPONENT', 'KIND', 'STATE', 'PID', 'FOR', 'RESTARTS')
-            : sprintf("  %-30s %-10s %-10s %-8s %s", 'COMPONENT', 'KIND', 'STATE', 'PID', 'FOR');
+            ? sprintf("  %-30s {$kind} %-10s %-8s %-10s %s", ...[...$columns, 'RESTARTS'])
+            : sprintf("  %-30s {$kind} %-10s %-8s %s", ...$columns);
         self::print($head, 90);
         $now = time();
         foreach ($units as $unit) {
             $row = [
                 $unit['name'],
                 $unit['kind'],
+                $priorities ? ($unit['priority'] ?? 'Normal') : '',
                 strtoupper($unit['state']),
                 $unit['pid'] ? (string) $unit['pid'] : '-',
                 $unit['since'] ? $this->duration($now - (int) $unit['since']) : '-',
             ];
             self::print($restarts
-                ? sprintf("  %-30s %-10s %-10s %-8s %-10s %s", ...[...$row, $this->restarts($unit)])
-                : sprintf("  %-30s %-10s %-10s %-8s %s", ...$row), $this->stateColor($unit['state']));
+                ? sprintf("  %-30s {$kind} %-10s %-8s %-10s %s", ...[...$row, $this->restarts($unit)])
+                : sprintf("  %-30s {$kind} %-10s %-8s %s", ...$row), $this->stateColor($unit['state']));
 
             if ($unit['retryAt'] > $now) {
                 self::print("      next attempt in " . $this->duration($unit['retryAt'] - $now), 90);
@@ -418,7 +433,7 @@ final class Application extends Cmd
 
     private function retries(Component $component): string
     {
-        if (in_array($component->kind, [ComponentKind::Daemon, ComponentKind::Command], true)) {
+        if ($component->kind === ComponentKind::Daemon) {
             return '-';
         }
         return (string) $component->retries;

@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Kernel\Tests\App;
 
 use Flytachi\Winter\Kernel\App\Component;
 use Flytachi\Winter\Kernel\App\Config\ServerSettings;
+use Flytachi\Winter\Kernel\App\Priority;
 use Flytachi\Winter\Kernel\Process\Stereotype\Process;
 use Flytachi\Winter\Kernel\WinterApplication;
 use PHPUnit\Framework\TestCase;
@@ -33,6 +34,24 @@ final class StopBudgetTest extends TestCase
         self::assertSame(65.0, self::budget([Component::process(LongGraceProcess::class)]));
         self::assertSame(55.0, self::budget([Component::command(['sleep', '1'], 'p', grace: 50.0)]));
         self::assertSame(35.0, self::budget([Component::command(['sleep', '1'], 'p')]), 'a program has 30 s too');
+    }
+
+    /** A level stops once the one before it is down: their longest graces add up. */
+    public function test_levels_add_up(): void
+    {
+        self::assertSame(125.0, self::budget([
+            Component::command(['web'], 'web', priority: Priority::Low),
+            Component::process(DefaultGraceProcess::class),
+            Component::command(['db'], 'db', grace: 60.0, priority: Priority::High),
+        ]), '30 + 30 + 60 + 5');
+        self::assertSame(65.0, self::budget([
+            Component::process(DefaultGraceProcess::class),
+            Component::command(['db'], 'db', grace: 30.0, priority: Priority::High),
+        ]));
+        self::assertSame(35.0, self::budget([
+            Component::process(DefaultGraceProcess::class),
+            Component::command(['p'], 'p', grace: 10.0),
+        ]), 'one level: the longest grace, as before');
     }
 
     public function test_a_component_that_waits_for_good_leaves_the_application_without_a_budget(): void

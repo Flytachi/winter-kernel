@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Kernel\App\Supervision;
 
 use Flytachi\Winter\Kernel\App\Component;
 use Flytachi\Winter\Kernel\App\ComponentKind;
+use Flytachi\Winter\Kernel\App\Priority;
 use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
 use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Kernel\Process\BeforeFork;
@@ -42,6 +43,11 @@ use Psr\Log\LoggerInterface;
  * once — never restarted, never critical — and is let go when it ends or is stopped;
  * one that failed stays listed, with why, until it is started again.
  *
+ * Components start level by level, by {@see Priority}: High, then — once every High one
+ * is ready, or settled where waiting is pointless — the application's `onStarting()`,
+ * then Normal, then Low. A stop goes the other way, each level once the one before it is
+ * down. An application that sets no priority starts and stops everything at once.
+ *
  * @internal Started by {@see \Flytachi\Winter\Kernel\WinterApplication} — not for application code.
  */
 final class Supervisor
@@ -56,6 +62,10 @@ final class Supervisor
     private const float HELD_INTERVAL = 1.0;
     /** Seconds between publications when nothing changed: the application is still here. */
     private const float HEARTBEAT = 10.0;
+    /** Seconds between asks of an outside program's readiness check. */
+    private const float PROBE_INTERVAL = 0.5;
+    /** Seconds a readiness check may take before it counts as a no. */
+    private const float PROBE_TIMEOUT = 5.0;
 
     /** @var list<Unit> */
     private array $units = [];
@@ -84,6 +94,22 @@ final class Supervisor
     /** The signal mask from before a fork, restored on both sides once it is safe. */
     private array $maskBeforeFork = [];
 
+    /** The level allowed to start while the application starts ({@see Priority::rank()}). */
+    private int $openRank = 0;
+    /** Every level has started: from now on a component starts whenever it is due. */
+    private bool $startupDone = false;
+    /** The process running the application's onStarting(); 0 when none is. */
+    private int $startingPid = 0;
+    private float $startingAt = 0.0;
+    /** When onStarting() is tried again after it could not be forked yet. */
+    private float $startingRetryAt = 0.0;
+    /** onStarting() has run, or there is none. */
+    private bool $startingDone;
+    /** The level a stop is waiting for; null before the stop reached any. */
+    private ?int $stopRank = null;
+    /** Whether the order is worth telling: a priority was set, or there is onStarting(). */
+    private bool $ordered;
+
     /** The signals the supervisor handles — and holds back around a fork. */
     private const array SIGNALS = [SIGTERM, SIGINT, SIGHUP, SIGUSR1, SIGUSR2];
 
@@ -100,6 +126,9 @@ final class Supervisor
      *     component stands whenever that changes — see {@see snapshot()}.
      * @param float|null $stopBudget Seconds a stop waits for the components before it
      *     kills what is left; null waits for good.
+     * @param (\Closure(): void)|null $starting The application's onStarting(): run in a
+     *     process of its own once the High components are ready, before the rest starts;
+     *     a throw stops the application.
      */
     public function __construct(
         array $components,
@@ -112,10 +141,15 @@ final class Supervisor
         private readonly ?\Closure $commands = null,
         private readonly ?\Closure $publish = null,
         private readonly ?float $stopBudget = null,
+        private readonly ?\Closure $starting = null,
     ) {
+        $ordered = $starting !== null;
         foreach ($components as $component) {
             $this->units[] = new Unit($component, $name($component));
+            $ordered = $ordered || $component->priority !== Priority::Normal;
         }
+        $this->ordered = $ordered;
+        $this->startingDone = $starting === null;
     }
 
     /**
@@ -148,6 +182,7 @@ final class Supervisor
         foreach ([SIGUSR1, SIGUSR2] as $signal) {
             pcntl_signal($signal, fn() => $this->forward($signal, ComponentKind::Http));
         }
+        $this->announceLevel(Priority::High->rank());
 
         while (true) {
             $now = microtime(true);
@@ -157,6 +192,7 @@ final class Supervisor
                 $this->announceStop();
             }
             if ($this->stopping && !$this->forced) {
+                $this->stopNextLevel();
                 if ($this->forceRequested) {
                     $this->killWhatIsLeft('a second stop signal');
                 } elseif ($this->stopBudget !== null && $now - $this->stopAt >= $this->stopBudget) {
@@ -170,7 +206,9 @@ final class Supervisor
             if (!$this->stopping) {
                 $this->takeCommands($now);
                 $this->watchHeld($now);
+                $this->advanceStartup();
                 $this->startDue($now);
+                $this->probeReadiness($now);
             }
             $this->listen();
             $this->reap();
@@ -209,6 +247,10 @@ final class Supervisor
     {
         $this->forced = true;
         $left = [];
+        if ($this->startingPid > 0) {
+            $left[] = 'onStarting';
+            @posix_kill(-$this->startingPid, SIGKILL);
+        }
         foreach ($this->units as $unit) {
             if ($unit->pid > 0) {
                 $left[] = $unit->name;
@@ -239,7 +281,7 @@ final class Supervisor
             'Application stopped%s%s in %s',
             $this->exitCode !== 0 ? ' (critical failure)' : '',
             $this->forced ? ' (forced)' : '',
-            $took < 1.0 ? sprintf('%d ms', (int) round($took * 1000)) : sprintf('%.1fs', $took),
+            self::duration($took),
         ));
     }
 
@@ -304,18 +346,73 @@ final class Supervisor
         $this->stopping = true;
         $this->stopReason = $reason;
         $this->stopCount = $this->alive();
-        $now = microtime(true);
-        $this->stopAt = $now;
+        $this->stopAt = microtime(true);
+        // What was only on its way goes at once: a readiness check, and onStarting() —
+        // the components it prepared for will not start.
         foreach ($this->units as $unit) {
-            if ($unit->pid > 0) {
-                @posix_kill($unit->pid, SIGTERM);
-                // A framework component ends within its own grace; an outside program
-                // may ignore the signal altogether.
-                if ($unit->component->kind === ComponentKind::Command) {
-                    $unit->killAt = $now + $unit->component->grace;
-                }
+            if ($unit->probePid > 0) {
+                @posix_kill($unit->probePid, SIGKILL);
             }
         }
+        if ($this->startingPid > 0) {
+            @posix_kill(-$this->startingPid, SIGTERM);
+        }
+        $this->stopNextLevel();
+    }
+
+    /**
+     * Asks the next level to stop once the one before it is down: Low first, High last.
+     * Called from the signal handler and from the loop; it signals a level only once.
+     */
+    private function stopNextLevel(): void
+    {
+        if ($this->stopRank !== null && $this->aliveAt($this->stopRank) > 0) {
+            return;
+        }
+        $rank = null;
+        foreach ($this->units as $unit) {
+            if ($unit->pid > 0 && ($this->stopRank === null || $unit->component->priority->rank() < $this->stopRank)) {
+                $rank = max($rank ?? -1, $unit->component->priority->rank());
+            }
+        }
+        if ($rank === null) {
+            return;
+        }
+        // onStarting() stands between High and the rest: High waits until it has ended.
+        if ($rank === Priority::High->rank() && $this->startingPid > 0) {
+            return;
+        }
+        $first = $this->stopRank === null;
+        $this->stopRank = $rank;
+        $now = microtime(true);
+        $names = [];
+        foreach ($this->units as $unit) {
+            if ($unit->pid <= 0 || $unit->component->priority->rank() !== $rank) {
+                continue;
+            }
+            $names[] = $unit->name;
+            @posix_kill($unit->pid, self::stopSignalOf($unit));
+            // A framework component ends within its own grace; an outside program
+            // may ignore the signal altogether.
+            if ($unit->component->kind === ComponentKind::Command) {
+                $unit->killAt = $now + $unit->component->grace;
+            }
+        }
+        // The first level is said by the stop's own line; a handler must not log.
+        if (!$first && $this->ordered) {
+            $this->logger->info(sprintf('Application stopping %s: %s', self::levelName($rank), implode(', ', $names)));
+        }
+    }
+
+    /** SIGTERM for a component of the framework; an outside program's own stop signal. */
+    private static function stopSignalOf(Unit $unit): int
+    {
+        return $unit->component->kind === ComponentKind::Command ? $unit->component->stopSignal : SIGTERM;
+    }
+
+    private static function levelName(int $rank): string
+    {
+        return Priority::inStartOrder()[$rank]->name;
     }
 
     // ── Starting ──────────────────────────────────────────────────────────────
@@ -328,10 +425,151 @@ final class Supervisor
             if ($this->stopping) {
                 return;
             }
+            // While the application starts, a level waits for the one before it.
+            $held = !$this->startupDone && !$unit->component->adopted
+                && $unit->component->priority->rank() > $this->openRank;
+            if ($held) {
+                continue;
+            }
             if ($unit->state === UnitState::Waiting && $now >= $unit->startAt) {
                 $this->start($unit);
             }
         }
+    }
+
+    /**
+     * Opens the next level once every component of the open one is ready, or settled
+     * where waiting is pointless: failed (and not critical — a critical one stops the
+     * application), held by an outside process, finished, stopped. Between High and
+     * Normal, the application's onStarting() runs, and the rest waits for it.
+     */
+    private function advanceStartup(): void
+    {
+        while (!$this->startupDone) {
+            if (!$this->settled($this->openRank)) {
+                return;
+            }
+            if ($this->openRank === Priority::High->rank() && !$this->startingDone) {
+                if ($this->startingPid === 0 && microtime(true) >= $this->startingRetryAt) {
+                    $this->runStarting();
+                }
+                return;
+            }
+            if ($this->openRank >= Priority::Low->rank()) {
+                $this->startupDone = true;
+                return;
+            }
+            $this->openRank++;
+            $this->announceLevel($this->openRank);
+        }
+    }
+
+    /** Says which components a level starts — only when an order was asked for. */
+    private function announceLevel(int $rank): void
+    {
+        if (!$this->ordered) {
+            return;
+        }
+        $names = [];
+        foreach ($this->units as $unit) {
+            if (!$unit->component->adopted && $unit->component->priority->rank() === $rank) {
+                $names[] = $unit->name;
+            }
+        }
+        if ($names !== []) {
+            $this->logger->info(sprintf('Application starting %s: %s', self::levelName($rank), implode(', ', $names)));
+        }
+    }
+
+    private function settled(int $rank): bool
+    {
+        $done = [UnitState::Running, UnitState::Completed, UnitState::Failed, UnitState::Held, UnitState::Stopped];
+        foreach ($this->units as $unit) {
+            $ofLevel = !$unit->component->adopted && $unit->component->priority->rank() === $rank;
+            if ($ofLevel && !in_array($unit->state, $done, true)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Runs the application's onStarting() in a process of its own: whatever it opens —
+     * a connection, a timer — ends with it, instead of being inherited by every
+     * component forked after. Its exit decides: 0 lets the rest start, anything else
+     * stops the application.
+     */
+    private function runStarting(): void
+    {
+        try {
+            BeforeFork::runAll();
+        } catch (\Throwable $e) {
+            $this->logger->error("onStarting not run yet: {$e->getMessage()}; retrying in 1s.");
+            $this->startingRetryAt = microtime(true) + 1.0;
+            return;
+        }
+        pcntl_sigprocmask(SIG_BLOCK, self::SIGNALS, $this->maskBeforeFork);
+        if ($this->stopping) {
+            pcntl_sigprocmask(SIG_SETMASK, $this->maskBeforeFork);
+            return;
+        }
+        $pid = pcntl_fork();
+        if ($pid === -1) {
+            pcntl_sigprocmask(SIG_SETMASK, $this->maskBeforeFork);
+            ($this->announce)('onStarting could not be run: fork failed. The application stops.');
+            $this->exitCode = 1;
+            $this->stop('onStarting failed');
+            return;
+        }
+        if ($pid === 0) {
+            @posix_setpgid(0, 0);
+            // A stop ends it by default: SIGTERM and SIGINT are not the supervisor's here.
+            $this->dropSupervisorSignals(program: false);
+            foreach ($this->units as $other) {
+                if ($other->socket !== null) {
+                    @fclose($other->socket);
+                }
+            }
+            $code = 0;
+            try {
+                ($this->starting)();
+            } catch (\Throwable $e) {
+                ($this->report)('onStarting failed', $e);
+                $code = 1;
+            }
+            Termination::leave($code);
+            throw new \LogicException('unreachable');
+        }
+        @posix_setpgid($pid, $pid);
+        $this->startingPid = $pid;
+        $this->startingAt = microtime(true);
+        $this->sentinel?->track($pid);
+        pcntl_sigprocmask(SIG_SETMASK, $this->maskBeforeFork);
+    }
+
+    /** onStarting() ended: the rest starts, or — when it failed — the application stops. */
+    private function startingEnded(int $status): void
+    {
+        $this->sentinel?->untrack($this->startingPid);
+        @posix_kill(-$this->startingPid, SIGKILL);
+        $this->startingPid = 0;
+        if ($this->stopping) {
+            return;
+        }
+        $took = microtime(true) - $this->startingAt;
+        if (pcntl_wifexited($status) && pcntl_wexitstatus($status) === 0) {
+            $this->startingDone = true;
+            $this->logger->info(sprintf('onStarting done in %s.', self::duration($took)));
+            return;
+        }
+        ($this->announce)('onStarting failed (' . self::describe($status, false) . '): the application stops.');
+        $this->exitCode = 1;
+        $this->stop('onStarting failed');
+    }
+
+    private static function duration(float $seconds): string
+    {
+        return $seconds < 1.0 ? sprintf('%d ms', (int) round($seconds * 1000)) : sprintf('%.1fs', $seconds);
     }
 
     private function start(Unit $unit): void
@@ -393,7 +631,7 @@ final class Supervisor
             fclose($pair[0]);
             if ($unit->component->kind === ComponentKind::Command) {
                 fclose($pair[1]);
-                $this->becomeProgram($unit);
+                $this->becomeProgram($unit->name, $unit->component->command);
             }
             $this->becomeComponent($unit, $pair[1]);
         }
@@ -412,19 +650,94 @@ final class Supervisor
         $unit->startedAt = microtime(true);
         $timeout = $unit->component->startTimeout;
         $unit->readyDeadline = $timeout > 0 ? $unit->startedAt + $timeout : 0.0;
-        // An outside program says nothing: it is ready as soon as it runs.
+        // An outside program says nothing: it is ready as soon as it runs, unless its
+        // readiness check says otherwise — asked from the next tick on.
         if ($unit->component->kind === ComponentKind::Command) {
+            if ($unit->component->ready === null) {
+                $this->ready($unit);
+            } else {
+                $unit->probeAt = $unit->startedAt;
+            }
+        }
+    }
+
+    /**
+     * Asks the readiness check of every outside program still starting: a port that
+     * accepts a connection, or a command that exits 0. A command runs in a process of its
+     * own, its output discarded, and is reaped like a component; one that hangs past
+     * {@see PROBE_TIMEOUT} is killed and counts as a no.
+     */
+    private function probeReadiness(float $now): void
+    {
+        foreach ($this->units as $unit) {
+            if ($unit->state !== UnitState::Starting || $unit->component->ready === null) {
+                continue;
+            }
+            if ($unit->probePid > 0) {
+                if ($now - $unit->probeStartedAt >= self::PROBE_TIMEOUT) {
+                    @posix_kill($unit->probePid, SIGKILL);
+                }
+                continue;
+            }
+            if ($now < $unit->probeAt) {
+                continue;
+            }
+            $unit->probeAt = $now + self::PROBE_INTERVAL;
+            $ready = $unit->component->ready;
+            if (is_string($ready)) {
+                $connection = @stream_socket_client($ready, $errno, $error, 0.25);
+                if ($connection !== false) {
+                    fclose($connection);
+                    $this->ready($unit);
+                }
+                continue;
+            }
+            $this->spawnProbe($unit, $ready, $now);
+        }
+    }
+
+    /** @param list<string> $command */
+    private function spawnProbe(Unit $unit, array $command, float $now): void
+    {
+        pcntl_sigprocmask(SIG_BLOCK, self::SIGNALS, $this->maskBeforeFork);
+        if ($this->stopping) {
+            pcntl_sigprocmask(SIG_SETMASK, $this->maskBeforeFork);
+            return;
+        }
+        $pid = pcntl_fork();
+        if ($pid === 0) {
+            // Its output says nothing the log needs: only its exit is the answer.
+            $this->becomeProgram(
+                "{$unit->name}'s ready check",
+                ['/bin/sh', '-c', 'exec "$@" >/dev/null 2>&1', 'ready', ...$command],
+            );
+        }
+        pcntl_sigprocmask(SIG_SETMASK, $this->maskBeforeFork);
+        if ($pid > 0) {
+            $unit->probePid = $pid;
+            $unit->probeStartedAt = $now;
+        }
+    }
+
+    /** A readiness check ended: exit 0 makes its program ready, anything else is asked again. */
+    private function probeEnded(Unit $unit, int $status): void
+    {
+        $unit->probePid = 0;
+        if ($unit->state === UnitState::Starting && pcntl_wifexited($status) && pcntl_wexitstatus($status) === 0) {
             $this->ready($unit);
         }
     }
 
     /**
-     * The child's side of an outside program: it becomes the program. Never returns.
+     * The child's side of an outside program — or of a readiness check: it becomes the
+     * program. Never returns.
      *
      * Looked up on PATH unless it is a path; run in the project root with the
      * application's environment, the variables `.env` loaded included.
+     *
+     * @param list<string> $command
      */
-    private function becomeProgram(Unit $unit): never
+    private function becomeProgram(string $name, array $command): never
     {
         $this->dropSupervisorSignals(program: true);
         foreach ($this->units as $other) {
@@ -437,14 +750,13 @@ final class Supervisor
             @chdir($root);
         }
 
-        $command = $unit->component->command;
         [$program, $args] = str_contains($command[0], '/')
             ? [$command[0], array_slice($command, 1)]
             : ['/usr/bin/env', $command];
         @pcntl_exec($program, $args, self::environment());
 
         // Only reached when the program could not be run.
-        @fwrite(STDERR, "winter: {$unit->name} could not be run: " . pcntl_strerror(pcntl_get_last_error()) . "\n");
+        @fwrite(STDERR, "winter: {$name} could not be run: " . pcntl_strerror(pcntl_get_last_error()) . "\n");
         Termination::leave(127);
         throw new \LogicException('unreachable');
     }
@@ -597,9 +909,17 @@ final class Supervisor
                 $this->sentinel = null;
                 continue;
             }
+            if ($this->startingPid > 0 && $pid === $this->startingPid) {
+                $this->startingEnded($status);
+                continue;
+            }
             foreach ($this->units as $unit) {
                 if ($unit->pid === $pid) {
                     $this->exited($unit, $status);
+                    break;
+                }
+                if ($unit->probePid === $pid) {
+                    $this->probeEnded($unit, $status);
                     break;
                 }
             }
@@ -620,7 +940,7 @@ final class Supervisor
             }
             if ($unit->timedOutAt === 0.0) {
                 $unit->timedOutAt = $now;
-                @posix_kill($unit->pid, SIGTERM);
+                @posix_kill($unit->pid, self::stopSignalOf($unit));
             } elseif ($now - $unit->timedOutAt >= self::KILL_AFTER) {
                 @posix_kill($unit->pid, SIGKILL);
             }
@@ -636,6 +956,9 @@ final class Supervisor
         // restart would meet them.
         @posix_kill(-$unit->pid, SIGKILL);
         $this->sentinel?->untrack($unit->pid);
+        if ($unit->probePid > 0) {
+            @posix_kill($unit->probePid, SIGKILL);
+        }
 
         if ($unit->socket !== null) {
             // Whatever it said last may still be unread.
@@ -906,7 +1229,7 @@ final class Supervisor
         if ($unit->state === UnitState::Running || $unit->state === UnitState::Starting) {
             // Stopped as on any request; it is started again as soon as it is down.
             $unit->restartPending = true;
-            @posix_kill($unit->pid, SIGTERM);
+            @posix_kill($unit->pid, self::stopSignalOf($unit));
             return;
         }
         if ($unit->state === UnitState::Waiting) {
@@ -1016,11 +1339,25 @@ final class Supervisor
                 'retries'  => $unit->component->retries,
                 'critical' => $unit->component->critical,
                 'retryAt'  => $unit->state === UnitState::Waiting && $unit->startAt > $now ? (int) $unit->startAt : 0,
-                'reason'   => $unit->reason,
+                'reason'   => $unit->reason !== '' ? $unit->reason : $this->waitsFor($unit),
                 'adopted'  => $unit->component->adopted,
+                'priority' => $unit->component->priority->name,
             ];
         }
         return $units;
+    }
+
+    /** What a component held back by the start order waits for; '' when it is not. */
+    private function waitsFor(Unit $unit): string
+    {
+        $held = !$this->startupDone && !$this->stopping && $unit->state === UnitState::Waiting
+            && !$unit->component->adopted && $unit->component->priority->rank() > $this->openRank;
+        if (!$held) {
+            return '';
+        }
+        return $this->startingPid > 0
+            ? 'waits for onStarting'
+            : 'waits for ' . self::levelName($this->openRank) . ' to be ready';
     }
 
     private function publish(): void
@@ -1048,11 +1385,24 @@ final class Supervisor
         }
     }
 
+    /** Components still running — onStarting() among them, while it runs. */
     private function alive(): int
+    {
+        $alive = $this->startingPid > 0 ? 1 : 0;
+        foreach ($this->units as $unit) {
+            if ($unit->pid > 0) {
+                $alive++;
+            }
+        }
+        return $alive;
+    }
+
+    /** Components of one level still running. */
+    private function aliveAt(int $rank): int
     {
         $alive = 0;
         foreach ($this->units as $unit) {
-            if ($unit->pid > 0) {
+            if ($unit->pid > 0 && $unit->component->priority->rank() === $rank) {
                 $alive++;
             }
         }

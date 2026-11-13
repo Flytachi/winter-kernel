@@ -6,6 +6,45 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [4.4.3] — 2026-11-13
+
+The application starts and stops its components in order, and gets two hooks of its own:
+one before it serves, one after it has stopped. A database or Redis can run inside the
+application, as a component the rest waits for.
+
+### Added
+
+- **`Priority`: start and stop order.** Every component takes `priority:` — High, Normal
+  (the default) or Low, in the `#[Enable*]` attributes and in `components()`. The higher,
+  the longer it lives: components start level by level, a level once every component of
+  the one before it is ready (or settled — failed and not critical, held by an outside
+  process, finished); a stop goes the other way, a level once the one before it is down.
+  High is for what the rest stands on (a database, Redis), Low for what takes outside
+  traffic (HTTP, WebSocket). The log says each level; `app status` shows a `PRIORITY`
+  column and what a waiting component waits for. With no priority set, everything starts
+  and stops at once, as before, and nothing more is logged.
+- **Outside programs that others can stand on.** `command()` and `script()` take:
+  - `ready:` — how the program is known to be ready: a command that succeeds once it is
+    (`['pg_isready', '-q']`, its output discarded) or `tcp://host:port`; asked every half
+    second for up to `startTimeout` (60 s). Without it a program is ready once it runs, as
+    before;
+  - `stopSignal:` — what asks it to stop: SIGINT for PostgreSQL's fast shutdown;
+  - `retries:` — restarts after a crash, as for processes. 0 by default, as before.
+- **`onStarting()` and `onStopped()` on the application.** `onStarting()` runs once the High
+  components are ready and before the rest starts — migrations, with the container and the
+  database layer there. It runs in a process of its own (what it opens is not inherited
+  by the components); a throw is logged, nothing more starts, and the application exits
+  with 1. `onStopped()` runs once everything is down, in the application's process, for at
+  most 5 seconds; an exception is logged and the stop goes on. Neither runs on a reload
+  (SIGHUP) or for console commands; under `call run dev` both run on every restart.
+
+### Changed
+
+- The stop budget adds the levels up: the longest grace of Low, plus Normal's, plus
+  High's, plus 5 seconds (never less than 35). With one level it is what it was. Raise
+  `stop_grace_period` (Docker) or `terminationGracePeriodSeconds` (Kubernetes) to match
+  when a High component has a long grace.
+
 ## [4.4.1] — unreleased
 
 The class scan reads the project's code, not everything under its root. A stop has a finite,

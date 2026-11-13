@@ -52,8 +52,9 @@ final class Components
         bool $critical = true,
         int $retries = Component::RETRIES,
         int $startTimeout = Component::START_TIMEOUT,
+        Priority $priority = Priority::Normal,
     ): self {
-        $this->components[] = Component::process($class, $critical, $retries, $startTimeout);
+        $this->components[] = Component::process($class, $critical, $retries, $startTimeout, $priority);
         return $this;
     }
 
@@ -67,8 +68,9 @@ final class Components
         bool $critical = true,
         int $retries = Component::RETRIES,
         int $startTimeout = Component::START_TIMEOUT,
+        Priority $priority = Priority::Normal,
     ): self {
-        $this->components[] = Component::scheduler($class, $critical, $retries, $startTimeout);
+        $this->components[] = Component::scheduler($class, $critical, $retries, $startTimeout, $priority);
         return $this;
     }
 
@@ -84,8 +86,9 @@ final class Components
         bool $critical = true,
         int $retries = Component::RETRIES,
         int $startTimeout = Component::START_TIMEOUT,
+        Priority $priority = Priority::Normal,
     ): self {
-        $this->components[] = Component::websocket($class, $port, $host, $critical, $retries, $startTimeout);
+        $this->components[] = Component::websocket($class, $port, $host, $critical, $retries, $startTimeout, $priority);
         return $this;
     }
 
@@ -95,9 +98,13 @@ final class Components
      *
      * @param class-string<\Flytachi\Winter\Kernel\Process\Stereotype\Daemon> $class
      */
-    public function daemon(string $class, bool $critical = true, int $startTimeout = Component::START_TIMEOUT): self
-    {
-        $this->components[] = Component::daemon($class, $critical, $startTimeout);
+    public function daemon(
+        string $class,
+        bool $critical = true,
+        int $startTimeout = Component::START_TIMEOUT,
+        Priority $priority = Priority::Normal,
+    ): self {
+        $this->components[] = Component::daemon($class, $critical, $startTimeout, $priority);
         return $this;
     }
 
@@ -108,7 +115,12 @@ final class Components
      * @param string $path The script, relative to the project root or absolute.
      * @param list<string> $args Its arguments.
      * @param string|null $name How logs name it; the file name without `.php` by default.
-     * @param float $grace Seconds it has to stop after SIGTERM before SIGKILL.
+     * @param float $grace Seconds it has to stop after its stop signal before SIGKILL.
+     * @param Priority $priority When it starts and stops relative to the others.
+     * @param list<string>|string|null $ready How it is known to be ready — see {@see command()}.
+     * @param int $stopSignal The signal that asks it to stop.
+     * @param int $retries Restarts after a crash within {@see Component::RETRY_WINDOW}.
+     * @param int $startTimeout Seconds `$ready` has to succeed; 0 waits for good.
      * @throws ApplicationConfigException No such file.
      * @link https://winterframe.net/docs/components#script Running a PHP script beside the application
      */
@@ -118,6 +130,11 @@ final class Components
         ?string $name = null,
         bool $critical = true,
         float $grace = 30.0,
+        Priority $priority = Priority::Normal,
+        array|string|null $ready = null,
+        int $stopSignal = SIGTERM,
+        int $retries = 0,
+        int $startTimeout = Component::START_TIMEOUT,
     ): self {
         $file = str_starts_with($path, '/') ? $path : rtrim($this->root, '/') . '/' . $path;
         if (!is_file($file)) {
@@ -128,25 +145,66 @@ final class Components
             $name ?? basename($file, '.php'),
             $critical,
             $grace,
+            $priority,
+            $ready,
+            $stopSignal,
+            $retries,
+            $startTimeout,
         );
         return $this;
     }
 
     /**
      * An outside program — any executable, looked up on PATH — the application starts
-     * and watches: ready as soon as it starts, never restarted (exit 0 is its work done,
-     * anything else a failure), stopped with SIGTERM and then SIGKILL after `$grace`.
-     * It runs in the project root with the application's environment; its output goes to
-     * the application's.
+     * and watches: exit 0 is its work done, anything else a failure; stopped with
+     * `$stopSignal` (SIGTERM) and then SIGKILL after `$grace`. It runs in the project root
+     * with the application's environment; its output goes to the application's.
+     *
+     * Ready as soon as it starts, unless `$ready` says how to tell — a command that
+     * succeeds once it is, or `tcp://host:port`. Not restarted unless `$retries` says so.
+     * A database the rest stands on:
+     *
+     * ```php
+     * $components->command(['bin/postgres.sh'], name: 'postgres',
+     *     priority: Priority::High,
+     *     ready: ['pg_isready', '-q', '-h', '/run/postgresql'],
+     *     stopSignal: SIGINT,
+     *     retries: 3);
+     * ```
      *
      * @param list<string> $command The program and its arguments.
      * @param string|null $name How logs name it; the program's name by default.
-     * @param float $grace Seconds it has to stop after SIGTERM before SIGKILL.
+     * @param float $grace Seconds it has to stop after its stop signal before SIGKILL.
+     * @param Priority $priority When it starts and stops relative to the others.
+     * @param list<string>|string|null $ready A command that succeeds once it is ready, or
+     *     `tcp://host:port`; asked every half second. Null: ready once it runs.
+     * @param int $stopSignal The signal that asks it to stop.
+     * @param int $retries Restarts after a crash within {@see Component::RETRY_WINDOW}.
+     * @param int $startTimeout Seconds `$ready` has to succeed; 0 waits for good.
      * @link https://winterframe.net/docs/components#command Running an outside program beside the application
      */
-    public function command(array $command, ?string $name = null, bool $critical = true, float $grace = 30.0): self
-    {
-        $this->components[] = Component::command($command, $name, $critical, $grace);
+    public function command(
+        array $command,
+        ?string $name = null,
+        bool $critical = true,
+        float $grace = 30.0,
+        Priority $priority = Priority::Normal,
+        array|string|null $ready = null,
+        int $stopSignal = SIGTERM,
+        int $retries = 0,
+        int $startTimeout = Component::START_TIMEOUT,
+    ): self {
+        $this->components[] = Component::command(
+            $command,
+            $name,
+            $critical,
+            $grace,
+            $priority,
+            $ready,
+            $stopSignal,
+            $retries,
+            $startTimeout,
+        );
         return $this;
     }
 

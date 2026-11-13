@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\App\Attribute;
 
 use Flytachi\Winter\Kernel\App\Component;
+use Flytachi\Winter\Kernel\App\Priority;
 use Flytachi\Winter\Kernel\Schedule\Stereotype\Scheduler;
 
 /**
@@ -31,12 +32,14 @@ final class EnableScheduler
      * @param int $retries Restarts after it crashed while running, within 30 minutes.
      *                     A failure to start is never retried.
      * @param int $startTimeout Seconds to become ready (to start its loop); 0 waits for good.
+     * @param Priority $priority When it starts and stops relative to the other components.
      */
     public function __construct(
         public string $class = Scheduler::class,
         public bool $critical = true,
         public int $retries = Component::RETRIES,
         public int $startTimeout = Component::START_TIMEOUT,
+        public Priority $priority = Priority::Normal,
     ) {
     }
 }

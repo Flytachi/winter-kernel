@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\App\Attribute;
 
 use Flytachi\Winter\Kernel\App\Component;
+use Flytachi\Winter\Kernel\App\Priority;
 use Flytachi\Winter\Kernel\Process\Stereotype\Daemon;
 
 /**
@@ -31,11 +32,13 @@ final class EnableDaemon
      * @param bool $critical Whether the application stops when it fails (the default);
      *                       false leaves it down, marked failed, while the rest runs on.
      * @param int $startTimeout Seconds for its workers to come up; 0 waits for good.
+     * @param Priority $priority When it starts and stops relative to the other components.
      */
     public function __construct(
         public string $class,
         public bool $critical = true,
         public int $startTimeout = Component::START_TIMEOUT,
+        public Priority $priority = Priority::Normal,
     ) {
     }
 }

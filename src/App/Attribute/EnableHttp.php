@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\App\Attribute;
 
 use Flytachi\Winter\Kernel\App\Component;
+use Flytachi\Winter\Kernel\App\Priority;
 
 /**
  * Enables the HTTP server — one {@see \Flytachi\Winter\Kernel\App\Component::http()} in the
@@ -38,6 +39,8 @@ final class EnableHttp
      * @param int $retries Restarts after it crashed while serving, within 30 minutes.
      *                     A failure to start — a port in use — is never retried.
      * @param int $startTimeout Seconds to bind its port and start; 0 waits for good.
+     * @param Priority $priority When it starts and stops relative to the other components:
+     *                          Low takes traffic once everything else is ready.
      */
     public function __construct(
         public int $port = 8000,
@@ -45,6 +48,7 @@ final class EnableHttp
         public bool $critical = true,
         public int $retries = Component::RETRIES,
         public int $startTimeout = Component::START_TIMEOUT,
+        public Priority $priority = Priority::Normal,
     ) {
     }
 }

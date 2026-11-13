@@ -125,6 +125,9 @@ use Psr\Log\LoggerInterface;
  */
 abstract class WinterApplication
 {
+    /** Seconds {@see onStopped()} has before it is cut short. */
+    public const int ON_STOPPED_TIMEOUT = 5;
+
     private static string $appClass = '';
     private static ?Container $container = null;
     /** Monotonic boot start (hrtime ns), for the startup banner's "up in N ms". */
@@ -905,6 +908,8 @@ abstract class WinterApplication
 
         $supervisor = self::supervisor($components, $web);
         $code = $supervisor->run(untilDone: true);
+        // Still the running application while it runs: its lock is released after.
+        static::runStopped();
         ApplicationRuntime::release(static::class);
 
         if ($supervisor->reloadRequested() && $web?->dev !== null) {
@@ -1121,22 +1126,33 @@ abstract class WinterApplication
                 ? null
                 : static fn(array $units) => ApplicationRuntime::publishUnits($run->appClass, $units),
             stopBudget: self::stopBudget($components, $web),
+            starting: static::overrides('onStarting')
+                ? static function (): void {
+                    LoggerFactory::setContextStorage(new ProcessContext());
+                    LoggerFactory::setDefaultChannel('sys');
+                    ForkReset::runAll();
+                    static::onStarting();
+                }
+                : null,
         );
     }
 
     /**
      * How long a stop of the application waits for its components: 35 seconds, or 5
-     * more than the longest grace among them — each gets its own in full, and a
-     * component stuck past it is killed rather than holding the stop for good. Null
-     * when a component waits for good (`$grace = 0`): that choice is respected.
+     * more than the levels need — a level stops once the one before it is down, so the
+     * longest grace of each level adds up (Low, then Normal, then High). Each component
+     * gets its own grace in full, and one stuck past it all is killed rather than holding
+     * the stop for good. Null when a component waits for good (`$grace = 0`): that
+     * choice is respected.
      *
      * @param list<Component> $components
      */
     private static function stopBudget(array $components, ?HttpTier $web): ?float
     {
-        $longest = $web !== null ? (float) $web->settings->getStopWait() : 0.0;
+        $longest = [];
         foreach ($components as $component) {
             $grace = match (true) {
+                $component->kind === ComponentKind::Http => $web?->settings->getStopWait(),
                 $component->kind === ComponentKind::Command => $component->grace,
                 $component->class !== null => (float) (new \ReflectionClass($component->class)->getDefaultProperties()['grace'] ?? 0.0),
                 default => null,
@@ -1147,9 +1163,10 @@ abstract class WinterApplication
             if ($grace <= 0.0) {
                 return null;
             }
-            $longest = max($longest, $grace);
+            $rank = $component->priority->rank();
+            $longest[$rank] = max($longest[$rank] ?? 0.0, $grace);
         }
-        return max(35.0, $longest + 5.0);
+        return max(35.0, array_sum($longest) + 5.0);
     }
 
     // ── Internal ──────────────────────────────────────────────────────────────
@@ -1220,6 +1237,7 @@ abstract class WinterApplication
                     critical: $h->critical,
                     retries: $h->retries,
                     startTimeout: $h->startTimeout,
+                    priority: $h->priority,
                 ),
             );
         } elseif ($ref->getAttributes(EnableWeb::class) !== []) {
@@ -1230,7 +1248,13 @@ abstract class WinterApplication
             $s = $scheduler[0]->newInstance();
             $components[] = self::component(
                 '#[EnableScheduler]',
-                static fn() => Component::scheduler($s->class, $s->critical, $s->retries, $s->startTimeout),
+                static fn() => Component::scheduler(
+                    $s->class,
+                    $s->critical,
+                    $s->retries,
+                    $s->startTimeout,
+                    $s->priority,
+                ),
             );
         }
         foreach ($ref->getAttributes(EnableProcess::class) as $attribute) {
@@ -1251,6 +1275,7 @@ abstract class WinterApplication
                     $process->critical,
                     $process->retries,
                     $process->startTimeout,
+                    $process->priority,
                 ),
             );
         }
@@ -1270,6 +1295,7 @@ abstract class WinterApplication
                     $socket->critical,
                     $socket->retries,
                     $socket->startTimeout,
+                    $socket->priority,
                 ),
             );
         }
@@ -1277,7 +1303,12 @@ abstract class WinterApplication
             $daemon = $attribute->newInstance();
             $components[] = self::component(
                 '#[EnableDaemon(' . self::bareName($daemon->class) . ')]',
-                static fn() => Component::daemon($daemon->class, $daemon->critical, $daemon->startTimeout),
+                static fn() => Component::daemon(
+                    $daemon->class,
+                    $daemon->critical,
+                    $daemon->startTimeout,
+                    $daemon->priority,
+                ),
             );
         }
 
@@ -1370,6 +1401,74 @@ abstract class WinterApplication
      */
     protected static function components(Components $components): void
     {
+    }
+
+    /**
+     * Runs once when the application starts — after the High components are ready, before
+     * the rest starts. The place for one-off work the application needs before it serves:
+     * migrations above all, with the container, the database layer and the logger there.
+     *
+     * ```
+     * protected static function onStarting(): void
+     * {
+     *     Migrations::apply();   // the High database is ready here
+     * }
+     * ```
+     *
+     * Throw to stop the start: the exception is logged, nothing more starts, and the
+     * application exits with 1. It runs in a process of its own — what it opens (a
+     * connection, a timer) is not inherited by the components, and what it keeps in memory
+     * does not reach them either: hand results on through a database, a file or a cache.
+     * Not run on a reload (SIGHUP), nor by console commands; under `call run dev` it runs
+     * on every restart, so it must be safe to repeat.
+     *
+     * @link https://winterframe.net/docs/components#onstarting Before the application starts
+     */
+    protected static function onStarting(): void
+    {
+    }
+
+    /**
+     * Runs once when the application has stopped — every component down, the High ones
+     * last — in the application's own process, for at most
+     * {@see ON_STOPPED_TIMEOUT} seconds. For short work: a notification, temporary files.
+     * An exception is logged; the application stops all the same, with the exit code it
+     * would have had.
+     *
+     * @link https://winterframe.net/docs/components#onstopped After the application stops
+     */
+    protected static function onStopped(): void
+    {
+    }
+
+    /** Whether the application overrides one of its hooks. */
+    private static function overrides(string $hook): bool
+    {
+        return (new \ReflectionMethod(static::class, $hook))->getDeclaringClass()->getName() !== self::class;
+    }
+
+    /**
+     * The application's onStopped(), bounded by {@see ON_STOPPED_TIMEOUT}: a hook that
+     * hangs must not keep a stopped application from exiting.
+     */
+    private static function runStopped(): void
+    {
+        if (!static::overrides('onStopped')) {
+            return;
+        }
+        pcntl_async_signals(true);
+        pcntl_signal(SIGALRM, static function (): never {
+            throw new \RuntimeException('it ran out of time (' . self::ON_STOPPED_TIMEOUT . 's)');
+        });
+        pcntl_alarm(self::ON_STOPPED_TIMEOUT);
+        try {
+            static::onStopped();
+        } catch (\Throwable $e) {
+            self::reportFailure('onStopped failed', $e);
+        } finally {
+            pcntl_alarm(0);
+            pcntl_signal(SIGALRM, SIG_DFL);
+        }
     }
 
     /**

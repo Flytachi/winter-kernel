@@ -31,6 +31,13 @@ final class Unit
     /** When an outside program asked to stop is killed if it has not; 0 when not stopping. */
     public float $killAt = 0.0;
 
+    /** The readiness check of an outside program running now; 0 when none is. */
+    public int $probePid = 0;
+    /** When that check was started. */
+    public float $probeStartedAt = 0.0;
+    /** When the readiness check is asked next. */
+    public float $probeAt = 0.0;
+
     /** The process said it ends because it was asked to stop. */
     public bool $stopRequested = false;
     /** The process said it gave up by its own rules. */
@@ -75,6 +82,9 @@ final class Unit
         $this->readyDeadline = 0.0;
         $this->timedOutAt = 0.0;
         $this->killAt = 0.0;
+        $this->probePid = 0;
+        $this->probeStartedAt = 0.0;
+        $this->probeAt = 0.0;
         $this->stopRequested = false;
         $this->gaveUp = false;
         $this->held = false;
