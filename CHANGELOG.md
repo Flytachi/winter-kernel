@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-## [4.5.0] — unreleased
+## [4.5.0] — 2026-11-15
 
 Services: a database or a cache the application runs in its container, packaged with
 everything it needs — and a command that writes what the image needs for them. An outside
