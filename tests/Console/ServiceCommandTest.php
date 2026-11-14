@@ -9,8 +9,8 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * `call service list | docker` against a real project in a child process: what the
- * declared services need goes into one Dockerfile block and into the compose override,
- * and running it again changes nothing that is already right.
+ * declared services need goes into one Dockerfile block, what compose needs is shown
+ * and never written, and running it again changes nothing that is already right.
  */
 final class ServiceCommandTest extends TestCase
 {
@@ -96,8 +96,10 @@ final class ServiceCommandTest extends TestCase
         return (string) @file_get_contents($this->project . '/' . $name);
     }
 
-    public function test_docker_writes_the_block_before_the_code_and_the_override(): void
+    public function test_docker_writes_the_block_before_the_code_and_shows_what_compose_needs(): void
     {
+        $compose = $this->file('docker-compose.yml');
+
         [, $output] = $this->call(['service', 'docker']);
 
         $dockerfile = $this->file('Dockerfile');
@@ -107,11 +109,28 @@ final class ServiceCommandTest extends TestCase
         self::assertGreaterThan(strrpos($dockerfile, 'FROM '), strpos($dockerfile, '# winter:services'), 'in the last stage');
         self::assertMatchesRegularExpression('#Dockerfile \.+ \[UPDATED\]#', $output);
 
-        $override = $this->file('docker-compose.override.yml');
-        self::assertStringContainsString("  server:\n    stop_grace_period: 100s\n", $override, 'Http 30 + fakedb 60 + 5, + 5 for the container');
-        self::assertStringContainsString('      - fakedb-data:/var/lib/fakedb', $override);
-        self::assertStringContainsString("volumes:\n  fakedb-data:\n", $override);
-        self::assertStringNotContainsString('fakedb', $this->file('docker-compose.yml'), 'the project\'s own compose file is not edited');
+        self::assertStringContainsString('stop_grace_period: 100s', $output, 'Http 30 + fakedb 60 + 5, + 5 for the container');
+        self::assertStringContainsString('- fakedb-data:/var/lib/fakedb', $output);
+        self::assertStringContainsString('Leave them out if it need not survive', $output);
+        self::assertSame($compose, $this->file('docker-compose.yml'), 'compose is not edited');
+        self::assertFileDoesNotExist($this->project . '/docker-compose.override.yml', 'nor an override written');
+    }
+
+    public function test_the_compose_snippet(): void
+    {
+        self::assertSame(
+            "services:\n  server:\n    stop_grace_period: 70s\n    volumes:\n      - pg-data:/var/lib/pg\nvolumes:\n  pg-data:\n",
+            Service::composeSnippet('server', ['pg-data' => '/var/lib/pg'], 70),
+        );
+        self::assertSame("services:\n  app:\n    stop_grace_period: 40s\n", Service::composeSnippet('app', [], 40), 'no data, no volumes');
+    }
+
+    public function test_the_service_is_named_by_the_option(): void
+    {
+        [, $output] = $this->call(['service', 'docker', '--service=api']);
+
+        self::assertStringContainsString('service "api"', $output);
+        self::assertMatchesRegularExpression('/^\W*api:\s*$/m', $output);
     }
 
     public function test_a_second_run_changes_nothing(): void
@@ -124,7 +143,6 @@ final class ServiceCommandTest extends TestCase
         self::assertSame($dockerfile, $this->file('Dockerfile'));
         self::assertSame(1, substr_count($dockerfile, '# winter:services end'));
         self::assertMatchesRegularExpression('#Dockerfile \.+ \[UNCHANGED\]#', $output);
-        self::assertMatchesRegularExpression('#docker-compose\.override\.yml \.+ \[UNCHANGED\]#', $output);
     }
 
     public function test_dry_shows_and_writes_nothing(): void
@@ -134,20 +152,20 @@ final class ServiceCommandTest extends TestCase
         [, $output] = $this->call(['service', 'docker', '--dry']);
 
         self::assertSame($before, $this->file('Dockerfile'));
-        self::assertFileDoesNotExist($this->project . '/docker-compose.override.yml');
         self::assertStringContainsString('apk add --no-cache fakedb18', $output);
+        self::assertStringContainsString('stop_grace_period: 100s', $output);
         self::assertStringContainsString('--dry: nothing was written.', $output);
     }
 
-    public function test_without_services_the_block_and_the_override_go(): void
+    public function test_without_services_the_block_goes_and_nothing_is_hinted(): void
     {
         $this->call(['service', 'docker']);
         $before = $this->file('Dockerfile');
 
-        $this->call(['service', 'docker'], ['NO_SERVICES' => '1']);
+        [, $output] = $this->call(['service', 'docker'], ['NO_SERVICES' => '1']);
 
         self::assertStringNotContainsString('winter:services', $this->file('Dockerfile'));
-        self::assertFileDoesNotExist($this->project . '/docker-compose.override.yml');
+        self::assertStringNotContainsString('stop_grace_period', $output);
         self::assertSame(
             str_replace(["\n\n\n"], ["\n\n"], (string) preg_replace('/# winter:services.*?# winter:services end\n\n?/s', '', $before)),
             $this->file('Dockerfile'),
@@ -155,15 +173,14 @@ final class ServiceCommandTest extends TestCase
         );
     }
 
-    public function test_an_override_the_command_did_not_write_is_left_alone(): void
+    public function test_an_override_of_the_developer_is_left_alone(): void
     {
-        file_put_contents($this->project . '/docker-compose.override.yml', "services:\n  server:\n    environment:\n      X: 1\n");
+        $own = "services:\n  server:\n    environment:\n      X: 1\n";
+        file_put_contents($this->project . '/docker-compose.override.yml', $own);
 
-        [, $output] = $this->call(['service', 'docker']);
+        $this->call(['service', 'docker']);
 
-        self::assertSame("services:\n  server:\n    environment:\n      X: 1\n", $this->file('docker-compose.override.yml'));
-        self::assertStringContainsString('is not this command\'s: it is left alone', $output);
-        self::assertStringContainsString('fakedb-data:/var/lib/fakedb', $output, 'what to add is printed');
+        self::assertSame($own, $this->file('docker-compose.override.yml'));
     }
 
     public function test_list_names_each_service_and_what_it_needs(): void

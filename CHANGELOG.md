@@ -28,11 +28,11 @@ everything it needs — and a command that writes what the image needs for them.
   from, priority, packages, volumes, environment.
 - **`call service docker`** — writes the block into the `Dockerfile`, between
   `# winter:services` marks (before the first `COPY` of the last stage the first time,
-  replaced in place after, removed with no services left), and the volumes and
-  `stop_grace_period` (the application's stop time + 5 s) into
-  `docker-compose.override.yml`, which Compose reads beside `docker-compose.yml` — that one
-  is never edited. An override it did not write is left alone, and what to add is printed.
-  `--dry` shows without writing; `--service=` names the compose service.
+  replaced in place after, removed with no services left). Compose is the developer's and
+  is never written: the command prints what to add to `docker-compose.yml` —
+  `stop_grace_period` (the application's stop time + 5 s) and the volumes for the services'
+  data, to take or leave out. `--dry` shows without writing; `--service=` names the compose
+  service in the hint.
 
 ## [4.4.4] — 2026-11-13
 

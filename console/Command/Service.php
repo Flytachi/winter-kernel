@@ -16,16 +16,13 @@ use Flytachi\Winter\Kernel\WinterApplication;
  * {@see \Flytachi\Winter\Kernel\App\Components::service()} declares them.
  *
  * `list` shows them; `docker` writes what the image needs for them into the Dockerfile
- * (a block between marks, replaced on every run) and their volumes and stop time into
- * `docker-compose.override.yml`, which Compose reads beside `docker-compose.yml` — the
- * project's own compose file is never edited.
+ * (a block between marks, replaced on every run) and prints what compose needs — the
+ * stop time and the volumes for their data. Compose is the developer's: it is never
+ * written.
  */
 final class Service extends Cmd
 {
     public static string $title = "the services the application runs in its container: list | docker";
-
-    /** The first line of the override file this command owns. */
-    private const string OVERRIDE_MARK = '# Written by `call service docker`';
 
     public function handle(): void
     {
@@ -86,7 +83,9 @@ final class Service extends Cmd
         $image = ServiceImage::merge(...array_map(static fn(AppService $s): ServiceImage => $s->image(), $services));
 
         $this->dockerfile($services === [] ? null : $image, $dry);
-        $this->override($services === [] ? [] : $image->volumes, $dry);
+        if ($services !== []) {
+            $this->composeHint($image->volumes);
+        }
 
         if ($dry) {
             self::printInfo('--dry: nothing was written.');
@@ -187,69 +186,51 @@ final class Service extends Cmd
     }
 
     /**
-     * `docker-compose.override.yml`: the volumes that keep the services' data and the
-     * time a stop needs. Compose reads it beside `docker-compose.yml`; a file of that
-     * name the command did not write is left alone, and what to add is printed instead.
+     * What compose needs for the services, printed, never written: compose is the
+     * developer's — whether the data outlives the container, and where it lives, is
+     * theirs to decide.
      *
      * @param array<string, string> $volumes
      */
-    private function override(array $volumes, bool $dry): void
+    private function composeHint(array $volumes): void
     {
-        $compose = Kernel::$pathRoot . '/docker-compose.yml';
-        $path = Kernel::$pathRoot . '/docker-compose.override.yml';
-        $ours = !is_file($path) || str_starts_with((string) file_get_contents($path), self::OVERRIDE_MARK);
-        $content = $volumes === []
-            ? null
-            : self::overrideContent($this->serviceName($compose), $volumes, $this->stopTime());
-
-        if ($dry || !$ours) {
-            if (!$ours && $content !== null) {
-                self::printWarning('docker-compose.override.yml is not this command\'s: it is left alone. Add to it:');
-            }
-            if ($content !== null) {
-                self::printLabel('docker-compose.override.yml', 34);
-                self::printSplit($content, 36);
-                self::printLabel('docker-compose.override.yml', 34);
-            }
+        $stopGrace = $this->stopTime();
+        if ($stopGrace === null && $volumes === []) {
             return;
         }
-        if ($content === null) {
-            if (is_file($path)) {
-                unlink($path);
-                self::printBadge('docker-compose.override.yml', 'REMOVED', 34, 32);
-            }
-            return;
+        $service = $this->serviceName(Kernel::$pathRoot . '/docker-compose.yml');
+        self::printInfo("Compose is yours: add to docker-compose.yml, service \"{$service}\", what fits:");
+        self::printLabel('docker-compose.yml', 34);
+        self::printSplit(rtrim(self::composeSnippet($service, $volumes, $stopGrace)), 36);
+        self::printLabel('docker-compose.yml', 34);
+        if ($stopGrace !== null) {
+            self::printInfo("stop_grace_period: a stop needs {$stopGrace}s;"
+                . ' without it Docker kills the container after 10s.');
         }
-        $before = is_file($path) ? (string) file_get_contents($path) : null;
-        if ($before === $content) {
-            self::printBadge('docker-compose.override.yml', 'UNCHANGED', 34, 36);
-            return;
+        if ($volumes !== []) {
+            self::printInfo('volumes: keep the data when the container is recreated. Leave them out if it need not'
+                . ' survive; skip one whose path is already inside a volume of yours.');
         }
-        file_put_contents($path, $content);
-        self::printBadge('docker-compose.override.yml', $before === null ? 'CREATED' : 'UPDATED', 34, 32);
     }
 
     /**
      * @param array<string, string> $volumes
      */
-    public static function overrideContent(string $service, array $volumes, ?int $stopGrace): string
+    public static function composeSnippet(string $service, array $volumes, ?int $stopGrace): string
     {
-        $lines = [
-            self::OVERRIDE_MARK . ' — the services the application runs in its container:',
-            '# their volumes and the time a stop needs. Run it again after changing them.',
-            'services:',
-            "  {$service}:",
-        ];
+        $lines = ['services:', "  {$service}:"];
         if ($stopGrace !== null) {
             $lines[] = "    stop_grace_period: {$stopGrace}s";
         }
-        $lines[] = '    volumes:';
-        foreach ($volumes as $name => $mount) {
-            $lines[] = "      - {$name}:{$mount}";
-        }
-        $lines[] = 'volumes:';
-        foreach (array_keys($volumes) as $name) {
-            $lines[] = "  {$name}:";
+        if ($volumes !== []) {
+            $lines[] = '    volumes:';
+            foreach ($volumes as $name => $mount) {
+                $lines[] = "      - {$name}:{$mount}";
+            }
+            $lines[] = 'volumes:';
+            foreach (array_keys($volumes) as $name) {
+                $lines[] = "  {$name}:";
+            }
         }
         return implode("\n", $lines) . "\n";
     }
@@ -327,14 +308,14 @@ final class Service extends Cmd
 
         self::printLabel("Commands", $cl);
         self::printBadge('list', 'the services components() declares, and what each needs', $cl, 36);
-        self::printBadge('docker', 'write what they need into Dockerfile and docker-compose.override.yml', $cl, 36);
+        self::printBadge('docker', 'write what they need into the Dockerfile, show what compose needs', $cl, 36);
         self::printLabel("Commands", $cl);
 
         self::printLabel("docker", $cl);
         self::print("Dockerfile: one block between '# winter:services' marks — apk packages,", $cl);
         self::print("directories owned by winter, environment; replaced on every run.", $cl);
-        self::print("docker-compose.override.yml: the volumes and stop_grace_period;", $cl);
-        self::print("docker-compose.yml itself is never edited.", $cl);
+        self::print("Compose is never written: stop_grace_period and the volumes it needs", $cl);
+        self::print("are printed, to add to docker-compose.yml as fits.", $cl);
         self::print("--dry            show what would be written, write nothing", $cl);
         self::print("--service=NAME   the compose service the application is (the first one by default)", $cl);
         self::printLabel("docker", $cl);
