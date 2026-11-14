@@ -39,6 +39,14 @@ final class Complete extends Cmd
             '--mvc:wrap output path in MVC category folders',
         ],
 
+        // --- service ---
+        'service' => [
+            'list:the services components() declares',
+            'docker:write what they need into the Dockerfile and compose override',
+        ],
+        'service list'   => [],
+        'service docker' => ['--dry:show, write nothing', '--service:the compose service the application is'],
+
         // --- cfg ---
         'cfg' => [
             'init:initialize project (.env + key)',

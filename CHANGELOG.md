@@ -6,6 +6,34 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [4.4.5] — unreleased
+
+Services: a database or a cache the application runs in its container, packaged with
+everything it needs — and a command that writes what the image needs for them.
+
+### Added
+
+- **`Service`** — the contract of a service: `component()` (what the supervisor runs: an
+  outside program with its checks, stop signal and priority) and `image()` (what the
+  container image needs for it). The kernel knows no service by name; a package — or the
+  project — provides one, and the application declares it with
+  **`Components::service()`**. `call app info` names its source `service(Name)`.
+- **`ServiceImage`** — what a service needs in the image, for apk (flytachi/winter is
+  Alpine): `packages`, `directories` (owned by winter, with a mode), `volumes` (name →
+  path), `env`, and `run` for what the rest does not cover. A value the Dockerfile cannot
+  take is refused when the object is made. `ServiceImage::merge()` makes one block of
+  several: one `apk add`, one `mkdir`/`chown`, each thing once; two services wanting one
+  thing two ways — a directory with two modes, a variable with two values — is an error.
+- **`call service list`** — the declared services: class, the Composer package it comes
+  from, priority, packages, volumes, environment.
+- **`call service docker`** — writes the block into the `Dockerfile`, between
+  `# winter:services` marks (before the first `COPY` of the last stage the first time,
+  replaced in place after, removed with no services left), and the volumes and
+  `stop_grace_period` (the application's stop time + 5 s) into
+  `docker-compose.override.yml`, which Compose reads beside `docker-compose.yml` — that one
+  is never edited. An override it did not write is left alone, and what to add is printed.
+  `--dry` shows without writing; `--service=` names the compose service.
+
 ## [4.4.4] — 2026-11-13
 
 An application with an outside program no longer keeps a CPU core busy.

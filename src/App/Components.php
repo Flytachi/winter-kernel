@@ -34,6 +34,9 @@ final class Components
     /** @var list<Component> */
     private array $components = [];
 
+    /** @var list<array{Service, Component}> The services declared, each with its component. */
+    private array $services = [];
+
     /**
      * @param string $root The project root — where relative script paths start.
      * @internal Built by the application.
@@ -217,11 +220,39 @@ final class Components
     }
 
     /**
+     * A {@see Service} — a database, a cache — that a package prepared: its component
+     * (how it is started, checked, stopped) and what the image needs for it, which
+     * `call service docker` writes into the Dockerfile.
+     *
+     * ```php
+     * $components->service(new Postgres(version: 18, database: 'app'));
+     * ```
+     *
+     * @link https://winterframe.net/docs/services Services inside the application
+     */
+    public function service(Service $service): self
+    {
+        $component = $service->component();
+        $this->components[] = $component;
+        $this->services[] = [$service, $component];
+        return $this;
+    }
+
+    /**
      * @return list<Component>
      * @internal Read by the application.
      */
     public function all(): array
     {
         return $this->components;
+    }
+
+    /**
+     * @return list<array{Service, Component}>
+     * @internal Read by the application.
+     */
+    public function services(): array
+    {
+        return $this->services;
     }
 }

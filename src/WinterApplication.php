@@ -43,6 +43,7 @@ use Flytachi\Winter\Kernel\App\Config\ServerSettings;
 use Flytachi\Winter\Kernel\App\Config\WebConfigurer;
 use Flytachi\Winter\Kernel\App\Config\WorkerMemory;
 use Flytachi\Winter\Kernel\App\PluginPackage;
+use Flytachi\Winter\Kernel\App\Service;
 use Flytachi\Winter\Kernel\Collector\ConfigurationCollector;
 use Flytachi\Winter\Kernel\Collector\ImplementorCollector;
 use Flytachi\Winter\Kernel\Collector\ScopeGraphCollector;
@@ -1125,7 +1126,7 @@ abstract class WinterApplication
             publish: $run === null
                 ? null
                 : static fn(array $units) => ApplicationRuntime::publishUnits($run->appClass, $units),
-            stopBudget: self::stopBudget($components, $web),
+            stopBudget: self::stopBudget($components, $web?->settings->getStopWait()),
             starting: static::overrides('onStarting')
                 ? static function (): void {
                     LoggerFactory::setContextStorage(new ProcessContext());
@@ -1147,12 +1148,12 @@ abstract class WinterApplication
      *
      * @param list<Component> $components
      */
-    private static function stopBudget(array $components, ?HttpTier $web): ?float
+    private static function stopBudget(array $components, ?int $httpStopWait): ?float
     {
         $longest = [];
         foreach ($components as $component) {
             $grace = match (true) {
-                $component->kind === ComponentKind::Http => $web?->settings->getStopWait(),
+                $component->kind === ComponentKind::Http => $httpStopWait,
                 $component->kind === ComponentKind::Command => $component->grace,
                 $component->class !== null => (float) (new \ReflectionClass($component->class)->getDefaultProperties()['grace'] ?? 0.0),
                 default => null,
@@ -1331,12 +1332,18 @@ abstract class WinterApplication
         $inCode = count(self::declaredInCode());
         $fromAttributes = count($all) - $inCode;
         $web = static::hasAttribute(EnableWeb::class) ? '#[EnableWeb]' : '#[EnableHttp]';
+        // A component a service made is named by the service: `service(Postgres)`.
+        $byService = [];
+        foreach (self::declared()->services() as [$service, $component]) {
+            $byService[$component->name()] = 'service(' . self::shortName($service::class) . ')';
+        }
 
         $manifest = [];
         foreach ($all as $i => $component) {
+            $inCodeSource = $byService[$component->name()] ?? 'components()';
             $manifest[] = [
                 'component' => $component,
-                'source' => $i >= $fromAttributes ? 'components()' : match ($component->kind) {
+                'source' => $i >= $fromAttributes ? $inCodeSource : match ($component->kind) {
                     ComponentKind::Http => $web,
                     ComponentKind::Process => '#[EnableProcess]',
                     ComponentKind::Daemon => '#[EnableDaemon]',
@@ -1371,13 +1378,39 @@ abstract class WinterApplication
      */
     private static function declaredInCode(): array
     {
+        return self::declared()->all();
+    }
+
+    /** What the {@see components()} hook declares, services included. */
+    private static function declared(): Components
+    {
         $declared = new Components(Kernel::$pathRoot ?? '');
         try {
             static::components($declared);
         } catch (\InvalidArgumentException $e) {
             throw new ApplicationConfigException(static::class . '::components(): ' . $e->getMessage(), previous: $e);
         }
-        return $declared->all();
+        return $declared;
+    }
+
+    /**
+     * The services the application declares, as `call service` shows them.
+     *
+     * @return list<Service>
+     * @throws ApplicationConfigException The declaration is invalid, as it would be at startup.
+     */
+    public static function services(): array
+    {
+        return array_map(static fn(array $entry): Service => $entry[0], self::declared()->services());
+    }
+
+    /**
+     * How long a stop of the application may take — what `call service docker` gives the
+     * container (`stop_grace_period`). Null when a component waits for good.
+     */
+    public static function stopTime(): ?float
+    {
+        return self::stopBudget(static::resolveComponents(), static::httpSettings()?->getStopWait());
     }
 
     /**
