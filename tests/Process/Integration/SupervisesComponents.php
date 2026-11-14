@@ -41,13 +41,15 @@ trait SupervisesComponents
         ?float $stopBudget = null,
         ?\Closure $starting = null,
         ?\Closure $programLog = null,
+        int $lineMax = Supervisor::LINE_MAX,
+        int $entryMax = Supervisor::ENTRY_MAX,
     ): int {
         $storage = $this->storage;
         $app = self::$testApp;
         if ($asApplication) {
             $this->actAsApplication($app);
         }
-        return $this->fork(static function () use ($components, $storage, $asApplication, $app, $stopBudget, $starting, $programLog): void {
+        return $this->fork(static function () use ($components, $storage, $asApplication, $app, $stopBudget, $starting, $programLog, $lineMax, $entryMax): void {
             $write = static fn(string $file, string $line) =>
                 file_put_contents("{$storage}/{$file}", $line . "\n", FILE_APPEND);
             $logger = new class ($write) extends AbstractLogger {
@@ -100,6 +102,8 @@ trait SupervisesComponents
                 stopBudget: $stopBudget,
                 starting: $starting,
                 programLog: $programLog,
+                lineMax: $lineMax,
+                entryMax: $entryMax,
             ))->run(untilDone: !$asApplication);
             file_put_contents("{$storage}/exit", (string) $code);
         });

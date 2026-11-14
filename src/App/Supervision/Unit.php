@@ -21,8 +21,16 @@ final class Unit
     public mixed $output = null;
     /** What the program wrote after its last full line. */
     public string $outputTail = '';
-    /** @var array{level: string, message: string, context: array<string, mixed>, pid: int, last: ?string}|null
-     *     The entry its output is on, logged once the next one starts or the program is quiet. */
+    /** A line too long was cut: the rest of it, up to its newline, is dropped. */
+    public bool $outputSkipping = false;
+    /**
+     * The entry its output is on, logged once the next one starts or the program is quiet.
+     *
+     * @var array{
+     *     level: string, message: string, context: array<string, mixed>,
+     *     pid: int, last: ?string, size: int, cut: int,
+     * }|null
+     */
     public ?array $entry = null;
     /** When the program last wrote to that entry. */
     public float $entryAt = 0.0;
@@ -102,6 +110,7 @@ final class Unit
         $this->socket = null;
         $this->output = null;
         $this->outputTail = '';
+        $this->outputSkipping = false;
         $this->entry = null;
         $this->entryAt = 0.0;
         $this->startedAt = 0.0;

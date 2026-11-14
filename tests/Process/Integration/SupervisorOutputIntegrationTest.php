@@ -86,6 +86,40 @@ final class SupervisorOutputIntegrationTest extends IntegrationCase
         self::assertSame(0, $this->exitCode($supervisor));
     }
 
+    public function test_an_entry_past_its_size_is_cut_and_says_so(): void
+    {
+        $script = 'echo "E:big"; i=0; while [ $i -lt 50 ]; do echo ">0123456789"; i=$((i+1)); done; echo "after"';
+        $supervisor = $this->supervise(
+            [Component::command(['sh', '-c', $script], 'db', output: new TaggedOutput())],
+            programLog: $this->programLog(),
+            entryMax: 100,
+        );
+        self::assertSame(0, $this->exitCode($supervisor));
+
+        $entries = $this->entries();
+        self::assertCount(2, $entries, 'the rest is dropped, not logged as entries of their own');
+        [$message, $marker] = explode(' … ', $entries[0]['message']);
+        self::assertSame(100, strlen($message), 'filled up to its size');
+        self::assertSame('(cut: 453 B more)', $marker, '50 lines of 11 bytes, less the 97 that fit');
+        self::assertSame('after', $entries[1]['message'], 'the next entry is whole');
+    }
+
+    public function test_a_line_past_its_size_is_cut_and_the_rest_of_it_dropped(): void
+    {
+        $script = 'printf "%0300d\n" 0; echo "next"';
+        $supervisor = $this->supervise(
+            [Component::command(['sh', '-c', $script], 'db', output: new TaggedOutput())],
+            programLog: $this->programLog(),
+            lineMax: 64,
+        );
+        self::assertSame(0, $this->exitCode($supervisor));
+
+        self::assertSame(
+            [str_repeat('0', 64) . ' … (cut)', 'next'],
+            array_column($this->entries(), 'message'),
+        );
+    }
+
     public function test_without_a_parser_the_output_is_left_alone(): void
     {
         $supervisor = $this->supervise(

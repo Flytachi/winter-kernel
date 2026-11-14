@@ -6,10 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-## [4.4.5] — unreleased
+## [4.5.0] — unreleased
 
 Services: a database or a cache the application runs in its container, packaged with
-everything it needs — and a command that writes what the image needs for them.
+everything it needs — and a command that writes what the image needs for them. An outside
+program's output can be read into the application's log.
 
 ### Added
 
@@ -42,7 +43,8 @@ everything it needs — and a command that writes what the image needs for them.
   or JSON format and the log file apply. An entry is logged once the next one starts or
   the program is quiet for 50 ms; a line the parser throws on is logged as it is; each
   look reads a bounded portion, so a program that writes without pause does not hold the
-  loop. Without `output`, the program writes straight to the application's output, as
+  loop. A line is cut at 128 KB (the rest of it dropped), an entry at 3 MB, ending with
+  how much was cut (`… (cut: 9.2 MB more)`); under `call run dev`, 1 MB and 16 MB. Without `output`, the program writes straight to the application's output, as
   before. The PID goes to `extra.program`, which winter-logger's line format shows in
   place of the application's, its channel in blue.
 

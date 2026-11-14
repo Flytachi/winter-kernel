@@ -71,7 +71,12 @@ final class Supervisor
     /** Seconds a program's quiet takes for its entry to be complete. */
     private const float ENTRY_QUIET = 0.05;
     /** Bytes of one line of a program's output; a longer one is cut there. */
-    private const int LINE_MAX = 65536;
+    public const int LINE_MAX = 131072;
+    /** Bytes of one entry of a program's log, its continuations included; the rest is cut. */
+    public const int ENTRY_MAX = 3 * 1048576;
+    /** The same, under `call run dev`: a developer reads whole statements. */
+    public const int DEV_LINE_MAX = 1048576;
+    public const int DEV_ENTRY_MAX = 16 * 1048576;
 
     /** @var list<Unit> */
     private array $units = [];
@@ -138,6 +143,8 @@ final class Supervisor
      * @param (\Closure(string): LoggerInterface)|null $programLog The log of an outside
      *     program whose output is parsed, by its name: its context `program` is the PID of
      *     the program's process that wrote the line. The supervisor's own log when absent.
+     * @param int $lineMax Bytes of one line of a parsed program's output.
+     * @param int $entryMax Bytes of one entry of its log; what is past them is cut, and said.
      */
     public function __construct(
         array $components,
@@ -152,6 +159,8 @@ final class Supervisor
         private readonly ?float $stopBudget = null,
         private readonly ?\Closure $starting = null,
         private readonly ?\Closure $programLog = null,
+        private readonly int $lineMax = self::LINE_MAX,
+        private readonly int $entryMax = self::ENTRY_MAX,
     ) {
         $ordered = $starting !== null;
         foreach ($components as $component) {
@@ -1150,16 +1159,30 @@ final class Supervisor
         }
     }
 
-    /** The full lines of what a program wrote; a line too long is cut and taken as it is. */
+    /**
+     * The full lines of what a program wrote. A line too long is cut: its first
+     * `$lineMax` bytes are taken, the rest of it — up to its newline — is dropped.
+     */
     private function takeLines(Unit $unit): void
     {
         while (($at = strpos($unit->outputTail, "\n")) !== false) {
-            $this->takeLine($unit, rtrim(substr($unit->outputTail, 0, $at), "\r"));
+            if ($unit->outputSkipping) {
+                $unit->outputSkipping = false;
+            } else {
+                $line = rtrim(substr($unit->outputTail, 0, $at), "\r");
+                if (strlen($line) > $this->lineMax) {
+                    $line = substr($line, 0, $this->lineMax) . ' … (cut)';
+                }
+                $this->takeLine($unit, $line);
+            }
             $unit->outputTail = substr($unit->outputTail, $at + 1);
         }
-        if (strlen($unit->outputTail) >= self::LINE_MAX) {
-            $this->takeLine($unit, substr($unit->outputTail, 0, self::LINE_MAX));
+        if ($unit->outputSkipping) {
             $unit->outputTail = '';
+        } elseif (strlen($unit->outputTail) >= $this->lineMax) {
+            $this->takeLine($unit, substr($unit->outputTail, 0, $this->lineMax) . ' … (cut)');
+            $unit->outputTail = '';
+            $unit->outputSkipping = true;
         }
     }
 
@@ -1183,13 +1206,22 @@ final class Supervisor
         if ($read->level === null && $unit->entry !== null) {
             $key = $read->key ?? $unit->entry['last'];
             $unit->entry['last'] = $key;
+            // Past its size an entry takes no more: what is left is counted, and said at its end.
+            $room = $this->entryMax - $unit->entry['size'];
+            $text = $read->message;
+            if (strlen($text) + 1 > $room) {
+                $unit->entry['cut'] += strlen($text) + 1 - max(0, $room);
+                $text = $room > 1 ? substr($text, 0, $room - 1) : null;
+            }
+            if ($text === null) {
+                return;
+            }
+            $unit->entry['size'] += strlen($text) + 1;
             if ($key === null) {
-                $unit->entry['message'] .= "\n" . $read->message;
+                $unit->entry['message'] .= "\n" . $text;
             } else {
                 $before = $unit->entry['context'][$key] ?? null;
-                $unit->entry['context'][$key] = is_string($before)
-                    ? "{$before}\n{$read->message}"
-                    : $read->message;
+                $unit->entry['context'][$key] = is_string($before) ? "{$before}\n{$text}" : $text;
             }
             return;
         }
@@ -1200,6 +1232,8 @@ final class Supervisor
             'context' => $read->context,
             'pid' => $read->pid ?? $unit->pid,
             'last' => null,
+            'size' => strlen($read->message),
+            'cut' => 0,
         ];
     }
 
@@ -1211,12 +1245,25 @@ final class Supervisor
             return;
         }
         $unit->entry = null;
+        if ($entry['cut'] > 0) {
+            $entry['message'] .= sprintf(' … (cut: %s more)', self::bytes($entry['cut']));
+        }
         $log = $this->programLog !== null ? ($this->programLog)($unit->name) : $this->logger;
         try {
             $log->log($entry['level'], $entry['message'], [...$entry['context'], 'program' => $entry['pid']]);
         } catch (\Throwable) {
             // The log failing is no reason to stop the application.
         }
+    }
+
+    /** `512 B`, `3.4 KB`, `9.2 MB`. */
+    private static function bytes(int $bytes): string
+    {
+        return match (true) {
+            $bytes >= 1048576 => sprintf('%.1f MB', $bytes / 1048576),
+            $bytes >= 1024 => sprintf('%.1f KB', $bytes / 1024),
+            default => "{$bytes} B",
+        };
     }
 
     private function endQuietEntries(float $now): void

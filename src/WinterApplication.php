@@ -908,7 +908,7 @@ abstract class WinterApplication
         // Nothing the boot opened may be inherited by the components forked from here.
         BeforeFork::runAll();
 
-        $supervisor = self::supervisor($components, $web);
+        $supervisor = self::supervisor($components, $web, $watch);
         $code = $supervisor->run(untilDone: true);
         // Still the running application while it runs: its lock is released after.
         static::runStopped();
@@ -1079,8 +1079,9 @@ abstract class WinterApplication
      * start a component in its own process, and how to say that one could not run.
      *
      * @param list<Component> $components
+     * @param bool $dev Under `call run dev`: a parsed program's lines and entries may be longer.
      */
-    private static function supervisor(array $components, ?HttpTier $web): Supervisor
+    private static function supervisor(array $components, ?HttpTier $web, bool $dev = false): Supervisor
     {
         $run = ApplicationRuntime::current()?->managedBy();
         return new Supervisor(
@@ -1137,6 +1138,8 @@ abstract class WinterApplication
                 }
                 : null,
             programLog: self::programLog(...),
+            lineMax: $dev ? Supervisor::DEV_LINE_MAX : Supervisor::LINE_MAX,
+            entryMax: $dev ? Supervisor::DEV_ENTRY_MAX : Supervisor::ENTRY_MAX,
         );
     }
 
