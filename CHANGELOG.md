@@ -33,6 +33,18 @@ everything it needs — and a command that writes what the image needs for them.
   `stop_grace_period` (the application's stop time + 5 s) and the volumes for the services'
   data, to take or leave out. `--dry` shows without writing; `--service=` names the compose
   service in the hint.
+- **`output:`** of `command()` and `script()` — a **`ProgramOutput`** that reads the
+  program's output into the application's log. Its stdout and stderr come to the
+  supervisor over a pipe instead of the application's own; each line is read into an
+  **`OutputLine`** — an entry at a PSR-3 level (with the PID of whoever wrote it), more of
+  the entry before (into its message or under a key of its context), or nothing — and
+  logged with the application's handlers under the program's name: `LOG_LEVEL`, the line
+  or JSON format and the log file apply. An entry is logged once the next one starts or
+  the program is quiet for 50 ms; a line the parser throws on is logged as it is; each
+  look reads a bounded portion, so a program that writes without pause does not hold the
+  loop. Without `output`, the program writes straight to the application's output, as
+  before. The PID goes to `extra.program`, which winter-logger's line format shows in
+  place of the application's, its channel in blue.
 
 ## [4.4.4] — 2026-11-13
 

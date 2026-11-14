@@ -45,6 +45,7 @@ final readonly class Component
      *     once it is. Null: ready as soon as it runs (Command).
      * @param Probe|null $alive How an outside program is checked to be alive once ready (Command).
      * @param int $stopSignal The signal that asks it to stop (Command).
+     * @param ProgramOutput|null $output How its output becomes the log; null: as it is (Command).
      */
     private function __construct(
         public ComponentKind $kind,
@@ -63,6 +64,7 @@ final readonly class Component
         public array|string|null $ready = null,
         public ?Probe $alive = null,
         public int $stopSignal = SIGTERM,
+        public ?ProgramOutput $output = null,
     ) {
         if ($retries < 0 || $startTimeout < 0) {
             throw new \InvalidArgumentException('retries and startTimeout cannot be negative.');
@@ -117,6 +119,7 @@ final readonly class Component
             $this->ready,
             $this->alive,
             $this->stopSignal,
+            $this->output,
         );
     }
 
@@ -141,7 +144,8 @@ final readonly class Component
      * An outside program the application starts and watches — a script, a binary, a
      * tool written in another language, a database. Exit 0 means its work is done, any
      * other exit that it failed. Stopped with `$stopSignal` (SIGTERM), then SIGKILL after
-     * `$grace` seconds. Its output goes to the application's.
+     * `$grace` seconds. Its output goes to the application's: as it is, or — with
+     * `$output` — line by line into the application's log ({@see ProgramOutput}).
      *
      * It is ready as soon as it starts, unless `$ready` says how to tell: a command that
      * succeeds once it is (`['pg_isready', '-q']`), or `tcp://host:port` that accepts a
@@ -160,6 +164,8 @@ final readonly class Component
      *     not checked.
      * @param int $stopSignal The signal that asks it to stop: SIGINT for PostgreSQL's fast shutdown.
      * @param int $startTimeout Seconds `$ready` has to succeed; 0 waits for good.
+     * @param ProgramOutput|null $output How its output becomes the application's log;
+     *     null: it is written as it is.
      * @link https://winterframe.net/docs/components#command Outside programs
      */
     public static function command(
@@ -173,6 +179,7 @@ final readonly class Component
         int $stopSignal = SIGTERM,
         int $retries = 0,
         int $startTimeout = self::START_TIMEOUT,
+        ?ProgramOutput $output = null,
     ): self {
         $command = array_values($command);
         $strings = array_filter($command, static fn($part): bool => is_string($part)) === $command;
@@ -194,6 +201,7 @@ final readonly class Component
             ready: $ready,
             alive: $alive !== null ? Probe::of($alive) : null,
             stopSignal: $stopSignal,
+            output: $output,
         );
     }
 

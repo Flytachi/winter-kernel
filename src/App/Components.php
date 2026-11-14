@@ -125,6 +125,7 @@ final class Components
      * @param int $stopSignal The signal that asks it to stop.
      * @param int $retries Restarts after a crash within {@see Component::RETRY_WINDOW}.
      * @param int $startTimeout Seconds `$ready` has to succeed; 0 waits for good.
+     * @param ProgramOutput|null $output How its output becomes the application's log; null: as it is.
      * @throws ApplicationConfigException No such file.
      * @link https://winterframe.net/docs/components#script Running a PHP script beside the application
      */
@@ -140,6 +141,7 @@ final class Components
         int $stopSignal = SIGTERM,
         int $retries = 0,
         int $startTimeout = Component::START_TIMEOUT,
+        ?ProgramOutput $output = null,
     ): self {
         $file = str_starts_with($path, '/') ? $path : rtrim($this->root, '/') . '/' . $path;
         if (!is_file($file)) {
@@ -156,6 +158,7 @@ final class Components
             $stopSignal,
             $retries,
             $startTimeout,
+            $output,
         );
         return $this;
     }
@@ -190,6 +193,8 @@ final class Components
      * @param int $stopSignal The signal that asks it to stop.
      * @param int $retries Restarts after a crash within {@see Component::RETRY_WINDOW}.
      * @param int $startTimeout Seconds `$ready` has to succeed; 0 waits for good.
+     * @param ProgramOutput|null $output How its output becomes the application's log; null:
+     *     as it is ({@see ProgramOutput}).
      * @link https://winterframe.net/docs/components#command Running an outside program beside the application
      */
     public function command(
@@ -203,6 +208,7 @@ final class Components
         int $stopSignal = SIGTERM,
         int $retries = 0,
         int $startTimeout = Component::START_TIMEOUT,
+        ?ProgramOutput $output = null,
     ): self {
         $this->components[] = Component::command(
             $command,
@@ -215,6 +221,7 @@ final class Components
             $stopSignal,
             $retries,
             $startTimeout,
+            $output,
         );
         return $this;
     }

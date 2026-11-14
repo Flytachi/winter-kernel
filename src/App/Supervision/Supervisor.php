@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Kernel\App\Supervision;
 
 use Flytachi\Winter\Kernel\App\Component;
 use Flytachi\Winter\Kernel\App\ComponentKind;
+use Flytachi\Winter\Kernel\App\OutputLine;
 use Flytachi\Winter\Kernel\App\Priority;
 use Flytachi\Winter\Kernel\App\Probe;
 use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
@@ -67,6 +68,10 @@ final class Supervisor
     private const float PROBE_INTERVAL = 0.5;
     /** Seconds a readiness check may take before it counts as a no. */
     private const float PROBE_TIMEOUT = 5.0;
+    /** Seconds a program's quiet takes for its entry to be complete. */
+    private const float ENTRY_QUIET = 0.05;
+    /** Bytes of one line of a program's output; a longer one is cut there. */
+    private const int LINE_MAX = 65536;
 
     /** @var list<Unit> */
     private array $units = [];
@@ -130,6 +135,9 @@ final class Supervisor
      * @param (\Closure(): void)|null $starting The application's onStarting(): run in a
      *     process of its own once the High components are ready, before the rest starts;
      *     a throw stops the application.
+     * @param (\Closure(string): LoggerInterface)|null $programLog The log of an outside
+     *     program whose output is parsed, by its name: its context `program` is the PID of
+     *     the program's process that wrote the line. The supervisor's own log when absent.
      */
     public function __construct(
         array $components,
@@ -143,6 +151,7 @@ final class Supervisor
         private readonly ?\Closure $publish = null,
         private readonly ?float $stopBudget = null,
         private readonly ?\Closure $starting = null,
+        private readonly ?\Closure $programLog = null,
     ) {
         $ordered = $starting !== null;
         foreach ($components as $component) {
@@ -634,8 +643,11 @@ final class Supervisor
             @posix_setpgid(0, 0);
             fclose($pair[0]);
             if ($unit->component->kind === ComponentKind::Command) {
-                fclose($pair[1]);
-                $this->becomeProgram($unit->name, $unit->component->command);
+                $parsed = $unit->component->output !== null;
+                if (!$parsed) {
+                    fclose($pair[1]);
+                }
+                $this->becomeProgram($unit->name, $unit->component->command, $parsed ? $pair[1] : null);
             }
             $this->becomeComponent($unit, $pair[1]);
         }
@@ -647,9 +659,15 @@ final class Supervisor
         $this->sentinel?->track($pid);
         // An outside program says nothing over a channel: it closes its end on exec. Kept
         // open here, that end would be at EOF for good — readable at once on every look,
-        // and the loop's wait would turn into a spin at full CPU.
+        // and the loop's wait would turn into a spin at full CPU. Its output, when parsed,
+        // comes over the same pair instead, and is let go once it ends.
         if ($unit->component->kind === ComponentKind::Command) {
-            fclose($pair[0]);
+            if ($unit->component->output !== null) {
+                stream_set_blocking($pair[0], false);
+                $unit->output = $pair[0];
+            } else {
+                fclose($pair[0]);
+            }
         } else {
             stream_set_blocking($pair[0], false);
             $unit->socket = $pair[0];
@@ -863,14 +881,23 @@ final class Supervisor
      * application's environment, the variables `.env` loaded included.
      *
      * @param list<string> $command
+     * @param resource|null $output Where its stdout and stderr go, when its output is
+     *     parsed; null: the application's own.
      */
-    private function becomeProgram(string $name, array $command): never
+    private function becomeProgram(string $name, array $command, mixed $output = null): never
     {
         $this->dropSupervisorSignals(program: true);
         foreach ($this->units as $other) {
-            if ($other->socket !== null) {
-                @fclose($other->socket);
+            foreach ([$other->socket, $other->output] as $stream) {
+                if ($stream !== null) {
+                    @fclose($stream);
+                }
             }
+        }
+        // Held until exec: closed, they would take the redirection with them.
+        $redirected = $output !== null ? self::redirectOutput($output) : [];
+        if ($output !== null && $redirected === []) {
+            @fwrite(STDERR, "winter: {$name}'s output could not be taken in: it is written as it is.\n");
         }
         $root = Kernel::$pathRoot ?? '';
         if ($root !== '') {
@@ -886,6 +913,67 @@ final class Supervisor
         @fwrite(STDERR, "winter: {$name} could not be run: " . pcntl_strerror(pcntl_get_last_error()) . "\n");
         Termination::leave(127);
         throw new \LogicException('unreachable');
+    }
+
+    /**
+     * Makes the stream this process's stdout and stderr, for a program about to be run.
+     * PHP has no dup2(): stdout and stderr are closed, and the stream opened twice by its
+     * descriptor, which takes the two lowest free ones — 1 and 2 while stdin is open.
+     * Checked before (the stream is found, stdin is open) and after (1 and 2 are the
+     * stream): a doubt before leaves the output as it was.
+     *
+     * @param resource $stream
+     * @return list<resource> The streams now on 1 and 2 — to be held until exec; empty
+     *     when the output stayed as it was.
+     */
+    private static function redirectOutput(mixed $stream): array
+    {
+        $fd = self::descriptorOf($stream);
+        if ($fd === null || $fd <= 2 || !self::isOn(0, STDIN)) {
+            return [];
+        }
+        fclose(STDOUT);
+        fclose(STDERR);
+        $out = @fopen("php://fd/{$fd}", 'w');
+        $err = @fopen("php://fd/{$fd}", 'w');
+        if ($out === false || $err === false || !self::isOn(1, $stream) || !self::isOn(2, $stream)) {
+            // Too late to go back: what the program writes is lost rather than misplaced.
+            return [];
+        }
+        fclose($stream);
+        return [$out, $err];
+    }
+
+    /**
+     * The descriptor a stream is on: the first of the process's open ones (`/dev/fd`, on
+     * Linux and macOS alike) that is the same file.
+     *
+     * @param resource $stream
+     */
+    private static function descriptorOf(mixed $stream): ?int
+    {
+        foreach (@scandir('/dev/fd') ?: [] as $entry) {
+            if (ctype_digit($entry) && self::isOn((int) $entry, $stream)) {
+                return (int) $entry;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Whether descriptor `$fd` is the stream's file: the same inode of the same kind, and
+     * the same device where the stream has one — a socket on macOS has none (-1).
+     *
+     * @param resource $stream
+     */
+    private static function isOn(int $fd, mixed $stream): bool
+    {
+        $stat = @fstat($stream);
+        $other = @stat("/dev/fd/{$fd}");
+        return $stat !== false && $other !== false
+            && $other['ino'] === $stat['ino']
+            && ($other['mode'] & 0170000) === ($stat['mode'] & 0170000)
+            && ($stat['dev'] < 0 || $other['dev'] === $stat['dev']);
     }
 
     /**
@@ -939,8 +1027,10 @@ final class Supervisor
     {
         $this->dropSupervisorSignals(program: false);
         foreach ($this->units as $other) {
-            if ($other->socket !== null) {
-                @fclose($other->socket);
+            foreach ([$other->socket, $other->output] as $stream) {
+                if ($stream !== null) {
+                    @fclose($stream);
+                }
             }
         }
         ComponentChannel::attach($socket);
@@ -972,6 +1062,9 @@ final class Supervisor
             if ($unit->socket !== null) {
                 $read[] = $unit->socket;
             }
+            if ($unit->output !== null) {
+                $read[] = $unit->output;
+            }
         }
         // stream_select() is fatal outside a coroutine once the runtime hooks are on — not
         // the case unless the application switched them on in this process itself; then the
@@ -982,9 +1075,16 @@ final class Supervisor
         } else {
             $write = $except = null;
             if (@stream_select($read, $write, $except, 0, (int) (self::TICK * 1_000_000)) < 1) {
+                $this->endQuietEntries(microtime(true));
                 return;
             }
         }
+        foreach ($this->units as $unit) {
+            if ($unit->output !== null && ($hooked || in_array($unit->output, $read, true))) {
+                $this->readOutput($unit);
+            }
+        }
+        $this->endQuietEntries(microtime(true));
         foreach ($this->units as $unit) {
             if ($unit->socket === null || !in_array($unit->socket, $read, true)) {
                 continue;
@@ -1014,6 +1114,116 @@ final class Supervisor
                 $this->logger->info("{$unit->name} asked for a restart of the application.");
                 $this->reloadRequested = true;
                 $this->stop('reload');
+            }
+        }
+    }
+
+    /**
+     * Takes what an outside program wrote — its parsed output — line by line into the
+     * log. At its end — EOF, or its exit with `$toTheEnd` — the rest goes too, a last
+     * line without its newline and the entry it was on included.
+     */
+    private function readOutput(Unit $unit, bool $toTheEnd = false): void
+    {
+        $stream = $unit->output;
+        if ($stream === null) {
+            return;
+        }
+        // Up to a few reads a look: a program that writes without pause cannot hold the
+        // loop, and what is left waits for the next look.
+        for ($i = 0; $i < 16 || $toTheEnd; $i++) {
+            $data = @fread($stream, 65536);
+            if ($data === false || $data === '') {
+                break;
+            }
+            $unit->outputTail .= $data;
+            $this->takeLines($unit);
+        }
+        if ($toTheEnd || feof($stream)) {
+            if ($unit->outputTail !== '') {
+                $this->takeLine($unit, $unit->outputTail);
+                $unit->outputTail = '';
+            }
+            $this->endEntry($unit);
+            @fclose($stream);
+            $unit->output = null;
+        }
+    }
+
+    /** The full lines of what a program wrote; a line too long is cut and taken as it is. */
+    private function takeLines(Unit $unit): void
+    {
+        while (($at = strpos($unit->outputTail, "\n")) !== false) {
+            $this->takeLine($unit, rtrim(substr($unit->outputTail, 0, $at), "\r"));
+            $unit->outputTail = substr($unit->outputTail, $at + 1);
+        }
+        if (strlen($unit->outputTail) >= self::LINE_MAX) {
+            $this->takeLine($unit, substr($unit->outputTail, 0, self::LINE_MAX));
+            $unit->outputTail = '';
+        }
+    }
+
+    /** One line of a program's output, as its {@see \Flytachi\Winter\Kernel\App\ProgramOutput} reads it. */
+    private function takeLine(Unit $unit, string $line): void
+    {
+        $parser = $unit->component->output;
+        if ($parser === null) {
+            return;
+        }
+        try {
+            $read = $parser->line($line);
+        } catch (\Throwable) {
+            // A line it cannot read is logged as it is: output is never lost to the parser.
+            $read = OutputLine::entry('info', $line);
+        }
+        if ($read->skip) {
+            return;
+        }
+        $unit->entryAt = microtime(true);
+        if ($read->level === null && $unit->entry !== null) {
+            $key = $read->key ?? $unit->entry['last'];
+            $unit->entry['last'] = $key;
+            if ($key === null) {
+                $unit->entry['message'] .= "\n" . $read->message;
+            } else {
+                $before = $unit->entry['context'][$key] ?? null;
+                $unit->entry['context'][$key] = is_string($before)
+                    ? "{$before}\n{$read->message}"
+                    : $read->message;
+            }
+            return;
+        }
+        $this->endEntry($unit);
+        $unit->entry = [
+            'level' => $read->level ?? 'info',
+            'message' => $read->message,
+            'context' => $read->context,
+            'pid' => $read->pid ?? $unit->pid,
+            'last' => null,
+        ];
+    }
+
+    /** Logs the entry a program's output is on: the next one started, or it went quiet. */
+    private function endEntry(Unit $unit): void
+    {
+        $entry = $unit->entry;
+        if ($entry === null) {
+            return;
+        }
+        $unit->entry = null;
+        $log = $this->programLog !== null ? ($this->programLog)($unit->name) : $this->logger;
+        try {
+            $log->log($entry['level'], $entry['message'], [...$entry['context'], 'program' => $entry['pid']]);
+        } catch (\Throwable) {
+            // The log failing is no reason to stop the application.
+        }
+    }
+
+    private function endQuietEntries(float $now): void
+    {
+        foreach ($this->units as $unit) {
+            if ($unit->entry !== null && $now - $unit->entryAt >= self::ENTRY_QUIET) {
+                $this->endEntry($unit);
             }
         }
     }
@@ -1113,6 +1323,10 @@ final class Supervisor
             }
         }
 
+        if ($unit->output !== null) {
+            // What it wrote last may still be unread: logged before its end is.
+            $this->readOutput($unit, toTheEnd: true);
+        }
         if ($unit->socket !== null) {
             // Whatever it said last may still be unread.
             $tail = (string) @stream_get_contents($unit->socket);

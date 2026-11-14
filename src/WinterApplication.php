@@ -74,6 +74,7 @@ use Flytachi\Winter\Kernel\WebSocket\WebSocket;
 use Flytachi\Winter\Kernel\WebSocket\WebSocketConfigException;
 use Flytachi\Winter\Logger\Context\CoroutineContext;
 use Flytachi\Winter\Logger\Context\ProcessContext;
+use Flytachi\Winter\Logger\Logger;
 use Flytachi\Winter\Logger\LoggerFactory;
 use Flytachi\Winter\Ppa\Pool\PoolTelemetry;
 use Flytachi\Winter\Ppa\Pool\PpaConnectionPool;
@@ -1135,7 +1136,37 @@ abstract class WinterApplication
                     static::onStarting();
                 }
                 : null,
+            programLog: self::programLog(...),
         );
+    }
+
+    /**
+     * The log of an outside program whose output is parsed: the application's handlers
+     * under the program's name, with the PID of the program's process that wrote a line
+     * (context `program`) moved to `extra.program` — where the line format shows it in
+     * place of the application's PID, and colours the channel as a program's.
+     */
+    private static function programLog(string $name): LoggerInterface
+    {
+        static $logs = [];
+        if (isset($logs[$name])) {
+            return $logs[$name];
+        }
+        $base = LoggerFactory::logger();
+        if (!$base instanceof Logger) {
+            return $logs[$name] = $base;
+        }
+        $monolog = $base->monolog()->withName($name);
+        $monolog->pushProcessor(static function ($record) {
+            if (!array_key_exists('program', $record->context)) {
+                return $record;
+            }
+            $context = $record->context;
+            $extra = [...$record->extra, 'program' => $context['program']];
+            unset($context['program']);
+            return $record->with(context: $context, extra: $extra);
+        });
+        return $logs[$name] = new Logger($monolog, LoggerFactory::contextStorage());
     }
 
     /**

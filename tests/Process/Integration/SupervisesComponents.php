@@ -40,13 +40,14 @@ trait SupervisesComponents
         bool $asApplication = false,
         ?float $stopBudget = null,
         ?\Closure $starting = null,
+        ?\Closure $programLog = null,
     ): int {
         $storage = $this->storage;
         $app = self::$testApp;
         if ($asApplication) {
             $this->actAsApplication($app);
         }
-        return $this->fork(static function () use ($components, $storage, $asApplication, $app, $stopBudget, $starting): void {
+        return $this->fork(static function () use ($components, $storage, $asApplication, $app, $stopBudget, $starting, $programLog): void {
             $write = static fn(string $file, string $line) =>
                 file_put_contents("{$storage}/{$file}", $line . "\n", FILE_APPEND);
             $logger = new class ($write) extends AbstractLogger {
@@ -98,6 +99,7 @@ trait SupervisesComponents
                     : static fn(array $units) => ApplicationRuntime::publishUnits($app, $units),
                 stopBudget: $stopBudget,
                 starting: $starting,
+                programLog: $programLog,
             ))->run(untilDone: !$asApplication);
             file_put_contents("{$storage}/exit", (string) $code);
         });

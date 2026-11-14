@@ -17,6 +17,15 @@ final class Unit
     public int $pid = 0;
     /** @var resource|null The supervisor's end of the channel to the running process. */
     public mixed $socket = null;
+    /** @var resource|null An outside program's stdout and stderr, when its output is parsed. */
+    public mixed $output = null;
+    /** What the program wrote after its last full line. */
+    public string $outputTail = '';
+    /** @var array{level: string, message: string, context: array<string, mixed>, pid: int, last: ?string}|null
+     *     The entry its output is on, logged once the next one starts or the program is quiet. */
+    public ?array $entry = null;
+    /** When the program last wrote to that entry. */
+    public float $entryAt = 0.0;
 
     /** Whether the component has been ready at least once since the application started. */
     public bool $everReady = false;
@@ -91,6 +100,10 @@ final class Unit
     {
         $this->pid = 0;
         $this->socket = null;
+        $this->output = null;
+        $this->outputTail = '';
+        $this->entry = null;
+        $this->entryAt = 0.0;
         $this->startedAt = 0.0;
         $this->readyDeadline = 0.0;
         $this->timedOutAt = 0.0;
