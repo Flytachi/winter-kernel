@@ -3,6 +3,8 @@
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/flytachi/winter-kernel.svg)](https://packagist.org/packages/flytachi/winter-kernel)
 [![PHP Version Require](https://img.shields.io/packagist/php-v/flytachi/winter-kernel.svg?style=flat-square)](https://packagist.org/packages/flytachi/winter-kernel)
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
+[![Integration](https://github.com/flytachi/winter-kernel/actions/workflows/integration.yml/badge.svg)](https://github.com/flytachi/winter-kernel/actions/workflows/integration.yml)
+[![Docs](https://img.shields.io/badge/docs-winterframe.net-blue.svg)](https://winterframe.net/docs/introduction)
 
 📖 **[winterframe.net/docs](https://winterframe.net/docs/introduction)** · [Install](https://winterframe.net/docs/installation) · [Quick start](https://winterframe.net/docs/quickstart) · [Key concepts](https://winterframe.net/docs/concepts)
 
