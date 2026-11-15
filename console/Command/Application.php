@@ -27,10 +27,15 @@ final class Application extends Cmd
 {
     private const int CL = 34;
 
-    public static string $title = "the application: start | stop | status | info";
+    public static string $title = "the application: start | stop | status | health | info";
 
     public function handle(): void
     {
+        // One line and an exit code, nothing around them: what a container's health check reads.
+        if (strtolower($this->args['arguments'][1] ?? '') === 'health') {
+            $this->healthArg(WinterApplication::getAppClass());
+        }
+
         self::printTitle("Application", self::CL);
 
         $app = WinterApplication::getAppClass();
@@ -46,10 +51,100 @@ final class Application extends Cmd
             'status', '' => $this->statusArg($app),
             'stop'   => $this->stopArg($app),
             'start'  => $this->startArg(),
-            default  => self::printWarning("Unknown action (use start|stop|status|info)."),
+            default  => self::printWarning("Unknown action (start|stop|status|health|info)."),
         };
 
         self::printTitle("Application", self::CL);
+    }
+
+    // ── health ────────────────────────────────────────────────────────────────
+
+    /**
+     * Whether the application is healthy, for a container's health check: one line, and
+     * exit 0 when it is, 1 when it is not. Never returns.
+     *
+     * @param class-string<WinterApplication>|'' $app
+     */
+    private function healthArg(string $app): never
+    {
+        [$code, $line] = $app === ''
+            ? [1, 'unhealthy: no WinterApplication booted this command']
+            : self::verdict(
+                ApplicationRuntime::live($app) !== null,
+                ApplicationRuntime::servingElsewhere() !== null,
+                ApplicationRuntime::seenAt($app),
+                ApplicationRuntime::units($app),
+                time(),
+            );
+        fwrite($code === 0 ? STDOUT : STDERR, $line . PHP_EOL);
+        exit($code);
+    }
+
+    /**
+     * The health of an application from what its supervisor last published.
+     *
+     * Healthy: every critical component runs — a process whose work is done, or one an
+     * outside process holds, counts. A non-critical one that failed, or a component
+     * stopped on request, leaves it healthy, degraded. Unhealthy: it does not run here, its
+     * supervisor has been silent past {@see ApplicationRuntime::HEARTBEAT_TTL} — it says
+     * so every few seconds while it is alive — or a critical component is not up: still
+     * starting, or waiting for its restart. Components started on request (adopted) are
+     * left out: they run once.
+     *
+     * @param list<array<string, mixed>> $units
+     * @return array{0: int, 1: string} The exit code and the line.
+     */
+    public static function verdict(bool $running, bool $elsewhere, int $seenAt, array $units, int $now): array
+    {
+        if (!$running) {
+            return [1, $elsewhere
+                ? 'unhealthy: it runs in another environment — check it there'
+                : 'unhealthy: not running'];
+        }
+        $silent = $now - $seenAt;
+        if ($silent > ApplicationRuntime::HEARTBEAT_TTL) {
+            return [1, "unhealthy: no report from the supervisor for {$silent}s"];
+        }
+        $declared = array_values(array_filter($units, static fn(array $u): bool => !($u['adopted'] ?? false)));
+        if ($declared === []) {
+            return [1, 'unhealthy: starting, no report yet'];
+        }
+        $down = [];
+        $degraded = [];
+        $up = 0;
+        foreach ($declared as $unit) {
+            $name = (string) ($unit['name'] ?? '?');
+            $state = (string) ($unit['state'] ?? '');
+            switch ($state) {
+                case 'Running':
+                case 'Completed':
+                case 'Held':
+                    $up++;
+                    break;
+                case 'Waiting':
+                case 'Starting':
+                    $restarts = (int) ($unit['restarts'] ?? 0);
+                    $what = $restarts > 0 || (int) ($unit['retryAt'] ?? 0) > 0
+                        ? sprintf('%s restarting (%d of %d)', $name, max(1, $restarts), (int) ($unit['retries'] ?? 0))
+                        : "{$name} starting";
+                    ($unit['critical'] ?? true) ? $down[] = $what : $degraded[] = $what;
+                    break;
+                case 'Failed':
+                    $degraded[] = "{$name} failed";
+                    break;
+                case 'Stopped':
+                    $degraded[] = "{$name} stopped";
+                    break;
+                default:
+                    $degraded[] = "{$name} {$state}";
+            }
+        }
+        if ($down !== []) {
+            return [1, 'unhealthy: ' . implode(', ', $down)];
+        }
+        return [0, $degraded === []
+            ? "healthy: {$up} component(s) up"
+            : 'healthy, degraded: ' . implode(', ', $degraded)];
     }
 
     // ── info ──────────────────────────────────────────────────────────────────
@@ -505,6 +600,7 @@ final class Application extends Cmd
         self::print("call application start dev   - the same with the DevWatcher (= call run dev)", $cl);
         self::print("call application stop        - stop the running application (SIGTERM, waits)", $cl);
         self::print("call application status      - the application and every component, live", $cl);
+        self::print("call application health      - one line, exit 0 when healthy: a container's health check", $cl);
         self::print("call application info        - what starts with the application, and its configuration", $cl);
         self::print("`app` is short for `application`: call app status", $cl);
         self::printLabel("Usage", $cl);

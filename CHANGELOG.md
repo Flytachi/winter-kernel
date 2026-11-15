@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [4.5.1] — 2026-11-15
+
+A health check for containers.
+
+### Added
+
+- **`call application health`** — the application's health for a container's check: one
+  line and an exit code. 0 while every critical component runs (a process whose work is
+  done, and one held by an outside process, count): `healthy: 4 component(s) up`, or
+  `healthy, degraded: …` with a non-critical one failed or a component stopped on
+  request. 1 when a critical component is starting or waits for its restart
+  (`unhealthy: postgres restarting (1 of 3)`), when the supervisor has been silent past
+  30 s — it hangs itself —, or when the application does not run. Components started on
+  request are left out. It asks nothing over the network: it reads what the supervisor
+  publishes, in any application, with HTTP or without. The healthy line goes to stdout,
+  the unhealthy one to stderr.
+- **`call cfg docker`** writes a `healthcheck` with it into a new project's
+  `docker-compose.yml`: `php call application health` every 30 s, 5 s for an answer, 60 s
+  of start period (a first start initialises the databases; a service not ready within
+  its 60 s start timeout stops the application anyway) checked every 5 s
+  (`start_interval`: Compose 2.20+, Engine 25+), 3 failures in a row.
+
 ## [4.5.0] — 2026-11-15
 
 Services: a database or a cache the application runs in its container, packaged with

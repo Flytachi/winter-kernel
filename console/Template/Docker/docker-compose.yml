@@ -8,6 +8,14 @@ services:
     environment:
       DEV: ${DEV:-false}
     stop_grace_period: 40s
+    # Healthy while every critical component runs: `call application health` exits 0, else 1.
+    healthcheck:
+      test: ["CMD", "php", "call", "application", "health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      start_interval: 5s
+      retries: 3
     ports:
       - "8000:8000"
     volumes:
