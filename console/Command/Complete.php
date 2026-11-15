@@ -42,7 +42,7 @@ final class Complete extends Cmd
         // --- service ---
         'service' => [
             'list:the services components() declares',
-            'docker:write what they need into the Dockerfile and compose override',
+            'docker:write the Dockerfile block, show what compose needs',
         ],
         'service list'   => [],
         'service docker' => ['--dry:show, write nothing', '--service:the compose service the application is'],
@@ -77,6 +77,7 @@ final class Complete extends Cmd
             'start:run the application in the foreground (= run)',
             'stop:stop the running application (SIGTERM, waits)',
             'status:the application and every component, live',
+            'health:one line, exit 0 when healthy (a container health check)',
             'info:components that start with it + configuration',
         ],
         'application start' => [
@@ -90,6 +91,7 @@ final class Complete extends Cmd
             '--force:SIGKILL what is left after the timeout',
         ],
         'application status' => [],
+        'application health' => [],
         'application info'   => [],
 
         // --- mapping ---

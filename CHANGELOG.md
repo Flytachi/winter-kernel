@@ -27,6 +27,12 @@ A health check for containers.
   of start period (a first start initialises the databases; a service not ready within
   its 60 s start timeout stops the application anyway) checked every 5 s
   (`start_interval`: Compose 2.20+, Engine 25+), 3 failures in a row.
+- Shell completion knows `call application health` (and `call app health`).
+
+### Fixed
+
+- The completion's hint for `call service docker` still said it writes a compose
+  override; it writes the Dockerfile block and shows what compose needs.
 
 ## [4.5.0] — 2026-11-15
 
