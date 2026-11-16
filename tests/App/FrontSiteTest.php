@@ -46,6 +46,9 @@ final class FrontSiteTest extends TestCase
     {
         self::assertSame('/x/200.html', (new FrontSite('frontend', '/x'))->marker());
         self::assertSame('/x/index.html', (new FrontSite('site', '/x', shell: null))->marker());
+        self::assertSame('/o/nitro.json', (new FrontSite('site', '/o/public', shell: null, marker: '/o/nitro.json'))->marker(), 'a file of its own, outside its files too');
+        $this->expectException(\InvalidArgumentException::class);
+        new FrontSite('site', '/x', marker: 'nitro.json');
     }
 
     public function test_is_built_follows_the_marker_on_disk(): void

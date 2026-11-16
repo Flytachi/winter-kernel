@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Tests\Process\Integration;
 
 use Flytachi\Winter\Kernel\App\Component;
+use Flytachi\Winter\Kernel\App\FrontProgram;
+use Flytachi\Winter\Kernel\App\FrontSite;
 use Flytachi\Winter\Kernel\Tests\Process\Fixtures\Supervision\TaggedOutput;
 use PHPUnit\Framework\Attributes\Group;
 use Psr\Log\AbstractLogger;
@@ -138,5 +140,33 @@ final class SupervisorOutputIntegrationTest extends IntegrationCase
         );
         self::assertSame(0, $this->exitCode($supervisor, 30.0));
         self::assertStringContainsString('db finished its work.', $this->logged());
+    }
+
+    public function test_a_program_runs_with_its_own_environment(): void
+    {
+        $file = $this->storage . '/env';
+        $port = self::freePort();
+        $program = new FrontProgram(
+            ['sh', '-c', "echo \"\$FOO \$PORT \$HOST \$WINTER_BACKEND\" > {$file}; exec php -S 127.0.0.1:\$PORT -t /tmp"],
+            ['FOO' => 'bar'],
+        );
+        $supervisor = $this->supervise([
+            Component::program(new FrontSite('front', '/x'), $program, $port, 'http://127.0.0.1:1', dev: false),
+        ]);
+        try {
+            self::assertTrue($this->waitLogged('front is up'), $this->logged());
+            self::assertSame("bar {$port} 127.0.0.1 http://127.0.0.1:1\n", file_get_contents($file));
+        } finally {
+            posix_kill($supervisor, SIGTERM);
+            $this->exitCode($supervisor);
+        }
+    }
+
+    private static function freePort(): int
+    {
+        $socket = stream_socket_server('tcp://127.0.0.1:0');
+        $port = (int) substr((string) strrchr((string) stream_socket_get_name($socket, false), ':'), 1);
+        fclose($socket);
+        return $port;
     }
 }

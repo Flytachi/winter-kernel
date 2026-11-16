@@ -46,7 +46,9 @@ final readonly class Component
      * @param Probe|null $alive How an outside program is checked to be alive once ready (Command).
      * @param int $stopSignal The signal that asks it to stop (Command).
      * @param ProgramOutput|null $output How its output becomes the log; null: as it is (Command).
-     * @param FrontSite|null $site What a frontend serves and where (Frontend).
+     * @param FrontSite|null $site What a frontend serves and where (Frontend, a frontend's program).
+     * @param array<string, string> $env What the program has in its environment beside the
+     *     application's (Command).
      */
     private function __construct(
         public ComponentKind $kind,
@@ -67,6 +69,7 @@ final readonly class Component
         public int $stopSignal = SIGTERM,
         public ?ProgramOutput $output = null,
         public ?FrontSite $site = null,
+        public array $env = [],
     ) {
         if ($retries < 0 || $startTimeout < 0) {
             throw new \InvalidArgumentException('retries and startTimeout cannot be negative.');
@@ -123,6 +126,7 @@ final readonly class Component
             $this->stopSignal,
             $this->output,
             $this->site,
+            $this->env,
         );
     }
 
@@ -223,6 +227,34 @@ final readonly class Component
             label: $site->name,
             priority: $site->priority,
             site: $site,
+        );
+    }
+
+    /**
+     * A frontend's own server ({@see FrontProgram}): an outside program on a loopback port,
+     * ready once it listens there, restarted when it crashes; the HTTP server forwards the
+     * frontend's requests to it. Named, critical and ordered as its site.
+     *
+     * @param int $port The loopback port it listens on: `PORT` in its environment.
+     * @param string $backend Where it reaches the controllers: `WINTER_BACKEND`.
+     * @param bool $dev Whether it is a development server.
+     */
+    public static function program(FrontSite $site, FrontProgram $program, int $port, string $backend, bool $dev): self
+    {
+        $address = "tcp://127.0.0.1:{$port}";
+        return new self(
+            ComponentKind::Command,
+            critical: $site->critical,
+            retries: self::RETRIES,
+            startTimeout: $program->startTimeout,
+            command: $program->command,
+            label: $site->name,
+            priority: $site->priority,
+            ready: $address,
+            alive: Probe::of($address),
+            output: $program->output,
+            site: $site->forwardedTo(new FrontUpstream($port, $program->server, $dev)),
+            env: [...$program->env, 'PORT' => (string) $port, 'HOST' => '127.0.0.1', 'WINTER_BACKEND' => $backend],
         );
     }
 

@@ -62,6 +62,7 @@ use Flytachi\Winter\Kernel\Core\Proxy\ProxyFactory;
 use Flytachi\Winter\Kernel\Core\DepSupport;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleResponse;
+use Flytachi\Winter\Kernel\Http\Front\FrontProxy;
 use Flytachi\Winter\Kernel\Http\Front\SiteMap;
 use Flytachi\Winter\Kernel\Http\Health\Health;
 use Flytachi\Winter\Kernel\Http\Health\HealthContributor;
@@ -859,6 +860,9 @@ abstract class WinterApplication
         // Where each listening component binds: what it was declared with, then the
         // launch flags; for the HTTP server its configurer has the last word.
         $components = ListenFlags::apply($components, $args);
+        // A frontend with a server of its own runs it as a program, on a loopback port; the
+        // program reaches the controllers on one of the backend's own.
+        [$components, $backends] = self::withPrograms($components, $watch);
         $settings = null;
         $http = null;
         $companions = [];
@@ -874,7 +878,7 @@ abstract class WinterApplication
         // or one it listens on as well. Their places are checked here, before anything binds.
         $sites = [];
         foreach ($companions as $companion) {
-            if ($companion->kind === ComponentKind::Frontend && $companion->site !== null) {
+            if ($companion->site !== null) {
                 $sites[] = $companion->site;
             }
         }
@@ -884,9 +888,9 @@ abstract class WinterApplication
                 $sites[0]->name,
             ));
         }
-        $siteMap = $http !== null ? new SiteMap($sites, $http->port) : null;
+        $siteMap = $http !== null ? new SiteMap($sites, $http->port, $backends) : null;
         if ($sites !== []) {
-            self::logHints($logger);
+            self::logHints($logger, $watch);
         }
         self::assertFreePorts($companions, $http?->port);
         self::assertWebSocketTls($companions);
@@ -940,6 +944,56 @@ abstract class WinterApplication
         }
 
         exit($code);
+    }
+
+    /**
+     * The frontends that run a server of their own ({@see Frontend::program()}): each one's
+     * component becomes its program, on a free loopback port, with one more port of its own
+     * where it reaches the controllers — `WINTER_BACKEND`: the routes its frontend's port
+     * shows, and nothing ever forwarded back to a frontend. Without such a frontend, nothing
+     * changes.
+     *
+     * @param list<Component> $companions
+     * @return array{0: list<Component>, 1: array<int, int|null>} The components, and each
+     *     backend port with the port whose routes it shows (null — the HTTP server's).
+     */
+    private static function withPrograms(array $companions, bool $dev): array
+    {
+        $programs = [];
+        foreach (static::frontends() as $frontend) {
+            $program = $frontend->program($dev);
+            if ($program !== null) {
+                $programs[$frontend->site()->name] = $program;
+            }
+        }
+        $backends = [];
+        foreach ($companions as $i => $companion) {
+            $program = $companion->kind === ComponentKind::Frontend ? $programs[$companion->name()] ?? null : null;
+            if ($program !== null && $companion->site !== null) {
+                $backend = self::freeLoopbackPort();
+                $backends[$backend] = $companion->site->port;
+                $companions[$i] = Component::program(
+                    $companion->site,
+                    $program,
+                    self::freeLoopbackPort(),
+                    "http://127.0.0.1:{$backend}",
+                    $dev,
+                );
+            }
+        }
+        return [$companions, $backends];
+    }
+
+    /** A port nothing listens on at 127.0.0.1, as the system hands one out. */
+    private static function freeLoopbackPort(): int
+    {
+        $socket = @stream_socket_server('tcp://127.0.0.1:0', $errno, $error);
+        if ($socket === false) {
+            throw new ApplicationConfigException("No loopback port for a frontend's program: {$error}");
+        }
+        $name = (string) stream_socket_get_name($socket, false);
+        fclose($socket);
+        return (int) substr($name, (int) strrpos($name, ':') + 1);
     }
 
     /**
@@ -1005,7 +1059,9 @@ abstract class WinterApplication
                 continue;
             }
             $paths = [$site->path];
-            if ($site->shell === null && is_dir($site->root)) {
+            // A pre-rendered site's pages are its files; a site with a server of its own
+            // renders them, so only its root is known.
+            if ($site->shell === null && $site->upstream === null && is_dir($site->root)) {
                 $paths = [];
                 // A check that only warns: a folder it cannot read is left out, never the boot.
                 try {
@@ -1059,7 +1115,11 @@ abstract class WinterApplication
         // address"; an IPv6 socket on `::` takes IPv4 clients as well.
         // TLS is a flag on the socket: the certificate options alone leave it plain HTTP.
         $tls = $web->settings->isTls();
-        $server = new \Swoole\Http\Server(
+        // A development server's live reload is a WebSocket through the application's own
+        // address: only then a WebSocket server, which answers plain HTTP the same way.
+        $relay = $web->sites?->relaysSockets() === true;
+        $class = $relay ? \Swoole\WebSocket\Server::class : \Swoole\Http\Server::class;
+        $server = new $class(
             $web->host(),
             $web->port(),
             SWOOLE_BASE,
@@ -1080,6 +1140,20 @@ abstract class WinterApplication
             }
             // A port given settings of its own inherits none of the server's: the same ones,
             // or a body the HTTP port takes would be too large here.
+            // ...and the live reload of a development server is a WebSocket there too.
+            $listener->set([
+                ...$web->settings->toArray(),
+                'open_http_protocol' => true,
+                'open_websocket_protocol' => $relay,
+            ]);
+        }
+        // Where a frontend's program reaches the controllers: loopback only, what its
+        // frontend's port shows, never a frontend — nothing it asks comes back to it.
+        foreach ($web->sites?->backendPorts() ?? [] as $backendPort) {
+            $listener = $server->addListener('127.0.0.1', $backendPort, SWOOLE_SOCK_TCP);
+            if ($listener === false) {
+                throw new ApplicationConfigException("The backend's loopback port {$backendPort} could not be bound.");
+            }
             $listener->set([...$web->settings->toArray(), 'open_http_protocol' => true]);
         }
 
@@ -1127,6 +1201,7 @@ abstract class WinterApplication
             // One sweep per worker rather than a timer per request; a no-op at 0, so an
             // application that wants no deadline runs no timer at all.
             RequestWatchdog::enable($requestTimeout);
+            FrontProxy::timeout($requestTimeout);
             LoggerFactory::setContextStorage(new CoroutineContext());
             LoggerFactory::setDefaultChannel('http');
             if (DepSupport::has(Dep::Ppa)) {
@@ -1165,6 +1240,14 @@ abstract class WinterApplication
             $server->on('request', $handler);
         }
         $server->on('workerExit', $workerExit);
+        if ($relay && $server instanceof \Swoole\WebSocket\Server && $web->sites !== null) {
+            $sites = $web->sites;
+            $server->on('handshake', static fn(\Swoole\Http\Request $req, \Swoole\Http\Response $res): bool =>
+                FrontProxy::handshake($server, $sites, $router, $req, $res));
+            $server->on('message', static fn(\Swoole\WebSocket\Server $s, \Swoole\WebSocket\Frame $frame) =>
+                FrontProxy::message($frame));
+            $server->on('close', static fn(\Swoole\Server $s, int $fd) => FrontProxy::closed($fd));
+        }
 
         $server->start();
 
@@ -1544,12 +1627,12 @@ abstract class WinterApplication
      * match its mode, a build not made yet — once, as the application starts serving. A
      * check that fails is one line too: it never stops the start.
      */
-    private static function logHints(LoggerInterface $logger): void
+    private static function logHints(LoggerInterface $logger, bool $dev): void
     {
         foreach (static::frontends() as $frontend) {
             $name = $frontend->site()->name;
             try {
-                $hints = $frontend->hints();
+                $hints = $frontend->hints($dev);
             } catch (\Throwable $e) {
                 $hints = ['its check failed: ' . $e->getMessage()];
             }
@@ -1774,13 +1857,14 @@ abstract class WinterApplication
                         $companion->port,
                     ),
                 )],
-                ComponentKind::Command => ['command', $companion->name()],
-                ComponentKind::Frontend => ['front', sprintf(
-                    '%s %s%s',
-                    $companion->name(),
-                    BindAddress::url($scheme, (string) $host, $companion->site?->port ?? (int) $port),
-                    $companion->site?->port !== null ? '/' : ltrim($companion->site?->path ?? '/', '/'),
-                )],
+                ComponentKind::Command, ComponentKind::Frontend => $companion->site === null
+                    ? ['command', $companion->name()]
+                    : ['front', sprintf(
+                        '%s %s%s',
+                        $companion->name(),
+                        BindAddress::url($scheme, (string) $host, $companion->site->port ?? (int) $port),
+                        $companion->site->port !== null ? '/' : ltrim($companion->site->path, '/'),
+                    )],
                 default => [self::componentLabel($companion->kind), $companion->name()],
             };
         }
@@ -1853,13 +1937,13 @@ abstract class WinterApplication
         foreach ($companions as $companion) {
             $port = match (true) {
                 $companion->kind === ComponentKind::WebSocket => $companion->port,
-                $companion->kind === ComponentKind::Frontend => $companion->site?->port,
+                $companion->site !== null => $companion->site->port,
                 default => null,
             };
             if ($port === null) {
                 continue;
             }
-            $name = $companion->kind === ComponentKind::Frontend
+            $name = $companion->site !== null
                 ? "the frontend \"{$companion->name()}\""
                 : self::shortName((string) $companion->class);
             if (isset($taken[$port])) {

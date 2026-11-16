@@ -81,23 +81,42 @@ final class Service extends Cmd
     {
         $dry = array_key_exists('dry', $this->args['options']);
         $services = $this->services();
-        $image = ServiceImage::merge(...array_map(static fn(AppService $s): ServiceImage => $s->image(), $services));
+        $images = array_map(static fn(AppService $s): ServiceImage => $s->image(), $services);
 
         $builds = [];
         $app = WinterApplication::getAppClass();
         foreach ($app::frontends() as $frontend) {
+            // What a frontend needs at run time — Node for a server of its own, in a
+            // development build for `nuxt dev` — goes into the same block.
+            $images[] = $frontend->image();
             $build = $frontend->build();
             if ($build !== null) {
                 $builds[$frontend->site()->name] = $build;
             }
         }
+        if ($builds !== []) {
+            // Where a development container mounts each frontend's node_modules volume: a
+            // folder of winter's in the image, or Docker makes it root's and the install
+            // under `call run dev` cannot write there.
+            $workdir = self::workdir((string) @file_get_contents(Kernel::$pathRoot . '/Dockerfile'));
+            $images[] = new ServiceImage(devRun: array_values(array_map(
+                static fn(FrontBuild $b): string => sprintf(
+                    'mkdir -p %1$s/%2$s/node_modules && chown winter:winter %1$s/%2$s/node_modules',
+                    $workdir,
+                    $b->context,
+                ),
+                $builds,
+            )));
+        }
+        $image = ServiceImage::merge(...$images);
 
-        $this->dockerfile($services === [] ? null : $image, $builds, $dry);
+        $this->dockerfile($image->isEmpty() ? null : $image, $builds, $dry);
         if ($services !== []) {
             $this->composeHint($image->volumes);
         }
         if ($builds !== []) {
             self::dockerignoreHint(array_values(array_map(static fn(FrontBuild $b): string => $b->context, $builds)));
+            $this->devHint($builds);
         }
 
         if ($dry) {
@@ -398,6 +417,44 @@ final class Service extends Cmd
                 count($missing) === 1 ? 'it' : 'them',
             ));
         }
+    }
+
+    /**
+     * What `call run dev` in Docker needs from compose for the frontends: the image built
+     * with `DEV=true` (Node in it), and `node_modules` in a volume of its own — the host's
+     * are built for the host, not for Alpine.
+     *
+     * @param array<string, FrontBuild> $builds By frontend name.
+     */
+    private function devHint(array $builds): void
+    {
+        $workdir = self::workdir((string) @file_get_contents(Kernel::$pathRoot . '/Dockerfile'));
+        $service = $this->serviceName(Kernel::$pathRoot . '/docker-compose.yml');
+        $lines = ['services:', "  {$service}:", '    build:', '      args:', '        DEV: ${DEV:-false}'];
+        $lines[] = '    volumes:';
+        foreach ($builds as $name => $build) {
+            $lines[] = "      - {$name}-node-modules:{$workdir}/{$build->context}/node_modules";
+        }
+        $lines[] = 'volumes:';
+        foreach (array_keys($builds) as $name) {
+            $lines[] = "  {$name}-node-modules:";
+        }
+        self::printInfo('For call run dev in Docker (DEV=true docker compose up --build), add to docker-compose.yml:');
+        self::printLabel('docker-compose.yml', 34);
+        self::printSplit(implode("\n", $lines), 36);
+        self::printLabel('docker-compose.yml', 34);
+    }
+
+    /** The image's working directory: the Dockerfile's last WORKDIR, `/app` without one. */
+    private static function workdir(string $dockerfile): string
+    {
+        $workdir = '/app';
+        foreach (preg_split('/\R/', $dockerfile) ?: [] as $line) {
+            if (preg_match('/^\s*WORKDIR\s+(\/\S*)/i', $line, $m) === 1 && $m[1] !== '/front') {
+                $workdir = rtrim($m[1], '/') ?: '/';
+            }
+        }
+        return $workdir;
     }
 
     private function composeHint(array $volumes): void

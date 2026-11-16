@@ -29,6 +29,10 @@ final readonly class ServiceImage
      * @param array<string, string> $env The image's environment: `['PGDATA' => '/var/lib/postgresql/data']`.
      * @param list<string> $run Commands of its own, run as root after the packages and the
      *     directories — for what none of the above covers.
+     * @param list<string> $devPackages apk packages for a development build only — the image
+     *     built with `DEV=true` (`call run dev` in Docker): `['nodejs', 'npm']`.
+     * @param list<string> $devRun Commands of its own for a development build only, run as
+     *     root after its packages.
      * @throws \InvalidArgumentException A name, path or value the Dockerfile cannot take.
      */
     public function __construct(
@@ -37,8 +41,10 @@ final readonly class ServiceImage
         public array $volumes = [],
         public array $env = [],
         public array $run = [],
+        public array $devPackages = [],
+        public array $devRun = [],
     ) {
-        foreach ($packages as $package) {
+        foreach ([...$packages, ...$devPackages] as $package) {
             if (!is_string($package) || preg_match('/^[a-z0-9][a-z0-9._+-]*$/', $package) !== 1) {
                 throw new \InvalidArgumentException("not an apk package name: \"{$package}\".");
             }
@@ -63,7 +69,7 @@ final readonly class ServiceImage
                 throw new \InvalidArgumentException("variable {$name}: a value is one line of text.");
             }
         }
-        foreach ($run as $command) {
+        foreach ([...$run, ...$devRun] as $command) {
             if (!is_string($command) || trim($command) === '' || str_contains($command, "\n")) {
                 throw new \InvalidArgumentException('a run command is one non-empty line.');
             }
@@ -78,8 +84,16 @@ final readonly class ServiceImage
      */
     public static function merge(self ...$images): self
     {
-        $packages = $directories = $volumes = $env = $run = [];
+        $packages = $directories = $volumes = $env = $run = $devPackages = $devRun = [];
         foreach ($images as $image) {
+            foreach ($image->devPackages as $package) {
+                $devPackages[$package] = true;
+            }
+            foreach ($image->devRun as $command) {
+                if (!in_array($command, $devRun, true)) {
+                    $devRun[] = $command;
+                }
+            }
             foreach ($image->packages as $package) {
                 $packages[$package] = true;
             }
@@ -116,7 +130,14 @@ final readonly class ServiceImage
                 }
             }
         }
-        return new self(array_keys($packages), $directories, $volumes, $env, $run);
+        return new self(array_keys($packages), $directories, $volumes, $env, $run, array_keys($devPackages), $devRun);
+    }
+
+    /** Whether it asks for nothing: no block is written for it. */
+    public function isEmpty(): bool
+    {
+        return $this->packages === [] && $this->directories === [] && $this->volumes === []
+            && $this->env === [] && $this->run === [] && $this->devPackages === [] && $this->devRun === [];
     }
 
     /**
@@ -144,13 +165,20 @@ final readonly class ServiceImage
                 $steps[] = "chmod {$mode} " . implode(' ', $group);
             }
         }
-        if ($steps !== [] || $this->run !== []) {
+        $dev = $this->devPackages !== [] ? ['apk add --no-cache ' . implode(' ', $this->devPackages)] : [];
+        $dev = [...$dev, ...$this->devRun];
+        if ($steps !== [] || $this->run !== [] || $dev !== []) {
             $lines[] = 'USER root';
             if ($steps !== []) {
                 $lines[] = 'RUN ' . implode(" \\\n    && ", $steps);
             }
             foreach ($this->run as $command) {
                 $lines[] = 'RUN ' . $command;
+            }
+            if ($dev !== []) {
+                // Only an image built for development: `DEV=true docker compose up --build`.
+                $lines[] = 'ARG DEV=false';
+                $lines[] = 'RUN if [ "$DEV" = "true" ]; then ' . implode(" \\\n    && ", $dev) . '; fi';
             }
             $lines[] = 'USER winter';
         }

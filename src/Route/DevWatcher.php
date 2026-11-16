@@ -260,6 +260,11 @@ final class DevWatcher
             );
             foreach ($iterator as $file) {
                 /** @var \SplFileInfo $file */
+                // A link to a folder is a leaf here, not followed: a tool's (pnpm's store
+                // links each project) — rewritten on every install, it is no source.
+                if (!$file->isFile()) {
+                    continue;
+                }
                 $files[$file->getPathname()] = (int) $file->getMTime();
             }
         }

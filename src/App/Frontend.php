@@ -27,11 +27,21 @@ interface Frontend
     public function build(): ?FrontBuild;
 
     /**
+     * What it runs beside the application — a development server under `call run dev`, a
+     * server that renders its pages — or null: its built files are all there is.
+     *
+     * @param bool $dev Whether the application runs under `call run dev`.
+     */
+    public function program(bool $dev): ?FrontProgram;
+
+    /**
      * Advice about its own setup — a config that does not match its mode, a build not made
      * yet — said once, as warnings, when the application starts serving; never a reason to
      * stop. Read nowhere else, so it may look at the disk.
      *
+     * @param bool $dev Whether the application runs under `call run dev`: nothing needs
+     *     to be built then.
      * @return list<string>
      */
-    public function hints(): array;
+    public function hints(bool $dev): array;
 }

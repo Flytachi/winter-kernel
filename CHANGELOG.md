@@ -49,11 +49,51 @@ beside its API.
   with no frontend left; a parser directive (`# syntax=`) stays on top. A `.dockerignore`
   that does not leave out `node_modules`, `.nuxt`, `.output` is pointed out (the host's
   `node_modules` would go into the image).
+- **A frontend with a server of its own** — **`Frontend::program()`** gives a
+  **`FrontProgram`**: a development server under `call run dev` (`nuxt dev`), a server that
+  renders the pages (Nitro, SSR). The kernel runs it as an outside program under the
+  supervisor on a free loopback port (`PORT`, `HOST=127.0.0.1` in its environment), ready
+  once it listens, restarted when it crashes, its output in the log. The HTTP server
+  forwards to it what no route took — a GET or HEAD for pages and files, every method for a
+  server with routes of its own — with the coroutine HTTP client: the client's address in
+  `X-Forwarded-For`/`-Proto`/`-Host`/`-Port`, every `Set-Cookie`, the body whole (a
+  compressed one unpacked and compressed again for the client); a built file of a
+  rendering server is sent by the HTTP server itself. A program not listening — starting,
+  down — answers 503 with `Retry-After`; one that does not answer within the request
+  timeout, 504 (no request timeout: no limit). An answer is passed on once it is whole: a
+  stream (server-sent events) is not relayed as it comes.
+- **`WINTER_BACKEND`** — where a frontend's program reaches the controllers: a loopback port
+  of the HTTP server's own per program, opened only when a frontend has one. It shows the
+  routes its frontend's port shows — a prefix closed there is closed for the program too,
+  so a public request the program hands on reaches nothing more — and nothing is ever
+  forwarded back to a frontend: no loop.
+- **The live reload of a development server through the application's address.** Under
+  `call run dev`, with a development server, the HTTP server is a `Swoole\WebSocket\Server`
+  and relays the browser's WebSocket (HMR, `vite-hmr`) to it — on a frontend's own port
+  too; asked as `localhost` (a
+  development server refuses names it does not know). In production the server stays the
+  plain `Http\Server`.
+- **`ServiceImage`** — `devPackages` and `devRun`: installed only in an image built with
+  `DEV=true` (`ARG DEV=false` in the services' block). `call service docker` takes a
+  frontend's image into the block (Node for a rendering server, Node for `nuxt dev` in a
+  development build), makes each frontend's `node_modules` a folder of winter's in a
+  development build, and says what compose needs for `call run dev` in Docker: the `DEV`
+  build argument and a `node_modules` volume per frontend.
+- **`FrontSite`** — `marker`: the file whose presence means the frontend is built, for a
+  build with no page at the root of its files (a rendering server's public files).
 
 ### Changed
 
+- **`Frontend` (since 4.6.0-RC1):** `program(bool $dev)` added; `hints()` takes `bool $dev`
+  — under `call run dev` nothing needs to be built.
 - `call cfg docker`'s `.dockerignore` leaves out `**/node_modules`, `**/.nuxt`, `**/.output`.
 - `call run dev`'s watcher no longer walks `.nuxt` and `.output`.
+
+### Fixed
+
+- `call run dev` restarted the application over and over while pnpm installed in a
+  container: a link to a folder (pnpm's store links each project) was taken for a source
+  file. Only `.php` files count.
 
 ## [4.5.1] — 2026-11-15
 

@@ -30,6 +30,17 @@ final class SwooleResponse implements HttpResponse
     /** @var bool Whether the caller named a Content-Encoding of its own. */
     private bool $encodingDeclared = false;
 
+    /**
+     * The Swoole response underneath — for what the contract has no word for: several
+     * values of one header as they came from a frontend's own server.
+     *
+     * @internal Read by {@see \Flytachi\Winter\Kernel\Http\Front\FrontProxy}.
+     */
+    public function getSwooleResponse(): Response
+    {
+        return $this->response;
+    }
+
     public function status(int $code): void
     {
         $this->response->status($code);

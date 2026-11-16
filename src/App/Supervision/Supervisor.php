@@ -674,7 +674,12 @@ final class Supervisor
                 if (!$parsed) {
                     fclose($pair[1]);
                 }
-                $this->becomeProgram($unit->name, $unit->component->command, $parsed ? $pair[1] : null);
+                $this->becomeProgram(
+                    $unit->name,
+                    $unit->component->command,
+                    $parsed ? $pair[1] : null,
+                    $unit->component->env,
+                );
             }
             $this->becomeComponent($unit, $pair[1]);
         }
@@ -910,8 +915,9 @@ final class Supervisor
      * @param list<string> $command
      * @param resource|null $output Where its stdout and stderr go, when its output is
      *     parsed; null: the application's own.
+     * @param array<string, string> $env What it has beside the application's environment.
      */
-    private function becomeProgram(string $name, array $command, mixed $output = null): never
+    private function becomeProgram(string $name, array $command, mixed $output = null, array $env = []): never
     {
         $this->dropSupervisorSignals(program: true);
         foreach ($this->units as $other) {
@@ -934,7 +940,7 @@ final class Supervisor
         [$program, $args] = str_contains($command[0], '/')
             ? [$command[0], array_slice($command, 1)]
             : ['/usr/bin/env', $command];
-        @pcntl_exec($program, $args, self::environment());
+        @pcntl_exec($program, $args, [...self::environment(), ...$env]);
 
         // Only reached when the program could not be run.
         @fwrite(STDERR, "winter: {$name} could not be run: " . pcntl_strerror(pcntl_get_last_error()) . "\n");

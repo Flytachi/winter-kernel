@@ -26,13 +26,20 @@ final class ServerProcess
      * @param class-string $app The application the entry file runs.
      * @param bool $httpFlags Whether `call run` gets `--http.host`/`--http.port` — an
      *     application without an HTTP server refuses them.
+     * @param bool $dev `call run dev` instead of `call run`.
      */
     public function __construct(
         private readonly string $host = '127.0.0.1',
         private readonly array $env = [],
         private readonly string $app = \Flytachi\Winter\Kernel\Tests\Route\Fixtures\App\ServeApp::class,
         private readonly bool $httpFlags = true,
+        private readonly bool $dev = false,
     ) {
+    }
+
+    public function pid(): int
+    {
+        return $this->pid;
     }
 
     public function port(): int
@@ -65,9 +72,10 @@ final class ServerProcess
             ? sprintf(", '--http.host=%s', '--http.port=%d'", $this->host, $this->port)
             : '';
         file_put_contents($this->runner, sprintf(
-            "<?php\nrequire %s;\n\\%s::main(['call', 'run'%s]);\n",
+            "<?php\nrequire %s;\n\\%s::main(['call', 'run'%s%s]);\n",
             var_export($autoload, true),
             $this->app,
+            $this->dev ? ", 'dev'" : '',
             $flags,
         ));
 

@@ -118,4 +118,43 @@ final class ServiceImageTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $make();
     }
+
+    public function test_dev_packages_are_installed_only_in_a_dev_build(): void
+    {
+        $image = new ServiceImage(
+            packages: ['nodejs'],
+            devPackages: ['npm'],
+            devRun: ['npm install -g corepack', 'corepack enable'],
+        );
+
+        self::assertSame(<<<'DOCKER'
+            # winter:services — written by `call service docker`; change the services, not this block
+            USER root
+            RUN apk add --no-cache nodejs
+            ARG DEV=false
+            RUN if [ "$DEV" = "true" ]; then apk add --no-cache npm \
+                && npm install -g corepack \
+                && corepack enable; fi
+            USER winter
+            # winter:services end
+
+            DOCKER, $image->dockerfile());
+    }
+
+    public function test_dev_parts_merge_once(): void
+    {
+        $merged = ServiceImage::merge(
+            new ServiceImage(devPackages: ['nodejs', 'npm'], devRun: ['corepack enable']),
+            new ServiceImage(devPackages: ['npm'], devRun: ['corepack enable']),
+        );
+
+        self::assertSame(['nodejs', 'npm'], $merged->devPackages);
+        self::assertSame(['corepack enable'], $merged->devRun);
+    }
+
+    public function test_dev_parts_take_what_the_dockerfile_can(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new ServiceImage(devPackages: ['No Such']);
+    }
 }

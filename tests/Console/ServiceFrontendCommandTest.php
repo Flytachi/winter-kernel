@@ -40,7 +40,7 @@ final class ServiceFrontendCommandTest extends TestCase
 
                 public function image(): ServiceImage
                 {
-                    return new ServiceImage();
+                    return new ServiceImage(packages: getenv('SSR_FRONT') ? ['nodejs'] : [], devPackages: ['nodejs', 'npm']);
                 }
 
                 public function build(): ?FrontBuild
@@ -49,7 +49,12 @@ final class ServiceFrontendCommandTest extends TestCase
                         'pnpm install --frozen-lockfile', 'pnpm generate');
                 }
 
-                public function hints(): array
+                public function program(bool $dev): ?\Flytachi\Winter\Kernel\App\FrontProgram
+                {
+                    return null;
+                }
+
+                public function hints(bool $dev): array
                 {
                     return [];
                 }
@@ -239,5 +244,36 @@ final class ServiceFrontendCommandTest extends TestCase
         [, $output] = $this->call(['service', 'docker']);
 
         self::assertStringNotContainsString('.dockerignore does not leave out', $output);
+    }
+
+    public function test_a_frontends_image_reaches_the_dockerfile(): void
+    {
+        $this->call(['service', 'docker'], ['SSR_FRONT' => '1']);
+        $file = $this->dockerfile();
+
+        self::assertStringContainsString('RUN apk add --no-cache nodejs', $file);
+        self::assertStringContainsString(
+            "ARG DEV=false\nRUN if [ \"\$DEV\" = \"true\" ]; then apk add --no-cache nodejs npm \\\n"
+                . "    && mkdir -p /app/admin/node_modules && chown winter:winter /app/admin/node_modules; fi",
+            $file,
+            'the volume\'s mount point is winter\'s: a new volume takes its owner from it',
+        );
+    }
+
+    public function test_the_dev_hint_names_the_node_modules_volume_and_the_build_arg(): void
+    {
+        [, $output] = $this->call(['service', 'docker']);
+
+        self::assertStringContainsString('call run dev in Docker', $output);
+        self::assertStringContainsString('DEV: ${DEV:-false}', $output);
+        self::assertStringContainsString('admin-node-modules:/app/admin/node_modules', $output);
+    }
+
+    public function test_no_frontend_no_dev_hint(): void
+    {
+        [, $output] = $this->call(['service', 'docker'], ['NO_FRONTENDS' => '1']);
+
+        self::assertStringNotContainsString('node_modules:', $output);
+        self::assertStringNotContainsString('ARG DEV', $this->dockerfile());
     }
 }
