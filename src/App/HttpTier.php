@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\App;
 
 use Flytachi\Winter\Kernel\App\Config\ServerSettings;
+use Flytachi\Winter\Kernel\Http\Front\SiteMap;
 use Flytachi\Winter\Kernel\Route\DevWatcher;
 use Flytachi\Winter\Kernel\Route\Router;
 
@@ -20,6 +21,7 @@ final readonly class HttpTier
         public ServerSettings $settings,
         public Router $router,
         public ?DevWatcher $dev,
+        public ?SiteMap $sites = null,
     ) {
     }
 

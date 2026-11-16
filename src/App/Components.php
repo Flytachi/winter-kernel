@@ -37,6 +37,9 @@ final class Components
     /** @var list<array{Service, Component}> The services declared, each with its component. */
     private array $services = [];
 
+    /** @var list<Frontend> The frontends declared. */
+    private array $frontends = [];
+
     /**
      * @param string $root The project root — where relative script paths start.
      * @internal Built by the application.
@@ -261,5 +264,31 @@ final class Components
     public function services(): array
     {
         return $this->services;
+    }
+
+    /**
+     * A {@see Frontend} — a single-page app, a pre-rendered site — that a package prepared:
+     * the HTTP server serves its built files after the routes, on its port or one of its own.
+     *
+     * ```php
+     * $components->frontend(Nuxt::spa('frontend'));
+     * ```
+     *
+     * @link https://winterframe.net/docs/frontend The frontend in the application
+     */
+    public function frontend(Frontend $frontend): self
+    {
+        $this->components[] = Component::frontend($frontend->site());
+        $this->frontends[] = $frontend;
+        return $this;
+    }
+
+    /**
+     * @return list<Frontend>
+     * @internal Read by the application.
+     */
+    public function frontends(): array
+    {
+        return $this->frontends;
     }
 }

@@ -17,4 +17,6 @@ enum ComponentKind
     case Daemon;
     case Scheduler;
     case Command;
+    /** A frontend's built files, served by the HTTP server: no process of its own. */
+    case Frontend;
 }

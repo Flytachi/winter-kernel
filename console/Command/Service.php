@@ -7,6 +7,7 @@ namespace Flytachi\Winter\Console\Command;
 use Composer\InstalledVersions;
 use Flytachi\Winter\Console\Inc\Cmd;
 use Flytachi\Winter\Kernel\App\Service as AppService;
+use Flytachi\Winter\Kernel\App\FrontBuild;
 use Flytachi\Winter\Kernel\App\ServiceImage;
 use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Kernel\WinterApplication;
@@ -82,7 +83,16 @@ final class Service extends Cmd
         $services = $this->services();
         $image = ServiceImage::merge(...array_map(static fn(AppService $s): ServiceImage => $s->image(), $services));
 
-        $this->dockerfile($services === [] ? null : $image, $dry);
+        $builds = [];
+        $app = WinterApplication::getAppClass();
+        foreach ($app::frontends() as $frontend) {
+            $build = $frontend->build();
+            if ($build !== null) {
+                $builds[$frontend->site()->name] = $build;
+            }
+        }
+
+        $this->dockerfile($services === [] ? null : $image, $builds, $dry);
         if ($services !== []) {
             $this->composeHint($image->volumes);
         }
@@ -91,13 +101,18 @@ final class Service extends Cmd
             self::printInfo('--dry: nothing was written.');
             return;
         }
-        if ($services !== []) {
+        if ($services !== [] || $builds !== []) {
             self::printInfo('Rebuild the image to take it in:  docker compose up -d --build');
         }
     }
 
-    /** The block in the Dockerfile: replaced when it is there, put in front of the code when not. */
-    private function dockerfile(?ServiceImage $image, bool $dry): void
+    /**
+     * The blocks in the Dockerfile — the services', the frontends' build stages and their
+     * output: replaced when they are there, put in place when not.
+     *
+     * @param array<string, FrontBuild> $builds By frontend name.
+     */
+    private function dockerfile(?ServiceImage $image, array $builds, bool $dry): void
     {
         $path = Kernel::$pathRoot . '/Dockerfile';
         if (!is_file($path)) {
@@ -105,10 +120,17 @@ final class Service extends Cmd
             return;
         }
         $before = (string) file_get_contents($path);
+        [$stages, $outputs] = self::frontendBlocks($builds);
         $after = self::withBlock($before, $image?->dockerfile());
+        $after = self::withFrontendStages($after, $stages);
+        $after = self::withFrontendOutputs($after, $outputs);
         if ($dry) {
             self::printLabel('Dockerfile', 34);
             self::printSplit($image?->dockerfile() ?? '(no block: no services are declared)', 36);
+            if ($stages !== null) {
+                self::printSplit($stages, 36);
+                self::printSplit((string) $outputs, 36);
+            }
             self::printLabel('Dockerfile', 34);
             return;
         }
@@ -117,7 +139,154 @@ final class Service extends Cmd
             return;
         }
         file_put_contents($path, $after);
-        self::printBadge('Dockerfile', $image === null ? 'BLOCK REMOVED' : 'UPDATED', 34, 32);
+        self::printBadge('Dockerfile', $image === null && $stages === null ? 'BLOCK REMOVED' : 'UPDATED', 34, 32);
+    }
+
+    private const string STAGES = '# winter:frontend-build';
+    private const string STAGES_END = '# winter:frontend-build end';
+    private const string OUTPUTS = '# winter:frontend-output';
+    private const string OUTPUTS_END = '# winter:frontend-output end';
+
+    /**
+     * The frontends' blocks: a build stage each — the manifest first, so the install is
+     * cached while the dependencies do not change, then the sources and the build — and
+     * the lines that copy each output into the last stage. Nulls when there is no build.
+     *
+     * @param array<string, FrontBuild> $builds By frontend name.
+     * @return array{0: ?string, 1: ?string}
+     */
+    public static function frontendBlocks(array $builds): array
+    {
+        if ($builds === []) {
+            return [null, null];
+        }
+        $note = ' — written by `call service docker`; change the frontends, not this block';
+        $stages = [self::STAGES . $note];
+        $outputs = [self::OUTPUTS . $note];
+        foreach ($builds as $name => $build) {
+            $manifest = implode(' ', array_map(
+                static fn(string $file): string => "{$build->context}/{$file}",
+                $build->manifest,
+            ));
+            array_push(
+                $stages,
+                "FROM {$build->image} AS frontend-{$name}",
+                'WORKDIR /front',
+                'RUN corepack enable',
+                "COPY {$manifest} ./",
+                "RUN {$build->install}",
+                "COPY {$build->context}/ ./",
+                "RUN {$build->build}",
+            );
+            $outputs[] = "COPY --from=frontend-{$name} --chown=winter:winter /front/{$build->output}"
+                . " ./{$build->context}/{$build->output}";
+        }
+        $stages[] = self::STAGES_END;
+        $outputs[] = self::OUTPUTS_END;
+        return [implode("\n", $stages) . "\n", implode("\n", $outputs) . "\n"];
+    }
+
+    /**
+     * The line of the last stage's FROM — an instruction, not a word on the line after a
+     * backslash that continues the one before.
+     *
+     * @param list<string> $lines
+     */
+    private static function lastFrom(array $lines): ?int
+    {
+        $last = null;
+        $continued = false;
+        foreach ($lines as $i => $line) {
+            if (!$continued && preg_match('/^\s*FROM\s/i', $line) === 1) {
+                $last = $i;
+            }
+            $continued = str_ends_with(rtrim($line), '\\') && !str_starts_with(ltrim($line), '#');
+        }
+        return $last;
+    }
+
+    /** The Dockerfile with the build stages before its last stage — its comments above them. */
+    public static function withFrontendStages(string $dockerfile, ?string $block): string
+    {
+        $before = static function (array $lines): int {
+            $at = self::lastFrom($lines) ?? count($lines);
+            // Its comments go below the stages with it — a parser directive (`# syntax=`)
+            // never: it counts only on the file's first lines.
+            while (
+                $at > 0
+                && str_starts_with(ltrim($lines[$at - 1]), '#')
+                && preg_match('/^#\s*(syntax|escape|check)\s*=/i', $lines[$at - 1]) !== 1
+            ) {
+                $at--;
+            }
+            return $at;
+        };
+        return self::withMarked($dockerfile, self::STAGES, self::STAGES_END, $block, $before);
+    }
+
+    /** The Dockerfile with the outputs copied in at the end of its last stage, before it starts. */
+    public static function withFrontendOutputs(string $dockerfile, ?string $block): string
+    {
+        $atTheEnd = static function (array $lines): int {
+            $from = self::lastFrom($lines);
+            $stage = $from === null ? 0 : $from + 1;
+            for ($i = $stage, $n = count($lines); $i < $n; $i++) {
+                if (preg_match('/^\s*(ENTRYPOINT|CMD)\s/i', $lines[$i]) === 1) {
+                    while ($i > $stage && str_starts_with(ltrim($lines[$i - 1]), '#')) {
+                        $i--;
+                    }
+                    return $i;
+                }
+            }
+            return count($lines);
+        };
+        return self::withMarked($dockerfile, self::OUTPUTS, self::OUTPUTS_END, $block, $atTheEnd);
+    }
+
+    /**
+     * A block between two marks: replaced in place, put where `$at` says the first time,
+     * removed — with the blank line after it — when null.
+     *
+     * @param \Closure(list<string>): int $at
+     * @throws \RuntimeException A start mark without its end: the file was edited by hand.
+     */
+    private static function withMarked(
+        string $dockerfile,
+        string $begin,
+        string $end,
+        ?string $block,
+        \Closure $at,
+    ): string {
+        $lines = explode("\n", $dockerfile);
+        $from = $to = null;
+        foreach ($lines as $i => $line) {
+            if ($from === null && str_starts_with($line, $begin) && !str_starts_with($line, $end)) {
+                $from = $i;
+            } elseif ($from !== null && trim($line) === $end) {
+                $to = $i;
+                break;
+            }
+        }
+        if ($from !== null && $to === null) {
+            throw new \RuntimeException(
+                "The Dockerfile has \"{$begin}\" without \"{$end}\": "
+                . 'put the end mark back, or remove the block, and run again.'
+            );
+        }
+        $new = $block === null ? [] : explode("\n", rtrim($block, "\n"));
+        if ($from !== null) {
+            $length = $to - $from + 1;
+            if ($block === null && ($lines[$to + 1] ?? null) === '') {
+                $length++;
+            }
+            array_splice($lines, $from, $length, $new);
+            return implode("\n", $lines);
+        }
+        if ($block === null) {
+            return $dockerfile;
+        }
+        array_splice($lines, $at($lines), 0, [...$new, '']);
+        return implode("\n", $lines);
     }
 
     /**

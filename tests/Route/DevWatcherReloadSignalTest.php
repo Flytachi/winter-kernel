@@ -99,4 +99,22 @@ final class DevWatcherReloadSignalTest extends TestCase
         self::assertFalse($b->reloadRequested(), 'a watcher over another tree is unaffected');
         self::assertTrue($a->reloadRequested());
     }
+
+    public function test_frontend_build_folders_are_not_scanned(): void
+    {
+        foreach (['src', 'frontend/.output/server', 'frontend/.nuxt'] as $folder) {
+            mkdir($this->dir . '/' . $folder, 0777, true);
+        }
+        touch($this->dir . '/src/App.php');
+        touch($this->dir . '/frontend/.output/server/chunk.php');
+        touch($this->dir . '/frontend/.nuxt/types.php');
+
+        try {
+            $scan = (new \ReflectionMethod(DevWatcher::class, 'scan'))->invoke(new DevWatcher([$this->dir]));
+        } finally {
+            exec('rm -rf ' . escapeshellarg($this->dir . '/src') . ' ' . escapeshellarg($this->dir . '/frontend'));
+        }
+
+        self::assertSame([$this->dir . '/src/App.php'], array_keys($scan));
+    }
 }

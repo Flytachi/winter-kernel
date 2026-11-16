@@ -46,6 +46,7 @@ final readonly class Component
      * @param Probe|null $alive How an outside program is checked to be alive once ready (Command).
      * @param int $stopSignal The signal that asks it to stop (Command).
      * @param ProgramOutput|null $output How its output becomes the log; null: as it is (Command).
+     * @param FrontSite|null $site What a frontend serves and where (Frontend).
      */
     private function __construct(
         public ComponentKind $kind,
@@ -65,6 +66,7 @@ final readonly class Component
         public ?Probe $alive = null,
         public int $stopSignal = SIGTERM,
         public ?ProgramOutput $output = null,
+        public ?FrontSite $site = null,
     ) {
         if ($retries < 0 || $startTimeout < 0) {
             throw new \InvalidArgumentException('retries and startTimeout cannot be negative.');
@@ -120,6 +122,7 @@ final readonly class Component
             $this->alive,
             $this->stopSignal,
             $this->output,
+            $this->site,
         );
     }
 
@@ -202,6 +205,24 @@ final readonly class Component
             alive: $alive !== null ? Probe::of($alive) : null,
             stopSignal: $stopSignal,
             output: $output,
+        );
+    }
+
+    /**
+     * A frontend's built files ({@see Frontend}): served by the HTTP server, with no process
+     * of its own. The supervisor counts it up while its build is there, and down — with
+     * why — when it is not, looking again every few seconds.
+     */
+    public static function frontend(FrontSite $site): self
+    {
+        return new self(
+            ComponentKind::Frontend,
+            critical: $site->critical,
+            retries: 0,
+            startTimeout: 0,
+            label: $site->name,
+            priority: $site->priority,
+            site: $site,
         );
     }
 

@@ -43,6 +43,7 @@ use Flytachi\Winter\Kernel\App\Config\ServerSettings;
 use Flytachi\Winter\Kernel\App\Config\WebConfigurer;
 use Flytachi\Winter\Kernel\App\Config\WorkerMemory;
 use Flytachi\Winter\Kernel\App\PluginPackage;
+use Flytachi\Winter\Kernel\App\Frontend;
 use Flytachi\Winter\Kernel\App\Service;
 use Flytachi\Winter\Kernel\Collector\ConfigurationCollector;
 use Flytachi\Winter\Kernel\Collector\ImplementorCollector;
@@ -61,6 +62,7 @@ use Flytachi\Winter\Kernel\Core\Proxy\ProxyFactory;
 use Flytachi\Winter\Kernel\Core\DepSupport;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleResponse;
+use Flytachi\Winter\Kernel\Http\Front\SiteMap;
 use Flytachi\Winter\Kernel\Http\Health\Health;
 use Flytachi\Winter\Kernel\Http\Health\HealthContributor;
 use Flytachi\Winter\Kernel\Http\Health\HealthIndicator;
@@ -868,6 +870,21 @@ abstract class WinterApplication
             }
             $companions[] = $component;
         }
+        // The frontends ride on the HTTP server: its workers serve their files, on its port
+        // or one it listens on as well. Their places are checked here, before anything binds.
+        $sites = [];
+        foreach ($companions as $companion) {
+            if ($companion->kind === ComponentKind::Frontend && $companion->site !== null) {
+                $sites[] = $companion->site;
+            }
+        }
+        if ($sites !== [] && $http === null) {
+            throw new ApplicationConfigException(sprintf(
+                'a frontend needs the HTTP server: its files are served there — declare #[EnableHttp] for "%s".',
+                $sites[0]->name,
+            ));
+        }
+        $siteMap = $http !== null ? new SiteMap($sites, $http->port) : null;
         self::assertFreePorts($companions, $http?->port);
         self::assertWebSocketTls($companions);
 
@@ -885,7 +902,7 @@ abstract class WinterApplication
         // which every worker then shares from this process's memory. The server itself is
         // created in its own process: the one Swoole runs threads in must not be the one
         // that forks the rest.
-        $web = $settings !== null ? static::prepareHttp($settings, $watch) : null;
+        $web = $settings !== null ? static::prepareHttp($settings, $watch, $siteMap, $logger) : null;
 
         if (Banner::isEnabled($args)) {
             $rows = static::bannerRows($companions, $web?->host(), $web?->port(), $web?->scheme() ?? 'http');
@@ -926,8 +943,12 @@ abstract class WinterApplication
      * Prepares the HTTP server in the application's process: its settings, the route scan,
      * the dev watcher — what the server's own process then starts from.
      */
-    private static function prepareHttp(ServerSettings $settings, bool $watch): HttpTier
-    {
+    private static function prepareHttp(
+        ServerSettings $settings,
+        bool $watch,
+        ?SiteMap $sites = null,
+        ?LoggerInterface $logger = null,
+    ): HttpTier {
         if (!extension_loaded('swoole')) {
             throw new ApplicationConfigException(
                 '`call run` with an HTTP server needs ext-swoole (pecl install swoole).'
@@ -956,7 +977,68 @@ abstract class WinterApplication
         // Built here so the server's process and this one name the same reload marker.
         $dev = $watch ? new DevWatcher([Kernel::$pathRoot]) : null;
 
-        return new HttpTier($settings, $router, $dev);
+        if ($sites !== null && !$sites->isEmpty()) {
+            $router->withSites($sites);
+            foreach ([...$sites->notes(), ...self::overlaps($sites, $router)] as $note) {
+                $logger?->warning($note);
+            }
+        }
+
+        return new HttpTier($settings, $router, $dev, $sites !== null && !$sites->isEmpty() ? $sites : null);
+    }
+
+    /**
+     * The pages of the frontends a controller route takes on the HTTP server's port — the
+     * route still wins, but the frontend is not reachable there, which is seldom meant: the
+     * root of a single-page app (or the path it is under), every page of a pre-rendered site.
+     *
+     * @return list<string>
+     */
+    private static function overlaps(SiteMap $sites, Router $router): array
+    {
+        $notes = [];
+        foreach ($sites->sites() as $site) {
+            if (!$site->overlap || $site->port !== null) {
+                continue;
+            }
+            $paths = [$site->path];
+            if ($site->shell === null && is_dir($site->root)) {
+                $paths = [];
+                // A check that only warns: a folder it cannot read is left out, never the boot.
+                try {
+                    $files = new \RecursiveIteratorIterator(
+                        new \RecursiveDirectoryIterator($site->root, \FilesystemIterator::SKIP_DOTS),
+                        \RecursiveIteratorIterator::LEAVES_ONLY,
+                        \RecursiveIteratorIterator::CATCH_GET_CHILD,
+                    );
+                    foreach ($files as $file) {
+                        if ($file->getFilename() !== 'index.html') {
+                            continue;
+                        }
+                        $page = substr(dirname($file->getPathname()), strlen($site->root));
+                        $paths[] = rtrim($site->path, '/') . ($page === '' ? '/' : $page);
+                        if (count($paths) >= 1000) {
+                            break;
+                        }
+                    }
+                } catch (\UnexpectedValueException) {
+                    // What was found is checked.
+                }
+            }
+            foreach ($paths as $path) {
+                $path = $path === '' ? '/' : $path;
+                if ($router->dispatch('GET', $path)->isFound()) {
+                    $notes[] = sprintf(
+                        'GET %s is a controller\'s route: the frontend "%s" is not reachable at %s'
+                        . ' (overlap: false says it is meant).',
+                        $path,
+                        $site->name,
+                        $path,
+                    );
+                }
+            }
+        }
+        return $notes;
     }
 
     /**
@@ -981,6 +1063,22 @@ abstract class WinterApplication
             (BindAddress::isIpv6($web->host()) ? SWOOLE_SOCK_TCP6 : SWOOLE_SOCK_TCP) | ($tls ? SWOOLE_SSL : 0),
         );
         $server->set($web->settings->toArray());
+        // A frontend on a port of its own: the same server listens there too — the same
+        // workers, the same router, which tells the ports apart. Plain HTTP; its host is the
+        // server's.
+        foreach ($web->sites?->ports() ?? [] as $port) {
+            $listener = $server->addListener(
+                $web->host(),
+                $port,
+                BindAddress::isIpv6($web->host()) ? SWOOLE_SOCK_TCP6 : SWOOLE_SOCK_TCP,
+            );
+            if ($listener === false) {
+                throw new ApplicationConfigException("The frontend's port {$port} could not be bound.");
+            }
+            // A port given settings of its own inherits none of the server's: the same ones,
+            // or a body the HTTP port takes would be too large here.
+            $listener->set([...$web->settings->toArray(), 'open_http_protocol' => true]);
+        }
 
         $router = $web->router;
         $trimThreshold = $web->settings->getMemoryTrimThreshold();
@@ -1383,7 +1481,7 @@ abstract class WinterApplication
                     ComponentKind::Daemon => '#[EnableDaemon]',
                     ComponentKind::Scheduler => '#[EnableScheduler]',
                     ComponentKind::WebSocket => '#[EnableWebSocket]',
-                    ComponentKind::Command => 'components()',
+                    ComponentKind::Command, ComponentKind::Frontend => 'components()',
                 },
             ];
         }
@@ -1436,6 +1534,17 @@ abstract class WinterApplication
     public static function services(): array
     {
         return array_map(static fn(array $entry): Service => $entry[0], self::declared()->services());
+    }
+
+    /**
+     * The frontends the application declares, as `call service docker` builds them.
+     *
+     * @return list<Frontend>
+     * @throws ApplicationConfigException The declaration is invalid, as it would be at startup.
+     */
+    public static function frontends(): array
+    {
+        return self::declared()->frontends();
     }
 
     /**
@@ -1643,6 +1752,12 @@ abstract class WinterApplication
                     ),
                 )],
                 ComponentKind::Command => ['command', $companion->name()],
+                ComponentKind::Frontend => ['front', sprintf(
+                    '%s %s%s',
+                    $companion->name(),
+                    BindAddress::url($scheme, (string) $host, $companion->site?->port ?? (int) $port),
+                    $companion->site?->port !== null ? '/' : ltrim($companion->site?->path ?? '/', '/'),
+                )],
                 default => [self::componentLabel($companion->kind), $companion->name()],
             };
         }
@@ -1713,20 +1828,27 @@ abstract class WinterApplication
     {
         $taken = $httpPort === null ? [] : [$httpPort => 'the web server'];
         foreach ($companions as $companion) {
-            if ($companion->kind !== ComponentKind::WebSocket) {
+            $port = match (true) {
+                $companion->kind === ComponentKind::WebSocket => $companion->port,
+                $companion->kind === ComponentKind::Frontend => $companion->site?->port,
+                default => null,
+            };
+            if ($port === null) {
                 continue;
             }
-            $name = self::shortName((string) $companion->class);
-            if (isset($taken[$companion->port])) {
+            $name = $companion->kind === ComponentKind::Frontend
+                ? "the frontend \"{$companion->name()}\""
+                : self::shortName((string) $companion->class);
+            if (isset($taken[$port])) {
                 throw new ApplicationConfigException(sprintf(
                     'Port %d is used twice: by %s and by %s. One port serves one process — '
                     . 'give each its own and route by path in the proxy.',
-                    $companion->port,
-                    $taken[$companion->port],
+                    $port,
+                    $taken[$port],
                     $name,
                 ));
             }
-            $taken[$companion->port] = $name;
+            $taken[$port] = $name;
         }
     }
 

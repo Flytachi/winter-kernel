@@ -23,10 +23,15 @@ final class ServerProcess
     /**
      * @param string $host The interface the server binds: `127.0.0.1`, or `::` for both protocols.
      * @param array<string, string> $env Variables the server is started with — `SERVER_TLS_CERT`, say.
+     * @param class-string $app The application the entry file runs.
+     * @param bool $httpFlags Whether `call run` gets `--http.host`/`--http.port` — an
+     *     application without an HTTP server refuses them.
      */
     public function __construct(
         private readonly string $host = '127.0.0.1',
         private readonly array $env = [],
+        private readonly string $app = \Flytachi\Winter\Kernel\Tests\Route\Fixtures\App\ServeApp::class,
+        private readonly bool $httpFlags = true,
     ) {
     }
 
@@ -56,12 +61,14 @@ final class ServerProcess
 
         // The entry a project would write by hand: load the autoloader, run the app.
         $autoload = dirname(__DIR__, 3) . '/vendor/autoload.php';
+        $flags = $this->httpFlags
+            ? sprintf(", '--http.host=%s', '--http.port=%d'", $this->host, $this->port)
+            : '';
         file_put_contents($this->runner, sprintf(
-            "<?php\nrequire %s;\n\\Flytachi\\Winter\\Kernel\\Tests\\Route\\Fixtures\\App\\ServeApp::main("
-            . "['call', 'run', '--http.host=%s', '--http.port=%d']);\n",
+            "<?php\nrequire %s;\n\\%s::main(['call', 'run'%s]);\n",
             var_export($autoload, true),
-            $this->host,
-            $this->port,
+            $this->app,
+            $flags,
         ));
 
         $env = '';
@@ -69,8 +76,9 @@ final class ServerProcess
             $env .= $name . '=' . escapeshellarg($value) . ' ';
         }
         $this->pid = (int) trim((string) shell_exec(sprintf(
-            '%sWK_SERVE_STORAGE=%s %s %s >> %s 2>&1 & echo $!',
+            '%sWK_SERVE_PORT=%d WK_SERVE_STORAGE=%s %s %s >> %s 2>&1 & echo $!',
             $env,
+            $this->port,
             escapeshellarg($this->storage),
             escapeshellarg(PHP_BINARY),
             escapeshellarg($this->runner),
@@ -198,7 +206,7 @@ final class ServerProcess
     }
 
     /** Asks the OS for an unused port, so parallel runs do not collide. */
-    private static function freePort(): int
+    public static function freePort(): int
     {
         $socket = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
         $name   = stream_socket_get_name($socket, false);

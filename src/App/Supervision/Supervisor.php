@@ -70,6 +70,8 @@ final class Supervisor
     private const float PROBE_TIMEOUT = 5.0;
     /** Seconds a program's quiet takes for its entry to be complete. */
     private const float ENTRY_QUIET = 0.05;
+    /** Seconds between looks at a frontend whose build was missing. */
+    private const float FRONTEND_INTERVAL = 3.0;
     /** Bytes of one line of a program's output; a longer one is cut there. */
     public const int LINE_MAX = 131072;
     /** Bytes of one entry of a program's log, its continuations included; the rest is cut. */
@@ -120,6 +122,9 @@ final class Supervisor
     private ?int $stopRank = null;
     /** Whether the order is worth telling: a priority was set, or there is onStarting(). */
     private bool $ordered;
+
+    /** When the frontends whose build was missing were last looked at. */
+    private float $frontendsAt = 0.0;
 
     /** The signals the supervisor handles — and holds back around a fork. */
     private const array SIGNALS = [SIGTERM, SIGINT, SIGHUP, SIGUSR1, SIGUSR2];
@@ -229,6 +234,7 @@ final class Supervisor
                 $this->startDue($now);
                 $this->probeReadiness($now);
                 $this->probeAlive($now);
+                $this->lookAtFrontends($now);
             }
             $this->listen();
             $this->reap();
@@ -378,6 +384,12 @@ final class Supervisor
         }
         if ($this->startingPid > 0) {
             @posix_kill(-$this->startingPid, SIGTERM);
+        }
+        // A frontend has nothing to stop: its files stop being served with the HTTP server.
+        foreach ($this->units as $unit) {
+            if ($unit->component->kind === ComponentKind::Frontend && $unit->state === UnitState::Running) {
+                $unit->state = UnitState::Stopped;
+            }
         }
         $this->stopNextLevel();
     }
@@ -597,6 +609,12 @@ final class Supervisor
     private function start(Unit $unit): void
     {
         $unit->resetRun();
+        // A frontend has no process: the HTTP server serves its files. It is up while
+        // they are there.
+        if ($unit->component->kind === ComponentKind::Frontend) {
+            $this->lookAtFrontend($unit);
+            return;
+        }
         $outsider = $this->records->outsider($unit->component);
         if ($outsider !== null) {
             $this->hold($unit, $outsider);
@@ -1271,6 +1289,37 @@ final class Supervisor
         foreach ($this->units as $unit) {
             if ($unit->entry !== null && $now - $unit->entryAt >= self::ENTRY_QUIET) {
                 $this->endEntry($unit);
+            }
+        }
+    }
+
+    /**
+     * A frontend is up while its build is there, failed — with why — while it is not. A
+     * critical one without a build stops the application, as any critical failure does.
+     */
+    private function lookAtFrontend(Unit $unit): void
+    {
+        $site = $unit->component->site;
+        if ($site !== null && $site->isBuilt()) {
+            $unit->state = UnitState::Starting;
+            $this->ready($unit);
+            return;
+        }
+        if ($unit->state !== UnitState::Failed) {
+            $this->fail($unit, sprintf('not built: no %s — build the frontend', $site?->marker() ?? 'site'));
+        }
+    }
+
+    /** Looks again, every few seconds, at the frontends whose build was missing. */
+    private function lookAtFrontends(float $now): void
+    {
+        if ($now - $this->frontendsAt < self::FRONTEND_INTERVAL) {
+            return;
+        }
+        $this->frontendsAt = $now;
+        foreach ($this->units as $unit) {
+            if ($unit->component->kind === ComponentKind::Frontend && $unit->state === UnitState::Failed) {
+                $this->lookAtFrontend($unit);
             }
         }
     }

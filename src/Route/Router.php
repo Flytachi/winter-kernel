@@ -31,6 +31,8 @@ use Flytachi\Winter\Kernel\Plugin;
 use Flytachi\Winter\Kernel\Route\Collector\MappingCollector;
 use Flytachi\Winter\Kernel\Http\Stereotype\Middleware;
 use Flytachi\Winter\Base\HttpCode;
+use Flytachi\Winter\Kernel\Http\Front\SiteMap;
+use Flytachi\Winter\Kernel\Http\Front\StaticFiles;
 
 /**
  * Router — dual-mode (Swoole + FPM), Spring Boot-style.
@@ -65,6 +67,9 @@ final class Router
     private array $dynamicRoutes = [];
 
     private ?Dispatcher $dispatcher = null;
+
+    /** The application's frontends; null — none, and routing is exactly what it was. */
+    private ?SiteMap $sites = null;
 
     // ── Route registration ────────────────────────────────────────────────────
 
@@ -358,6 +363,17 @@ final class Router
     }
 
     /**
+     * Serves the application's frontends after the routes: a GET or HEAD no route took goes
+     * to the frontend there, and a port shows only the routes {@see SiteMap} lets through.
+     * Without it the router routes exactly as before.
+     */
+    public function withSites(SiteMap $sites): static
+    {
+        $this->sites = $sites->isEmpty() ? null : $sites;
+        return $this;
+    }
+
+    /**
      * Handle an HTTP request end-to-end. Works identically in Swoole and FPM.
      *
      * Pipeline:
@@ -425,7 +441,32 @@ final class Router
                 return;
             }
 
-            $result = $this->dispatch($method, $request->getPath());
+            // A frontend: the routes a port does not show are not there, and what no route
+            // took may be the frontend's. Without one, nothing below runs.
+            if ($this->sites !== null) {
+                $port = (int) ($request->getServerParam('server_port') ?? 0);
+                $path = $request->getPath();
+                $result = $this->sites->routeVisible($port, $path)
+                    ? $this->dispatch($method, $path)
+                    : new RouteResult(RouteResult::NOT_FOUND);
+                if ($result->status !== RouteResult::FOUND && ($method === 'GET' || $method === 'HEAD')) {
+                    $site = $this->sites->siteFor($port, $path);
+                    $accept = (string) $request->getHeader('Accept');
+                    $asksHtml = str_contains($accept, 'text/html');
+                    if (
+                        $site !== null
+                        && ($result->status === RouteResult::NOT_FOUND || $asksHtml)
+                        && !$this->sites->isRouteOf($port, $path)
+                    ) {
+                        $takesHtml = $asksHtml || $accept === '' || str_contains($accept, '*/*');
+                        $page = !str_contains((string) strrchr($path, '/'), '.');
+                        StaticFiles::serve($site, $request, $response, $takesHtml && $page);
+                        return;
+                    }
+                }
+            } else {
+                $result = $this->dispatch($method, $request->getPath());
+            }
 
             // ── Per-route #[CrossOrigin] overrides global CORS ────────────────
             if (Cors::getConfig() !== null && $result->status === RouteResult::FOUND) {

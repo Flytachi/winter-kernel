@@ -16,6 +16,11 @@
 # Dependencies (composer)
 vendor
 
+# A frontend's dependencies and builds: its image stage installs and builds them itself
+**/node_modules
+**/.nuxt
+**/.output
+
 # Environment & secrets
 .env
 

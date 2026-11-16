@@ -13,13 +13,17 @@ use Flytachi\Winter\Kernel\Http\Cookie\CookieParser;
  */
 final class FakeRequest implements HttpRequest
 {
-    /** @param array<string, string> $headers */
+    /**
+     * @param array<string, string> $headers
+     * @param array<string, string|int|float> $server Server parameters, lower-case keys: `server_port`.
+     */
     public function __construct(
         private readonly string $method = 'GET',
         private readonly string $uri = '/',
         private readonly array $headers = [],
         private readonly array $query = [],
         private readonly array $body = [],
+        private readonly array $server = [],
     ) {
     }
 
@@ -96,9 +100,9 @@ final class FakeRequest implements HttpRequest
         return [];
     }
 
-    public function getServerParam(string $key): ?string
+    public function getServerParam(string $key): string|int|float|null
     {
-        return null;
+        return $this->server[strtolower($key)] ?? null;
     }
 
     public function getClientIp(): string
