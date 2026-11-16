@@ -48,6 +48,11 @@ final class ServiceFrontendCommandTest extends TestCase
                     return new FrontBuild('admin', '.output/public', ['package.json', 'pnpm-lock.yaml'],
                         'pnpm install --frozen-lockfile', 'pnpm generate');
                 }
+
+                public function hints(): array
+                {
+                    return [];
+                }
             }
 
             #[\Flytachi\Winter\Kernel\App\Attribute\EnableHttp]
@@ -187,5 +192,52 @@ final class ServiceFrontendCommandTest extends TestCase
         $with = \Flytachi\Winter\Console\Command\Service::withFrontendStages($dockerfile, $stages);
 
         self::assertLessThan(strpos($with, 'FROM flytachi/winter'), strpos($with, 'AS frontend-admin'), 'before the real FROM');
+    }
+
+    public function test_a_dockerignore_that_keeps_node_modules_is_pointed_out(): void
+    {
+        file_put_contents($this->project . '/.dockerignore', ".git\n.env\n");
+
+        [, $output] = $this->call(['service', 'docker']);
+
+        self::assertStringContainsString(
+            '.dockerignore does not leave out **/node_modules, **/.nuxt, **/.output',
+            $output,
+        );
+        self::assertSame(".git\n.env\n", file_get_contents($this->project . '/.dockerignore'), 'a hint: the file is not touched');
+    }
+
+    public function test_a_dockerignore_that_leaves_them_out_is_quiet(): void
+    {
+        [, $output] = $this->call(['service', 'docker']);
+
+        self::assertStringNotContainsString('.dockerignore does not leave out', $output);
+    }
+
+    public function test_without_frontends_the_dockerignore_is_not_looked_at(): void
+    {
+        file_put_contents($this->project . '/.dockerignore', ".git\n");
+
+        [, $output] = $this->call(['service', 'docker'], ['NO_FRONTENDS' => '1']);
+
+        self::assertStringNotContainsString('.dockerignore', $output);
+    }
+
+    public function test_a_root_only_pattern_does_not_cover_the_frontends_folder(): void
+    {
+        file_put_contents($this->project . '/.dockerignore', "node_modules\n/.nuxt\n.output\n");
+
+        [, $output] = $this->call(['service', 'docker']);
+
+        self::assertStringContainsString('.dockerignore does not leave out **/node_modules, **/.nuxt, **/.output', $output);
+    }
+
+    public function test_the_frontends_own_folder_covers_it(): void
+    {
+        file_put_contents($this->project . '/.dockerignore', "admin/node_modules\n/admin/.nuxt/\nadmin/.output\n");
+
+        [, $output] = $this->call(['service', 'docker']);
+
+        self::assertStringNotContainsString('.dockerignore does not leave out', $output);
     }
 }

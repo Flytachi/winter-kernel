@@ -96,6 +96,9 @@ final class Service extends Cmd
         if ($services !== []) {
             $this->composeHint($image->volumes);
         }
+        if ($builds !== []) {
+            self::dockerignoreHint(array_values(array_map(static fn(FrontBuild $b): string => $b->context, $builds)));
+        }
 
         if ($dry) {
             self::printInfo('--dry: nothing was written.');
@@ -361,6 +364,42 @@ final class Service extends Cmd
      *
      * @param array<string, string> $volumes
      */
+    /**
+     * What a frontend's folder holds that the build context must not carry: the host's
+     * `node_modules` — another platform's binaries, hundreds of megabytes copied into the
+     * image with the code — and the build folders. Said, not written: the file is the
+     * developer's. Docker reads a pattern from the context's root: `node_modules` leaves
+     * out the root's only; `**\/node_modules` or `frontend/node_modules` the frontend's.
+     *
+     * @param list<string> $contexts The frontends' folders.
+     */
+    private static function dockerignoreHint(array $contexts): void
+    {
+        $text = @file_get_contents(Kernel::$pathRoot . '/.dockerignore');
+        $lines = is_string($text)
+            ? array_map(static fn(string $l): string => trim(trim($l), '/'), explode("\n", $text))
+            : [];
+        $missing = [];
+        foreach (['node_modules', '.nuxt', '.output'] as $folder) {
+            if (in_array("**/{$folder}", $lines, true)) {
+                continue;
+            }
+            foreach ($contexts as $context) {
+                if (!in_array("{$context}/{$folder}", $lines, true)) {
+                    $missing[] = "**/{$folder}";
+                    break;
+                }
+            }
+        }
+        if ($missing !== []) {
+            self::printWarning(sprintf(
+                '.dockerignore does not leave out %s: the build context and the image would carry them — add %s.',
+                implode(', ', $missing),
+                count($missing) === 1 ? 'it' : 'them',
+            ));
+        }
+    }
+
     private function composeHint(array $volumes): void
     {
         $stopGrace = $this->stopTime();

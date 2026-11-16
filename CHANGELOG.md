@@ -16,6 +16,9 @@ beside its API.
   where it answers: a path on the HTTP server's port or a port of its own, with `routes`
   and `exclusive`), what the image needs and its **`FrontBuild`**. The application
   declares it with **`Components::frontend()`**; `WinterApplication::frontends()` lists them.
+  Its **`hints()`** — advice about its own setup (a config that does not match its mode, a
+  build not made yet) — are logged as warnings once, when `call run` starts serving; a
+  check that fails is a warning too, never a reason to stop.
 - **The HTTP server serves frontends after the routes.** A controller always wins; a GET
   or HEAD no route took goes to the frontend there: a file of its build sent as it is
   (`sendfile`), with its type, `ETag`/`Last-Modified` (a match answers 304), a
@@ -24,7 +27,9 @@ beside its API.
   request takes HTML; a missing content-hashed file is a 404 never stored; nothing outside
   the build is ever sent. A POST, PUT or DELETE no route took is the backend's 404/405,
   never the shell. A GET on a path with another method's route goes to the frontend only
-  for an HTML request.
+  for an HTML request. A browser's `fetch()` (`Sec-Fetch-Dest` other than `document` or
+  `iframe`) never gets the shell: a typo in an API path is a 404 there, not a page with
+  200. A rebuild is seen at once — no restart, no stale `ETag`.
 - **A frontend on a port of its own** — the HTTP server listens there as well
   (`addListener`): the same workers, the same router. Only its `routes` reach the
   controllers there, and those prefixes are closed on the HTTP server's port unless one of
@@ -41,7 +46,9 @@ beside its API.
 - **`call service docker`** writes a frontend's build: a stage of its own on Node before the
   image's last stage (the manifest, the install, the sources, the build), and its output
   copied into the last stage after the code — between marks, replaced in place, removed
-  with no frontend left.
+  with no frontend left; a parser directive (`# syntax=`) stays on top. A `.dockerignore`
+  that does not leave out `node_modules`, `.nuxt`, `.output` is pointed out (the host's
+  `node_modules` would go into the image).
 
 ### Changed
 

@@ -459,9 +459,19 @@ final class Router
                         && !$this->sites->isRouteOf($port, $path)
                     ) {
                         $takesHtml = $asksHtml || $accept === '' || str_contains($accept, '*/*');
-                        $page = !str_contains((string) strrchr($path, '/'), '.');
-                        StaticFiles::serve($site, $request, $response, $takesHtml && $page);
-                        return;
+                        // A browser says what a request is for: fetch() is `empty`, a page
+                        // `document` — its `*/*` is not a page asked for. Without the header
+                        // (curl, an old client) the Accept header decides.
+                        // A browser's navigation is a page even on `/users/john.doe`; without the
+                        // header, a dot in the last segment says a file.
+                        $dest = strtolower((string) $request->getHeader('Sec-Fetch-Dest'));
+                        $page = $dest === ''
+                            ? !str_contains((string) strrchr($path, '/'), '.')
+                            : $dest === 'document' || $dest === 'iframe';
+                        if (StaticFiles::serve($site, $request, $response, $takesHtml && $page)) {
+                            return;
+                        }
+                        // Nothing of the frontend's: the router's own 404 or 405 below.
                     }
                 }
             } else {

@@ -25,4 +25,13 @@ interface Frontend
 
     /** How the image builds it — a stage of its own; null when it is built elsewhere. */
     public function build(): ?FrontBuild;
+
+    /**
+     * Advice about its own setup — a config that does not match its mode, a build not made
+     * yet — said once, as warnings, when the application starts serving; never a reason to
+     * stop. Read nowhere else, so it may look at the disk.
+     *
+     * @return list<string>
+     */
+    public function hints(): array;
 }

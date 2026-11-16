@@ -30,4 +30,17 @@ final readonly class TestFrontend implements Frontend
     {
         return $this->build;
     }
+
+    /** From `WK_FRONT_HINTS` for the root site: `a|b`, or `throw`. */
+    public function hints(): array
+    {
+        $hints = (string) getenv('WK_FRONT_HINTS');
+        if ($hints === '' || $this->site->path !== '/' || $this->site->port !== null) {
+            return [];
+        }
+        if ($hints === 'throw') {
+            throw new \RuntimeException('broken check');
+        }
+        return explode('|', $hints);
+    }
 }

@@ -172,4 +172,20 @@ final class ServeFrontendTest extends TestCase
             chmod("{$this->root}/ssg/locked", 0755);
         }
     }
+
+    public function test_a_frontends_hints_are_logged_at_start(): void
+    {
+        self::assertTrue($this->start(env: ['WK_FRONT_HINTS' => 'set ssr: false|run generate']), $this->server?->log() ?? '');
+
+        self::assertMatchesRegularExpression('/WARN.*the frontend "site": set ssr: false/', $this->server->log());
+        self::assertStringContainsString('the frontend "site": run generate', $this->server->log());
+    }
+
+    public function test_a_throwing_hints_check_does_not_stop_the_start(): void
+    {
+        self::assertTrue($this->start(env: ['WK_FRONT_HINTS' => 'throw']), $this->server?->log() ?? '');
+
+        self::assertSame(200, $this->get($this->server->port(), '/employees')['status']);
+        self::assertStringContainsString('the frontend "site": its check failed: broken check', $this->server->log());
+    }
 }

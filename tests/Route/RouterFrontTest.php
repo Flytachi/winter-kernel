@@ -175,4 +175,41 @@ final class RouterFrontTest extends TestCase
         self::assertSame(404, $response->status);
         self::assertNull($response->sentFile, 'its routes are controller territory: not the shell');
     }
+
+    public function test_a_browsers_fetch_gets_the_404_not_the_shell(): void
+    {
+        $fetch = $this->send($this->router(), 'GET', '/notes', ['Accept' => '*/*', 'Sec-Fetch-Dest' => 'empty']);
+        self::assertSame(404, $fetch->status);
+        self::assertNull($fetch->sentFile, 'fetch() says what it is: not a page');
+
+        $page = $this->send($this->router(), 'GET', '/employees/5', ['Accept' => 'text/html', 'Sec-Fetch-Dest' => 'document']);
+        self::assertSame($this->shellOf('site'), $page->sentFile);
+
+        $frame = $this->send($this->router(), 'GET', '/employees/5', ['Accept' => 'text/html', 'Sec-Fetch-Dest' => 'iframe']);
+        self::assertSame($this->shellOf('site'), $frame->sentFile);
+    }
+
+    public function test_a_browsers_fetch_miss_is_the_apis_own_404(): void
+    {
+        $response = $this->send($this->router(), 'GET', '/api/typo', ['Accept' => '*/*', 'Sec-Fetch-Dest' => 'empty']);
+
+        self::assertSame(404, $response->status);
+        self::assertSame(404, $response->json()['code'] ?? null, "the router's error, not the static 'Not Found'");
+    }
+
+    public function test_a_browsers_fetch_on_a_post_only_route_is_405(): void
+    {
+        $response = $this->send($this->router(), 'GET', '/login', ['Accept' => 'text/html', 'Sec-Fetch-Dest' => 'empty']);
+
+        self::assertSame(405, $response->status);
+    }
+
+    public function test_a_navigation_to_a_dotted_path_gets_the_shell(): void
+    {
+        $page = $this->send($this->router(), 'GET', '/users/john.doe', ['Accept' => 'text/html', 'Sec-Fetch-Dest' => 'document']);
+        self::assertSame($this->shellOf('site'), $page->sentFile, 'the browser says it is a page');
+
+        $curl = $this->send($this->router(), 'GET', '/users/john.doe', ['Accept' => 'text/html']);
+        self::assertNull($curl->sentFile, 'without the header the dot still says a file');
+    }
 }

@@ -102,12 +102,14 @@ final class StaticFilesTest extends TestCase
         self::assertSame('text/html; charset=utf-8', $response->header_('Content-Type'));
     }
 
-    public function test_an_unknown_page_is_404_when_the_shell_is_not_allowed(): void
+    public function test_an_unknown_page_is_left_to_the_router_when_the_shell_is_not_allowed(): void
     {
-        $response = $this->serve($this->spa(), '/employees/5', shell: false);
+        $response = new FakeResponse();
+        $answered = StaticFiles::serve($this->spa(), new FakeRequest('GET', '/employees/5'), $response, false);
 
-        self::assertSame(404, $response->status);
+        self::assertFalse($answered, 'the router answers: its 404 or 405, in the API\'s format');
         self::assertNull($response->sentFile);
+        self::assertNull($response->status, 'nothing was said yet');
     }
 
     public function test_ssg_pages_resolve_to_their_index(): void
@@ -117,7 +119,9 @@ final class StaticFilesTest extends TestCase
         self::assertSame(realpath($this->dir . '/ssg/index.html'), $this->serve($site, '/')->sentFile);
         self::assertSame(realpath($this->dir . '/ssg/about/index.html'), $this->serve($site, '/about')->sentFile);
         self::assertSame(realpath($this->dir . '/ssg/about/index.html'), $this->serve($site, '/about/')->sentFile);
-        self::assertSame(404, $this->serve($site, '/nope')->status, 'no shell: a page of its own or 404');
+        $nope = $this->serve($site, '/nope');
+        self::assertNull($nope->sentFile, 'no shell: a page of its own, or the router\'s 404');
+        self::assertNull($nope->status);
     }
 
     public function test_a_site_without_a_build_answers_503(): void
@@ -144,7 +148,7 @@ final class StaticFilesTest extends TestCase
         foreach (['/../secret', '/%2e%2e/secret', '/_nuxt/..%2f..%2fsecret', "/a%00.js", '/link.txt', '/..\\secret'] as $path) {
             $response = $this->serve($this->spa(), $path, shell: false);
             self::assertNull($response->sentFile, $path);
-            self::assertSame(404, $response->status, $path);
+            self::assertNotSame(200, $response->status, $path);
         }
     }
 
@@ -223,5 +227,50 @@ final class StaticFilesTest extends TestCase
         sleep(2);
 
         self::assertSame(realpath($this->dir . '/spa/late.js'), $this->serve($this->spa(), '/late.js', shell: false)->sentFile);
+    }
+
+    public function test_a_file_rewritten_by_another_process_gets_a_new_etag(): void
+    {
+        $shell = $this->dir . '/spa/200.html';
+        $before = $this->serve($this->spa(), '/employees/5');
+        self::assertSame(realpath($shell), $before->sentFile);
+        $etag = (string) $before->header_('ETag');
+
+        // A build in another process: the same size, a later time — PHP's stat cache does
+        // not hear of it.
+        exec(sprintf(
+            'printf %%s %s > %s && touch -t %s %s',
+            escapeshellarg('<html>shelL</html>'),
+            escapeshellarg($shell),
+            date('YmdHi.s', time() + 120),
+            escapeshellarg($shell),
+        ));
+        $after = $this->serve($this->spa(), '/employees/5', ['If-None-Match' => $etag]);
+
+        self::assertNotSame(304, $after->status, 'the old ETag must not match the new file');
+        self::assertNotSame($etag, $after->header_('ETag'));
+    }
+
+    /**
+     * Under the coroutine hooks — how the HTTP server runs — a second stat of the same path
+     * is answered from a cache that a write by another process does not clear.
+     */
+    #[\PHPUnit\Framework\Attributes\RequiresPhpExtension('swoole')]
+    #[\PHPUnit\Framework\Attributes\RunInSeparateProcess]
+    public function test_a_rebuild_is_seen_under_the_coroutine_hooks(): void
+    {
+        $shell = $this->dir . '/spa/200.html';
+        $seen = [];
+        \Swoole\Runtime::enableCoroutine(SWOOLE_HOOK_ALL);
+        \Swoole\Coroutine\run(function () use ($shell, &$seen): void {
+            $before = $this->serve($this->spa(), '/employees/5');
+            shell_exec(sprintf('touch -t %s %s', date('YmdHi.s', time() + 120), escapeshellarg($shell)));
+            $after = $this->serve($this->spa(), '/employees/5', ['If-None-Match' => (string) $before->header_('ETag')]);
+            $seen = [$before->header_('ETag'), $after->header_('ETag'), $after->status];
+        });
+        \Swoole\Runtime::enableCoroutine(0);
+
+        self::assertNotSame($seen[0], $seen[1], 'a new mtime, a new ETag');
+        self::assertNotSame(304, $seen[2]);
     }
 }

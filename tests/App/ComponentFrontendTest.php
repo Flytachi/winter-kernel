@@ -57,6 +57,11 @@ final class ComponentFrontendTest extends TestCase
             {
                 return null;
             }
+
+            public function hints(): array
+            {
+                return [];
+            }
         };
         $components = new Components('/project');
         $components->frontend($frontend);

@@ -885,6 +885,9 @@ abstract class WinterApplication
             ));
         }
         $siteMap = $http !== null ? new SiteMap($sites, $http->port) : null;
+        if ($sites !== []) {
+            self::logHints($logger);
+        }
         self::assertFreePorts($companions, $http?->port);
         self::assertWebSocketTls($companions);
 
@@ -1534,6 +1537,26 @@ abstract class WinterApplication
     public static function services(): array
     {
         return array_map(static fn(array $entry): Service => $entry[0], self::declared()->services());
+    }
+
+    /**
+     * What each frontend's package has to say about its setup — a config that does not
+     * match its mode, a build not made yet — once, as the application starts serving. A
+     * check that fails is one line too: it never stops the start.
+     */
+    private static function logHints(LoggerInterface $logger): void
+    {
+        foreach (static::frontends() as $frontend) {
+            $name = $frontend->site()->name;
+            try {
+                $hints = $frontend->hints();
+            } catch (\Throwable $e) {
+                $hints = ['its check failed: ' . $e->getMessage()];
+            }
+            foreach ($hints as $hint) {
+                $logger->warning(sprintf('the frontend "%s": %s', $name, $hint));
+            }
+        }
     }
 
     /**

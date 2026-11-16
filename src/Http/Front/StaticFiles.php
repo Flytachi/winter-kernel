@@ -74,44 +74,48 @@ final class StaticFiles
     /**
      * @param bool $shellAllowed Whether an unknown path may get the shell: the request is
      *     a page the browser asked for, not a script or an API call.
+     * @return bool Whether it answered — false: nothing of the frontend's is there (no file,
+     *     no shell for this request), the router's 404 or 405 is the answer.
      */
     public static function serve(
         FrontSite $site,
         HttpRequest $request,
         HttpResponse $response,
         bool $shellAllowed,
-    ): void {
+    ): bool {
+        $relative = self::relative($site, $request->getPath());
+        if ($relative === null) {
+            return false;
+        }
+        $hashed = $site->assets !== null && str_starts_with($relative, $site->assets . '/');
         $files = self::files($site);
         if ($files === null) {
+            if (!$shellAllowed && !$hashed) {
+                return false;
+            }
             $response->status(503);
             $response->header('Content-Type', 'text/plain; charset=utf-8');
             $response->header('Retry-After', '5');
             $response->header('Cache-Control', 'no-store');
             $response->end('the frontend is not built');
-            return;
-        }
-        $relative = self::relative($site, $request->getPath());
-        if ($relative === null) {
-            self::notFound($response, 'no-cache');
-            return;
+            return true;
         }
 
-        $hashed = $site->assets !== null && str_starts_with($relative, $site->assets . '/');
         foreach (self::candidates($relative) as $candidate) {
             if (isset($files[$candidate])) {
                 self::send($request, $response, $files, $candidate, $hashed ? self::IMMUTABLE : 'no-cache');
-                return;
+                return true;
             }
         }
         if ($hashed) {
             self::notFound($response, 'no-store');
-            return;
+            return true;
         }
         if ($site->shell !== null && $shellAllowed && isset($files['/' . $site->shell])) {
             self::send($request, $response, $files, '/' . $site->shell, 'no-cache');
-            return;
+            return true;
         }
-        self::notFound($response, 'no-cache');
+        return false;
     }
 
     /**
@@ -126,6 +130,10 @@ final class StaticFiles
      */
     private static function files(FrontSite $site): ?array
     {
+        // Under the coroutine hooks a second stat of a path is answered from a cache that a
+        // build in another process does not clear: the old marker would hide a rebuild, the
+        // old ETag would answer 304 for new files. Cleared for the path, it costs no call.
+        clearstatcache(true, $site->marker());
         $marker = @stat($site->marker());
         if ($marker === false) {
             unset(self::$index[$site->root]);
@@ -220,6 +228,7 @@ final class StaticFiles
         string $cache,
     ): void {
         $file = $files[$key];
+        clearstatcache(true, $file);
         $stat = @stat($file);
         if ($stat === false) {
             self::notFound($response, 'no-cache');
@@ -255,6 +264,7 @@ final class StaticFiles
             if ($sent === $file) {
                 $response->header('Content-Encoding', 'identity');
             }
+            clearstatcache(true, $sent);
             $response->header('Content-Length', (string) filesize($sent));
         }
         $response->sendfile($sent);
