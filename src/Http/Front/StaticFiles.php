@@ -55,6 +55,9 @@ final class StaticFiles
 
     private const string IMMUTABLE = 'public, max-age=31536000, immutable';
 
+    /** A pre-rendered site's page for what it has not: `nuxt generate` writes it. */
+    private const string NOT_FOUND_PAGE = '/404.html';
+
     /** Files of one build the index holds: past them, the rest is not served. */
     private const int MAX_FILES = 100_000;
 
@@ -113,6 +116,12 @@ final class StaticFiles
         }
         if ($site->shell !== null && $shellAllowed && isset($files['/' . $site->shell])) {
             self::send($request, $response, $files, '/' . $site->shell, 'no-cache');
+            return true;
+        }
+        // A pre-rendered site's page that was not built: its own 404 page, when the build has
+        // one and a page is asked for — said with 404, never revalidated into a 304.
+        if ($site->shell === null && $shellAllowed && isset($files[self::NOT_FOUND_PAGE])) {
+            self::send($request, $response, $files, self::NOT_FOUND_PAGE, 'no-cache', 404);
             return true;
         }
         return false;
@@ -226,6 +235,7 @@ final class StaticFiles
         array $files,
         string $key,
         string $cache,
+        int $status = 200,
     ): void {
         $file = $files[$key];
         clearstatcache(true, $file);
@@ -241,7 +251,9 @@ final class StaticFiles
         $response->header('ETag', $etag);
         $response->header('Last-Modified', gmdate('D, d M Y H:i:s', $stat['mtime']) . ' GMT');
         $response->header('X-Content-Type-Options', 'nosniff');
-        if ($request->getHeader('If-None-Match') === $etag) {
+        if ($status !== 200) {
+            $response->status($status);
+        } elseif ($request->getHeader('If-None-Match') === $etag) {
             $response->status(304);
             $response->end('');
             return;

@@ -24,7 +24,8 @@ beside its API.
   (`sendfile`), with its type, `ETag`/`Last-Modified` (a match answers 304), a
   precompressed `.br`/`.gz` the client accepts, content-hashed files (`assets`, `/_nuxt`)
   cached for good and the rest revalidated; an unknown page gets the shell when the
-  request takes HTML; a missing content-hashed file is a 404 never stored; nothing outside
+  request takes HTML; a pre-rendered site's page that was not built gets the site's own
+  `404.html` with 404 when a page is asked for; a missing content-hashed file is a 404 never stored; nothing outside
   the build is ever sent. A POST, PUT or DELETE no route took is the backend's 404/405,
   never the shell. A GET on a path with another method's route goes to the frontend only
   for an HTML request. A browser's `fetch()` (`Sec-Fetch-Dest` other than `document` or

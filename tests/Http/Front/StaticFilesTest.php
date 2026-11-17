@@ -273,4 +273,51 @@ final class StaticFilesTest extends TestCase
         self::assertNotSame($seen[0], $seen[1], 'a new mtime, a new ETag');
         self::assertNotSame(304, $seen[2]);
     }
+
+    public function test_an_ssg_page_not_built_gets_the_sites_own_404(): void
+    {
+        file_put_contents($this->dir . '/ssg/404.html', '<html>our 404</html>');
+        $site = new FrontSite('site', $this->dir . '/ssg', shell: null);
+
+        $page = $this->serve($site, '/nope');
+        self::assertSame(404, $page->status, 'the site\'s page, with the code that says what it is');
+        self::assertSame(realpath($this->dir . '/ssg/404.html'), $page->sentFile);
+        self::assertSame('no-cache', $page->header_('Cache-Control'));
+    }
+
+    public function test_the_sites_404_is_never_a_304(): void
+    {
+        file_put_contents($this->dir . '/ssg/404.html', '<html>our 404</html>');
+        $site = new FrontSite('site', $this->dir . '/ssg', shell: null);
+        $etag = $this->serve($site, '/nope')->header_('ETag');
+
+        $again = $this->serve($site, '/nope', ['If-None-Match' => (string) $etag]);
+        self::assertSame(404, $again->status, 'a cached copy would answer as a page that is there');
+        self::assertNotNull($again->sentFile);
+    }
+
+    public function test_the_sites_404_is_for_pages_only(): void
+    {
+        file_put_contents($this->dir . '/ssg/404.html', '<html>our 404</html>');
+        $site = new FrontSite('site', $this->dir . '/ssg', shell: null);
+
+        $file = $this->serve($site, '/nope', shell: false);
+        self::assertNull($file->status, 'not a page asked for (fetch, a file): the router\'s own 404');
+        self::assertNull($file->sentFile);
+    }
+
+    public function test_without_its_own_404_it_is_the_routers(): void
+    {
+        $site = new FrontSite('site', $this->dir . '/ssg', shell: null);
+
+        self::assertNull($this->serve($site, '/nope')->status);
+    }
+
+    public function test_a_single_page_app_keeps_its_shell_not_its_404(): void
+    {
+        file_put_contents($this->dir . '/spa/404.html', '<html>spa 404</html>');
+
+        $page = $this->serve($this->spa(), '/users/7');
+        self::assertSame(realpath($this->dir . '/spa/200.html'), $page->sentFile, 'its router decides what is not there');
+    }
 }
