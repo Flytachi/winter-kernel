@@ -137,7 +137,8 @@ final readonly class FrontSite
     public function hasRoute(string $path): bool
     {
         foreach ($this->routes as $prefix) {
-            if ($path === $prefix || str_starts_with($path, $prefix . '/')) {
+            // `/` is every path: all the controllers on its port.
+            if ($prefix === '/' || $path === $prefix || str_starts_with($path, $prefix . '/')) {
                 return true;
             }
         }

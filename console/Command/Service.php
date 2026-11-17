@@ -94,20 +94,6 @@ final class Service extends Cmd
                 $builds[$frontend->site()->name] = $build;
             }
         }
-        if ($builds !== []) {
-            // Where a development container mounts each frontend's node_modules volume: a
-            // folder of winter's in the image, or Docker makes it root's and the install
-            // under `call run dev` cannot write there.
-            $workdir = self::workdir((string) @file_get_contents(Kernel::$pathRoot . '/Dockerfile'));
-            $images[] = new ServiceImage(devRun: array_values(array_map(
-                static fn(FrontBuild $b): string => sprintf(
-                    'mkdir -p %1$s/%2$s/node_modules && chown winter:winter %1$s/%2$s/node_modules',
-                    $workdir,
-                    $b->context,
-                ),
-                $builds,
-            )));
-        }
         $image = ServiceImage::merge(...$images);
 
         $this->dockerfile($image->isEmpty() ? null : $image, $builds, $dry);
@@ -173,8 +159,11 @@ final class Service extends Cmd
      * The frontends' blocks: a build stage each — the manifest first, so the install is
      * cached while the dependencies do not change, then the sources and the build — and,
      * in the last stage, each frontend's folder emptied of the sources the project's copy
-     * brought, then its output copied in: the image keeps the build only. Nulls when there
-     * is no build.
+     * brought (a folder inside another goes with it), then the outputs copied in: the image
+     * keeps the build only. A development build (`DEV=true`) then gets each frontend's
+     * `node_modules`, a folder of winter's: a new volume mounted there takes its owner
+     * from it, and the install under `call run dev` writes there. Nulls when there is no
+     * build.
      *
      * @param array<string, FrontBuild> $builds By frontend name.
      * @return array{0: ?string, 1: ?string}
@@ -188,6 +177,8 @@ final class Service extends Cmd
         $stages = [self::STAGES . $note];
         $outputs = [self::OUTPUTS . $note];
         $copies = [];
+        $modules = [];
+        $contexts = array_map(static fn(FrontBuild $b): string => $b->context, $builds);
         foreach ($builds as $name => $build) {
             $manifest = implode(' ', array_map(
                 static fn(string $file): string => "{$build->context}/{$file}",
@@ -203,16 +194,37 @@ final class Service extends Cmd
                 "COPY {$build->context}/ ./",
                 "RUN {$build->build}",
             );
-            // Every folder emptied before any output is copied: one frontend inside another's
-            // folder keeps its build. Its content, not the folder: the folder is winter's
-            // (the project's copy chowns it), the one above it may not be.
-            $outputs[] = "RUN find ./{$build->context} -mindepth 1 -delete";
+            // Every folder emptied before any output is copied, and one inside another's
+            // with it: emptying it again would find nothing and fail the build. Its
+            // content, not the folder: the folder is winter's (the project's copy chowns
+            // it), the one above it may not be.
+            if (!self::insideAnother($build->context, $contexts)) {
+                $outputs[] = "RUN find ./{$build->context} -mindepth 1 -delete";
+            }
+            $modules[] = "./{$build->context}/node_modules";
             $copies[] = "COPY --from=frontend-{$name} --chown=winter:winter /front/{$build->output}"
                 . " ./{$build->context}/{$build->output}";
         }
         $stages[] = self::STAGES_END;
-        $outputs = [...$outputs, ...$copies, self::OUTPUTS_END];
+        $outputs = [
+            ...$outputs,
+            ...$copies,
+            'ARG DEV=false',
+            'RUN if [ "$DEV" = "true" ]; then mkdir -p ' . implode(' ', $modules) . '; fi',
+            self::OUTPUTS_END,
+        ];
         return [implode("\n", $stages) . "\n", implode("\n", $outputs) . "\n"];
+    }
+
+    /** @param list<string> $contexts */
+    private static function insideAnother(string $context, array $contexts): bool
+    {
+        foreach ($contexts as $other) {
+            if ($other !== $context && str_starts_with($context, $other . '/')) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

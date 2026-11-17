@@ -630,16 +630,6 @@ final class Router
         ]);
     }
 
-    // ── CORS internals ────────────────────────────────────────────────────────
-
-    /**
-     * Handle an OPTIONS preflight request.
-     *
-     * Probes the dispatcher with the browser's Access-Control-Request-Method to:
-     * 1. Find what HTTP methods are registered for this URI.
-     * 2. Retrieve any per-route #[CrossOrigin] config from the matched handler.
-     * 3. Respond 204 No Content with the merged CORS headers.
-     */
     /**
      * A frontend's built files for a GET or HEAD no route took: a file of the build, or the
      * shell when a page is asked for. Whether anything was sent.
@@ -664,6 +654,16 @@ final class Router
         return StaticFiles::serve($site, $request, $response, $takesHtml && $page);
     }
 
+    // ── CORS internals ────────────────────────────────────────────────────────
+
+    /**
+     * Handle an OPTIONS preflight request.
+     *
+     * Probes the dispatcher with the browser's Access-Control-Request-Method to:
+     * 1. Find what HTTP methods are registered for this URI.
+     * 2. Retrieve any per-route #[CrossOrigin] config from the matched handler.
+     * 3. Respond 204 No Content with the merged CORS headers.
+     */
     private function handlePreflight(HttpRequest $req, HttpResponse $res): void
     {
         $requestedMethod = strtoupper(Header::get('Access-Control-Request-Method') ?? 'GET');

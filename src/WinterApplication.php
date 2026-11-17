@@ -1843,7 +1843,7 @@ abstract class WinterApplication
                         '%s %s%s',
                         $companion->name(),
                         BindAddress::url($scheme, (string) $host, $companion->site->port ?? (int) $port),
-                        $companion->site->port !== null ? '/' : ltrim($companion->site->path, '/'),
+                        $companion->site->port !== null ? '/' : $companion->site->path,
                     )],
                 default => [self::componentLabel($companion->kind), $companion->name()],
             };

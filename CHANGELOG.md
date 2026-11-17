@@ -35,8 +35,8 @@ beside its API; under `call run dev` its development server behind the same addr
   (`addListener`): the same workers, the same router. Only its `routes` reach the
   controllers there, and those prefixes are closed on the HTTP server's port unless one of
   the frontends naming them has `exclusive: false` (said at start). A prefix named by
-  several frontends is open on each of their ports. The port a request came in on is the
-  request's `server_port`.
+  several frontends is open on each of their ports; `/` names every route. The port a
+  request came in on is the request's `server_port`.
 - **A frontend under the supervisor** — no process of its own: up while its build is there,
   failed (with why) while it is not, looked at again every 3 s and up once the build
   appears; not critical and `Priority::Low` by default; a build that is missing answers 503.
@@ -47,10 +47,10 @@ beside its API; under `call run dev` its development server behind the same addr
 - **`call service docker`** writes a frontend's build: a stage of its own on Node before the
   image's last stage (the manifest, the install, the sources, the build), and its output
   copied into the last stage after the code — the frontend's folder emptied first, so the
-  image keeps the build and not the sources — between marks, replaced in place, removed with
-  no frontend left; a parser directive (`# syntax=`) stays on top. A `.dockerignore` that
-  does not leave out `node_modules`, `.nuxt`, `.output` is pointed out (the host's
-  `node_modules` would go into the image).
+  image keeps the build and not the sources (a frontend inside another's folder goes with
+  it) — between marks, replaced in place, removed with no frontend left; a parser directive
+  (`# syntax=`) stays on top. A `.dockerignore` that does not leave out `node_modules`,
+  `.nuxt`, `.output` is pointed out (the host's `node_modules` would go into the image).
 - **`nuxt dev` behind the application's address** — **`Frontend::devServer()`** gives a
   **`FrontProgram`**: the frontend's development server, asked only under `call run dev` (in
   production a frontend is its built files, and nothing runs Node). The kernel runs it as an

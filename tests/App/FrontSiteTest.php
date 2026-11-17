@@ -69,6 +69,14 @@ final class FrontSiteTest extends TestCase
         self::assertFalse($site->hasRoute('/'));
     }
 
+    public function test_the_root_as_a_route_is_every_route(): void
+    {
+        $site = new FrontSite('admin', '/x', port: 9091, routes: ['/']);
+
+        self::assertTrue($site->hasRoute('/'));
+        self::assertTrue($site->hasRoute('/api/users'), 'every controller on its port');
+    }
+
     public function test_a_trailing_slash_is_dropped(): void
     {
         $site = new FrontSite('admin', '/x/', path: '/admin/', port: 9091, routes: ['/api/']);

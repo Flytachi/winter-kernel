@@ -137,7 +137,7 @@ final readonly class SiteMap
             return isset($this->byPort[$port]) && $this->byPort[$port]->hasRoute($path);
         }
         foreach ($this->claims as $prefix => $openOnHttp) {
-            if ($path === $prefix || str_starts_with($path, $prefix . '/')) {
+            if ($prefix === '/' || $path === $prefix || str_starts_with($path, $prefix . '/')) {
                 return $openOnHttp;
             }
         }

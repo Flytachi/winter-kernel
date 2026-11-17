@@ -134,4 +134,13 @@ final class SiteMapTest extends TestCase
         $this->expectExceptionMessage($why);
         new SiteMap($sites, self::HTTP);
     }
+
+    public function test_the_root_as_a_route_closes_every_route_on_the_http_port(): void
+    {
+        $map = new SiteMap([new FrontSite('admin', '/b/admin', port: 9091, routes: ['/'])], 8000);
+
+        self::assertTrue($map->routeVisible(9091, '/api/users'), 'its port shows every controller');
+        self::assertFalse($map->routeVisible(8000, '/api/users'), 'and the HTTP port none: exclusive');
+        self::assertFalse($map->routeVisible(8000, '/'));
+    }
 }

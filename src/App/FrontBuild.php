@@ -31,7 +31,11 @@ final readonly class FrontBuild
         public string $image = 'node:24-alpine',
     ) {
         foreach (['context' => $context, 'output' => $output] as $what => $path) {
-            if (preg_match('#^[A-Za-z0-9._][A-Za-z0-9._/-]*$#', $path) !== 1 || str_contains($path, '..')) {
+            // No `.` segment: the image empties the frontend's folder before its build is
+            // copied in, and `.` would be the whole application.
+            $segments = explode('/', $path);
+            $plain = preg_match('#^[A-Za-z0-9._][A-Za-z0-9._/-]*$#', $path) === 1 && !str_contains($path, '..');
+            if (!$plain || in_array('.', $segments, true) || in_array('', $segments, true)) {
                 throw new \InvalidArgumentException("{$what} must be a relative path, \"{$path}\" given.");
             }
         }

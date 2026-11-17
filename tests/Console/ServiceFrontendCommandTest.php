@@ -257,10 +257,8 @@ final class ServiceFrontendCommandTest extends TestCase
 
         self::assertStringContainsString('RUN apk add --no-cache nodejs', $file);
         self::assertStringContainsString(
-            "ARG DEV=false\nRUN if [ \"\$DEV\" = \"true\" ]; then apk add --no-cache nodejs npm \\\n"
-                . "    && mkdir -p /app/admin/node_modules && chown winter:winter /app/admin/node_modules; fi",
+            "ARG DEV=false\nRUN if [ \"\$DEV\" = \"true\" ]; then apk add --no-cache nodejs npm; fi",
             $file,
-            'the volume\'s mount point is winter\'s: a new volume takes its owner from it',
         );
     }
 
