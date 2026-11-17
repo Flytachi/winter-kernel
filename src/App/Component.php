@@ -237,9 +237,8 @@ final readonly class Component
      * its site.
      *
      * @param int $port The loopback port it listens on: `PORT` in its environment.
-     * @param string $backend Where it reaches the controllers: `WINTER_BACKEND`.
      */
-    public static function program(FrontSite $site, FrontProgram $program, int $port, string $backend): self
+    public static function program(FrontSite $site, FrontProgram $program, int $port): self
     {
         $address = "tcp://127.0.0.1:{$port}";
         return new self(
@@ -254,7 +253,7 @@ final readonly class Component
             alive: Probe::of($address),
             output: $program->output,
             site: $site->forwardedTo(new FrontUpstream($port)),
-            env: [...$program->env, 'PORT' => (string) $port, 'HOST' => '127.0.0.1', 'WINTER_BACKEND' => $backend],
+            env: [...$program->env, 'PORT' => (string) $port, 'HOST' => '127.0.0.1'],
         );
     }
 

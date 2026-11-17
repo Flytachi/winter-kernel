@@ -61,11 +61,10 @@ beside its API.
   development server refuses names it does not know), every `Set-Cookie`, the body whole.
   A program not listening — starting, down — answers 503 with `Retry-After`; one that does
   not answer within the request timeout, 504 (no request timeout: no limit).
-- **`WINTER_BACKEND`** — where a frontend's program reaches the controllers: a loopback port
-  of the HTTP server's own per program, opened only when a frontend has one. It shows the
-  routes its frontend's port shows — a prefix closed there is closed for the program too,
-  so a public request the program hands on reaches nothing more — and nothing is ever
-  forwarded back to a frontend: no loop.
+- **No loop through a development server.** Every request forwarded to it carries
+  `X-Winter-Forwarded`; one that comes back to the application with it — a Nitro route or
+  `devProxy` handing a path back, the request's headers carried along — finds a controller
+  or the application's 404, and is never forwarded again (the live-reload socket too).
 - **The live reload of a development server through the application's address.** Under
   `call run dev`, with a development server, the HTTP server is a `Swoole\WebSocket\Server`
   and relays the browser's WebSocket (HMR, `vite-hmr`) to it — on a frontend's own port

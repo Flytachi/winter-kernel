@@ -860,9 +860,9 @@ abstract class WinterApplication
         // Where each listening component binds: what it was declared with, then the
         // launch flags; for the HTTP server its configurer has the last word.
         $components = ListenFlags::apply($components, $args);
-        // A frontend with a server of its own runs it as a program, on a loopback port; the
-        // program reaches the controllers on one of the backend's own.
-        [$components, $backends] = self::withPrograms($components, $watch);
+        // Under `call run dev` a frontend's development server runs as a program, on a
+        // loopback port.
+        $components = self::withPrograms($components, $watch);
         $settings = null;
         $http = null;
         $companions = [];
@@ -888,7 +888,7 @@ abstract class WinterApplication
                 $sites[0]->name,
             ));
         }
-        $siteMap = $http !== null ? new SiteMap($sites, $http->port, $backends) : null;
+        $siteMap = $http !== null ? new SiteMap($sites, $http->port) : null;
         if ($sites !== []) {
             self::logHints($logger, $watch);
         }
@@ -948,19 +948,16 @@ abstract class WinterApplication
 
     /**
      * Under `call run dev`, the frontends with a development server ({@see Frontend::devServer()}):
-     * each one's component becomes that program, on a free loopback port, with one more port
-     * of its own where it reaches the controllers — `WINTER_BACKEND`: the routes its
-     * frontend's port shows, and nothing ever forwarded back to a frontend. In production,
+     * each one's component becomes that program, on a free loopback port. In production,
      * and without such a frontend, nothing changes: a frontend is its built files.
      *
      * @param list<Component> $companions
-     * @return array{0: list<Component>, 1: array<int, int|null>} The components, and each
-     *     backend port with the port whose routes it shows (null — the HTTP server's).
+     * @return list<Component>
      */
     private static function withPrograms(array $companions, bool $dev): array
     {
         if (!$dev) {
-            return [$companions, []];
+            return $companions;
         }
         $programs = [];
         foreach (static::frontends() as $frontend) {
@@ -969,21 +966,13 @@ abstract class WinterApplication
                 $programs[$frontend->site()->name] = $program;
             }
         }
-        $backends = [];
         foreach ($companions as $i => $companion) {
             $program = $companion->kind === ComponentKind::Frontend ? $programs[$companion->name()] ?? null : null;
             if ($program !== null && $companion->site !== null) {
-                $backend = self::freeLoopbackPort();
-                $backends[$backend] = $companion->site->port;
-                $companions[$i] = Component::program(
-                    $companion->site,
-                    $program,
-                    self::freeLoopbackPort(),
-                    "http://127.0.0.1:{$backend}",
-                );
+                $companions[$i] = Component::program($companion->site, $program, self::freeLoopbackPort());
             }
         }
-        return [$companions, $backends];
+        return $companions;
     }
 
     /** A port nothing listens on at 127.0.0.1, as the system hands one out. */
@@ -1146,15 +1135,6 @@ abstract class WinterApplication
                 'open_http_protocol' => true,
                 'open_websocket_protocol' => $relay,
             ]);
-        }
-        // Where a frontend's program reaches the controllers: loopback only, what its
-        // frontend's port shows, never a frontend — nothing it asks comes back to it.
-        foreach ($web->sites?->backendPorts() ?? [] as $backendPort) {
-            $listener = $server->addListener('127.0.0.1', $backendPort, SWOOLE_SOCK_TCP);
-            if ($listener === false) {
-                throw new ApplicationConfigException("The backend's loopback port {$backendPort} could not be bound.");
-            }
-            $listener->set([...$web->settings->toArray(), 'open_http_protocol' => true]);
         }
 
         $router = $web->router;

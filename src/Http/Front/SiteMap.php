@@ -36,12 +36,9 @@ final readonly class SiteMap
 
     /**
      * @param list<FrontSite> $sites
-     * @param array<int, int|null> $backends The loopback ports frontends' programs reach the
-     *     controllers at, each with the port whose routes it shows (null — the HTTP
-     *     server's): never a frontend there.
      * @throws ApplicationConfigException Two sites in one place, or a site on the HTTP server's port.
      */
-    public function __construct(array $sites, private int $httpPort, private array $backends = [])
+    public function __construct(array $sites, private int $httpPort)
     {
         $onHttp = [];
         $byPort = [];
@@ -102,12 +99,6 @@ final readonly class SiteMap
         $this->notes = $notes;
     }
 
-    /** @return list<int> The loopback ports frontends' programs reach the controllers at. */
-    public function backendPorts(): array
-    {
-        return array_keys($this->backends);
-    }
-
     /** Whether a frontend runs a development server — its live reload needs WebSockets. */
     public function relaysSockets(): bool
     {
@@ -142,11 +133,6 @@ final readonly class SiteMap
     /** Whether a controller route on this path is reachable on this port. */
     public function routeVisible(int $port, string $path): bool
     {
-        // A program's way to the controllers shows what its frontend's port shows: a public
-        // request it was forwarded reaches nothing that port closes.
-        if (array_key_exists($port, $this->backends)) {
-            return $this->routeVisible($this->backends[$port] ?? $this->httpPort, $path);
-        }
         if ($port !== $this->httpPort) {
             return isset($this->byPort[$port]) && $this->byPort[$port]->hasRoute($path);
         }

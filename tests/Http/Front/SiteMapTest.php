@@ -134,25 +134,4 @@ final class SiteMapTest extends TestCase
         $this->expectExceptionMessage($why);
         new SiteMap($sites, self::HTTP);
     }
-
-    public function test_a_backend_port_shows_what_its_frontends_port_shows_and_no_site(): void
-    {
-        // A program's own way to the controllers: what its frontend's port shows, never more —
-        // or a public request forwarded to the program would reach a closed prefix through it.
-        $map = new SiteMap([
-            new FrontSite('site', '/b/site'),
-            new FrontSite('admin', '/b/admin', port: 9091, routes: ['/admin']),
-        ], 8000, [9200 => null, 9201 => 9091]);
-
-        self::assertSame([9200, 9201], $map->backendPorts());
-        self::assertFalse($map->routeVisible(9200, '/admin/x'), 'closed on the HTTP port: closed for its program');
-        self::assertTrue($map->routeVisible(9200, '/api'));
-        self::assertTrue($map->routeVisible(9201, '/admin/x'), 'the admin program reaches the admin API');
-        self::assertFalse($map->routeVisible(9201, '/api'), 'and only what its port lets through');
-        self::assertNull($map->siteFor(9200, '/'), 'never a frontend: nothing goes back to a program');
-        self::assertNull($map->siteFor(9201, '/'));
-        self::assertFalse($map->isRouteOf(9201, '/admin'), 'a miss there is the controllers\' 404, not a page');
-        self::assertSame([9091], $map->ports(), 'a backend port is not a frontend port');
-        self::assertSame([], new SiteMap([], 8000)->backendPorts());
-    }
 }

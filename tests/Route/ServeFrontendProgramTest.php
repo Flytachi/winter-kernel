@@ -54,14 +54,14 @@ final class ServeFrontendProgramTest extends TestCase
         return $this->server->start();
     }
 
-    /** Waits for the program's first line: its port and the backend it was given. */
+    /** Waits for the program's first line: its port. */
     private function program(): array
     {
         $deadline = microtime(true) + 15;
         while (microtime(true) < $deadline) {
-            if (preg_match('#listening on 127\.0\.0\.1:(\d+) backend=http://127\.0\.0\.1:(\d+)#', $this->log(), $m) === 1
+            if (preg_match('#listening on 127\.0\.0\.1:(\d+)#', $this->log(), $m) === 1
                 && preg_match('#(site|admin) is up\.#', $this->log()) === 1) {
-                return ['port' => (int) $m[1], 'backend' => (int) $m[2]];
+                return ['port' => (int) $m[1]];
             }
             usleep(100_000);
         }
@@ -128,19 +128,55 @@ final class ServeFrontendProgramTest extends TestCase
         return (int) $this->server?->port();
     }
 
-    // ── Task 2: the program and the backend port ─────────────────────────────
+    // ── the program ──────────────────────────────────────────────────────────
 
-    public function test_the_program_runs_with_its_port_and_the_backend(): void
+    public function test_the_program_runs_on_its_own_loopback_port(): void
     {
         self::assertTrue($this->start('pages'), $this->log());
         $program = $this->program();
 
-        self::assertNotSame($program['port'], $program['backend']);
-        $api = $this->send($program['backend'], 'GET', '/api/ping');
-        self::assertSame(200, $api['status']);
-        self::assertSame('pong', $api['body'], 'the backend port reaches the controllers');
-        self::assertSame(404, $this->send($program['backend'], 'GET', '/admin/users')['status'], 'a prefix closed on its port is closed for it');
-        self::assertSame(404, $this->send($program['backend'], 'GET', '/nowhere')['status'], 'never the frontend');
+        self::assertNotSame($this->http(), $program['port']);
+        self::assertSame('pong', $this->send($this->http(), 'GET', '/api/ping')['body']);
+    }
+
+    // ── the loop: what the program sends back is never forwarded again ──────
+
+    public function test_what_the_program_hands_back_is_not_forwarded_again(): void
+    {
+        self::assertTrue($this->start('pages'), $this->log());
+        $this->program();
+
+        $back = $this->echoed($this->send($this->http(), 'GET', '/back?to=/no/route/here'));
+        self::assertSame(404, $back['status'], 'the application\'s 404: one round, no loop');
+        self::assertStringNotContainsString('"uri"', (string) $back['body'], 'not the program\'s answer');
+    }
+
+    public function test_what_the_program_hands_back_still_reaches_a_controller(): void
+    {
+        self::assertTrue($this->start('pages'), $this->log());
+        $this->program();
+
+        $back = $this->echoed($this->send($this->http(), 'GET', '/back?to=/api/ping'));
+        self::assertSame(200, $back['status']);
+        self::assertSame('pong', $back['body']);
+    }
+
+    public function test_a_forwarded_request_is_marked(): void
+    {
+        self::assertTrue($this->start('pages'), $this->log());
+        $this->program();
+
+        self::assertSame('1', $this->echoed($this->send($this->http(), 'GET', '/x'))['forwarded']);
+    }
+
+    public function test_a_client_sending_the_mark_gets_the_404_not_the_page(): void
+    {
+        self::assertTrue($this->start('pages'), $this->log());
+        $this->program();
+
+        $page = $this->send($this->http(), 'GET', '/users/7', ['X-Winter-Forwarded' => '1']);
+        self::assertSame(404, $page['status']);
+        self::assertArrayNotHasKey('x-upstream', $page['headers']);
     }
 
     public function test_a_program_that_cannot_start_does_not_stop_the_application(): void
@@ -174,7 +210,7 @@ final class ServeFrontendProgramTest extends TestCase
         self::assertFalse(@fsockopen('127.0.0.1', $program['port'], $errno, $error, 0.5), 'its port is free');
     }
 
-    public function test_no_program_no_backend_listener(): void
+    public function test_no_program_no_listener_of_its_own(): void
     {
         self::assertTrue($this->start(''), $this->log());
         $pid = $this->server?->pid();
@@ -214,18 +250,6 @@ final class ServeFrontendProgramTest extends TestCase
         $admin = $this->send($this->http(), 'GET', '/admin/users', ['Accept' => 'application/json']);
         self::assertNotSame('users', $admin['body'], 'the admin API stays on its own port');
         self::assertSame('yes', $admin['headers']['x-upstream'][0] ?? '', 'there it is the frontend\'s, as any path no route took');
-    }
-
-    public function test_a_closed_prefix_stays_closed_through_the_programs_backend(): void
-    {
-        self::assertTrue($this->start('pages'), $this->log());
-        $this->program();
-
-        $through = $this->echoed($this->send($this->http(), 'GET', '/via-backend?to=/admin/users'));
-        self::assertSame(404, $through['status'], 'a public request handed on by the program meets the HTTP port\'s rules');
-        self::assertNotSame('users', $through['body']);
-        $api = $this->echoed($this->send($this->http(), 'GET', '/via-backend?to=/api/ping'));
-        self::assertSame('pong', $api['body'], 'the rest of the API is there');
     }
 
     public function test_dev_never_serves_the_old_build(): void
@@ -351,6 +375,14 @@ final class ServeFrontendProgramTest extends TestCase
         $socket = $this->socket('/_nuxt/', ['one'], $this->adminPort);
         self::assertSame(101, $socket['status'], $this->log());
         self::assertSame(['up:one'], $socket['said']);
+    }
+
+    public function test_a_socket_handed_back_is_refused(): void
+    {
+        self::assertTrue($this->start('pages'), $this->log());
+        $this->program();
+
+        self::assertSame(404, $this->socket('/_nuxt/', ['--mark'])['status'], 'no loop for the live reload either');
     }
 
     public function test_the_program_closing_closes_the_client(): void

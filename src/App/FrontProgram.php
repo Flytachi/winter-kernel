@@ -10,9 +10,10 @@ namespace Flytachi\Winter\Kernel\App;
  * production: there the built files are all a frontend is.
  *
  * The kernel runs it as an outside program under the supervisor, on a loopback port it
- * picks, and tells it where in the environment: `PORT`, `HOST` (`127.0.0.1`) and
- * `WINTER_BACKEND` — the address it reaches the application's controllers at, where no
- * request is ever forwarded back to it. It runs in the project root.
+ * picks, and tells it where in the environment: `PORT` and `HOST` (`127.0.0.1`). It runs
+ * in the project root. What the HTTP server forwards to it carries `X-Winter-Forwarded`:
+ * such a request back at the application finds a controller or a 404, never the program
+ * again — no loop.
  *
  * @link https://winterframe.net/docs/frontend The frontend in the application
  */
@@ -21,7 +22,7 @@ final readonly class FrontProgram
     /**
      * @param list<string> $command The program and its arguments.
      * @param array<string, string> $env What it needs in its environment beside the
-     *     application's; `PORT`, `HOST` and `WINTER_BACKEND` are the kernel's.
+     *     application's; `PORT` and `HOST` are the kernel's.
      * @param ProgramOutput|null $output How its output becomes the application's log.
      * @param int $startTimeout Seconds it has to listen on its port; 0 waits for good.
      * @throws \InvalidArgumentException A command or a variable exec cannot take.

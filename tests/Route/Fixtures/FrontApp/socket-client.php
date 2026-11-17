@@ -11,11 +11,17 @@ declare(strict_types=1);
 
 [, $port, $path] = $argv;
 $words = array_slice($argv, 3);
+// `--mark` first: the socket carries the mark of a request already forwarded.
+$mark = ($words[0] ?? '') === '--mark';
+if ($mark) {
+    array_shift($words);
+}
 $result = ['upgraded' => false, 'status' => 0, 'protocol' => null, 'said' => []];
-Swoole\Coroutine\run(static function () use ($port, $path, $words, &$result): void {
+Swoole\Coroutine\run(static function () use ($port, $path, $words, $mark, &$result): void {
     $client = new Swoole\Coroutine\Http\Client('127.0.0.1', (int) $port);
     $client->set(['timeout' => 5]);
-    $client->setHeaders(['Host' => "127.0.0.1:{$port}", 'Sec-WebSocket-Protocol' => 'vite-hmr']);
+    $client->setHeaders(['Host' => "127.0.0.1:{$port}", 'Sec-WebSocket-Protocol' => 'vite-hmr']
+        + ($mark ? ['X-Winter-Forwarded' => '1'] : []));
     $result['upgraded'] = $client->upgrade($path);
     $result['status'] = (int) $client->statusCode;
     $result['protocol'] = $client->headers['sec-websocket-protocol'] ?? null;

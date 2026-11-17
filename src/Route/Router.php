@@ -32,6 +32,7 @@ use Flytachi\Winter\Kernel\Route\Collector\MappingCollector;
 use Flytachi\Winter\Kernel\Http\Stereotype\Middleware;
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\Kernel\Http\Front\SiteMap;
+use Flytachi\Winter\Kernel\App\FrontSite;
 use Flytachi\Winter\Kernel\Http\Front\FrontProxy;
 use Flytachi\Winter\Kernel\Http\Front\StaticFiles;
 
@@ -459,22 +460,14 @@ final class Router
                         && ($result->status === RouteResult::NOT_FOUND || $asksHtml)
                         && !$this->sites->isRouteOf($port, $path)
                     ) {
-                        // Under `call run dev` its development server has every page and file.
+                        // Under `call run dev` its development server has every page and file —
+                        // once: what it hands back here is not forwarded to it again.
                         if ($site->upstream !== null) {
-                            FrontProxy::forward($site, $request, $response);
-                            return;
-                        }
-                        $takesHtml = $asksHtml || $accept === '' || str_contains($accept, '*/*');
-                        // A browser says what a request is for: fetch() is `empty`, a page
-                        // `document` — its `*/*` is not a page asked for. Without the header
-                        // (curl, an old client) the Accept header decides.
-                        // A browser's navigation is a page even on `/users/john.doe`; without the
-                        // header, a dot in the last segment says a file.
-                        $dest = strtolower((string) $request->getHeader('Sec-Fetch-Dest'));
-                        $page = $dest === ''
-                            ? !str_contains((string) strrchr($path, '/'), '.')
-                            : $dest === 'document' || $dest === 'iframe';
-                        if (StaticFiles::serve($site, $request, $response, $takesHtml && $page)) {
+                            if (!FrontProxy::cameBack($request)) {
+                                FrontProxy::forward($site, $request, $response);
+                                return;
+                            }
+                        } elseif ($this->serveFiles($site, $request, $response, $path, $accept, $asksHtml)) {
                             return;
                         }
                         // Nothing of the frontend's: the router's own 404 or 405 below.
@@ -647,6 +640,30 @@ final class Router
      * 2. Retrieve any per-route #[CrossOrigin] config from the matched handler.
      * 3. Respond 204 No Content with the merged CORS headers.
      */
+    /**
+     * A frontend's built files for a GET or HEAD no route took: a file of the build, or the
+     * shell when a page is asked for. Whether anything was sent.
+     */
+    private function serveFiles(
+        FrontSite $site,
+        HttpRequest $request,
+        HttpResponse $response,
+        string $path,
+        string $accept,
+        bool $asksHtml,
+    ): bool {
+        $takesHtml = $asksHtml || $accept === '' || str_contains($accept, '*/*');
+        // A browser says what a request is for: fetch() is `empty`, a page `document` — its
+        // `*/*` is not a page asked for. Without the header (curl, an old client) the Accept
+        // header decides. A browser's navigation is a page even on `/users/john.doe`;
+        // without the header, a dot in the last segment says a file.
+        $dest = strtolower((string) $request->getHeader('Sec-Fetch-Dest'));
+        $page = $dest === ''
+            ? !str_contains((string) strrchr($path, '/'), '.')
+            : $dest === 'document' || $dest === 'iframe';
+        return StaticFiles::serve($site, $request, $response, $takesHtml && $page);
+    }
+
     private function handlePreflight(HttpRequest $req, HttpResponse $res): void
     {
         $requestedMethod = strtoupper(Header::get('Access-Control-Request-Method') ?? 'GET');

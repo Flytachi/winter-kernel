@@ -11,7 +11,7 @@ declare(strict_types=1);
 $port = (int) getenv('PORT');
 $server = new Swoole\WebSocket\Server((string) getenv('HOST'), $port, SWOOLE_BASE);
 $server->set(['worker_num' => 1, 'log_level' => SWOOLE_LOG_WARNING, 'package_max_length' => 16 * 1024 * 1024]);
-echo 'listening on ' . getenv('HOST') . ":{$port} backend=" . getenv('WINTER_BACKEND') . "\n";
+echo 'listening on ' . getenv('HOST') . ":{$port}\n";
 
 $server->on('handshake', static function (Swoole\Http\Request $req, Swoole\Http\Response $res): bool {
     $key = base64_encode(sha1(($req->header['sec-websocket-key'] ?? '') . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11', true));
@@ -54,11 +54,14 @@ $server->on('request', static function (Swoole\Http\Request $req, Swoole\Http\Re
             $child = proc_open(['sleep', '300'], [], $pipes);
             $res->end((string) proc_get_status($child)['pid']);
             return;
-        case '/via-backend':
-            // What a Nitro route handing /api on does: the path asked for, to WINTER_BACKEND.
-            $backend = parse_url((string) getenv('WINTER_BACKEND'));
-            $client = new Swoole\Coroutine\Http\Client('127.0.0.1', (int) $backend['port']);
+        case '/back':
+            // What a Nitro route handing a path back to the application does (proxyRequest):
+            // the application's own address, the request's headers carried along.
+            $client = new Swoole\Coroutine\Http\Client('127.0.0.1', (int) ($req->header['x-forwarded-port'] ?? 0));
+            $client->set(['timeout' => 5]);
+            $client->setHeaders(array_diff_key($req->header, ['host' => 1, 'content-length' => 1]));
             $client->get((string) ($req->get['to'] ?? '/'));
+            $res->header('Content-Type', 'application/json');
             $res->end(json_encode(['status' => $client->statusCode, 'body' => $client->body]));
             return;
         case '/status':
@@ -75,6 +78,7 @@ $server->on('request', static function (Swoole\Http\Request $req, Swoole\Http\Re
         'xff' => $req->header['x-forwarded-for'] ?? '',
         'xfproto' => $req->header['x-forwarded-proto'] ?? '',
         'xfhost' => $req->header['x-forwarded-host'] ?? '',
+        'forwarded' => $req->header['x-winter-forwarded'] ?? '',
         'connection' => $req->header['connection'] ?? '',
         'type' => $req->header['content-type'] ?? '',
         'length' => strlen((string) $req->rawContent()),

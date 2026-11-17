@@ -85,7 +85,6 @@ final class ComponentFrontendTest extends TestCase
             $site,
             new FrontProgram(['node', 's.mjs'], ['A' => '1', 'PORT' => '1'], startTimeout: 90),
             4100,
-            'http://127.0.0.1:4200',
         );
 
         self::assertSame(ComponentKind::Command, $component->kind);
@@ -98,7 +97,7 @@ final class ComponentFrontendTest extends TestCase
         self::assertTrue($component->critical);
         self::assertSame(Priority::Low, $component->priority);
         self::assertSame(
-            ['A' => '1', 'PORT' => '4100', 'HOST' => '127.0.0.1', 'WINTER_BACKEND' => 'http://127.0.0.1:4200'],
+            ['A' => '1', 'PORT' => '4100', 'HOST' => '127.0.0.1'],
             $component->env,
             "the kernel's three win",
         );

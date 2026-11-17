@@ -36,6 +36,13 @@ final class FrontProxy
         'te', 'trailer', 'transfer-encoding', 'upgrade', 'content-length', 'host',
     ];
 
+    /**
+     * The mark on every request forwarded to a development server: one that comes back to
+     * the application with it — a program's proxy hands its request's headers on — finds a
+     * controller or the application's 404, and is never forwarded again. No loop.
+     */
+    public const string MARK = 'x-winter-forwarded';
+
     /** What RFC 6455 joins to a client's key to accept its socket. */
     private const string WEBSOCKET_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
@@ -49,6 +56,12 @@ final class FrontProxy
     public static function timeout(float $seconds): void
     {
         self::$timeout = $seconds > 0 ? $seconds : -1.0;
+    }
+
+    /** Whether the request was forwarded to a development server already. */
+    public static function cameBack(HttpRequest $request): bool
+    {
+        return $request->getHeader(self::MARK) !== null;
     }
 
     public static function forward(FrontSite $site, HttpRequest $request, HttpResponse $response): void
@@ -138,7 +151,8 @@ final class FrontProxy
         $site = $sites->siteFor($port, $path);
         $upstream = $site?->upstream;
         $routed = $sites->routeVisible($port, $path) && $router->dispatch('GET', $path)->isFound();
-        if ($upstream === null || $routed || $sites->isRouteOf($port, $path)) {
+        $back = isset($request->header[self::MARK]);
+        if ($upstream === null || $routed || $back || $sites->isRouteOf($port, $path)) {
             $response->status(404);
             $response->end();
             return false;
@@ -236,6 +250,7 @@ final class FrontProxy
         $headers['x-forwarded-proto'] = $request->getScheme();
         $headers['x-forwarded-host'] = $original;
         $headers['x-forwarded-port'] = (string) ($in->server['server_port'] ?? '');
+        $headers[self::MARK] = '1';
         return $headers;
     }
 

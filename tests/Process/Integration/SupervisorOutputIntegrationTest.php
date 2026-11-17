@@ -147,15 +147,15 @@ final class SupervisorOutputIntegrationTest extends IntegrationCase
         $file = $this->storage . '/env';
         $port = self::freePort();
         $program = new FrontProgram(
-            ['sh', '-c', "echo \"\$FOO \$PORT \$HOST \$WINTER_BACKEND\" > {$file}; exec php -S 127.0.0.1:\$PORT -t /tmp"],
+            ['sh', '-c', "echo \"\$FOO \$PORT \$HOST\" > {$file}; exec php -S 127.0.0.1:\$PORT -t /tmp"],
             ['FOO' => 'bar'],
         );
         $supervisor = $this->supervise([
-            Component::program(new FrontSite('front', '/x'), $program, $port, 'http://127.0.0.1:1'),
+            Component::program(new FrontSite('front', '/x'), $program, $port),
         ]);
         try {
             self::assertTrue($this->waitLogged('front is up'), $this->logged());
-            self::assertSame("bar {$port} 127.0.0.1 http://127.0.0.1:1\n", file_get_contents($file));
+            self::assertSame("bar {$port} 127.0.0.1\n", file_get_contents($file));
         } finally {
             posix_kill($supervisor, SIGTERM);
             $this->exitCode($supervisor);
