@@ -4,33 +4,33 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [4.6.0] — 2026-11-17
 
 A frontend — a single-page app, a pre-rendered site — served by the application itself,
-beside its API.
+beside its API; under `call run dev` its development server behind the same address.
 
 ### Added
 
 - **`Frontend`** — the contract of a frontend a package prepares (winter-front-nuxt): its
   **`FrontSite`** (the built files, the shell a single-page app answers every route with,
-  where it answers: a path on the HTTP server's port or a port of its own, with `routes`
-  and `exclusive`), what the image needs and its **`FrontBuild`**. The application
-  declares it with **`Components::frontend()`**; `WinterApplication::frontends()` lists them.
-  Its **`hints()`** — advice about its own setup (a config that does not match its mode, a
-  build not made yet) — are logged as warnings once, when `call run` starts serving; a
-  check that fails is a warning too, never a reason to stop.
-- **The HTTP server serves frontends after the routes.** A controller always wins; a GET
-  or HEAD no route took goes to the frontend there: a file of its build sent as it is
-  (`sendfile`), with its type, `ETag`/`Last-Modified` (a match answers 304), a
-  precompressed `.br`/`.gz` the client accepts, content-hashed files (`assets`, `/_nuxt`)
-  cached for good and the rest revalidated; an unknown page gets the shell when the
-  request takes HTML; a pre-rendered site's page that was not built gets the site's own
-  `404.html` with 404 when a page is asked for; a missing content-hashed file is a 404 never stored; nothing outside
+  where it answers: a path on the HTTP server's port or a port of its own, with `routes` and
+  `exclusive`), what the image needs and its **`FrontBuild`**. The application declares it
+  with **`Components::frontend()`**; `WinterApplication::frontends()` lists them. Its
+  **`hints()`** — advice about its own setup (a config that does not match its mode, a build
+  not made yet) — are logged as warnings once, when `call run` starts serving; a check that
+  fails is a warning too, never a reason to stop.
+- **The HTTP server serves frontends after the routes.** A controller always wins; a GET or
+  HEAD no route took goes to the frontend there: a file of its build sent as it is
+  (`sendfile`), with its type, `ETag`/`Last-Modified` (a match answers 304), a precompressed
+  `.br`/`.gz` the client accepts, content-hashed files (`assets`, `/_nuxt`) cached for good
+  and the rest revalidated; an unknown page gets the shell when the request takes HTML; a
+  pre-rendered site's page that was not built gets the site's own `404.html` with 404 when a
+  page is asked for; a missing content-hashed file is a 404 never stored; nothing outside
   the build is ever sent. A POST, PUT or DELETE no route took is the backend's 404/405,
-  never the shell. A GET on a path with another method's route goes to the frontend only
-  for an HTML request. A browser's `fetch()` (`Sec-Fetch-Dest` other than `document` or
-  `iframe`) never gets the shell: a typo in an API path is a 404 there, not a page with
-  200. A rebuild is seen at once — no restart, no stale `ETag`.
+  never the shell. A GET on a path with another method's route goes to the frontend only for
+  an HTML request. A browser's `fetch()` (`Sec-Fetch-Dest` other than `document` or
+  `iframe`) never gets the shell: a typo in an API path is a 404 there, not a page with 200.
+  A rebuild is seen at once — no restart, no stale `ETag`.
 - **A frontend on a port of its own** — the HTTP server listens there as well
   (`addListener`): the same workers, the same router. Only its `routes` reach the
   controllers there, and those prefixes are closed on the HTTP server's port unless one of
@@ -47,45 +47,44 @@ beside its API.
 - **`call service docker`** writes a frontend's build: a stage of its own on Node before the
   image's last stage (the manifest, the install, the sources, the build), and its output
   copied into the last stage after the code — the frontend's folder emptied first, so the
-  image keeps the build and not the sources — between marks, replaced in place, removed
-  with no frontend left; a parser directive (`# syntax=`) stays on top. A `.dockerignore`
-  that does not leave out `node_modules`, `.nuxt`, `.output` is pointed out (the host's
+  image keeps the build and not the sources — between marks, replaced in place, removed with
+  no frontend left; a parser directive (`# syntax=`) stays on top. A `.dockerignore` that
+  does not leave out `node_modules`, `.nuxt`, `.output` is pointed out (the host's
   `node_modules` would go into the image).
 - **`nuxt dev` behind the application's address** — **`Frontend::devServer()`** gives a
-  **`FrontProgram`**: the frontend's development server, asked only under `call run dev`
-  (in production a frontend is its built files, and nothing runs Node). The kernel runs it
-  as an outside program under the supervisor on a free loopback port (`PORT`,
-  `HOST=127.0.0.1` in its environment), ready once it listens, restarted when it crashes,
-  its output in the log. The HTTP server forwards to it the GET and HEAD no route took —
-  pages and files, a development server's own — with the coroutine HTTP client: the
-  client's address in `X-Forwarded-For`/`-Proto`/`-Host`/`-Port`, asked as `localhost` (a
-  development server refuses names it does not know), every `Set-Cookie`, the body whole.
-  A program not listening — starting, down — answers 503 with `Retry-After`; one that does
-  not answer within the request timeout, 504 (no request timeout: no limit).
+  **`FrontProgram`**: the frontend's development server, asked only under `call run dev` (in
+  production a frontend is its built files, and nothing runs Node). The kernel runs it as an
+  outside program under the supervisor on a free loopback port (`PORT`, `HOST=127.0.0.1` in
+  its environment), ready once it listens, restarted when it crashes, its output in the log.
+  The HTTP server forwards to it the GET and HEAD no route took — pages and files, a
+  development server's own — with the coroutine HTTP client: the client's address in
+  `X-Forwarded-For`/`-Proto`/`-Host`/`-Port`, asked as `localhost` (a development server
+  refuses names it does not know), every `Set-Cookie`, the body whole. A program not
+  listening — starting, down — answers 503 with `Retry-After`; one that does not answer
+  within the request timeout, 504 (no request timeout: no limit).
 - **No loop through a development server.** Every request forwarded to it carries
   `X-Winter-Forwarded`; one that comes back to the application with it — a Nitro route or
   `devProxy` handing a path back, the request's headers carried along — finds a controller
   or the application's 404, and is never forwarded again (the live-reload socket too).
-- **The live reload of a development server through the application's address.** Under
-  `call run dev`, with a development server, the HTTP server is a `Swoole\WebSocket\Server`
-  and relays the browser's WebSocket (HMR, `vite-hmr`) to it — on a frontend's own port
-  too; asked as `localhost` (a
-  development server refuses names it does not know). In production the server stays the
-  plain `Http\Server`.
+- **The live reload of a development server through the application's address.** Under `call
+  run dev`, with a development server, the HTTP server is a `Swoole\WebSocket\Server` and
+  relays the browser's WebSocket (HMR, `vite-hmr`) to it — on a frontend's own port too;
+  asked as `localhost` (a development server refuses names it does not know). In production
+  the server stays the plain `Http\Server`.
 - **`ServiceImage`** — `devPackages` and `devRun`: installed only in an image built with
   `DEV=true` (`ARG DEV=false` in the services' block). `call service docker` takes a
-  frontend's image into the block (Node for `nuxt dev`, in a development build only), makes each frontend's `node_modules` a folder of winter's in a
-  development build, and says what compose needs for `call run dev` in Docker: the `DEV`
-  build argument and a `node_modules` volume per frontend.
+  frontend's image into the block (Node for `nuxt dev`, in a development build only), makes
+  each frontend's `node_modules` a folder of winter's in a development build, and says what
+  compose needs for `call run dev` in Docker: the `DEV` build argument and a `node_modules`
+  volume per frontend.
 
 ### Changed
 
-- **`Frontend` (since 4.6.0-RC1):** `devServer()` added; `hints()` takes `bool $dev` — under
-  `call run dev` nothing needs to be built.
-- **No server-side rendering (since 4.6.0-RC2):** `FrontProgram::$server`, `FrontSite`'s
-  `marker` and the production program are gone — a page rendered on every request is a
-  Node service of its own, beside the application, not run by it.
-- `call cfg docker`'s `.dockerignore` leaves out `**/node_modules`, `**/.nuxt`, `**/.output`.
+- **`Flytachi\Winter\Kernel\Dev`** — what only `call run dev` runs lives together:
+  `DevWatcher` moved there from `Route` (a `use` of `Route\DevWatcher` changes), beside the
+  frontend's dev-server forwarding and live-reload relay.
+- `call cfg docker`'s `.dockerignore` leaves out `**/node_modules`, `**/.nuxt`,
+  `**/.output`.
 - `call run dev`'s watcher no longer walks `.nuxt` and `.output`.
 
 ### Fixed
@@ -93,6 +92,13 @@ beside its API.
 - `call run dev` restarted the application over and over while pnpm installed in a
   container: a link to a folder (pnpm's store links each project) was taken for a source
   file. Only `.php` files count.
+
+## [4.5.2] — 2026-11-15
+
+### Fixed
+
+- Shell completion offers `call application health`, and `call service docker`'s
+  description says what it does now (the Dockerfile block; compose is only shown).
 
 ## [4.5.1] — 2026-11-15
 

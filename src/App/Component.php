@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\App;
 
+use Flytachi\Winter\Kernel\Dev\FrontUpstream;
 use Flytachi\Winter\Kernel\Process\Stereotype\Daemon;
 use Flytachi\Winter\Kernel\Process\Stereotype\Process;
 use Flytachi\Winter\Kernel\Schedule\Stereotype\Scheduler;

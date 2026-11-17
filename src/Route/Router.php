@@ -33,7 +33,7 @@ use Flytachi\Winter\Kernel\Http\Stereotype\Middleware;
 use Flytachi\Winter\Base\HttpCode;
 use Flytachi\Winter\Kernel\Http\Front\SiteMap;
 use Flytachi\Winter\Kernel\App\FrontSite;
-use Flytachi\Winter\Kernel\Http\Front\FrontProxy;
+use Flytachi\Winter\Kernel\Dev\FrontProxy;
 use Flytachi\Winter\Kernel\Http\Front\StaticFiles;
 
 /**

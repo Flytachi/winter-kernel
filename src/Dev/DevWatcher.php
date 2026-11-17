@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\Kernel\Route;
+namespace Flytachi\Winter\Kernel\Dev;
 
 use Swoole\Http\Request;
 use Swoole\Http\Response;

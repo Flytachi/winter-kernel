@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\Route;
 
-use Flytachi\Winter\Kernel\Route\DevWatcher;
+use Flytachi\Winter\Kernel\Dev\DevWatcher;
 use PHPUnit\Framework\TestCase;
 
 /** What the dev watcher counts as the source: `.php` files, nothing a tool leaves beside them. */

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\App;
 
+use Flytachi\Winter\Kernel\Dev\FrontUpstream;
+
 /**
  * Where a frontend is served from and where it answers — what a {@see Frontend} package
  * hands the kernel: the built files, the page that stands for every route a single-page

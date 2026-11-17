@@ -2,13 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\Kernel\Http\Front;
+namespace Flytachi\Winter\Kernel\Dev;
 
 use Flytachi\Winter\Kernel\App\FrontSite;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleResponse;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\Front\SiteMap;
+use Flytachi\Winter\Kernel\Route\Router;
 
 /**
  * A frontend's request handed to its development server under `call run dev`
@@ -142,7 +144,7 @@ final class FrontProxy
     public static function handshake(
         \Swoole\WebSocket\Server $server,
         SiteMap $sites,
-        \Flytachi\Winter\Kernel\Route\Router $router,
+        Router $router,
         \Swoole\Http\Request $request,
         \Swoole\Http\Response $response,
     ): bool {

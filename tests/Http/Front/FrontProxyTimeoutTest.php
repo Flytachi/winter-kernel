@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\Http\Front;
 
-use Flytachi\Winter\Kernel\Http\Front\FrontProxy;
+use Flytachi\Winter\Kernel\Dev\FrontProxy;
 use PHPUnit\Framework\TestCase;
 
 /** How long a frontend's program has to answer: the server's request timeout, or none. */

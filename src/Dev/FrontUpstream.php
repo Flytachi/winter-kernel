@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flytachi\Winter\Kernel\App;
+namespace Flytachi\Winter\Kernel\Dev;
 
 /**
  * Where a frontend's development server listens under `call run dev`, as the kernel set it

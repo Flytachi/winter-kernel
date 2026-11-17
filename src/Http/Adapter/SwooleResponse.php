@@ -34,7 +34,7 @@ final class SwooleResponse implements HttpResponse
      * The Swoole response underneath — for what the contract has no word for: several
      * values of one header as they came from a frontend's own server.
      *
-     * @internal Read by {@see \Flytachi\Winter\Kernel\Http\Front\FrontProxy}.
+     * @internal Read by {@see \Flytachi\Winter\Kernel\Dev\FrontProxy}.
      */
     public function getSwooleResponse(): Response
     {

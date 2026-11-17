@@ -6,7 +6,7 @@ namespace Flytachi\Winter\Kernel\App;
 
 use Flytachi\Winter\Kernel\App\Config\ServerSettings;
 use Flytachi\Winter\Kernel\Http\Front\SiteMap;
-use Flytachi\Winter\Kernel\Route\DevWatcher;
+use Flytachi\Winter\Kernel\Dev\DevWatcher;
 use Flytachi\Winter\Kernel\Route\Router;
 
 /**

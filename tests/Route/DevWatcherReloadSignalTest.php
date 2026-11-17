@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\Route;
 
-use Flytachi\Winter\Kernel\Route\DevWatcher;
+use Flytachi\Winter\Kernel\Dev\DevWatcher;
 use PHPUnit\Framework\TestCase;
 
 /**
