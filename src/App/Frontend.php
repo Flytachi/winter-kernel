@@ -27,12 +27,11 @@ interface Frontend
     public function build(): ?FrontBuild;
 
     /**
-     * What it runs beside the application — a development server under `call run dev`, a
-     * server that renders its pages — or null: its built files are all there is.
-     *
-     * @param bool $dev Whether the application runs under `call run dev`.
+     * Its development server under `call run dev` (`nuxt dev`), which the application's own
+     * address then serves; null — none, the built files under `call run dev` too. Asked only
+     * under `call run dev`: in production a frontend is its built files.
      */
-    public function program(bool $dev): ?FrontProgram;
+    public function devServer(): ?FrontProgram;
 
     /**
      * Advice about its own setup — a config that does not match its mode, a build not made

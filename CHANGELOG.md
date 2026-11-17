@@ -45,23 +45,22 @@ beside its API.
   names each frontend and where it answers.
 - **`call service docker`** writes a frontend's build: a stage of its own on Node before the
   image's last stage (the manifest, the install, the sources, the build), and its output
-  copied into the last stage after the code — between marks, replaced in place, removed
+  copied into the last stage after the code — the frontend's folder emptied first, so the
+  image keeps the build and not the sources — between marks, replaced in place, removed
   with no frontend left; a parser directive (`# syntax=`) stays on top. A `.dockerignore`
   that does not leave out `node_modules`, `.nuxt`, `.output` is pointed out (the host's
   `node_modules` would go into the image).
-- **A frontend with a server of its own** — **`Frontend::program()`** gives a
-  **`FrontProgram`**: a development server under `call run dev` (`nuxt dev`), a server that
-  renders the pages (Nitro, SSR). The kernel runs it as an outside program under the
-  supervisor on a free loopback port (`PORT`, `HOST=127.0.0.1` in its environment), ready
-  once it listens, restarted when it crashes, its output in the log. The HTTP server
-  forwards to it what no route took — a GET or HEAD for pages and files, every method for a
-  server with routes of its own — with the coroutine HTTP client: the client's address in
-  `X-Forwarded-For`/`-Proto`/`-Host`/`-Port`, every `Set-Cookie`, the body whole (a
-  compressed one unpacked and compressed again for the client); a built file of a
-  rendering server is sent by the HTTP server itself. A program not listening — starting,
-  down — answers 503 with `Retry-After`; one that does not answer within the request
-  timeout, 504 (no request timeout: no limit). An answer is passed on once it is whole: a
-  stream (server-sent events) is not relayed as it comes.
+- **`nuxt dev` behind the application's address** — **`Frontend::devServer()`** gives a
+  **`FrontProgram`**: the frontend's development server, asked only under `call run dev`
+  (in production a frontend is its built files, and nothing runs Node). The kernel runs it
+  as an outside program under the supervisor on a free loopback port (`PORT`,
+  `HOST=127.0.0.1` in its environment), ready once it listens, restarted when it crashes,
+  its output in the log. The HTTP server forwards to it the GET and HEAD no route took —
+  pages and files, a development server's own — with the coroutine HTTP client: the
+  client's address in `X-Forwarded-For`/`-Proto`/`-Host`/`-Port`, asked as `localhost` (a
+  development server refuses names it does not know), every `Set-Cookie`, the body whole.
+  A program not listening — starting, down — answers 503 with `Retry-After`; one that does
+  not answer within the request timeout, 504 (no request timeout: no limit).
 - **`WINTER_BACKEND`** — where a frontend's program reaches the controllers: a loopback port
   of the HTTP server's own per program, opened only when a frontend has one. It shows the
   routes its frontend's port shows — a prefix closed there is closed for the program too,
@@ -75,17 +74,17 @@ beside its API.
   plain `Http\Server`.
 - **`ServiceImage`** — `devPackages` and `devRun`: installed only in an image built with
   `DEV=true` (`ARG DEV=false` in the services' block). `call service docker` takes a
-  frontend's image into the block (Node for a rendering server, Node for `nuxt dev` in a
-  development build), makes each frontend's `node_modules` a folder of winter's in a
+  frontend's image into the block (Node for `nuxt dev`, in a development build only), makes each frontend's `node_modules` a folder of winter's in a
   development build, and says what compose needs for `call run dev` in Docker: the `DEV`
   build argument and a `node_modules` volume per frontend.
-- **`FrontSite`** — `marker`: the file whose presence means the frontend is built, for a
-  build with no page at the root of its files (a rendering server's public files).
 
 ### Changed
 
-- **`Frontend` (since 4.6.0-RC1):** `program(bool $dev)` added; `hints()` takes `bool $dev`
-  — under `call run dev` nothing needs to be built.
+- **`Frontend` (since 4.6.0-RC1):** `devServer()` added; `hints()` takes `bool $dev` — under
+  `call run dev` nothing needs to be built.
+- **No server-side rendering (since 4.6.0-RC2):** `FrontProgram::$server`, `FrontSite`'s
+  `marker` and the production program are gone — a page rendered on every request is a
+  Node service of its own, beside the application, not run by it.
 - `call cfg docker`'s `.dockerignore` leaves out `**/node_modules`, `**/.nuxt`, `**/.output`.
 - `call run dev`'s watcher no longer walks `.nuxt` and `.output`.
 

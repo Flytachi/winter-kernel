@@ -33,10 +33,10 @@ final readonly class TestFrontend implements Frontend
     }
 
     /**
-     * From `WK_FRONT_PROGRAM` for the root site: `pages` (GET/HEAD), `server` (every
-     * method), `broken` (a program that exits at once) — the fixture upstream otherwise.
+     * From `WK_FRONT_PROGRAM` for the root site: `broken` (a program that exits at once), the
+     * fixture upstream otherwise.
      */
-    public function program(bool $dev): ?FrontProgram
+    public function devServer(): ?FrontProgram
     {
         $kind = (string) getenv('WK_FRONT_PROGRAM');
         // `WK_FRONT_PROGRAM_ON=admin`: the admin on its own port runs it instead.
@@ -49,7 +49,7 @@ final readonly class TestFrontend implements Frontend
         if ($kind === 'broken') {
             return new FrontProgram(['false'], startTimeout: 5);
         }
-        return new FrontProgram([PHP_BINARY, __DIR__ . '/upstream.php'], startTimeout: 10, server: $kind === 'server');
+        return new FrontProgram([PHP_BINARY, __DIR__ . '/upstream.php'], startTimeout: 10);
     }
 
     /** From `WK_FRONT_HINTS` for the root site: `a|b`, or `throw`. */

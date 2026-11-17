@@ -947,11 +947,11 @@ abstract class WinterApplication
     }
 
     /**
-     * The frontends that run a server of their own ({@see Frontend::program()}): each one's
-     * component becomes its program, on a free loopback port, with one more port of its own
-     * where it reaches the controllers — `WINTER_BACKEND`: the routes its frontend's port
-     * shows, and nothing ever forwarded back to a frontend. Without such a frontend, nothing
-     * changes.
+     * Under `call run dev`, the frontends with a development server ({@see Frontend::devServer()}):
+     * each one's component becomes that program, on a free loopback port, with one more port
+     * of its own where it reaches the controllers — `WINTER_BACKEND`: the routes its
+     * frontend's port shows, and nothing ever forwarded back to a frontend. In production,
+     * and without such a frontend, nothing changes: a frontend is its built files.
      *
      * @param list<Component> $companions
      * @return array{0: list<Component>, 1: array<int, int|null>} The components, and each
@@ -959,9 +959,12 @@ abstract class WinterApplication
      */
     private static function withPrograms(array $companions, bool $dev): array
     {
+        if (!$dev) {
+            return [$companions, []];
+        }
         $programs = [];
         foreach (static::frontends() as $frontend) {
-            $program = $frontend->program($dev);
+            $program = $frontend->devServer();
             if ($program !== null) {
                 $programs[$frontend->site()->name] = $program;
             }
@@ -977,7 +980,6 @@ abstract class WinterApplication
                     $program,
                     self::freeLoopbackPort(),
                     "http://127.0.0.1:{$backend}",
-                    $dev,
                 );
             }
         }
@@ -1059,9 +1061,7 @@ abstract class WinterApplication
                 continue;
             }
             $paths = [$site->path];
-            // A pre-rendered site's pages are its files; a site with a server of its own
-            // renders them, so only its root is known.
-            if ($site->shell === null && $site->upstream === null && is_dir($site->root)) {
+            if ($site->shell === null && is_dir($site->root)) {
                 $paths = [];
                 // A check that only warns: a folder it cannot read is left out, never the boot.
                 try {

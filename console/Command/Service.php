@@ -171,8 +171,10 @@ final class Service extends Cmd
 
     /**
      * The frontends' blocks: a build stage each — the manifest first, so the install is
-     * cached while the dependencies do not change, then the sources and the build — and
-     * the lines that copy each output into the last stage. Nulls when there is no build.
+     * cached while the dependencies do not change, then the sources and the build — and,
+     * in the last stage, each frontend's folder emptied of the sources the project's copy
+     * brought, then its output copied in: the image keeps the build only. Nulls when there
+     * is no build.
      *
      * @param array<string, FrontBuild> $builds By frontend name.
      * @return array{0: ?string, 1: ?string}
@@ -185,6 +187,7 @@ final class Service extends Cmd
         $note = ' — written by `call service docker`; change the frontends, not this block';
         $stages = [self::STAGES . $note];
         $outputs = [self::OUTPUTS . $note];
+        $copies = [];
         foreach ($builds as $name => $build) {
             $manifest = implode(' ', array_map(
                 static fn(string $file): string => "{$build->context}/{$file}",
@@ -200,11 +203,15 @@ final class Service extends Cmd
                 "COPY {$build->context}/ ./",
                 "RUN {$build->build}",
             );
-            $outputs[] = "COPY --from=frontend-{$name} --chown=winter:winter /front/{$build->output}"
+            // Every folder emptied before any output is copied: one frontend inside another's
+            // folder keeps its build. Its content, not the folder: the folder is winter's
+            // (the project's copy chowns it), the one above it may not be.
+            $outputs[] = "RUN find ./{$build->context} -mindepth 1 -delete";
+            $copies[] = "COPY --from=frontend-{$name} --chown=winter:winter /front/{$build->output}"
                 . " ./{$build->context}/{$build->output}";
         }
         $stages[] = self::STAGES_END;
-        $outputs[] = self::OUTPUTS_END;
+        $outputs = [...$outputs, ...$copies, self::OUTPUTS_END];
         return [implode("\n", $stages) . "\n", implode("\n", $outputs) . "\n"];
     }
 

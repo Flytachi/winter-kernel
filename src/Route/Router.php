@@ -450,41 +450,31 @@ final class Router
                 $result = $this->sites->routeVisible($port, $path)
                     ? $this->dispatch($method, $path)
                     : new RouteResult(RouteResult::NOT_FOUND);
-                if ($result->status !== RouteResult::FOUND) {
+                if ($result->status !== RouteResult::FOUND && ($method === 'GET' || $method === 'HEAD')) {
                     $site = $this->sites->siteFor($port, $path);
-                    $upstream = $site?->upstream;
-                    $pageMethod = $method === 'GET' || $method === 'HEAD';
                     $accept = (string) $request->getHeader('Accept');
                     $asksHtml = str_contains($accept, 'text/html');
-                    // A page or a file: GET or HEAD — every method for a frontend whose own
-                    // server has routes of its own (SSR). A path a controller knows keeps its
-                    // 405 unless a page is asked for.
                     if (
                         $site !== null
-                        && ($pageMethod || $upstream?->server === true)
                         && ($result->status === RouteResult::NOT_FOUND || $asksHtml)
                         && !$this->sites->isRouteOf($port, $path)
                     ) {
-                        // A development server has every file, the built ones may be old.
-                        if ($pageMethod && $upstream?->dev !== true) {
-                            $takesHtml = $asksHtml || $accept === '' || str_contains($accept, '*/*');
-                            // A browser says what a request is for: fetch() is `empty`, a page
-                            // `document` — its `*/*` is not a page asked for. Without the header
-                            // (curl, an old client) the Accept header decides.
-                            // A browser's navigation is a page even on `/users/john.doe`; without the
-                            // header, a dot in the last segment says a file.
-                            $dest = strtolower((string) $request->getHeader('Sec-Fetch-Dest'));
-                            $page = $dest === ''
-                                ? !str_contains((string) strrchr($path, '/'), '.')
-                                : $dest === 'document' || $dest === 'iframe';
-                            // With a server of its own, a built file is sent; a page is its server's.
-                            $shell = $upstream === null && $takesHtml && $page;
-                            if (StaticFiles::serve($site, $request, $response, $shell)) {
-                                return;
-                            }
-                        }
-                        if ($upstream !== null) {
+                        // Under `call run dev` its development server has every page and file.
+                        if ($site->upstream !== null) {
                             FrontProxy::forward($site, $request, $response);
+                            return;
+                        }
+                        $takesHtml = $asksHtml || $accept === '' || str_contains($accept, '*/*');
+                        // A browser says what a request is for: fetch() is `empty`, a page
+                        // `document` — its `*/*` is not a page asked for. Without the header
+                        // (curl, an old client) the Accept header decides.
+                        // A browser's navigation is a page even on `/users/john.doe`; without the
+                        // header, a dot in the last segment says a file.
+                        $dest = strtolower((string) $request->getHeader('Sec-Fetch-Dest'));
+                        $page = $dest === ''
+                            ? !str_contains((string) strrchr($path, '/'), '.')
+                            : $dest === 'document' || $dest === 'iframe';
+                        if (StaticFiles::serve($site, $request, $response, $takesHtml && $page)) {
                             return;
                         }
                         // Nothing of the frontend's: the router's own 404 or 405 below.

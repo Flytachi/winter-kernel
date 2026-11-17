@@ -10,9 +10,10 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 
 /**
- * A frontend with a server of its own over real HTTP: the program runs under the
- * supervisor on a loopback port, the HTTP server forwards to it what no route took, and
- * the program reaches the controllers on a loopback port of the backend's own.
+ * A frontend's development server under `call run dev`, over real HTTP: the program runs
+ * under the supervisor on a loopback port, the HTTP server forwards to it the pages and
+ * files no route took, and the program reaches the controllers on a loopback port of its
+ * own. In production it is never run.
  */
 #[Group('integration')]
 final class ServeFrontendProgramTest extends TestCase
@@ -41,7 +42,7 @@ final class ServeFrontendProgramTest extends TestCase
     }
 
     /** @param array<string, string> $env */
-    private function start(string $program, array $env = [], bool $dev = false): bool
+    private function start(string $program, array $env = [], bool $dev = true): bool
     {
         $this->server = new ServerProcess(env: [
             'WK_FRONT_ROOT' => $this->root,
@@ -205,20 +206,9 @@ final class ServeFrontendProgramTest extends TestCase
         self::assertArrayNotHasKey('x-upstream', $post['headers']);
     }
 
-    public function test_a_server_frontend_gets_a_post_no_route_took(): void
-    {
-        self::assertTrue($this->start('server'), $this->log());
-        $this->program();
-
-        $echo = $this->echoed($this->send($this->http(), 'POST', '/api/_nitro', ['Content-Type' => 'application/json'], '{"a":1}'));
-        self::assertSame('POST', $echo['method']);
-        self::assertSame(7, $echo['length']);
-        self::assertSame(405, $this->send($this->http(), 'PUT', '/api/ping', ['Accept' => 'application/json'])['status'], 'a known path keeps its 405');
-    }
-
     public function test_an_exclusive_prefix_never_reaches_its_controllers_on_the_http_port(): void
     {
-        self::assertTrue($this->start('server'), $this->log());
+        self::assertTrue($this->start('pages'), $this->log());
         $this->program();
 
         $admin = $this->send($this->http(), 'GET', '/admin/users', ['Accept' => 'application/json']);
@@ -228,7 +218,7 @@ final class ServeFrontendProgramTest extends TestCase
 
     public function test_a_closed_prefix_stays_closed_through_the_programs_backend(): void
     {
-        self::assertTrue($this->start('server'), $this->log());
+        self::assertTrue($this->start('pages'), $this->log());
         $this->program();
 
         $through = $this->echoed($this->send($this->http(), 'GET', '/via-backend?to=/admin/users'));
@@ -238,19 +228,9 @@ final class ServeFrontendProgramTest extends TestCase
         self::assertSame('pong', $api['body'], 'the rest of the API is there');
     }
 
-    public function test_a_built_file_is_sent_without_the_program(): void
-    {
-        self::assertTrue($this->start('server'), $this->log());
-        $this->program();
-
-        $file = $this->send($this->http(), 'GET', '/robots.txt', ['Accept' => '*/*']);
-        self::assertSame('built', $file['body']);
-        self::assertArrayNotHasKey('x-upstream', $file['headers']);
-    }
-
     public function test_dev_never_serves_the_old_build(): void
     {
-        self::assertTrue($this->start('pages', dev: true), $this->log());
+        self::assertTrue($this->start('pages'), $this->log());
         $this->program();
 
         $echo = $this->echoed($this->send($this->http(), 'GET', '/robots.txt', ['Accept' => '*/*']));
@@ -260,24 +240,14 @@ final class ServeFrontendProgramTest extends TestCase
     public function test_the_client_and_its_host_reach_the_program(): void
     {
         self::assertTrue($this->start('pages'), $this->log());
-        $this->program();
-
-        $echo = $this->echoed($this->send($this->http(), 'GET', '/x', ['Host' => 'shop.example:8000', 'X-Forwarded-For' => '203.0.113.9']));
-        self::assertSame('shop.example:8000', $echo['host']);
-        self::assertSame('203.0.113.9, 127.0.0.1', $echo['xff']);
-        self::assertSame('http', $echo['xfproto']);
-        self::assertSame('shop.example:8000', $echo['xfhost']);
-        self::assertNotSame('close', $echo['connection'], 'hop-by-hop headers stay here');
-    }
-
-    public function test_dev_asks_the_program_as_localhost(): void
-    {
-        self::assertTrue($this->start('pages', dev: true), $this->log());
         $program = $this->program();
 
-        $echo = $this->echoed($this->send($this->http(), 'GET', '/x', ['Host' => 'shop.example:8000']));
-        self::assertSame("localhost:{$program['port']}", $echo['host']);
+        $echo = $this->echoed($this->send($this->http(), 'GET', '/x', ['Host' => 'shop.example:8000', 'X-Forwarded-For' => '203.0.113.9']));
+        self::assertSame("localhost:{$program['port']}", $echo['host'], 'a development server refuses names it does not know');
         self::assertSame('shop.example:8000', $echo['xfhost']);
+        self::assertSame('203.0.113.9, 127.0.0.1', $echo['xff']);
+        self::assertSame('http', $echo['xfproto']);
+        self::assertNotSame('close', $echo['connection'], 'hop-by-hop headers stay here');
     }
 
     public function test_a_body_the_program_compressed_reaches_the_client_whole(): void
@@ -316,26 +286,6 @@ final class ServeFrontendProgramTest extends TestCase
         self::assertSame(200, $head['status']);
         self::assertSame('', $head['body']);
         self::assertSame(418, $this->send($this->http(), 'GET', '/status')['status'], 'the program\'s status as it is');
-    }
-
-    public function test_a_large_post_reaches_the_program(): void
-    {
-        self::assertTrue($this->start('server'), $this->log());
-        $this->program();
-
-        $echo = $this->echoed($this->send($this->http(), 'POST', '/upload', ['Content-Type' => 'application/octet-stream'], str_repeat('x', 5 * 1024 * 1024), 15.0));
-        self::assertSame(5 * 1024 * 1024, $echo['length']);
-    }
-
-    public function test_a_multipart_post_reaches_the_program(): void
-    {
-        self::assertTrue($this->start('server'), $this->log());
-        $this->program();
-
-        $body = "--b\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.txt\"\r\n"
-            . "Content-Type: text/plain\r\n\r\nhello\r\n--b--\r\n";
-        $echo = $this->echoed($this->send($this->http(), 'POST', '/form', ['Content-Type' => 'multipart/form-data; boundary=b'], $body));
-        self::assertSame(['file'], $echo['files'], 'the program parses the same body');
     }
 
     public function test_a_program_not_listening_is_503(): void
@@ -382,7 +332,7 @@ final class ServeFrontendProgramTest extends TestCase
 
     public function test_the_hmr_socket_reaches_the_program(): void
     {
-        self::assertTrue($this->start('pages', dev: true), $this->log());
+        self::assertTrue($this->start('pages'), $this->log());
         $this->program();
 
         $socket = $this->socket('/_nuxt/?token=abc', ['one', 'two']);
@@ -395,7 +345,7 @@ final class ServeFrontendProgramTest extends TestCase
 
     public function test_the_hmr_socket_works_on_a_frontends_own_port(): void
     {
-        self::assertTrue($this->start('pages', ['WK_FRONT_PROGRAM_ON' => 'admin'], dev: true), $this->log());
+        self::assertTrue($this->start('pages', ['WK_FRONT_PROGRAM_ON' => 'admin']), $this->log());
         $this->program();
 
         $socket = $this->socket('/_nuxt/', ['one'], $this->adminPort);
@@ -405,7 +355,7 @@ final class ServeFrontendProgramTest extends TestCase
 
     public function test_the_program_closing_closes_the_client(): void
     {
-        self::assertTrue($this->start('pages', dev: true), $this->log());
+        self::assertTrue($this->start('pages'), $this->log());
         $this->program();
 
         $socket = $this->socket('/_nuxt/', ['bye']);
@@ -415,7 +365,7 @@ final class ServeFrontendProgramTest extends TestCase
 
     public function test_a_socket_off_the_frontend_is_refused(): void
     {
-        self::assertTrue($this->start('pages', dev: true), $this->log());
+        self::assertTrue($this->start('pages'), $this->log());
         $this->program();
 
         $socket = $this->socket('/api/ping');
@@ -423,13 +373,15 @@ final class ServeFrontendProgramTest extends TestCase
         self::assertSame(404, $socket['status']);
     }
 
-    public function test_production_keeps_the_plain_http_server(): void
+    public function test_production_never_runs_the_development_server(): void
     {
-        self::assertTrue($this->start('pages'), $this->log());
-        $this->program();
+        self::assertTrue($this->start('pages', dev: false), $this->log());
 
+        $page = $this->send($this->http(), 'GET', '/users/7');
+        self::assertSame('<html>site</html>', $page['body'], 'its built files, as without one');
+        usleep(500_000);
+        self::assertStringNotContainsString('listening on', $this->log(), 'no program started');
         $socket = $this->socket('/_nuxt/');
-        self::assertNotSame(101, $socket['status'], 'no relay outside call run dev');
-        self::assertNull($socket['protocol']);
+        self::assertNotSame(101, $socket['status'], 'no relay: the plain HTTP server');
     }
 }

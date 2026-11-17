@@ -11,14 +11,13 @@ use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
 
 /**
- * A frontend's request handed to its own server ({@see \Flytachi\Winter\Kernel\App\FrontProgram}),
- * on its loopback port, with the coroutine HTTP client: the request as it came — less the
- * headers that belong to one connection — and the answer as it comes back, the bytes of
- * its body untouched.
+ * A frontend's request handed to its development server under `call run dev`
+ * ({@see \Flytachi\Winter\Kernel\App\FrontProgram}), on its loopback port, with the
+ * coroutine HTTP client: the request as it came — less the headers that belong to one
+ * connection — and the answer as it comes back.
  *
  * The program sees who asked: `X-Forwarded-For` / `-Proto` / `-Host` / `-Port`. It is
- * asked under the client's own `Host`, except a development server, which refuses a name
- * it does not know and is asked as `localhost`.
+ * asked as `localhost`: a development server refuses a name it does not know.
  *
  * It is asked for a plain body (`Accept-Encoding: identity`): the HTTP server compresses
  * for the client, as it does a controller's answer. A program that compresses anyway has
@@ -65,7 +64,7 @@ final class FrontProxy
         $client = new \Swoole\Coroutine\Http\Client('127.0.0.1', $upstream->port);
         $client->set(['timeout' => self::$timeout, 'keep_alive' => false]);
         $client->setMethod($request->getMethod());
-        $client->setHeaders(self::requestHeaders($request, $in, $upstream->dev ? "localhost:{$upstream->port}" : null));
+        $client->setHeaders(self::requestHeaders($request, $in, "localhost:{$upstream->port}"));
         $body = $request->getRawBody();
         if ($body !== '') {
             $client->setData($body);
@@ -139,7 +138,7 @@ final class FrontProxy
         $site = $sites->siteFor($port, $path);
         $upstream = $site?->upstream;
         $routed = $sites->routeVisible($port, $path) && $router->dispatch('GET', $path)->isFound();
-        if ($upstream === null || !$upstream->dev || $routed || $sites->isRouteOf($port, $path)) {
+        if ($upstream === null || $routed || $sites->isRouteOf($port, $path)) {
             $response->status(404);
             $response->end();
             return false;
@@ -220,7 +219,7 @@ final class FrontProxy
      *
      * @return array<string, string>
      */
-    private static function requestHeaders(HttpRequest $request, \Swoole\Http\Request $in, ?string $host): array
+    private static function requestHeaders(HttpRequest $request, \Swoole\Http\Request $in, string $host): array
     {
         $headers = [];
         foreach ((array) $in->header as $name => $value) {
@@ -231,7 +230,7 @@ final class FrontProxy
         $original = (string) ($in->header['host'] ?? '');
         $peer = (string) ($in->server['remote_addr'] ?? '');
         $forwardedFor = trim((string) ($in->header['x-forwarded-for'] ?? ''));
-        $headers['host'] = $host ?? $original;
+        $headers['host'] = $host;
         $headers['accept-encoding'] = 'identity';
         $headers['x-forwarded-for'] = $forwardedFor === '' ? $peer : "{$forwardedFor}, {$peer}";
         $headers['x-forwarded-proto'] = $request->getScheme();

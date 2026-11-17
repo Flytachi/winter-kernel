@@ -112,7 +112,7 @@ final readonly class SiteMap
     public function relaysSockets(): bool
     {
         foreach ($this->sites() as $site) {
-            if ($site->upstream?->dev === true) {
+            if ($site->upstream !== null) {
                 return true;
             }
         }

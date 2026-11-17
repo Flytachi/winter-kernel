@@ -59,7 +59,7 @@ final class ComponentFrontendTest extends TestCase
                 return null;
             }
 
-            public function program(bool $dev): ?FrontProgram
+            public function devServer(): ?FrontProgram
             {
                 return null;
             }
@@ -83,10 +83,9 @@ final class ComponentFrontendTest extends TestCase
         $site = new FrontSite('front', '/x', critical: true);
         $component = Component::program(
             $site,
-            new FrontProgram(['node', 's.mjs'], ['A' => '1', 'PORT' => '1'], startTimeout: 90, server: true),
+            new FrontProgram(['node', 's.mjs'], ['A' => '1', 'PORT' => '1'], startTimeout: 90),
             4100,
             'http://127.0.0.1:4200',
-            dev: false,
         );
 
         self::assertSame(ComponentKind::Command, $component->kind);
@@ -104,8 +103,6 @@ final class ComponentFrontendTest extends TestCase
             "the kernel's three win",
         );
         self::assertSame(4100, $component->site?->upstream?->port);
-        self::assertTrue($component->site->upstream->server);
-        self::assertFalse($component->site->upstream->dev);
         self::assertSame('/x', $component->site->root, 'the rest of the site kept');
         self::assertSame($component->env, $component->at('127.0.0.1', 9000)->env, 'kept when bound elsewhere');
     }

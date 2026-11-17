@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\App;
 
 /**
- * What a {@see Frontend} runs beside the application: a server of its own — a development
- * server, a rendering server — that the HTTP server forwards the frontend's requests to.
+ * The development server a {@see Frontend} runs under `call run dev` — `nuxt dev` — that
+ * the HTTP server forwards the frontend's pages, files and live-reload socket to. Never in
+ * production: there the built files are all a frontend is.
  *
  * The kernel runs it as an outside program under the supervisor, on a loopback port it
  * picks, and tells it where in the environment: `PORT`, `HOST` (`127.0.0.1`) and
@@ -23,9 +24,6 @@ final readonly class FrontProgram
      *     application's; `PORT`, `HOST` and `WINTER_BACKEND` are the kernel's.
      * @param ProgramOutput|null $output How its output becomes the application's log.
      * @param int $startTimeout Seconds it has to listen on its port; 0 waits for good.
-     * @param bool $server Whether it answers every method itself (it renders pages and
-     *     has routes of its own): every request no controller took goes to it. False — it
-     *     serves pages and files: a GET or HEAD only, the rest is the controllers' 404.
      * @throws \InvalidArgumentException A command or a variable exec cannot take.
      */
     public function __construct(
@@ -33,7 +31,6 @@ final readonly class FrontProgram
         public array $env = [],
         public ?ProgramOutput $output = null,
         public int $startTimeout = 60,
-        public bool $server = false,
     ) {
         $strings = array_filter($command, static fn($part): bool => is_string($part));
         if ($command === [] || !array_is_list($command) || count($strings) !== count($command) || $command[0] === '') {

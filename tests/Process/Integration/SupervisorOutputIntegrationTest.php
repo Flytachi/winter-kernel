@@ -151,7 +151,7 @@ final class SupervisorOutputIntegrationTest extends IntegrationCase
             ['FOO' => 'bar'],
         );
         $supervisor = $this->supervise([
-            Component::program(new FrontSite('front', '/x'), $program, $port, 'http://127.0.0.1:1', dev: false),
+            Component::program(new FrontSite('front', '/x'), $program, $port, 'http://127.0.0.1:1'),
         ]);
         try {
             self::assertTrue($this->waitLogged('front is up'), $this->logged());

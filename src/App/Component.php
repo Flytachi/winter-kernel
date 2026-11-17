@@ -231,15 +231,15 @@ final readonly class Component
     }
 
     /**
-     * A frontend's own server ({@see FrontProgram}): an outside program on a loopback port,
-     * ready once it listens there, restarted when it crashes; the HTTP server forwards the
-     * frontend's requests to it. Named, critical and ordered as its site.
+     * A frontend's development server ({@see FrontProgram}) under `call run dev`: an outside
+     * program on a loopback port, ready once it listens there, restarted when it crashes;
+     * the HTTP server forwards the frontend's requests to it. Named, critical and ordered as
+     * its site.
      *
      * @param int $port The loopback port it listens on: `PORT` in its environment.
      * @param string $backend Where it reaches the controllers: `WINTER_BACKEND`.
-     * @param bool $dev Whether it is a development server.
      */
-    public static function program(FrontSite $site, FrontProgram $program, int $port, string $backend, bool $dev): self
+    public static function program(FrontSite $site, FrontProgram $program, int $port, string $backend): self
     {
         $address = "tcp://127.0.0.1:{$port}";
         return new self(
@@ -253,7 +253,7 @@ final readonly class Component
             ready: $address,
             alive: Probe::of($address),
             output: $program->output,
-            site: $site->forwardedTo(new FrontUpstream($port, $program->server, $dev)),
+            site: $site->forwardedTo(new FrontUpstream($port)),
             env: [...$program->env, 'PORT' => (string) $port, 'HOST' => '127.0.0.1', 'WINTER_BACKEND' => $backend],
         );
     }

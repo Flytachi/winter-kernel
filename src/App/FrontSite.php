@@ -30,9 +30,6 @@ final readonly class FrontSite
     /** @var list<string> The controller prefixes its port lets through, `/admin`. */
     public array $routes;
 
-    /** The file whose presence means it is built, when it is not the default. */
-    private ?string $builtMarker;
-
     /** The folder of content-hashed files, `/_nuxt`; null — none. */
     public ?string $assets;
 
@@ -50,11 +47,8 @@ final readonly class FrontSite
      * @param bool $overlap Whether a controller taking one of its pages is warned of.
      * @param string|null $assets The folder of files whose names carry a hash of their
      *     content (`/_nuxt`): cached for good, and a missing one is a 404, never the shell.
-     * @param string|null $marker The file whose presence means it is built, an absolute
-     *     path — for a build whose files have no page of their own at the root (a rendering
-     *     server's public files); null — its shell, or `index.html`.
-     * @param FrontUpstream|null $upstream Its own server, which the kernel sets up when the
-     *     frontend has a program ({@see forwardedTo()}); null — files only.
+     * @param FrontUpstream|null $upstream Its development server under `call run dev`, set by
+     *     the kernel ({@see forwardedTo()}); null — its files.
      * @throws \InvalidArgumentException A value it cannot take.
      */
     public function __construct(
@@ -69,13 +63,8 @@ final readonly class FrontSite
         public Priority $priority = Priority::Low,
         public bool $overlap = true,
         ?string $assets = null,
-        ?string $marker = null,
         public ?FrontUpstream $upstream = null,
     ) {
-        if ($marker !== null && (!str_starts_with($marker, '/') || str_contains($marker, "\0"))) {
-            throw new \InvalidArgumentException("marker must be an absolute path, \"{$marker}\" given.");
-        }
-        $this->builtMarker = $marker;
         if (preg_match(self::NAME, $name) !== 1) {
             throw new \InvalidArgumentException("name must be lowercase letters, digits, _ . -, \"{$name}\" given.");
         }
@@ -112,7 +101,7 @@ final readonly class FrontSite
         $this->assets = $assets === null ? null : rtrim($assets, '/');
     }
 
-    /** The same site, its requests forwarded to its own server. */
+    /** The same site, its requests forwarded to its development server. */
     public function forwardedTo(FrontUpstream $upstream): self
     {
         return new self(
@@ -127,15 +116,14 @@ final readonly class FrontSite
             $this->priority,
             $this->overlap,
             $this->assets,
-            $this->builtMarker,
             $upstream,
         );
     }
 
-    /** The file whose presence means it is built: the one it was given, its shell, or `index.html`. */
+    /** The file whose presence means it is built: its shell, or `index.html`. */
     public function marker(): string
     {
-        return $this->builtMarker ?? $this->root . '/' . ($this->shell ?? 'index.html');
+        return $this->root . '/' . ($this->shell ?? 'index.html');
     }
 
     public function isBuilt(): bool

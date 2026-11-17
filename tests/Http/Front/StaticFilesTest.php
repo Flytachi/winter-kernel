@@ -273,15 +273,4 @@ final class StaticFilesTest extends TestCase
         self::assertNotSame($seen[0], $seen[1], 'a new mtime, a new ETag');
         self::assertNotSame(304, $seen[2]);
     }
-
-    public function test_a_site_built_without_an_index_page_serves_its_files(): void
-    {
-        mkdir($this->dir . '/ssr/public/_nuxt', 0777, true);
-        file_put_contents($this->dir . '/ssr/public/_nuxt/app.js', 'js');
-        file_put_contents($this->dir . '/ssr/nitro.json', '{}');
-        $site = new FrontSite('site', $this->dir . '/ssr/public', shell: null, assets: '/_nuxt', marker: $this->dir . '/ssr/nitro.json');
-
-        $response = $this->serve($site, '/_nuxt/app.js', shell: false);
-        self::assertSame(realpath($this->dir . '/ssr/public/_nuxt/app.js'), $response->sentFile, 'built: its marker is there');
-    }
 }

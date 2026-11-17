@@ -20,14 +20,12 @@ final class FrontProgramTest extends TestCase
                 return OutputLine::skip();
             }
         };
-        $program = new FrontProgram(['node', 'server.mjs'], ['NODE_ENV' => 'production'], $output, 90, server: true);
+        $program = new FrontProgram(['node', 'server.mjs'], ['NODE_ENV' => 'production'], $output, 90);
 
         self::assertSame(['node', 'server.mjs'], $program->command);
         self::assertSame(['NODE_ENV' => 'production'], $program->env);
         self::assertSame($output, $program->output);
         self::assertSame(90, $program->startTimeout);
-        self::assertTrue($program->server);
-        self::assertFalse(new FrontProgram(['node'])->server, 'pages only, by default');
     }
 
     public function test_it_refuses_what_exec_cannot_take(): void

@@ -49,7 +49,7 @@ final class ServiceFrontendCommandTest extends TestCase
                         'pnpm install --frozen-lockfile', 'pnpm generate');
                 }
 
-                public function program(bool $dev): ?\Flytachi\Winter\Kernel\App\FrontProgram
+                public function devServer(): ?\Flytachi\Winter\Kernel\App\FrontProgram
                 {
                     return null;
                 }
@@ -122,6 +122,10 @@ final class ServiceFrontendCommandTest extends TestCase
         self::assertStringContainsString("COPY admin/package.json admin/pnpm-lock.yaml ./\nRUN pnpm install --frozen-lockfile\nCOPY admin/ ./\nRUN pnpm generate", $file);
         self::assertNotFalse($copy);
         self::assertGreaterThan($code, $copy, 'the output is copied after the code, or the code would overwrite it');
+        $drop = strpos($file, "RUN find ./admin -mindepth 1 -delete\n");
+        self::assertNotFalse($drop, 'the sources the code brought are dropped: the image keeps the build only');
+        self::assertGreaterThan($code, $drop);
+        self::assertLessThan($copy, $drop, 'before the build is copied in');
         self::assertLessThan(strpos($file, 'ENTRYPOINT'), $copy);
         self::assertMatchesRegularExpression('#Dockerfile \.+ \[UPDATED\]#', $output);
     }
