@@ -918,6 +918,7 @@ abstract class WinterApplication
                 // What the profile resolved to, because a limit nobody can see is a limit
                 // nobody thinks of when a request starts queueing or a connection is refused.
                 $rows[] = ['profile', self::profileSummary($web->settings)];
+                $rows[] = ['proxies', self::proxiesSummary($web->settings->getTrustedProxies())];
             }
             Banner::print($rows, self::elapsedMs());
         }
@@ -929,6 +930,9 @@ abstract class WinterApplication
             $names === [] ? '' : ($web !== null ? ' + ' : ': ') . '[' . implode(', ', $names) . ']',
             $watch ? ' (dev/watch)' : ''
         ));
+        if ($web !== null) {
+            $logger->info('Trusted proxies: ' . self::proxiesSummary($web->settings->getTrustedProxies()));
+        }
 
         // Nothing the boot opened may be inherited by the components forked from here.
         BeforeFork::runAll();
@@ -1141,6 +1145,7 @@ abstract class WinterApplication
         $router = $web->router;
         $trimThreshold = $web->settings->getMemoryTrimThreshold();
         $serverHeader = $web->settings->getServerHeader();
+        $proxies = $web->settings->getTrustedProxies();
         $handler = static function (
             \Swoole\Http\Request $req,
             \Swoole\Http\Response $res
@@ -1149,12 +1154,13 @@ abstract class WinterApplication
             $trimThreshold,
             $serverHeader,
             $tls,
-            $server
+            $server,
+            $proxies
         ): void {
             // Before the route runs, so a response that sets its own `Server` replaces it;
             // an empty value makes Swoole send no header instead of its own name.
             $res->header('Server', $serverHeader);
-            $request = new SwooleRequest($req, $tls);
+            $request = new SwooleRequest($req, $tls, $proxies);
             $isHead  = strtoupper($request->getMethod()) === 'HEAD';
             $router->handle($request, new SwooleResponse($res, $isHead, $server));
 
@@ -1803,6 +1809,21 @@ abstract class WinterApplication
      * periodic work that would distort a measurement, which is right for a benchmark and
      * wrong for anything else, and a banner is the last place it can still be noticed.
      */
+    /**
+     * Whose forwarded headers the server believes, for the banner and the boot log:
+     * `none — forwarded headers ignored`, `10.244.0.0/16`, `* (every peer)`.
+     *
+     * @internal
+     */
+    public static function proxiesSummary(\Flytachi\Winter\Kernel\Http\TrustedProxies $proxies): string
+    {
+        return match (true) {
+            $proxies->trustsAll() => '* (every peer)',
+            $proxies->isEmpty() => 'none — forwarded headers ignored',
+            default => implode(', ', $proxies->list()),
+        };
+    }
+
     /**
      * The resolved server profile in one line, for the banner and `call application info`.
      *

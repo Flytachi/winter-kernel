@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Kernel\App\Config;
 
 use Flytachi\Winter\Kernel\App\ApplicationConfigException;
 use Flytachi\Winter\Kernel\App\BindAddress;
+use Flytachi\Winter\Kernel\Http\TrustedProxies;
 use Flytachi\Winter\Kernel\Kernel;
 
 /**
@@ -89,6 +90,7 @@ final class ServerSettings
         private ?Profile $profile = null,
         private int $baselineBytes = 0,
         private string $serverHeader = self::DEFAULT_SERVER_HEADER,
+        private ?TrustedProxies $trustedProxies = null,
     ) {
     }
 
@@ -745,6 +747,39 @@ final class ServerSettings
     {
         $this->serverHeader = trim($value);
         return $this;
+    }
+
+    /**
+     * The proxies whose `Forwarded` / `X-Forwarded-*` / `X-Real-IP` headers are believed.
+     * Default: none — the client's address, scheme and host come from the connection.
+     *
+     * ```
+     * $server->trustedProxies('10.244.0.0/16');            // the ingress of a cluster
+     * $server->trustedProxies('172.16.0.0/12', '::1');     // a proxy in a docker network
+     * $server->trustedProxies('*');                        // reachable only through the proxy
+     * $server->trustedProxies();                           // nobody, again
+     * ```
+     *
+     * Behind a proxy that terminates TLS, without it `getScheme()` is `http`, cookies lose
+     * `Secure`, `getClientIp()` is the proxy's address, and `getBaseUrl()` carries the
+     * server's own port. With it, a request from anyone else — a client at a NodePort, a
+     * published container port — still cannot pass for another address or host: its
+     * headers are ignored and logged once as a warning. A later call replaces the list.
+     *
+     * @param string ...$proxies Addresses, networks (`10.0.0.0/8`, `fd00::/8`), or `*` alone.
+     * @throws \InvalidArgumentException A value that is neither, named in the message.
+     * @link https://winterframe.net/docs/web-configuration Trusted proxies
+     */
+    public function trustedProxies(string ...$proxies): self
+    {
+        $this->trustedProxies = TrustedProxies::of(...$proxies);
+        return $this;
+    }
+
+    /** Whose forwarded headers are believed — nobody's unless set. */
+    public function getTrustedProxies(): TrustedProxies
+    {
+        return $this->trustedProxies ?? TrustedProxies::none();
     }
 
     /** The `Server` header's value; empty when none is sent. */

@@ -7,7 +7,26 @@ All notable changes to this project are documented here. The format follows
 ## [4.7.0] — 2026-11-20
 
 Server-Sent Events: a controller returns a stream, and the browser's `EventSource` gets its
-events as they come.
+events as they come. And the proxy headers are believed only from the application's own
+proxies.
+
+### Upgrading — behind a proxy
+
+**Forwarded headers are no longer believed from anyone.** Behind nginx, HAProxy, Nginx Proxy
+Manager or an ingress, add the proxy, or `getClientIp()` is the proxy's address,
+`getScheme()` is `http` behind TLS termination (cookies lose `Secure`), and `getBaseUrl()`
+carries the server's own port — links in mail and redirects break:
+
+```php
+public function configureServer(ServerSettings $server, ApplicationArguments $args): void
+{
+    $server->trustedProxies('172.16.0.0/12');   // docker network; k8s: the ingress pod network
+}
+```
+
+`getHost()` is unchanged where the proxy passes `Host` as it is (nginx with
+`proxy_set_header Host $host`, Nginx Proxy Manager, HAProxy by default). Until the proxy is
+added, the log says which address sent the headers that were ignored.
 
 ### Added
 
@@ -34,6 +53,26 @@ events as they come.
 - **`StreamingResponse`** — `write()`, a response written in parts, and `close()`, its
   connection cut at once (reset by the server: what waits in its buffer is dropped). The
   Swoole adapter's. `HttpResponse` is unchanged.
+
+### Security
+
+- **Forwarded headers count only from a trusted proxy.** `getClientIp()`, `getScheme()`,
+  `getHost()`, `getPort()` and `getBaseUrl()` took `Forwarded`, `X-Real-IP` and
+  `X-Forwarded-*` from any client: a service reachable past its proxy (a NodePort, a
+  published container port) took `curl -H "X-Real-IP: 1.2.3.4"` for the client 1.2.3.4 — in
+  audit logs, IP rate limits, IP allow-lists — and a forged `X-Forwarded-Host` for the host
+  of the links it built. Now they are read only on a request from
+  `ServerSettings::trustedProxies()` — addresses, networks (IPv4, IPv6) or `*`; nobody by
+  default, and no environment variable: the application decides where the list comes from.
+  A wrong value stops the boot by name; the banner and the boot log say whom it trusts.
+- **`X-Forwarded-For` and `Forwarded` are read from the right.** The leftmost public address
+  was taken — the part the client writes itself, forgeable behind a trusted proxy too; now
+  the first address that is not a trusted proxy, counted from the right. A client in a
+  private network is no longer passed over.
+- **Forwarded headers from an untrusted sender are a warning** — once per sender per worker,
+  for 32 senders at most: a proxy missing from the list, or a client passing for someone
+  else. The header values go to the record's context, line breaks removed. Both adapters
+  read them the same way (`FpmRequest` included).
 
 ### Fixed
 

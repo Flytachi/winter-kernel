@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\Http\Request;
 
+use Flytachi\Winter\Kernel\Http\TrustedProxies;
 use Flytachi\Winter\Kernel\Http\Adapter\FpmRequest;
 use Flytachi\Winter\Kernel\Http\Header;
 use PHPUnit\Framework\TestCase;
@@ -31,7 +32,8 @@ class HeaderOriginTest extends TestCase
     private function init(array $server): void
     {
         $_SERVER = $server;
-        Header::init(new FpmRequest());
+        // These requests stand for a trusted proxy's.
+        Header::init(new FpmRequest(TrustedProxies::of('*')));
     }
 
     // ── Origin getters ────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Kernel\Http\Adapter;
 
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
 use Flytachi\Winter\Kernel\Http\Cookie\CookieParser;
+use Flytachi\Winter\Kernel\Http\TrustedProxies;
 
 /**
  * HttpRequest adapter for PHP-FPM / Apache (CGI model).
@@ -22,9 +23,18 @@ final class FpmRequest implements HttpRequest
     private ?array $cookies = null;
     private ?string $rawBody = null;
 
-    public function __construct()
+    /** What a trusted proxy says about the client; nothing from anyone else. */
+    private readonly ForwardedHeaders $forwarded;
+
+    /** @param TrustedProxies|null $proxies Whose forwarded headers are believed; null — nobody's. */
+    public function __construct(?TrustedProxies $proxies = null)
     {
         $this->headers = $this->extractHeaders();
+        $this->forwarded = new ForwardedHeaders(
+            $this->headers,
+            (string) ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'),
+            $proxies ?? TrustedProxies::none(),
+        );
     }
 
     public function getMethod(): string
@@ -134,34 +144,10 @@ final class FpmRequest implements HttpRequest
         return $_SERVER[$key] ?? $_SERVER[strtoupper($key)] ?? null;
     }
 
+    /** The client's address — see {@see SwooleRequest::getClientIp()}. */
     public function getClientIp(): string
     {
-        if (!empty($_SERVER['HTTP_FORWARDED'])) {
-            if (preg_match('/for=["\']?([^;,"\'\s\]]+)/i', $_SERVER['HTTP_FORWARDED'], $m)) {
-                $ip = trim($m[1], '"\'[]');
-                if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                    return ClientAddress::unmapped($ip);
-                }
-            }
-        }
-
-        if (!empty($_SERVER['HTTP_X_REAL_IP'])) {
-            $ip = trim($_SERVER['HTTP_X_REAL_IP']);
-            if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                return ClientAddress::unmapped($ip);
-            }
-        }
-
-        if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-            foreach (explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']) as $ip) {
-                $ip = trim($ip);
-                if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-                    return ClientAddress::unmapped($ip);
-                }
-            }
-        }
-
-        return ClientAddress::unmapped($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
+        return $this->forwarded->clientIp();
     }
 
     /**
@@ -241,11 +227,9 @@ final class FpmRequest implements HttpRequest
 
     public function getPort(): int
     {
-        if (!empty($_SERVER['HTTP_X_FORWARDED_PORT'])) {
-            $port = (int) trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PORT'])[0]);
-            if ($port > 0) {
-                return $port;
-            }
+        $port = $this->forwarded->port();
+        if ($port !== null) {
+            return $port;
         }
         $hostHeader = $this->forwardedHost() ?? ($_SERVER['HTTP_HOST'] ?? null);
         if ($hostHeader !== null) {
@@ -273,37 +257,15 @@ final class FpmRequest implements HttpRequest
         return $this->getScheme() === 'https' ? 443 : 80;
     }
 
-    /** Whether the request reached this backend through a reverse proxy. */
+    /** Whether the request reached this backend through a trusted reverse proxy. */
     private function isProxied(): bool
     {
-        return !empty($_SERVER['HTTP_FORWARDED'])
-            || !empty($_SERVER['HTTP_X_FORWARDED_PROTO'])
-            || !empty($_SERVER['HTTP_X_FORWARDED_HOST'])
-            || !empty($_SERVER['HTTP_X_FORWARDED_FOR']);
+        return $this->forwarded->proxied();
     }
 
-    /**
-     * Scheme advertised by a trusted proxy via the Forwarded or
-     * X-Forwarded-Proto header, or null when the request is not proxied.
-     */
     private function forwardedProto(): ?string
     {
-        if (
-            !empty($_SERVER['HTTP_FORWARDED'])
-            && preg_match('/proto=([A-Za-z]+)/i', $_SERVER['HTTP_FORWARDED'], $m)
-        ) {
-            $proto = strtolower($m[1]);
-            if ($proto === 'http' || $proto === 'https') {
-                return $proto;
-            }
-        }
-        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
-            $proto = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
-            if ($proto === 'http' || $proto === 'https') {
-                return $proto;
-            }
-        }
-        return null;
+        return $this->forwarded->proto();
     }
 
     public function getBaseUrl(): string
@@ -348,15 +310,7 @@ final class FpmRequest implements HttpRequest
 
     private function forwardedHost(): ?string
     {
-        if (!empty($_SERVER['HTTP_FORWARDED'])) {
-            if (preg_match('/host=([^;,\s]+)/i', $_SERVER['HTTP_FORWARDED'], $m)) {
-                return trim($m[1], '"\'');
-            }
-        }
-        if (!empty($_SERVER['HTTP_X_FORWARDED_HOST'])) {
-            return trim(explode(',', $_SERVER['HTTP_X_FORWARDED_HOST'])[0]);
-        }
-        return null;
+        return $this->forwarded->host();
     }
 
     private static function stripPort(string $host): string

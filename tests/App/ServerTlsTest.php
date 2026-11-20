@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\App;
 
+use Flytachi\Winter\Kernel\Http\TrustedProxies;
 use Flytachi\Winter\Kernel\App\ApplicationConfigException;
 use Flytachi\Winter\Kernel\App\Config\ServerSettings;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleRequest;
@@ -159,6 +160,8 @@ final class ServerTlsTest extends TestCase
         $raw->server = ['server_port' => 8443];
         $raw->header = ['x-forwarded-proto' => 'http'];
 
-        self::assertSame('http', new SwooleRequest($raw, tls: true)->getScheme());
+        self::assertSame('http', new SwooleRequest($raw, tls: true, proxies: TrustedProxies::of('*'))->getScheme());
+        // From a peer nobody trusts, the header is ignored and the server's TLS counts.
+        self::assertSame('https', new SwooleRequest($raw, tls: true)->getScheme());
     }
 }

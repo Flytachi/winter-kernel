@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\Http\Request;
 
+use Flytachi\Winter\Kernel\Http\TrustedProxies;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleRequest;
 use PHPUnit\Framework\TestCase;
 use Swoole\Http\Request;
@@ -41,7 +42,8 @@ class SwooleRequestBaseUrlTest extends TestCase
         $req = new Request();
         $req->header = $header;
         $req->server = $server;
-        return (new SwooleRequest($req))->getBaseUrl();
+        // A trusted proxy's request: its headers count (who is trusted — ForwardedTrustTest).
+        return (new SwooleRequest($req, false, TrustedProxies::of('*')))->getBaseUrl();
     }
 
     // ── Standard ports are dropped ────────────────────────────────────────────

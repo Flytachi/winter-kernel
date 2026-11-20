@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\Http\Request;
 
+use Flytachi\Winter\Kernel\Http\TrustedProxies;
 use Flytachi\Winter\Kernel\Http\Adapter\FpmRequest;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
@@ -41,7 +42,7 @@ final class UrlPartsTest extends TestCase
         $raw = new \Swoole\Http\Request();
         $raw->server = ['request_uri' => $path] + ($query === null ? [] : ['query_string' => $query]);
         $raw->header = $headers + ['host' => 'api.example.uz'];
-        return new SwooleRequest($raw);
+        return new SwooleRequest($raw, false, TrustedProxies::of('*'));
     }
 
     /** Runs $fn against an FPM request built from the given $_SERVER values. */
@@ -53,7 +54,7 @@ final class UrlPartsTest extends TestCase
         }
         $_SERVER = $server + ['HTTP_HOST' => 'api.example.uz'] + $_SERVER;
         try {
-            $fn(new FpmRequest());
+            $fn(new FpmRequest(TrustedProxies::of('*')));
         } finally {
             $_SERVER = $original;
         }

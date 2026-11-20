@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Kernel\Http\Adapter;
 
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
 use Flytachi\Winter\Kernel\Http\Cookie\CookieParser;
+use Flytachi\Winter\Kernel\Http\TrustedProxies;
 use Swoole\Http\Request;
 
 /**
@@ -21,12 +22,24 @@ final class SwooleRequest implements HttpRequest
     /** @var array<string, string>|null Parsed on first use. */
     private ?array $cookies = null;
 
+    /** What a trusted proxy says about the client; nothing from anyone else. */
+    private readonly ForwardedHeaders $forwarded;
+
     /**
      * @param bool $tls Whether the server it came to speaks TLS — Swoole does not say so
      *   in the request itself.
+     * @param TrustedProxies|null $proxies Whose forwarded headers are believed; null — nobody's.
      */
-    public function __construct(private readonly Request $request, private readonly bool $tls = false)
-    {
+    public function __construct(
+        private readonly Request $request,
+        private readonly bool $tls = false,
+        ?TrustedProxies $proxies = null,
+    ) {
+        $this->forwarded = new ForwardedHeaders(
+            $request->header ?? [],
+            (string) ($request->server['remote_addr'] ?? '127.0.0.1'),
+            $proxies ?? TrustedProxies::none(),
+        );
     }
 
     public function getMethod(): string
@@ -124,36 +137,14 @@ final class SwooleRequest implements HttpRequest
         return $this->request->server[$key] ?? $this->request->server[strtolower($key)] ?? null;
     }
 
+    /**
+     * The client's address. A trusted proxy's `Forwarded`, `X-Real-IP` or
+     * `X-Forwarded-For` (read from the right, past the trusted hops) says it; from anyone
+     * else they are ignored and the connection's address is the client.
+     */
     public function getClientIp(): string
     {
-        $h = $this->request->header ?? [];
-
-        if (!empty($h['forwarded'])) {
-            if (preg_match('/for=["\']?([^;,"\'\s\]]+)/i', $h['forwarded'], $m)) {
-                $ip = trim($m[1], '"\'[]');
-                if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                    return ClientAddress::unmapped($ip);
-                }
-            }
-        }
-
-        if (!empty($h['x-real-ip'])) {
-            $ip = trim($h['x-real-ip']);
-            if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                return ClientAddress::unmapped($ip);
-            }
-        }
-
-        if (!empty($h['x-forwarded-for'])) {
-            foreach (explode(',', $h['x-forwarded-for']) as $ip) {
-                $ip = trim($ip);
-                if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-                    return ClientAddress::unmapped($ip);
-                }
-            }
-        }
-
-        return ClientAddress::unmapped($this->request->server['remote_addr'] ?? '127.0.0.1');
+        return $this->forwarded->clientIp();
     }
 
     /**
@@ -210,30 +201,9 @@ final class SwooleRequest implements HttpRequest
         return $this->tls ? 'https' : 'http';
     }
 
-    /**
-     * Scheme advertised by a trusted proxy via the Forwarded or
-     * x-forwarded-proto header, or null when the request is not proxied.
-     */
     private function forwardedProto(): ?string
     {
-        $h = $this->request->header ?? [];
-
-        if (
-            !empty($h['forwarded'])
-            && preg_match('/proto=([A-Za-z]+)/i', $h['forwarded'], $m)
-        ) {
-            $proto = strtolower($m[1]);
-            if ($proto === 'http' || $proto === 'https') {
-                return $proto;
-            }
-        }
-        if (!empty($h['x-forwarded-proto'])) {
-            $proto = strtolower(trim(explode(',', $h['x-forwarded-proto'])[0]));
-            if ($proto === 'http' || $proto === 'https') {
-                return $proto;
-            }
-        }
-        return null;
+        return $this->forwarded->proto();
     }
 
     public function getHost(): string
@@ -253,11 +223,9 @@ final class SwooleRequest implements HttpRequest
     {
         $h = $this->request->header ?? [];
 
-        if (!empty($h['x-forwarded-port'])) {
-            $port = (int) trim(explode(',', $h['x-forwarded-port'])[0]);
-            if ($port > 0) {
-                return $port;
-            }
+        $port = $this->forwarded->port();
+        if ($port !== null) {
+            return $port;
         }
         $hostHeader = $this->forwardedHost() ?? ($h['host'] ?? null);
         if ($hostHeader !== null) {
@@ -277,14 +245,10 @@ final class SwooleRequest implements HttpRequest
         return $this->getScheme() === 'https' ? 443 : 80;
     }
 
-    /** Whether the request reached this worker through a reverse proxy. */
+    /** Whether the request reached this worker through a trusted reverse proxy. */
     private function isProxied(): bool
     {
-        $h = $this->request->header ?? [];
-        return !empty($h['forwarded'])
-            || !empty($h['x-forwarded-proto'])
-            || !empty($h['x-forwarded-host'])
-            || !empty($h['x-forwarded-for']);
+        return $this->forwarded->proxied();
     }
 
     public function getBaseUrl(): string
@@ -306,16 +270,7 @@ final class SwooleRequest implements HttpRequest
 
     private function forwardedHost(): ?string
     {
-        $h = $this->request->header ?? [];
-        if (!empty($h['forwarded'])) {
-            if (preg_match('/host=([^;,\s]+)/i', $h['forwarded'], $m)) {
-                return trim($m[1], '"\'');
-            }
-        }
-        if (!empty($h['x-forwarded-host'])) {
-            return trim(explode(',', $h['x-forwarded-host'])[0]);
-        }
-        return null;
+        return $this->forwarded->host();
     }
 
     private static function stripPort(string $host): string
