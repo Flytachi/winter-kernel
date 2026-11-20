@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Http\Adapter;
 
-use Flytachi\Winter\Kernel\Http\Contracts\HttpResponse;
+use Flytachi\Winter\Kernel\Http\Contracts\StreamingResponse;
 use Flytachi\Winter\Kernel\Http\Cookie\SetCookie;
 use Swoole\Http\Response;
 
@@ -12,15 +12,18 @@ use Swoole\Http\Response;
  * HttpResponse adapter for the Swoole runtime.
  * A thin proxy — Swoole's API matches the interface exactly.
  */
-final class SwooleResponse implements HttpResponse
+final class SwooleResponse implements StreamingResponse
 {
     /**
      * @param Response $response underlying Swoole response
      * @param bool $headOnly suppress the body (HEAD request) while keeping headers
+     * @param \Swoole\Server|null $server The server it came to — what cuts its connection
+     *     at once ({@see close()}); null: the response closes it, once its buffer is sent.
      */
     public function __construct(
         private readonly Response $response,
         private readonly bool $headOnly = false,
+        private readonly ?\Swoole\Server $server = null,
     ) {
     }
 
@@ -94,6 +97,26 @@ final class SwooleResponse implements HttpResponse
         }
 
         $this->response->end($body);
+    }
+
+    public function write(string $chunk): bool
+    {
+        // HEAD has no body: nothing to write, and the client is still there.
+        if ($this->headOnly) {
+            return true;
+        }
+        return $this->response->write($chunk) !== false;
+    }
+
+    public function close(): void
+    {
+        // Reset by the server: what waits in the buffer is dropped. The response's own close
+        // waits for the buffer to reach a client that may never read it again.
+        if ($this->server !== null) {
+            $this->server->close($this->response->fd, true);
+            return;
+        }
+        $this->response->close();
     }
 
     public function sendfile(string $path, int $offset = 0, int $length = 0): void

@@ -23,6 +23,7 @@ use Flytachi\Winter\Kernel\Http\Response\ExceptionWrapper;
 use Flytachi\Winter\Kernel\Http\Response\ResponseEntity;
 use Flytachi\Winter\Kernel\Http\Response\ResponseException;
 use Flytachi\Winter\Kernel\Http\Response\Sendable;
+use Flytachi\Winter\Kernel\Http\Sse\Streaming;
 use Flytachi\Winter\Kernel\Http\Cors;
 use Flytachi\Winter\Kernel\Http\Health\Health;
 use Flytachi\Winter\Kernel\Http\Health\HealthIndicatorInterface;
@@ -568,6 +569,12 @@ final class Router
             // queries that never ran. Answer the deadline instead of that.
             if (RequestWatchdog::isCurrentExpired()) {
                 throw new ResponseException('Gateway Timeout', HttpCode::GATEWAY_TIMEOUT);
+            }
+
+            // A stream lasts as long as its client, not as long as a request may: the
+            // global deadline is lifted; its route's own #[Timeout] still caps it.
+            if ($result instanceof Streaming && $this->extractRouteTimeout($stored) === null) {
+                RequestWatchdog::extend(\Swoole\Coroutine::getCid(), 0.0);
             }
 
             // ── Serialize return value ────────────────────────────────────────

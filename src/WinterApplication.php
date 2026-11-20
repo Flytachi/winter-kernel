@@ -64,6 +64,7 @@ use Flytachi\Winter\Kernel\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleResponse;
 use Flytachi\Winter\Kernel\Dev\FrontProxy;
 use Flytachi\Winter\Kernel\Http\Front\SiteMap;
+use Flytachi\Winter\Kernel\Http\Sse\SseEmitter;
 use Flytachi\Winter\Kernel\Http\Health\Health;
 use Flytachi\Winter\Kernel\Http\Health\HealthContributor;
 use Flytachi\Winter\Kernel\Http\Health\HealthIndicator;
@@ -1147,14 +1148,15 @@ abstract class WinterApplication
             $router,
             $trimThreshold,
             $serverHeader,
-            $tls
+            $tls,
+            $server
         ): void {
             // Before the route runs, so a response that sets its own `Server` replaces it;
             // an empty value makes Swoole send no header instead of its own name.
             $res->header('Server', $serverHeader);
             $request = new SwooleRequest($req, $tls);
             $isHead  = strtoupper($request->getMethod()) === 'HEAD';
-            $router->handle($request, new SwooleResponse($res, $isHead));
+            $router->handle($request, new SwooleResponse($res, $isHead, $server));
 
             // After the response, not before it: giving memory back can take tens of
             // milliseconds when there is a lot of it, and the client should not wait for
@@ -1194,6 +1196,9 @@ abstract class WinterApplication
         // `workerExit` fires exactly while the reactor is trying to drain, which is
         // where those timers have to be released.
         $workerExit = static function (\Swoole\Http\Server $server, int $workerId): void {
+            // An open event stream never ends on its own: the worker would wait for it
+            // until it is killed.
+            SseEmitter::closeAll();
             RequestWatchdog::disable();
             if (DepSupport::has(Dep::Ppa)) {
                 PoolTelemetry::stop($workerId);

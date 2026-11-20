@@ -14,7 +14,7 @@ abstract class Printer
         echo "\033[0m";
     }
 
-    public static function printError(\Throwable $exception): never
+    public static function printError(\Throwable $exception, int $exitCode = 1): never
     {
         self::printTitle($exception::class, 31);
         self::printMessage($exception->getMessage(), 31);
@@ -22,7 +22,7 @@ abstract class Printer
             self::printSplit($exception->getTraceAsString(), 31);
         }
         self::printTitle($exception::class, 31);
-        die();
+        exit($exitCode);
     }
 
     public static function printLabel(string $message, int $cl = 33): void

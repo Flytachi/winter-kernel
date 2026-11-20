@@ -4,6 +4,44 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.7.0] — 2026-11-20
+
+Server-Sent Events: a controller returns a stream, and the browser's `EventSource` gets its
+events as they come.
+
+### Added
+
+- **`SseEmitter`** (`Flytachi\Winter\Kernel\Http\Sse`) — a stream a controller returns.
+  Events come from a function run beside it (the stream ends when it returns) or are
+  `push()`ed from other requests of the worker; `complete()`, `isOpen()`, `onClose()`,
+  `lastEventId()` (the browser's `Last-Event-ID` after a reconnect — known in the
+  controller, to send what was missed; what a controller pushes before the stream starts is
+  not capped). `200` with `text/event-stream`, `Cache-Control: no-cache`,
+  `X-Accel-Buffering: no`, never compressed; `retry` first, a `: ping` heartbeat after
+  `heartbeat` seconds of silence. A client gone is noticed at the next write; a client too
+  slow to take `capacity` events is cut off rather than left behind. An exception after the
+  headers is logged and closes the stream; `HEAD` gets the headers only. A stream that never
+  reaches its response (the controller threw, the deadline answered) still runs its
+  `onClose`; the deadline that ends a capped stream does not cancel its `onClose`.
+- **`SseEvent`** — `data` (a string as it is, anything else JSON; lines become `data:`
+  lines), `event`, `id`, `retry`; a line break or NUL in `event`/`id` is refused.
+- **A stream is not under the request's deadline** (`SERVER_REQUEST_TIMEOUT`) — no
+  `#[Timeout(0)]` needed; a `#[Timeout(n)]` of its route caps it. Marker: `Streaming`.
+- **Streams close when the worker stops** — `docker stop`, `call application stop`, a worker
+  recycled, a `call run dev` reload: their connections are cut, so nothing waits for them —
+  a client that stopped reading (a dead network) and a producer waiting between its events
+  included.
+- **`StreamingResponse`** — `write()`, a response written in parts, and `close()`, its
+  connection cut at once (reset by the server: what waits in its buffer is dropped). The
+  Swoole adapter's. `HttpResponse` is unchanged.
+
+### Fixed
+
+- **A console command that fails exits with 1.** An exception escaping a command was printed
+  and the process ended with 0 (`die()`): a script, a CI job or a container's entrypoint
+  took the failure for a success. `Printer::printError()` now exits with 1, or with the code
+  it is given (`printError($e, 3)`).
+
 ## [4.6.0] — 2026-11-17
 
 A frontend — a single-page app, a pre-rendered site — served by the application itself,
