@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\Http\Request;
 
+use Flytachi\Winter\Kernel\Http\ProxyHeader;
 use Flytachi\Winter\Kernel\Http\TrustedProxies;
 use Flytachi\Winter\Kernel\Http\Adapter\FpmRequest;
 use PHPUnit\Framework\TestCase;
@@ -33,7 +34,7 @@ class FpmRequestBaseUrlTest extends TestCase
     {
         $_SERVER = $server;
         // A trusted proxy's request: its headers count (who is trusted — ForwardedTrustTest).
-        return (new FpmRequest(TrustedProxies::of('*')))->getBaseUrl();
+        return (new FpmRequest(TrustedProxies::of('*')->withHeaders(...ProxyHeader::cases())))->getBaseUrl();
     }
 
     // ── Standard ports are dropped ────────────────────────────────────────────

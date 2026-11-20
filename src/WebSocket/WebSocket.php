@@ -14,6 +14,7 @@ use Flytachi\Winter\Kernel\Http\Adapter\ClientAddress;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\Kernel\Http\Contracts\HttpRequest;
 use Flytachi\Winter\Kernel\Http\Response\ExceptionWrapper;
+use Flytachi\Winter\Kernel\Http\TrustedProxies;
 use Flytachi\Winter\Kernel\Process\Stereotype\Process;
 use Flytachi\Winter\Kernel\WebSocket\Internal\Wire;
 use Psr\Log\LogLevel;
@@ -537,7 +538,7 @@ abstract class WebSocket extends Process
         $conn = new Connection(
             ++$this->lastId,
             self::remoteAddress($request),
-            new SwooleRequest($request, self::$bindTls !== null),
+            new SwooleRequest($request, self::$bindTls !== null, TrustedProxies::installed()),
             $wire,
         );
 

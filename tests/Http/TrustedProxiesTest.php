@@ -113,14 +113,40 @@ final class TrustedProxiesTest extends TestCase
 
     public function test_every_hop_trusted_gives_the_leftmost(): void
     {
-        self::assertSame('1.2.3.4', TrustedProxies::of('*')->client(['1.2.3.4', '203.0.113.7']));
+        self::assertSame('1.2.3.4', TrustedProxies::of('10.0.0.0/8')->client(['1.2.3.4', '10.0.0.9']));
     }
 
-    public function test_garbage_in_the_chain_is_passed_over(): void
+    public function test_a_star_trusts_only_the_peer_not_the_chain(): void
+    {
+        // The client sent 1.1.1.1; the one proxy appended 2.2.2.2 — the client it saw.
+        self::assertSame('2.2.2.2', TrustedProxies::of('*')->client(['1.1.1.1', '2.2.2.2']));
+    }
+
+    public function test_a_hop_that_is_no_address_stops_the_walk(): void
+    {
+        // Past a hop nobody can read, the rest was written by whoever: the client is unknown.
+        $proxies = TrustedProxies::of('10.0.0.0/8');
+
+        self::assertNull($proxies->client(['6.6.6.6', 'unknown']));
+        self::assertNull($proxies->client(['6.6.6.6', '_hidden', '10.0.0.9']));
+        self::assertNull($proxies->client(['unknown', '']));
+    }
+
+    public function test_a_port_or_a_zone_is_cut_off_a_hop(): void
     {
         $proxies = TrustedProxies::of('10.0.0.0/8');
 
-        self::assertSame('203.0.113.7', $proxies->client(['203.0.113.7', 'unknown', '10.0.0.9']));
-        self::assertNull($proxies->client(['unknown', '']));
+        self::assertSame('9.9.9.9', $proxies->client(['6.6.6.6', '9.9.9.9:1234']));
+        self::assertSame('2001:db8::9', $proxies->client(['6.6.6.6', '[2001:db8::9]:443']));
+        self::assertSame('fe80::9', $proxies->client(['6.6.6.6', 'fe80::9%eth0']));
+    }
+
+    public function test_every_spelling_of_a_mapped_address_is_one_address(): void
+    {
+        $proxies = TrustedProxies::of('10.0.0.0/8');
+
+        self::assertTrue($proxies->trusts('0:0:0:0:0:ffff:10.0.0.2'));
+        self::assertTrue($proxies->trusts('::ffff:a00:2'));
+        self::assertSame('9.9.9.9', $proxies->client(['::ffff:909:909']));
     }
 }

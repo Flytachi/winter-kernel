@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Http\Adapter;
 
+use Flytachi\Winter\Kernel\Http\ProxyHeader;
 use Flytachi\Winter\Kernel\Http\TrustedProxies;
 use Flytachi\Winter\Logger\LoggerFactory;
 
 /**
  * What a request's proxy says about its client — read only when the request came from a
- * trusted proxy. Shared by the request adapters, so both runtimes believe the same.
+ * trusted proxy, and only from the header families it is trusted for. Shared by the
+ * request adapters, so both runtimes believe the same.
  *
  * A request from anyone else that carries these headers is told about once per sender: it
  * is either a proxy missing from the list (after an upgrade, typically) or a client trying
@@ -22,21 +24,24 @@ final class ForwardedHeaders
     /** Senders warned about per worker; past that, one line says the rest are not. */
     public const int WARN_PEERS = 32;
 
-    /** @var array<string, string> The headers it reads, by their lower-case name. */
+    /** @var array<string, array{string, ProxyHeader}> Lower-case name → its spelling and family. */
     private const array NAMES = [
-        'forwarded' => 'Forwarded',
-        'x-forwarded-for' => 'X-Forwarded-For',
-        'x-real-ip' => 'X-Real-IP',
-        'x-forwarded-proto' => 'X-Forwarded-Proto',
-        'x-forwarded-host' => 'X-Forwarded-Host',
-        'x-forwarded-port' => 'X-Forwarded-Port',
+        'forwarded' => ['Forwarded', ProxyHeader::Forwarded],
+        'x-forwarded-for' => ['X-Forwarded-For', ProxyHeader::XForwarded],
+        'x-real-ip' => ['X-Real-IP', ProxyHeader::XRealIp],
+        'x-forwarded-proto' => ['X-Forwarded-Proto', ProxyHeader::XForwarded],
+        'x-forwarded-host' => ['X-Forwarded-Host', ProxyHeader::XForwarded],
+        'x-forwarded-port' => ['X-Forwarded-Port', ProxyHeader::XForwarded],
     ];
 
     /** @var array<string, true> Senders already warned about in this worker. */
     private static array $warned = [];
 
-    /** @var array<string, string> Present headers, only when the sender is trusted. */
+    /** @var array<string, string> Believed headers: a trusted sender's, of its trusted families. */
     private readonly array $headers;
+
+    /** @var array{0: string|null, 1: array<string, string>}|null The client and its `Forwarded` element, once read. */
+    private ?array $forwarded = null;
 
     /**
      * @param array<string, string> $headers The request's headers by lower-case name.
@@ -46,8 +51,7 @@ final class ForwardedHeaders
         array $headers,
         private readonly string $peer,
         private readonly TrustedProxies $proxies,
-    )
-    {
+    ) {
         $present = [];
         foreach (self::NAMES as $name => $_) {
             if (isset($headers[$name]) && $headers[$name] !== '') {
@@ -58,6 +62,11 @@ final class ForwardedHeaders
             self::warn($peer, $present, $proxies);
             $present = [];
         }
+        foreach ($present as $name => $_) {
+            if (!$proxies->believes(self::NAMES[$name][1])) {
+                unset($present[$name]);
+            }
+        }
         $this->headers = $present;
     }
 
@@ -66,14 +75,16 @@ final class ForwardedHeaders
     {
         $h = $this->headers;
         $ip = null;
-        if (isset($h['forwarded'])) {
-            $ip = $this->proxies->client(self::forwardedFor($h['forwarded']));
-        }
-        if ($ip === null && isset($h['x-real-ip']) && filter_var(trim($h['x-real-ip']), FILTER_VALIDATE_IP) !== false) {
-            $ip = trim($h['x-real-ip']);
-        }
-        if ($ip === null && isset($h['x-forwarded-for'])) {
+        if (isset($h['x-forwarded-for'])) {
             $ip = $this->proxies->client(explode(',', $h['x-forwarded-for']));
+        }
+        if ($ip === null && isset($h['forwarded'])) {
+            $ip = $this->forwarded()[0];
+        }
+        if ($ip === null && isset($h['x-real-ip'])) {
+            $real = TrustedProxies::address($h['x-real-ip']);
+            // A proxy of ours named there is a hop, not the client.
+            $ip = $real !== null && !$this->proxies->trustsHop($real) ? $real : null;
         }
         return ClientAddress::unmapped($ip ?? $this->peer);
     }
@@ -82,10 +93,10 @@ final class ForwardedHeaders
     public function proto(): ?string
     {
         $proto = null;
-        if (isset($this->headers['forwarded']) && preg_match('/proto=([A-Za-z]+)/i', $this->headers['forwarded'], $m)) {
-            $proto = strtolower($m[1]);
-        } elseif (isset($this->headers['x-forwarded-proto'])) {
+        if (isset($this->headers['x-forwarded-proto'])) {
             $proto = strtolower(trim(explode(',', $this->headers['x-forwarded-proto'])[0]));
+        } elseif (isset($this->headers['forwarded'])) {
+            $proto = strtolower($this->forwarded()[1]['proto'] ?? '');
         }
         return $proto === 'http' || $proto === 'https' ? $proto : null;
     }
@@ -93,11 +104,13 @@ final class ForwardedHeaders
     /** The host the client asked for, maybe with a port; null — no trusted word on it. */
     public function host(): ?string
     {
-        if (isset($this->headers['forwarded']) && preg_match('/host=([^;,\s]+)/i', $this->headers['forwarded'], $m)) {
-            return trim($m[1], '"\'');
-        }
         if (isset($this->headers['x-forwarded-host'])) {
-            return trim(explode(',', $this->headers['x-forwarded-host'])[0]);
+            $host = trim(explode(',', $this->headers['x-forwarded-host'])[0]);
+            return $host === '' ? null : $host;
+        }
+        if (isset($this->headers['forwarded'])) {
+            $host = $this->forwarded()[1]['host'] ?? '';
+            return $host === '' ? null : $host;
         }
         return null;
     }
@@ -108,8 +121,9 @@ final class ForwardedHeaders
         if (!isset($this->headers['x-forwarded-port'])) {
             return null;
         }
-        $port = (int) trim(explode(',', $this->headers['x-forwarded-port'])[0]);
-        return $port > 0 ? $port : null;
+        $value = trim(explode(',', $this->headers['x-forwarded-port'])[0]);
+        $port = ctype_digit($value) ? (int) $value : 0;
+        return $port >= 1 && $port <= 65535 ? $port : null;
     }
 
     /** Whether a trusted proxy sent it: then the server's own port is the proxy's hop. */
@@ -128,26 +142,65 @@ final class ForwardedHeaders
     }
 
     /**
-     * The `for=` of every element, client first: `for=1.2.3.4, for="[2001:db8::7]:4711"`.
+     * The client in `Forwarded`, and the element it is in — whose `proto` and `host` are
+     * what the client asked for. The elements a client wrote itself, left of it, are not read.
+     * With no client to be found, the rightmost element — the one our proxy wrote.
      *
-     * @return list<string>
+     * @return array{0: string|null, 1: array<string, string>}
      */
-    private static function forwardedFor(string $header): array
+    private function forwarded(): array
     {
-        $hops = [];
-        foreach (explode(',', $header) as $element) {
-            if (preg_match('/(?:^|;)\s*for=("[^"]*"|[^;,\s]+)/i', $element, $m) !== 1) {
+        if ($this->forwarded !== null) {
+            return $this->forwarded;
+        }
+        $elements = self::parseForwarded($this->headers['forwarded'] ?? '');
+        $hops = array_map(static fn(array $e): string => $e['for'] ?? '', $elements);
+        $i = $this->proxies->clientIndex($hops);
+        // No client to be found (no `for`, an obfuscated one): the element our proxy
+        // appended — the rightmost — still says how the request reached it.
+        $element = $i !== null ? $elements[$i] : ($elements === [] ? [] : $elements[array_key_last($elements)]);
+        return $this->forwarded = [$i === null ? null : TrustedProxies::address($hops[$i]), $element];
+    }
+
+    /**
+     * `for=1.2.3.4;proto=https, for="[2001:db8::7]:4711"` → one map per element, keys in
+     * lower case, values unquoted. A comma or semicolon inside quotes does not split.
+     *
+     * @return list<array<string, string>>
+     */
+    private static function parseForwarded(string $header): array
+    {
+        $elements = [];
+        $pairs = [];
+        $token = '';
+        $quoted = false;
+        $length = strlen($header);
+        for ($i = 0; $i <= $length; $i++) {
+            $c = $i < $length ? $header[$i] : ',';
+            if ($c === '"') {
+                $quoted = !$quoted;
+                $token .= $c;
                 continue;
             }
-            $value = trim($m[1], '"');
-            if (str_starts_with($value, '[')) {
-                $value = substr($value, 1, (int) strpos($value, ']') - 1);
-            } elseif (substr_count($value, ':') === 1) {
-                $value = explode(':', $value)[0];   // 192.0.2.43:47011
+            if ($quoted || ($c !== ';' && $c !== ',')) {
+                $token .= $c;
+                continue;
             }
-            $hops[] = $value;
+            if (str_contains($token, '=')) {
+                [$key, $value] = explode('=', $token, 2);
+                $value = trim($value);
+                if (strlen($value) >= 2 && $value[0] === '"' && str_ends_with($value, '"')) {
+                    $value = stripslashes(substr($value, 1, -1));
+                }
+                $pairs[strtolower(trim($key))] = $value;
+            }
+            $token = '';
+            if ($c === ',') {
+                $elements[] = $pairs;
+                $pairs = [];
+            }
         }
-        return $hops;
+        return $elements;
     }
 
     /** @param array<string, string> $present */
@@ -157,10 +210,11 @@ final class ForwardedHeaders
         if (isset(self::$warned[$peer]) || count(self::$warned) > self::WARN_PEERS) {
             return;
         }
-        $logger = LoggerFactory::getLogger(TrustedProxies::class);
+        // Marked before the logger is asked for: its first creation may yield to another
+        // request from the same sender.
         if (count(self::$warned) === self::WARN_PEERS) {
             self::$warned[''] = true;
-            $logger->warning(sprintf(
+            LoggerFactory::getLogger(TrustedProxies::class)->warning(sprintf(
                 'Forwarded headers from %d senders were ignored; further senders are no longer logged in this worker.',
                 self::WARN_PEERS,
             ));
@@ -168,13 +222,13 @@ final class ForwardedHeaders
         }
         self::$warned[$peer] = true;
 
-        $names = implode(', ', array_map(static fn(string $n): string => self::NAMES[$n], array_keys($present)));
+        $names = implode(', ', array_map(static fn(string $n): string => self::NAMES[$n][0], array_keys($present)));
         $why = $proxies->isEmpty()
             ? "no proxy is trusted. If {$peer} is your proxy, trust it: "
                 . "\$server->trustedProxies('{$peer}') in configureServer()."
             : 'it is not a trusted proxy (' . implode(', ', $proxies->list()) . '): '
                 . 'a client sending them past the proxy, or a proxy missing from the list.';
-        $logger->warning(
+        LoggerFactory::getLogger(TrustedProxies::class)->warning(
             "Forwarded headers from {$peer} ignored ({$names}): {$why}",
             array_map(self::clean(...), $present),
         );

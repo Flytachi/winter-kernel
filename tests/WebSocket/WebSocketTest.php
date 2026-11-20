@@ -74,6 +74,31 @@ final class WebSocketTest extends TestCase
         self::assertStringContainsString('error handshake exploded', $this->waitLog('error handshake'));
     }
 
+    /** The handshake reads the proxies the application trusts — and only theirs. */
+    public function test_the_handshake_believes_only_the_trusted_proxies(): void
+    {
+        $this->startServer(['WS_TRUSTED' => '127.0.0.1']);
+        self::co(function (): void {
+            $c = $this->client();
+            $c->setHeaders(['X-Forwarded-For' => '203.0.113.7']);
+            $c->upgrade('/ws?token=ok');
+            $c->close();
+        });
+        self::assertStringContainsString('ip 203.0.113.7', $this->waitLog('ip '));
+    }
+
+    public function test_the_handshake_ignores_forwarded_headers_by_default(): void
+    {
+        $this->startServer();
+        self::co(function (): void {
+            $c = $this->client();
+            $c->setHeaders(['X-Forwarded-For' => '203.0.113.7']);
+            $c->upgrade('/ws?token=ok');
+            $c->close();
+        });
+        self::assertStringContainsString('ip 127.0.0.1', $this->waitLog('ip '));
+    }
+
     /** A refusal is the framework's own answer; the 101 is Swoole's and keeps its name. */
     public function test_a_refused_handshake_names_the_server_winter(): void
     {
@@ -425,6 +450,9 @@ final class WebSocketTest extends TestCase
             "<?php\nrequire %s;\n"
             . "Flytachi\\Winter\\Kernel\\Kernel::init(pathRoot: %s);\n"
             . "Flytachi\\Winter\\DI\\Container::init();\n"
+            // What the application installs at boot from its configureServer().
+            . "if (getenv('WS_TRUSTED')) { Flytachi\\Winter\\Kernel\\Http\\TrustedProxies::install("
+            . "Flytachi\\Winter\\Kernel\\Http\\TrustedProxies::of(getenv('WS_TRUSTED'))); }\n"
             . "%s::start(%d);\n",
             var_export($autoload, true),
             var_export($this->root, true),

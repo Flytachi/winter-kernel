@@ -46,6 +46,7 @@ final class EchoSocket extends WebSocket
                 $conn->set('refused', true);
             }
         }
+        self::log('ip ' . $request->getClientIp());
         $conn->set('name', $request->getQueryParams()['name'] ?? 'anon');
         return $token !== 'bad';
     }

@@ -6,6 +6,7 @@ namespace Flytachi\Winter\Kernel\App\Config;
 
 use Flytachi\Winter\Kernel\App\ApplicationConfigException;
 use Flytachi\Winter\Kernel\App\BindAddress;
+use Flytachi\Winter\Kernel\Http\ProxyHeader;
 use Flytachi\Winter\Kernel\Http\TrustedProxies;
 use Flytachi\Winter\Kernel\Kernel;
 
@@ -91,6 +92,7 @@ final class ServerSettings
         private int $baselineBytes = 0,
         private string $serverHeader = self::DEFAULT_SERVER_HEADER,
         private ?TrustedProxies $trustedProxies = null,
+        private array $trustedHeaders = [],
     ) {
     }
 
@@ -776,10 +778,35 @@ final class ServerSettings
         return $this;
     }
 
-    /** Whose forwarded headers are believed — nobody's unless set. */
+    /**
+     * Which of a trusted proxy's headers are believed. Default: `X-Forwarded-*` only — what
+     * nginx, HAProxy, Nginx Proxy Manager and ingresses set. Name `X-Real-IP` or `Forwarded`
+     * only when your proxy writes them: a proxy passes on what it does not set as the
+     * client sent it, and the client would choose its own address.
+     *
+     * ```
+     * $server->trustedHeaders(ProxyHeader::XForwarded, ProxyHeader::XRealIp);
+     * $server->trustedHeaders(ProxyHeader::Forwarded);     // a proxy speaking RFC 7239 only
+     * ```
+     *
+     * With both, `X-Forwarded-For` is read first, then `Forwarded`, then `X-Real-IP`. A later
+     * call replaces the families.
+     *
+     * @throws \InvalidArgumentException None given.
+     * @link https://winterframe.net/docs/web-configuration Trusted proxies
+     */
+    public function trustedHeaders(ProxyHeader ...$headers): self
+    {
+        TrustedProxies::none()->withHeaders(...$headers);   // the same refusal, at the call
+        $this->trustedHeaders = array_values($headers);
+        return $this;
+    }
+
+    /** Whose forwarded headers are believed — nobody's unless set — and which of them. */
     public function getTrustedProxies(): TrustedProxies
     {
-        return $this->trustedProxies ?? TrustedProxies::none();
+        $proxies = $this->trustedProxies ?? TrustedProxies::none();
+        return $this->trustedHeaders === [] ? $proxies : $proxies->withHeaders(...$this->trustedHeaders);
     }
 
     /** The `Server` header's value; empty when none is sent. */

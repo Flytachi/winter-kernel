@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flytachi\Winter\Kernel\Tests\App;
 
 use Flytachi\Winter\Kernel\App\Config\ServerSettings;
+use Flytachi\Winter\Kernel\Http\ProxyHeader;
 use Flytachi\Winter\Kernel\WinterApplication;
 use PHPUnit\Framework\TestCase;
 
@@ -36,7 +37,7 @@ final class ServerTrustedProxiesTest extends TestCase
         $settings = ServerSettings::fromEnv()->trustedProxies('10.0.0.0/8')->trustedProxies('172.16.0.0/12', '::1');
 
         self::assertSame(['172.16.0.0/12', '::1'], $settings->getTrustedProxies()->list());
-        self::assertSame('172.16.0.0/12, ::1', WinterApplication::proxiesSummary($settings->getTrustedProxies()));
+        self::assertSame('172.16.0.0/12, ::1 (X-Forwarded-*)', WinterApplication::proxiesSummary($settings->getTrustedProxies()));
         self::assertTrue($settings->trustedProxies()->getTrustedProxies()->isEmpty());
     }
 
@@ -44,7 +45,7 @@ final class ServerTrustedProxiesTest extends TestCase
     {
         $proxies = ServerSettings::fromEnv()->trustedProxies('*')->getTrustedProxies();
 
-        self::assertSame('* (every peer)', WinterApplication::proxiesSummary($proxies));
+        self::assertSame('* (every peer) (X-Forwarded-*)', WinterApplication::proxiesSummary($proxies));
     }
 
     public function test_a_wrong_value_stops_the_boot(): void
@@ -52,5 +53,22 @@ final class ServerTrustedProxiesTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage("'nginx'");
         ServerSettings::fromEnv()->trustedProxies('nginx');
+    }
+
+    public function test_the_header_families_are_set_apart_and_in_any_order(): void
+    {
+        $settings = ServerSettings::fromEnv()
+            ->trustedHeaders(ProxyHeader::XForwarded, ProxyHeader::XRealIp)
+            ->trustedProxies('10.0.0.0/8');
+
+        self::assertTrue($settings->getTrustedProxies()->believes(ProxyHeader::XRealIp));
+        self::assertFalse($settings->getTrustedProxies()->believes(ProxyHeader::Forwarded));
+        self::assertSame('10.0.0.0/8 (X-Forwarded-*, X-Real-IP)', WinterApplication::proxiesSummary($settings->getTrustedProxies()));
+    }
+
+    public function test_no_header_family_is_refused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        ServerSettings::fromEnv()->trustedHeaders();
     }
 }

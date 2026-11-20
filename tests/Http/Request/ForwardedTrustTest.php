@@ -7,6 +7,7 @@ namespace Flytachi\Winter\Kernel\Tests\Http\Request;
 use Flytachi\Winter\Kernel\Http\Adapter\ForwardedHeaders;
 use Flytachi\Winter\Kernel\Http\Adapter\FpmRequest;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleRequest;
+use Flytachi\Winter\Kernel\Http\ProxyHeader;
 use Flytachi\Winter\Kernel\Http\TrustedProxies;
 use Flytachi\Winter\Logger\LoggerFactory;
 use PHPUnit\Framework\TestCase;
@@ -112,7 +113,7 @@ final class ForwardedTrustTest extends TestCase
             'x-real-ip' => '203.0.113.7',
             'x-forwarded-proto' => 'https',
             'x-forwarded-host' => 'app.example.com',
-        ], '10.244.1.3', TrustedProxies::of('10.244.0.0/16'));
+        ], '10.244.1.3', TrustedProxies::of('10.244.0.0/16')->withHeaders(ProxyHeader::XForwarded, ProxyHeader::XRealIp));
 
         self::assertSame('203.0.113.7', $request->getClientIp());
         self::assertSame('https', $request->getScheme());
@@ -133,7 +134,7 @@ final class ForwardedTrustTest extends TestCase
         $request = self::request(
             ['forwarded' => 'for=1.2.3.4, for="[2001:db8::7]:4711";proto=https'],
             '10.0.0.5',
-            TrustedProxies::of('10.0.0.0/8'),
+            TrustedProxies::of('10.0.0.0/8')->withHeaders(ProxyHeader::Forwarded),
         );
 
         self::assertSame('2001:db8::7', $request->getClientIp());
@@ -148,7 +149,11 @@ final class ForwardedTrustTest extends TestCase
 
     public function test_a_star_believes_every_peer(): void
     {
-        $request = self::request(['x-real-ip' => '203.0.113.7', 'x-forwarded-proto' => 'https'], '172.18.0.3', TrustedProxies::of('*'));
+        $request = self::request(
+            ['x-real-ip' => '203.0.113.7', 'x-forwarded-proto' => 'https'],
+            '172.18.0.3',
+            TrustedProxies::of('*')->withHeaders(ProxyHeader::XForwarded, ProxyHeader::XRealIp),
+        );
 
         self::assertSame('203.0.113.7', $request->getClientIp());
         self::assertSame('https', $request->getScheme());
@@ -163,12 +168,78 @@ final class ForwardedTrustTest extends TestCase
             self::assertSame('http', new FpmRequest()->getScheme());
 
             $_SERVER['REMOTE_ADDR'] = '10.0.0.5';
-            $trusted = new FpmRequest(TrustedProxies::of('10.0.0.0/8'));
+            $trusted = new FpmRequest(TrustedProxies::of('10.0.0.0/8')->withHeaders(ProxyHeader::XForwarded, ProxyHeader::XRealIp));
             self::assertSame('1.2.3.4', $trusted->getClientIp());
             self::assertSame('https', $trusted->getScheme());
         } finally {
             $_SERVER = $saved;
         }
+    }
+
+    // ── Only the headers the proxy sets ────────────────────────────────────────
+
+    public function test_by_default_only_x_forwarded_is_believed(): void
+    {
+        // nginx appends X-Forwarded-For and passes a client's Forwarded and X-Real-IP on.
+        $request = self::request([
+            'host' => 'good.example',
+            'forwarded' => 'for=6.6.6.6;host=evil.example;proto=https',
+            'x-real-ip' => '6.6.6.6',
+            'x-forwarded-for' => '9.9.9.9',
+            'x-forwarded-host' => 'good.example',
+        ], '10.0.0.2', TrustedProxies::of('10.0.0.0/8'));
+
+        self::assertSame('9.9.9.9', $request->getClientIp());
+        self::assertSame('good.example', $request->getHost());
+        self::assertSame('http', $request->getScheme());
+    }
+
+    public function test_x_forwarded_for_wins_over_x_real_ip_when_both_are_believed(): void
+    {
+        $proxies = TrustedProxies::of('10.0.0.0/8')->withHeaders(ProxyHeader::XForwarded, ProxyHeader::XRealIp);
+
+        self::assertSame('9.9.9.9', self::request(['x-real-ip' => '6.6.6.6', 'x-forwarded-for' => '9.9.9.9'], '10.0.0.2', $proxies)->getClientIp());
+        self::assertSame('9.9.9.9', self::request(['x-real-ip' => '9.9.9.9'], '10.0.0.2', $proxies)->getClientIp());
+    }
+
+    public function test_an_x_real_ip_naming_a_proxy_is_not_the_client(): void
+    {
+        $proxies = TrustedProxies::of('10.0.0.0/8')->withHeaders(ProxyHeader::XRealIp);
+
+        self::assertSame('10.0.0.2', self::request(['x-real-ip' => '10.0.0.7'], '10.0.0.2', $proxies)->getClientIp());
+    }
+
+    public function test_forwarded_proto_and_host_come_from_the_client_element(): void
+    {
+        // The client wrote the first element; the proxy appended the second.
+        $request = self::request(
+            ['host' => 'backend', 'forwarded' => 'for=6.6.6.6;host=evil.example;proto=https, for=9.9.9.9;host=good.example;proto=http'],
+            '10.0.0.2',
+            TrustedProxies::of('10.0.0.0/8')->withHeaders(ProxyHeader::Forwarded),
+        );
+
+        self::assertSame('9.9.9.9', $request->getClientIp());
+        self::assertSame('good.example', $request->getHost());
+        self::assertSame('http', $request->getScheme());
+    }
+
+    public function test_a_quoted_forwarded_value_is_not_split(): void
+    {
+        $request = self::request(
+            ['forwarded' => 'for="9.9.9.9";xhost=evil.example;host="good.example"'],
+            '10.0.0.2',
+            TrustedProxies::of('10.0.0.0/8')->withHeaders(ProxyHeader::Forwarded),
+        );
+
+        self::assertSame('9.9.9.9', $request->getClientIp());
+        self::assertSame('good.example', $request->getHost());
+    }
+
+    public function test_a_port_out_of_range_is_ignored(): void
+    {
+        $request = self::request(['host' => 'app.example', 'x-forwarded-proto' => 'https', 'x-forwarded-port' => '99999'], '10.0.0.2', TrustedProxies::of('10.0.0.0/8'));
+
+        self::assertSame('https://app.example', $request->getBaseUrl());
     }
 
     // ── The warning ────────────────────────────────────────────────────────────

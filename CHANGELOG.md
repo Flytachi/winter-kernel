@@ -25,8 +25,11 @@ public function configureServer(ServerSettings $server, ApplicationArguments $ar
 ```
 
 `getHost()` is unchanged where the proxy passes `Host` as it is (nginx with
-`proxy_set_header Host $host`, Nginx Proxy Manager, HAProxy by default). Until the proxy is
-added, the log says which address sent the headers that were ignored.
+`proxy_set_header Host $host`, Nginx Proxy Manager, HAProxy by default). Only `X-Forwarded-*`
+is read by default; a proxy that passes the client in `X-Real-IP` alone needs
+`->trustedHeaders(ProxyHeader::XForwarded, ProxyHeader::XRealIp)`. Until the proxy is added,
+the log says which address sent the headers that were ignored. WebSocket handshakes read the
+same list — behind a proxy, add it for them too.
 
 ### Added
 
@@ -62,13 +65,26 @@ added, the log says which address sent the headers that were ignored.
   published container port) took `curl -H "X-Real-IP: 1.2.3.4"` for the client 1.2.3.4 — in
   audit logs, IP rate limits, IP allow-lists — and a forged `X-Forwarded-Host` for the host
   of the links it built. Now they are read only on a request from
-  `ServerSettings::trustedProxies()` — addresses, networks (IPv4, IPv6) or `*`; nobody by
+  `ServerSettings::trustedProxies()` — addresses, networks (IPv4, IPv6) or `*` (the peer,
+  whoever it is: only it is a proxy, and the rightmost hop is the client); nobody by
   default, and no environment variable: the application decides where the list comes from.
   A wrong value stops the boot by name; the banner and the boot log say whom it trusts.
+- **Only the headers the proxy sets.** A proxy passes on a client's headers it does not set
+  itself — nginx appends `X-Forwarded-For` and forwards `Forwarded` and `X-Real-IP` as the
+  client sent them. So only `X-Forwarded-*` is read by default; `X-Real-IP` and `Forwarded`
+  when named: `ServerSettings::trustedHeaders(ProxyHeader ...)`. With several, the address
+  comes from `X-Forwarded-For`, then `Forwarded`, then `X-Real-IP`; an `X-Real-IP` naming a
+  trusted proxy is not the client. `Forwarded`'s `proto` and `host` come from the client's
+  element, not the leftmost one; a quoted value is not split.
 - **`X-Forwarded-For` and `Forwarded` are read from the right.** The leftmost public address
   was taken — the part the client writes itself, forgeable behind a trusted proxy too; now
   the first address that is not a trusted proxy, counted from the right. A client in a
-  private network is no longer passed over.
+  private network is no longer passed over. A port (`ip:port`, `[ipv6]:port`) and a zone are
+  cut off a hop; a hop that is no address (`unknown`, `_hidden`) stops the walk — the proxy
+  is then the client. Every spelling of an IPv4-mapped address is its IPv4.
+- **WebSocket handshakes read the same trusted proxies** as the HTTP server — the
+  application's, installed at boot (with no HTTP server, from its `configureServer()` all
+  the same). `X-Forwarded-Port` outside 1–65535 is ignored.
 - **Forwarded headers from an untrusted sender are a warning** — once per sender per worker,
   for 32 senders at most: a proxy missing from the list, or a client passing for someone
   else. The header values go to the record's context, line breaks removed. Both adapters

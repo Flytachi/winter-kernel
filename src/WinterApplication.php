@@ -68,6 +68,8 @@ use Flytachi\Winter\Kernel\Http\Sse\SseEmitter;
 use Flytachi\Winter\Kernel\Http\Health\Health;
 use Flytachi\Winter\Kernel\Http\Health\HealthContributor;
 use Flytachi\Winter\Kernel\Http\Health\HealthIndicator;
+use Flytachi\Winter\Kernel\Http\ProxyHeader;
+use Flytachi\Winter\Kernel\Http\TrustedProxies;
 use Flytachi\Winter\Kernel\Plugin;
 use Flytachi\Winter\Kernel\Process\BeforeFork;
 use Flytachi\Winter\Kernel\Process\ForkReset;
@@ -875,6 +877,12 @@ abstract class WinterApplication
             }
             $companions[] = $component;
         }
+        // The proxies the servers believe — the HTTP server's, and every WebSocket forked
+        // from here takes them too: one list, the application's.
+        TrustedProxies::install(
+            $settings?->getTrustedProxies() ?? static::trustedProxiesWithoutHttp($args)
+        );
+
         // The frontends ride on the HTTP server: its workers serve their files, on its port
         // or one it listens on as well. Their places are checked here, before anything binds.
         $sites = [];
@@ -1382,6 +1390,23 @@ abstract class WinterApplication
     // ── Internal ──────────────────────────────────────────────────────────────
 
     /**
+     * The trusted proxies of an application with no HTTP server — for its WebSockets: the
+     * application's {@see ServerConfigurer} says them all the same. Nobody without one.
+     */
+    private static function trustedProxiesWithoutHttp(ApplicationArguments $args): TrustedProxies
+    {
+        $c = self::$container;
+        if ($c === null || self::$serverConfigurer === null) {
+            return TrustedProxies::none();
+        }
+        $settings = ServerSettings::fromEnv();
+        /** @var ServerConfigurer $configurer */
+        $configurer = $c->make(self::$serverConfigurer);
+        $configurer->configureServer($settings, $args);
+        return $settings->getTrustedProxies();
+    }
+
+    /**
      * Builds the server settings: bind address + Swoole options. The address arrives
      * resolved — `#[EnableHttp]`, then `--http.port` / `--http.host`; base Swoole options
      * come from .env; the application's {@see ServerConfigurer} may then change both,
@@ -1815,13 +1840,21 @@ abstract class WinterApplication
      *
      * @internal
      */
-    public static function proxiesSummary(\Flytachi\Winter\Kernel\Http\TrustedProxies $proxies): string
+    public static function proxiesSummary(TrustedProxies $proxies): string
     {
-        return match (true) {
-            $proxies->trustsAll() => '* (every peer)',
-            $proxies->isEmpty() => 'none — forwarded headers ignored',
-            default => implode(', ', $proxies->list()),
-        };
+        if ($proxies->isEmpty()) {
+            return 'none — forwarded headers ignored';
+        }
+        $who = $proxies->trustsAll() ? '* (every peer)' : implode(', ', $proxies->list());
+        $headers = array_map(
+            static fn(ProxyHeader $h): string => match ($h) {
+                ProxyHeader::XForwarded => 'X-Forwarded-*',
+                ProxyHeader::XRealIp => 'X-Real-IP',
+                ProxyHeader::Forwarded => 'Forwarded',
+            },
+            $proxies->headers(),
+        );
+        return $who . ' (' . implode(', ', $headers) . ')';
     }
 
     /**
