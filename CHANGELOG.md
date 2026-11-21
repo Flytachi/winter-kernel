@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.7.1] — 2026-11-21
+
+### Fixed
+
+- **A Server-Sent Events stream no longer holds a database or Redis connection.** A coroutine
+  keeps the pooled connection of its first query until it ends, and a stream's coroutine ends
+  when the tab closes: with `#[WebAuth]` or any middleware that read the session, each open
+  tab held a connection for hours, and a few tabs emptied the pool — every other request of
+  the worker waited for `poolWaitTimeout` and failed. When a stream starts, its request's
+  connections now go back to their pools (`PpaConnectionPool::releaseCurrent()`,
+  `RedisPool::releaseCurrent()`); whatever it needs later — an `onClose` that writes — borrows
+  again, and a connection inside a transaction is kept, with a warning. Needs winter-ppa 1.3 /
+  winter-redis 1.2; with older ones, nothing changes.
+
+### Changed
+
+- Requires **winter-cdo `^4.1`**: PostgreSQL connections carry `tcp_user_timeout=10000`, so a
+  query on a socket the network dropped in silence fails in 10 s instead of hanging for
+  minutes — and a worker's stop no longer waits on it. With winter-cpool 1.3 (through
+  winter-ppa 1.3 / winter-redis 1.2) a liveness check that does not answer is no longer waited
+  for beyond 3 s.
+
 ## [4.7.0] — 2026-11-20
 
 Server-Sent Events: a controller returns a stream, and the browser's `EventSource` gets its

@@ -12,6 +12,8 @@ use Flytachi\Winter\Kernel\Tests\Http\Sse\Fixtures\FakeStreamingResponse;
 use Flytachi\Winter\Kernel\Tests\Route\Fixtures\FakeRequest;
 use Flytachi\Winter\Kernel\Route\RequestWatchdog;
 use Flytachi\Winter\Kernel\Tests\Route\Fixtures\FakeResponse;
+use Flytachi\Winter\Kernel\Tests\Http\Sse\Fixtures\StreamDb;
+use Flytachi\Winter\Ppa\Pool\PpaConnectionPool;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
@@ -329,6 +331,41 @@ final class SseEmitterTest extends TestCase
         self::stream($emitter, new FakeStreamingResponse());
 
         self::assertTrue($done);
+    }
+
+    public function test_the_request_gives_its_database_connection_back_when_the_stream_starts(): void
+    {
+        // A middleware that read the session borrowed it; a stream lives for hours on.
+        $file = tempnam(sys_get_temp_dir(), 'wk-sse-db-');
+        putenv("WK_SSE_DB={$file}");
+        $seen = [];
+        Coroutine\run(static function () use (&$seen): void {
+            Coroutine::create(static function () use (&$seen): void {
+                PpaConnectionPool::db(StreamDb::class)->query('SELECT 1');
+                $seen['before'] = PpaConnectionPool::stats()[StreamDb::class]['active'];
+                $emitter = new SseEmitter();
+                $emitter->onClose(static function () use (&$seen): void {
+                    // A clean-up that needs the database still gets it.
+                    $seen['onClose'] = PpaConnectionPool::db(StreamDb::class)->query('SELECT 2')->fetchColumn();
+                });
+                Coroutine::create(static function () use ($emitter, &$seen): void {
+                    Coroutine::sleep(0.05);
+                    $seen['during'] = PpaConnectionPool::stats()[StreamDb::class]['active'];
+                    $emitter->complete();
+                });
+                $emitter->send(new FakeStreamingResponse(), new FakeRequest('GET', '/events'));
+            });
+            Coroutine::sleep(0.2);
+            $seen['after'] = PpaConnectionPool::stats()[StreamDb::class];
+            PpaConnectionPool::shutdown();
+        });
+        @unlink($file);
+
+        self::assertSame(1, $seen['before']);
+        self::assertSame(0, $seen['during'], 'no connection held while the stream runs');
+        self::assertSame(2, (int) $seen['onClose']);
+        self::assertSame(0, $seen['after']['active']);
+        self::assertSame(1, $seen['after']['total'], 'one connection, given back and reused');
     }
 
     public function test_head_gets_the_headers_and_no_stream(): void

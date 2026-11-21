@@ -11,6 +11,8 @@ use Flytachi\Winter\Kernel\Http\Header;
 use Flytachi\Winter\Kernel\Http\Response\Sendable;
 use Flytachi\Winter\Kernel\Route\RequestWatchdog;
 use Flytachi\Winter\Logger\LoggerFactory;
+use Flytachi\Winter\Ppa\Pool\PpaConnectionPool;
+use Flytachi\Winter\Redis\RedisPool;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
 
@@ -206,6 +208,8 @@ final class SseEmitter implements Sendable, Streaming
             return;
         }
 
+        self::releaseConnections();
+
         $key = spl_object_id($this);
         self::$open[$key] = $this;
         $this->sendCid = Coroutine::getCid();
@@ -249,6 +253,24 @@ final class SseEmitter implements Sendable, Streaming
                 $response->end('');
             }
             $this->closed();
+        }
+    }
+
+    /**
+     * Gives the pooled connections this request borrowed — a middleware that read the
+     * session, a controller that loaded what a reconnect missed — back to their pools.
+     * A coroutine keeps them until it ends, and a stream's coroutine ends when the tab
+     * closes: a few open tabs would empty the pool for every other request of the worker.
+     * Whatever the stream needs later (an `onClose` that writes) borrows again. A
+     * connection inside a transaction is kept by the pool, with a warning. Pools of an
+     * older winter-ppa / winter-redis, without the method, keep theirs as before.
+     */
+    private static function releaseConnections(): void
+    {
+        foreach ([PpaConnectionPool::class, RedisPool::class] as $pool) {
+            if (method_exists($pool, 'releaseCurrent')) {
+                $pool::releaseCurrent();
+            }
         }
     }
 
