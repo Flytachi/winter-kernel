@@ -4,7 +4,10 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [4.7.2] — 2026-11-21
+
+A new class is found by the next start and by `call run dev` with `DEBUG=false`, and a
+controller parameter no request can fill is said at start.
 
 ### Added
 

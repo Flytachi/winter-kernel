@@ -54,7 +54,13 @@ Everything else comes from composer. Details: [Installation](https://winterframe
 
 ```bash
 composer require flytachi/winter-kernel
+composer require monolog/monolog     # for logs
 ```
+
+Logging writes through `monolog/monolog`, which the kernel does not pull in on purpose —
+an application that needs no logs carries no extra dependency. Without it the
+application runs as usual and silently logs nothing. Details:
+[Logging](https://winterframe.net/docs/logging).
 
 ## Mini start — two files
 
