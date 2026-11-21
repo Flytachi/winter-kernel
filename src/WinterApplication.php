@@ -56,6 +56,7 @@ use Flytachi\Winter\Kernel\Cache\Caches;
 use Flytachi\Winter\Kernel\Cache\CacheType;
 use Flytachi\Winter\Kernel\Concurrent\Async\AsyncInterceptor;
 use Flytachi\Winter\Kernel\Core\ClassScanner;
+use Flytachi\Winter\Kernel\Core\ScanCache;
 use Flytachi\Winter\Kernel\Core\Dep;
 use Flytachi\Winter\Kernel\Core\Proxy\ProxyCollector;
 use Flytachi\Winter\Kernel\Core\Proxy\ProxyFactory;
@@ -255,13 +256,15 @@ abstract class WinterApplication
         self::$bootStartedAt = hrtime(true);
         $args = ApplicationArguments::parse($argv);
 
+        $starts = self::startsTheApplication($args);
+        $watch = $starts && self::watches($args);
+        // Before the boot: its scan is the first to ask for the class-list cache.
+        ClassScanner::cacheMode(self::scanCacheFor($args));
+
         try {
             static::bootstrap($args);
 
-            if (self::startsTheApplication($args)) {
-                // `run dev` / `application start dev`: the word after the verb.
-                $mode = $args->command() === 'run' ? $args->sub() : $args->positional(2);
-                $watch = $mode === 'dev' || $args->flag('w') || $args->has('watcher');
+            if ($starts) {
                 static::serve($watch, $args);
             }
         } catch (\Throwable $e) {
@@ -288,6 +291,31 @@ abstract class WinterApplication
         }
         return $args->command() === 'run'
             || (in_array($args->command(), ['application', 'app'], true) && $args->sub() === 'start');
+    }
+
+    /**
+     * Whether a start runs under the DevWatcher: `run dev` / `application start dev` (the
+     * word after the verb), `-w` or `--watcher`.
+     */
+    private static function watches(ApplicationArguments $args): bool
+    {
+        $mode = $args->command() === 'run' ? $args->sub() : $args->positional(2);
+        return $mode === 'dev' || $args->flag('w') || $args->has('watcher');
+    }
+
+    /**
+     * What this command line does with the class-list cache. A start writes it anew, so
+     * the list is the code that is running; a start under the DevWatcher drops it, since
+     * the first new class would make it wrong; any other command only reads it — a command
+     * run before a class was added used to write the list that hid the class from the
+     * next start.
+     */
+    private static function scanCacheFor(ApplicationArguments $args): ScanCache
+    {
+        if (!self::startsTheApplication($args)) {
+            return ScanCache::Read;
+        }
+        return self::watches($args) ? ScanCache::Live : ScanCache::Refresh;
     }
 
     // ── Boot ──────────────────────────────────────────────────────────────────
@@ -458,7 +486,7 @@ abstract class WinterApplication
 
         $projectScan = $shared(ClassScanner::scanner(
             rootDir: Kernel::$pathRoot,
-            cache: $debug ? null : Kernel::$pathBuild . '/di.php',
+            cache: ClassScanner::cachePath(),
         ))->collect($serverCollector);
         $projectScan->execute();
 
@@ -1017,13 +1045,13 @@ abstract class WinterApplication
         }
         $settings->assertTls();
 
-        // The same class-list cache the boot scan built a moment ago: without it this
+        // The same class-list cache the boot scan wrote a moment ago: without it this
         // walks the whole tree a second time, `require_once`-ing every file again — and
         // this process's memory is what every worker forks from.
-        $router = Router::fromScan(
-            Kernel::$pathRoot,
-            cache: env('DEBUG', false) ? null : Kernel::$pathBuild . '/di.php',
-        );
+        $router = Router::fromScan(Kernel::$pathRoot, cache: ClassScanner::cachePath());
+        foreach ($router->unboundWarnings() as $warning) {
+            ($logger ?? LoggerFactory::getLogger('sys'))->warning($warning);
+        }
 
         // Says the arithmetic out loud before any worker exists: the memory limit is per
         // worker and shared by every coroutine in it, so what the box must hold is

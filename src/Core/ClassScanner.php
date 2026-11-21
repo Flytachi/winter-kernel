@@ -28,8 +28,59 @@ final class ClassScanner
     /** The file declaring the application class — scanned with the project's code. */
     private static ?string $entry = null;
 
+    /** What this process does with the class-list cache; a console command by default. */
+    private static ScanCache $cacheMode = ScanCache::Read;
+
+    /** Whether {@see cachePath()} has already dropped the old list in this process. */
+    private static bool $cacheDropped = false;
+
     private function __construct()
     {
+    }
+
+    /**
+     * Says what this process does with the class-list cache — before the first scan.
+     *
+     * @internal Called by {@see \Flytachi\Winter\Kernel\WinterApplication} from the
+     *     command line, before the boot.
+     */
+    public static function cacheMode(ScanCache $mode): void
+    {
+        self::$cacheMode = $mode;
+        self::$cacheDropped = false;
+    }
+
+    /**
+     * The class-list cache a scan of the project should use, or null to walk it.
+     *
+     * `DEBUG=true` — null, the file untouched. Otherwise by {@see ScanCache}:
+     *   - Read    — the file when it exists, null when not: a command never creates it;
+     *   - Refresh — the first call drops the file, so the scan given the path walks the
+     *               project and writes it; later calls get the path and read that list;
+     *   - Live    — the first call drops the file; every call is null.
+     *
+     * The one place the boot scan, the router and the health report take it from: they
+     * must agree, or the router would walk a project the boot has just listed.
+     */
+    public static function cachePath(): ?string
+    {
+        if (env('DEBUG', false) || !isset(Kernel::$pathBuild)) {
+            return null;
+        }
+        $path = Kernel::$pathBuild . '/di.php';
+
+        if (self::$cacheMode !== ScanCache::Read && !self::$cacheDropped) {
+            self::$cacheDropped = true;
+            if (is_file($path)) {
+                @unlink($path);
+            }
+        }
+
+        return match (self::$cacheMode) {
+            ScanCache::Read    => is_file($path) ? $path : null,
+            ScanCache::Refresh => $path,
+            ScanCache::Live    => null,
+        };
     }
 
     /**

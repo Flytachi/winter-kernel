@@ -80,6 +80,26 @@ final class ParameterResolver
      */
     private const array ARRAY_COMPATIBLE = ['array', 'mixed', 'iterable'];
 
+    /** The attributes that name where a parameter's value comes from. */
+    private const array SOURCES = [
+        PathVariable::class,
+        RequestParam::class,
+        RequestBody::class,
+        RequestFile::class,
+        RequestJson::class,
+        RequestForm::class,
+        RequestXml::class,
+        RequestQuery::class,
+        RequestHeader::class,
+    ];
+
+    /**
+     * Types a value of the request is cast to — what a parameter without a source most
+     * likely meant to take from the query. A class (a DTO), the request and the response
+     * have rules of their own and are not among them.
+     */
+    private const array SCALARS = ['int', 'float', 'string', 'bool', BcNumber::class, Decimal::class];
+
     // ── Public API ────────────────────────────────────────────────────────────
 
     public static function resolve(
@@ -98,6 +118,53 @@ final class ParameterResolver
             }
         }
         return $args;
+    }
+
+    /**
+     * The parameters of a controller method that no request can ever fill: a scalar with
+     * no source attribute whose name is not a path variable of the route.
+     *
+     * Without an attribute a parameter is looked up among the path variables only — a
+     * query parameter needs `#[RequestParam]`. So `?string $q = null` under `/search` is
+     * null whatever `?q=` says, `int $page = 1` is always 1, and a required `string $q`
+     * fails every request with 500. Nothing says so at runtime; the route table, which
+     * knows both the parameters and the path, says it once at start.
+     *
+     * @param list<string> $pathParams The route's path variable names.
+     * @return list<array{name: string, outcome: 'default'|'null'|'fails'}> What each one
+     *     always is: its default value, null, or a failed request.
+     */
+    public static function unbound(ReflectionMethod $method, array $pathParams): array
+    {
+        $found = [];
+        foreach ($method->getParameters() as $param) {
+            if ($param->isVariadic() || in_array($param->getName(), $pathParams, true)) {
+                continue;
+            }
+            $type = $param->getType();
+            if (!$type instanceof ReflectionNamedType || !self::isScalar($type->getName())) {
+                continue;
+            }
+            foreach (self::SOURCES as $source) {
+                if ($param->getAttributes($source) !== []) {
+                    continue 2;
+                }
+            }
+            $found[] = [
+                'name'    => $param->getName(),
+                'outcome' => match (true) {
+                    $param->isDefaultValueAvailable() => $param->getDefaultValue() === null ? 'null' : 'default',
+                    $type->allowsNull()               => 'null',
+                    default                           => 'fails',
+                },
+            ];
+        }
+        return $found;
+    }
+
+    private static function isScalar(string $type): bool
+    {
+        return in_array($type, self::SCALARS, true) || is_subclass_of($type, BackedEnum::class);
     }
 
     // ── Resolution pipeline ───────────────────────────────────────────────────

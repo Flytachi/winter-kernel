@@ -74,6 +74,13 @@ final class Router
     /** The application's frontends; null — none, and routing is exactly what it was. */
     private ?SiteMap $sites = null;
 
+    /**
+     * Controller parameters nothing in a request fills, found while the routes were added.
+     *
+     * @var list<array{method: string, path: string, handler: string, param: string, outcome: string}>
+     */
+    private array $unbound = [];
+
     // ── Route registration ────────────────────────────────────────────────────
 
     /**
@@ -844,6 +851,49 @@ final class Router
     }
 
     // ── Debug helpers ─────────────────────────────────────────────────────────
+
+    /**
+     * Records a parameter of a route's handler that no request fills — see
+     * {@see \Flytachi\Winter\Kernel\Http\ParameterResolver::unbound()}.
+     *
+     * @param string $method The HTTP method, or `ANY` for a `#[RequestMapping]` without one.
+     * @param 'default'|'null'|'fails' $outcome What the parameter always is.
+     */
+    public function noteUnbound(string $method, string $path, string $handler, string $param, string $outcome): void
+    {
+        $this->unbound[] = compact('method', 'path', 'handler', 'param', 'outcome');
+    }
+
+    /**
+     * One warning per parameter no request fills: what is wrong and what to write. Said at
+     * start and by `call mapping` — the route works, so nothing else would say it.
+     *
+     * @param string $pattern Only the routes whose path contains it; empty — all.
+     * @return list<string>
+     */
+    public function unboundWarnings(string $pattern = ''): array
+    {
+        $warnings = [];
+        foreach ($this->unbound as $u) {
+            if ($pattern !== '' && !str_contains(ltrim($u['path'], '/'), $pattern)) {
+                continue;
+            }
+            $warnings[] = sprintf(
+                'Route %s %s (%s): $%s is never taken from the request — it is not a path variable, '
+                . 'and a query parameter needs #[RequestParam]. %s',
+                $u['method'],
+                $u['path'],
+                $u['handler'],
+                $u['param'],
+                match ($u['outcome']) {
+                    'default' => 'It is always its default value.',
+                    'null'    => 'It is always null.',
+                    default   => 'Every request to it fails with 500.',
+                },
+            );
+        }
+        return $warnings;
+    }
 
     /** @return list<array{method:string, path:string, handler:string}> */
     public function getRoutesSummary(): array

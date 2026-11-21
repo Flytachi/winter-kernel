@@ -30,7 +30,8 @@ final class Mapping extends Cmd
     private function showArg(string $pattern): void
     {
         try {
-            $routes  = Router::fromScan(Kernel::$pathRoot)->getRoutesSummary();
+            $router  = Router::fromScan(Kernel::$pathRoot);
+            $routes  = $router->getRoutesSummary();
             $pattern = trim($pattern, '/');
 
             $matched = $pattern === ''
@@ -51,6 +52,16 @@ final class Mapping extends Cmd
                     self::printKeyValue($key, '→ ' . $route['handler'], 45, 34, 36);
                 }
                 self::printLabel($label, 34);
+            }
+
+            // The routes work, so nothing else says it: a parameter no request fills.
+            $unbound = $router->unboundWarnings(trim($pattern, '/'));
+            if ($unbound !== []) {
+                self::printLabel('Unbound parameters (' . count($unbound) . ')', 33);
+                foreach ($unbound as $warning) {
+                    self::printWarning($warning);
+                }
+                self::printLabel('Unbound parameters', 33);
             }
         } catch (\Throwable $e) {
             self::printWarning("Show failed: " . $e->getMessage());

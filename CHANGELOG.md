@@ -4,6 +4,46 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **A controller parameter no request can fill is a warning at start.** Without a source
+  attribute a parameter is looked up among the path variables only — a query parameter
+  needs `#[RequestParam]`. Forgetting it was silent: `?string $q = null` under `/search`
+  was null whatever `?q=` said, `int $page = 1` was always 1, and a required `string $q`
+  failed every request with 500, while the route was registered and listed as if nothing
+  were wrong. Now a scalar parameter (`int`, `float`, `string`, `bool`, a backed enum,
+  `BcMath\Number`, `Decimal`) with no source attribute and no path variable of its name is
+  said once at start, in the `sys` log, with what it always is:
+  `Route GET /search (…::search): $q is never taken from the request — it is not a path
+  variable, and a query parameter needs #[RequestParam]. It is always null.`
+  `call mapping show` lists the same under the routes. Binding is unchanged, and nothing
+  is checked per request: the route table already knows the parameters and the path.
+
+### Fixed
+
+- **`call run dev` sees a new class.** With `DEBUG=false` it scanned from the class-list
+  cache (`.winter/build/di.php`): an edit of a controller came through, but a controller
+  added under it restarted the application and still answered 404 — the list was the one
+  of the last start. Under the DevWatcher (`run dev`, `-w`, `--watcher`) the project is now
+  walked on every start, and the list a start left behind is deleted, so the commands run
+  beside it do not read it either.
+- **A console command no longer writes the class list.** The first command with
+  `DEBUG=false` — a bare `php call` included — wrote it, and nothing rewrote it: a class
+  added afterwards stayed invisible to the next `call run` until `call di clean`. A command
+  now reads the list when there is one and walks the project when there is not.
+
+### Changed
+
+- **`call run` / `call application start` writes the class list anew** — one walk at start,
+  and the router, the health report and every later command read that list: it is the
+  code that is running, outside Docker too (a `git pull` and a restart without
+  `call di build`). `call di build` is unchanged and still checks the proxies and the cache
+  names before a start. A container whose entrypoint runs `di build` then walks the project
+  twice — about 10 ms per 200 classes each time. `DEBUG=true` is unchanged: walked, the
+  file left alone.
+
 ## [4.7.1] — 2026-11-21
 
 ### Fixed

@@ -224,15 +224,15 @@ class HealthIndicator implements HealthIndicatorInterface
      * magnitude slower than the other endpoints.
      *
      * The cache is the one the application boots from, so a hit costs a `require` of
-     * a class-name list and no filesystem work at all. `DEBUG=true` keeps the live
-     * walk, exactly as it does everywhere else — a new datasource must show up in the
-     * report without a rebuild.
+     * a class-name list and no filesystem work at all. `DEBUG=true` and `call run dev`
+     * keep the live walk, exactly as they do everywhere else — a new datasource must show
+     * up in the report without a rebuild.
      */
     private static function scanner(string $rootDir): Scanner
     {
         return ClassScanner::scanner(
             rootDir: $rootDir,
-            cache: env('DEBUG', false) ? null : Kernel::$pathBuild . '/di.php',
+            cache: ClassScanner::cachePath(),
         );
     }
 

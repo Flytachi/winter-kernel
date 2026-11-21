@@ -9,6 +9,8 @@ use Flytachi\Winter\Kernel\Route\Annotation\AbstractMapping;
 use Flytachi\Winter\Kernel\Route\Annotation\CrossOrigin;
 use Flytachi\Winter\Kernel\Route\Annotation\Timeout;
 use Flytachi\Winter\Kernel\Route\Annotation\RequestMapping;
+use Flytachi\Winter\Kernel\Http\ParameterResolver;
+use Flytachi\Winter\Kernel\Route\Route;
 use Flytachi\Winter\Kernel\Route\Router;
 use Flytachi\Winter\Kernel\Http\Stereotype\ControllerInterface;
 use Flytachi\Winter\Kernel\Http\Stereotype\Middleware;
@@ -71,6 +73,18 @@ final readonly class MappingCollector implements CollectorInterface
                 // The method's own #[Timeout] wins over the controller's; neither
                 // present leaves the global deadline in force (null).
                 $timeout = $this->collectTimeout($method->getAttributes(Timeout::class)) ?? $classTimeout;
+
+                // Once per mapping, not per verb: a #[RequestMapping] without a method is
+                // five routes with one handler.
+                foreach (ParameterResolver::unbound($method, Route::compile($url)[1]) as $unbound) {
+                    $this->router->noteUnbound(
+                        $httpMethod ?? 'ANY',
+                        $url,
+                        $ref->getName() . '::' . $method->getName(),
+                        $unbound['name'],
+                        $unbound['outcome'],
+                    );
+                }
 
                 if ($httpMethod !== null) {
                     $this->router->add($httpMethod, $url, $handler, $middlewares, $cors, $timeout);
