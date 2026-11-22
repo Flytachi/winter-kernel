@@ -86,6 +86,52 @@ final class ApplicationHealthTest extends TestCase
         ]));
     }
 
+    /** @param list<array<string, mixed>> $units */
+    private static function alive(array $units, int $seenAgo = 2, bool $running = true): array
+    {
+        return Application::aliveVerdict($running, false, self::NOW - $seenAgo, $units, self::NOW);
+    }
+
+    /** @return list<array<string, mixed>> A start migrating: High up, the rest held back. */
+    private static function migrating(): array
+    {
+        return [
+            self::unit('Redis', 'Running', ['priority' => 'High']),
+            self::unit('Server', 'Waiting', ['reason' => 'waits for onStarting']),
+            self::unit('Worker', 'Waiting', ['reason' => 'waits for onStarting']),
+        ];
+    }
+
+    public function test_a_start_in_onstarting_is_not_ready_and_says_why(): void
+    {
+        self::assertSame([1, 'unhealthy: starting, onStarting running'], self::verdict(self::migrating()));
+    }
+
+    public function test_a_start_in_onstarting_is_alive(): void
+    {
+        self::assertSame([0, 'alive: starting, onStarting running'], self::alive(self::migrating()));
+    }
+
+    public function test_alive_while_up_starting_or_restarting(): void
+    {
+        self::assertSame([0, 'alive: up'], self::alive([self::unit('Server', 'Running')]));
+        self::assertSame([0, 'alive: starting'], self::alive([self::unit('Server', 'Starting')]));
+        self::assertSame([0, 'alive: starting'], self::alive([
+            self::unit('Server', 'Waiting', ['restarts' => 1, 'retryAt' => self::NOW + 2]),
+        ]));
+        self::assertSame([0, 'alive: starting'], self::alive([]), 'no report of components yet');
+    }
+
+    public function test_dead_when_not_running_or_silent(): void
+    {
+        self::assertSame([1, 'dead: not running'], self::alive([], running: false));
+        self::assertSame(
+            [1, 'dead: no report from the supervisor for 45s'],
+            self::alive(self::migrating(), seenAgo: 45),
+            'a supervisor that hangs is what a liveness probe is for',
+        );
+    }
+
     public function test_the_command_exits_1_with_one_line_when_the_application_does_not_run(): void
     {
         $project = sys_get_temp_dir() . '/wk_health_' . getmypid() . '_' . bin2hex(random_bytes(4));
@@ -100,12 +146,16 @@ final class ApplicationHealthTest extends TestCase
             HealthApplication::run($argv);
             PHP, var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true)));
         try {
-            $process = proc_open([PHP_BINARY, $project . '/bootstrap.php', 'app', 'health'], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $project);
-            $out = stream_get_contents($pipes[1]);
-            $err = stream_get_contents($pipes[2]);
-            fclose($pipes[1]);
-            fclose($pipes[2]);
-            $code = proc_close($process);
+            $run = static function (string $action) use ($project): array {
+                $process = proc_open([PHP_BINARY, $project . '/bootstrap.php', 'app', $action], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $project);
+                $out = stream_get_contents($pipes[1]);
+                $err = stream_get_contents($pipes[2]);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                return [proc_close($process), $out, $err];
+            };
+            [$code, $out, $err] = $run('health');
+            [$aliveCode, $aliveOut, $aliveErr] = $run('alive');
         } finally {
             exec('rm -rf ' . escapeshellarg($project));
         }
@@ -113,5 +163,6 @@ final class ApplicationHealthTest extends TestCase
         self::assertSame(1, $code);
         self::assertSame('', $out, 'nothing on stdout when unhealthy');
         self::assertSame("unhealthy: not running\n", $err, 'one line, nothing around it');
+        self::assertSame([1, '', "dead: not running\n"], [$aliveCode, $aliveOut, $aliveErr]);
     }
 }

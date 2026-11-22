@@ -34,6 +34,18 @@ All notable changes to this project are documented here. The format follows
   under `call run dev` so is a history whose versions are not applied because
   `#[EnablePpaMigration]` is not set.
 
+- **The start waits for another instance's migration as long as it runs** — two replicas starting
+  together: the second used to give up after 300 s, fail its start and be restarted to wait again,
+  later each time (CrashLoopBackOff). It says it waits every 30 s; `call application alive` stays 0
+  meanwhile. `call db migrate` keeps its 300 s.
+- **`call application alive`** — for a liveness probe: exit 0 while the supervisor runs and
+  reports, a start that migrates for minutes included (`alive: starting, onStarting running`);
+  `dead: …` and 1 when it does not run or has been silent past 30 s. `health` stays what it was —
+  ready, every critical component up — and says `unhealthy: starting, onStarting running` during
+  onStarting instead of every component held back. A k8s liveness probe on `health` or on
+  `/actuator/health` (no port before onStarting is done) killed a long migration midway, and the
+  next start began it again.
+
 - **`call db sql` and `call db migrate` say what a server would not build as the entities declare
   it** (winter-ppa's `SchemaCheck`: an index method the server has not, a partial unique index on
   MySQL, an operator class without its extension…): `sql` says it, `migrate` of 4.x creates nothing

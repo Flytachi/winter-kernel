@@ -64,6 +64,9 @@ final class Supervisor
     private const float HELD_INTERVAL = 1.0;
     /** Seconds between publications when nothing changed: the application is still here. */
     private const float HEARTBEAT = 10.0;
+    /** Why a component waits while onStarting() runs — what `call application alive` reads. */
+    public const string WAITS_FOR_STARTING = 'waits for onStarting';
+
     /** Seconds between asks of an outside program's readiness check. */
     private const float PROBE_INTERVAL = 0.5;
     /** Seconds a readiness check may take before it counts as a no. */
@@ -1850,7 +1853,7 @@ final class Supervisor
             return '';
         }
         return $this->startingPid > 0
-            ? 'waits for onStarting'
+            ? self::WAITS_FOR_STARTING
             : 'waits for ' . self::levelName($this->openRank) . ' to be ready';
     }
 

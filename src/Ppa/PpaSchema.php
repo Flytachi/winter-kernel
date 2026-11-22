@@ -184,7 +184,10 @@ final class PpaSchema
                 continue;
             }
             $any = true;
-            self::migrator($db, $logger)->migrate();
+            // No limit on waiting for another instance's run: failing the start after 300 s
+            // only restarted it to wait again, later each time (CrashLoopBackOff). The lock
+            // dies with its holder's connection; `call db migrate` keeps its limit.
+            self::migrator($db, $logger)->migrate(lockTimeout: 0);
             $db['config']->disconnect();
         }
         if (!$any) {

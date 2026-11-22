@@ -8,7 +8,9 @@ services:
     environment:
       DEV: ${DEV:-false}
     stop_grace_period: 40s
-    # Healthy while every critical component runs: `call application health` exits 0, else 1.
+    # Healthy while every critical component runs: `call application health` exits 0, else 1 —
+    # what `depends_on: condition: service_healthy` waits for. Docker does not restart an
+    # unhealthy container; a liveness probe that does (k8s) asks `call application alive`.
     healthcheck:
       test: ["CMD", "php", "call", "application", "health"]
       interval: 30s

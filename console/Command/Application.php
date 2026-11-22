@@ -15,6 +15,7 @@ use Flytachi\Winter\Kernel\App\Config\ServerSettings;
 use Flytachi\Winter\Kernel\App\Priority;
 use Flytachi\Winter\Kernel\App\Runtime\ApplicationRecord;
 use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
+use Flytachi\Winter\Kernel\App\Supervision\Supervisor;
 use Flytachi\Winter\Kernel\Kernel;
 use Flytachi\Winter\Kernel\WinterApplication;
 
@@ -27,13 +28,14 @@ final class Application extends Cmd
 {
     private const int CL = 34;
 
-    public static string $title = "the application: start | stop | status | health | info";
+    public static string $title = "the application: start | stop | status | health | alive | info";
 
     public function handle(): void
     {
         // One line and an exit code, nothing around them: what a container's health check reads.
-        if (strtolower($this->args['arguments'][1] ?? '') === 'health') {
-            $this->healthArg(WinterApplication::getAppClass());
+        $action = strtolower($this->args['arguments'][1] ?? '');
+        if ($action === 'health' || $action === 'alive') {
+            $this->healthArg(WinterApplication::getAppClass(), $action === 'alive');
         }
 
         self::printTitle("Application", self::CL);
@@ -51,7 +53,7 @@ final class Application extends Cmd
             'status', '' => $this->statusArg($app),
             'stop'   => $this->stopArg($app),
             'start'  => $this->startArg(),
-            default  => self::printWarning("Unknown action (start|stop|status|health|info)."),
+            default  => self::printWarning("Unknown action (start|stop|status|health|alive|info)."),
         };
 
         self::printTitle("Application", self::CL);
@@ -65,19 +67,62 @@ final class Application extends Cmd
      *
      * @param class-string<WinterApplication>|'' $app
      */
-    private function healthArg(string $app): never
+    private function healthArg(string $app, bool $alive): never
     {
-        [$code, $line] = $app === ''
-            ? [1, 'unhealthy: no WinterApplication booted this command']
-            : self::verdict(
+        if ($app === '') {
+            [$code, $line] = [1, ($alive ? 'dead' : 'unhealthy') . ': no WinterApplication booted this command'];
+        } else {
+            $args = [
                 ApplicationRuntime::live($app) !== null,
                 ApplicationRuntime::servingElsewhere() !== null,
                 ApplicationRuntime::seenAt($app),
                 ApplicationRuntime::units($app),
                 time(),
-            );
+            ];
+            [$code, $line] = $alive ? self::aliveVerdict(...$args) : self::verdict(...$args);
+        }
         fwrite($code === 0 ? STDOUT : STDERR, $line . PHP_EOL);
         exit($code);
+    }
+
+    /**
+     * Whether the application is alive — for a liveness probe, which restarts what fails
+     * it: its supervisor runs and keeps reporting. Not whether it is ready: a start that
+     * migrates the schema for minutes is alive all along, its components waiting for
+     * onStarting — a liveness probe asking {@see verdict()} killed it midway, and the next
+     * start began the same migration again. A component restarting is the supervisor's
+     * work, alive too; an application that gave up stops, and is not running.
+     *
+     * @param list<array<string, mixed>> $units
+     * @return array{0: int, 1: string} The exit code and the line.
+     */
+    public static function aliveVerdict(bool $running, bool $elsewhere, int $seenAt, array $units, int $now): array
+    {
+        if (!$running) {
+            return [1, $elsewhere
+                ? 'dead: it runs in another environment — check it there'
+                : 'dead: not running'];
+        }
+        $silent = $now - $seenAt;
+        if ($silent > ApplicationRuntime::HEARTBEAT_TTL) {
+            return [1, "dead: no report from the supervisor for {$silent}s"];
+        }
+        if (self::onStarting($units)) {
+            return [0, 'alive: starting, onStarting running'];
+        }
+        [$code] = self::verdict($running, $elsewhere, $seenAt, $units, $now);
+        return [0, $code === 0 ? 'alive: up' : 'alive: starting'];
+    }
+
+    /** Some component waits for the application's onStarting() — the migrations among it. */
+    private static function onStarting(array $units): bool
+    {
+        foreach ($units as $unit) {
+            if (str_starts_with((string) ($unit['reason'] ?? ''), Supervisor::WAITS_FOR_STARTING)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -138,6 +183,9 @@ final class Application extends Cmd
                 default:
                     $degraded[] = "{$name} {$state}";
             }
+        }
+        if ($down !== [] && self::onStarting($declared)) {
+            return [1, 'unhealthy: starting, onStarting running'];
         }
         if ($down !== []) {
             return [1, 'unhealthy: ' . implode(', ', $down)];

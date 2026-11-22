@@ -77,7 +77,8 @@ final class Complete extends Cmd
             'start:run the application in the foreground (= run)',
             'stop:stop the running application (SIGTERM, waits)',
             'status:the application and every component, live',
-            'health:one line, exit 0 when healthy (a container health check)',
+            'health:one line, exit 0 when healthy: every critical component up (readiness)',
+            'alive:one line, exit 0 while it runs, a long start too (liveness)',
             'info:components that start with it + configuration',
         ],
         'application start' => [
@@ -92,6 +93,7 @@ final class Complete extends Cmd
         ],
         'application status' => [],
         'application health' => [],
+        'application alive'  => [],
         'application info'   => [],
 
         // --- mapping ---

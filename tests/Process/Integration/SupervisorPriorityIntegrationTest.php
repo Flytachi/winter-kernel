@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Kernel\Tests\Process\Integration;
 
+use Flytachi\Winter\Console\Command\Application;
 use Flytachi\Winter\Kernel\App\Component;
 use Flytachi\Winter\Kernel\App\Priority;
 use Flytachi\Winter\Kernel\App\Probe;
+use Flytachi\Winter\Kernel\App\Runtime\ApplicationRuntime;
 use PHPUnit\Framework\Attributes\Group;
 
 /**
@@ -205,6 +207,33 @@ final class SupervisorPriorityIntegrationTest extends IntegrationCase
 
         self::assertSame(0, $this->exitCode($supervisor));
         self::assertLessThan(3.0, microtime(true) - $sent);
+        self::assertNull($this->at('app', 'start'));
+    }
+
+    public function test_a_long_on_starting_is_alive_and_not_ready(): void
+    {
+        $app = self::$testApp;
+        $supervisor = $this->supervise(
+            [$this->program('app')],
+            asApplication: true,
+            starting: static function (): void {
+                sleep(30);                          // a migration of minutes
+            },
+        );
+
+        $verdicts = static function () use ($app): array {
+            $args = [ApplicationRuntime::live($app) !== null, false, ApplicationRuntime::seenAt($app),
+                ApplicationRuntime::units($app), time()];
+            return [Application::aliveVerdict(...$args), Application::verdict(...$args)];
+        };
+        self::assertTrue($this->pollUntil(static fn() => $verdicts()[0][0] === 0), 'alive while onStarting runs');
+        self::assertSame([
+            [0, 'alive: starting, onStarting running'],
+            [1, 'unhealthy: starting, onStarting running'],
+        ], $verdicts());
+
+        posix_kill($supervisor, SIGTERM);
+        self::assertSame(0, $this->exitCode($supervisor));
         self::assertNull($this->at('app', 'start'));
     }
 
