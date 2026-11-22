@@ -4,6 +4,62 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Schema versions** (needs winter-ppa with `Schema`): a `#[Migratable]` database's schema follows
+  its entities version by version, the history in `ppa/<Config>/` — the config's class name as it
+  is (`App\Config\PgDb` → `ppa/PgDb/`), the code of its versions in `ppa/<Config>/custom/`;
+  `db status` points at a folder of versions no config is named after (a config renamed).
+  - **`call db snapshot`** records what the entities changed since the last version
+    (`--name=`, `--drop=t.c,…`, `--keep=t.c,…`, `--db=`, `--dry`); it refuses what would lose data
+    or guess: a rename without `#[RenamedFrom]`, a column gone without `--drop` / `--keep`, a NOT
+    NULL column without a default, a change the driver cannot make.
+  - **`call db snapshot custom <name>`** — the same with a class for the version's code
+    (`before()` / `after()`); a version may be code only.
+  - **`call db snapshot clean`** removes the `#[RenamedFrom]` every database's history has
+    recorded — an entity of several databases keeps it until the last one has.
+  - **`call db status`** — versions applied, pending or failed, and whether the entities moved on.
+  - **`call db migrate`** applies the pending versions of a database with a history (`--dry`
+    prints the statements); a database without one keeps the create-if-missing pass of 4.x and is
+    told how to start a history. A failed database ends the command with 1.
+- **`#[EnablePpaMigration]`** on the application — the pending versions of every database are
+  applied at start, in the onStarting slot: after the High components, before anything else; a
+  version that fails stops the start. Refused at once without winter-ppa. What it did is said in
+  the console's lines when the output is a terminal, in log entries when it is not (a container);
+  nothing when there is nothing to apply.
+- **The start checks the schema versions** (files and entities, no database): a database whose
+  entities moved on from its last version — a snapshot forgotten — is said on every `call run`;
+  under `call run dev` so is a history whose versions are not applied because
+  `#[EnablePpaMigration]` is not set.
+
+- **`call db sql` and `call db migrate` say what a server would not build as the entities declare
+  it** (winter-ppa's `SchemaCheck`: an index method the server has not, a partial unique index on
+  MySQL, an operator class without its extension…): `sql` says it, `migrate` of 4.x creates nothing
+  for that database. `db snapshot` / `status` pass the config's `#[Extension]`s to the versions.
+
+### Changed
+
+- **`Application up` is said when it is true** — every component started, after onStarting and
+  the migrations — not before the supervisor starts anything: with a migration of minutes the
+  line no longer stands minutes ahead of an open port. The banner's `✔ Application up in …` moved
+  with it; `Banner::print()` takes the rows only, `Banner::printUp()` says it is up.
+- ⚠️ **Without `LOG_LEVEL` the logs are no longer off** — `sys` and `http` write `critical` to
+  stdout (`LOG_OUTPUT`, `LOG_FORMAT` apply as with a level). Before, an unset `LOG_LEVEL` sent
+  every channel to nothing; to keep that, set `LOG_OUTPUT=null`. A channel's level is still
+  `LOG_<CHANNEL>_LEVEL`, else `LOG_LEVEL`, else the default — now `critical`, before `info`
+  (`Kernel::channel('job')` included). `call application info` shows `critical (default)`, `/actuator` the
+  level instead of `disabled`.
+- **Channels `ppa` and `redis`** — added only when winter-ppa / winter-redis is installed; `info`
+  without a level set, so what a start migrated and a pool losing connections are seen with no
+  configuration (`LOG_PPA_LEVEL=debug` shows every borrow and release, the rest stays quiet).
+  The connection pools, the schema versions at start and their checks write there under their
+  class names (`PpaConnectionPool`, `RedisPool`, `PpaSchema`) — before, in `sys` as `PPA`,
+  `Redis` and `Migrations`. `/actuator` lists them.
+- **A failed start is said once** — the line on stderr; the logger has it too only when a level
+  is set (`LOG_LEVEL` / `LOG_SYS_LEVEL`), not twice in `docker logs` by the default `critical`.
+
 ## [4.7.2] — 2026-11-21
 
 A new class is found by the next start and by `call run dev` with `DEBUG=false`, and a

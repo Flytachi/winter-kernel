@@ -43,13 +43,14 @@ trait SupervisesComponents
         ?\Closure $programLog = null,
         int $lineMax = Supervisor::LINE_MAX,
         int $entryMax = Supervisor::ENTRY_MAX,
+        bool $up = false,
     ): int {
         $storage = $this->storage;
         $app = self::$testApp;
         if ($asApplication) {
             $this->actAsApplication($app);
         }
-        return $this->fork(static function () use ($components, $storage, $asApplication, $app, $stopBudget, $starting, $programLog, $lineMax, $entryMax): void {
+        return $this->fork(static function () use ($components, $storage, $asApplication, $app, $stopBudget, $starting, $programLog, $lineMax, $entryMax, $up): void {
             $write = static fn(string $file, string $line) =>
                 file_put_contents("{$storage}/{$file}", $line . "\n", FILE_APPEND);
             $logger = new class ($write) extends AbstractLogger {
@@ -104,6 +105,7 @@ trait SupervisesComponents
                 programLog: $programLog,
                 lineMax: $lineMax,
                 entryMax: $entryMax,
+                up: $up ? static fn() => $write('up', sprintf('%.6f', microtime(true))) : null,
             ))->run(untilDone: !$asApplication);
             file_put_contents("{$storage}/exit", (string) $code);
         });
@@ -125,6 +127,13 @@ trait SupervisesComponents
     private function reports(): string
     {
         return (string) @file_get_contents($this->storage . '/reports');
+    }
+
+    /** When the supervisor said the start was over, or null. */
+    private function upAt(): ?float
+    {
+        $up = @file_get_contents($this->storage . '/up');
+        return $up === false ? null : (float) $up;
     }
 
     private function logged(): string

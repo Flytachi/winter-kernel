@@ -38,21 +38,31 @@ final class Banner
     private const string BOLD = "\033[1;97m";       // bold white
 
     /**
-     * Prints the banner to STDOUT.
+     * Prints the banner to STDOUT — what starts, before it does; {@see printUp()} says when
+     * it is up.
      *
      * @param list<array{string, string}> $rows Ordered label/value lines (web, daemon, …).
+     */
+    public static function print(array $rows): void
+    {
+        echo self::render($rows);
+    }
+
+    /**
+     * The banner's last line, once the application is up — every component started, after
+     * onStarting and the migrations — not when the banner is printed.
+     *
      * @param float $elapsedMs Milliseconds from boot start to now.
      */
-    public static function print(array $rows, float $elapsedMs): void
+    public static function printUp(float $elapsedMs): void
     {
-        echo self::render($rows, $elapsedMs);
+        echo self::renderUp($elapsedMs);
     }
 
     /**
      * @param list<array{string, string}> $rows Ordered label/value lines.
-     * @param float $elapsedMs Milliseconds from boot start to now.
      */
-    public static function render(array $rows, float $elapsedMs): string
+    public static function render(array $rows): string
     {
         $last = count(self::MARK) - 1;
         $out  = "\n";
@@ -81,13 +91,16 @@ final class Banner
                 self::RESET,
             );
         }
-        $out .= '   ' . self::LABEL . str_repeat('─', 53) . self::RESET . "\n";
-
-        $out .= '   ' . self::OK . '✔' . self::RESET
-              . ' ' . self::BOLD . 'Application up' . self::RESET
-              . self::META . ' in ' . self::elapsed($elapsedMs) . self::RESET . "\n\n";
+        $out .= '   ' . self::LABEL . str_repeat('─', 53) . self::RESET . "\n\n";
 
         return $out;
+    }
+
+    public static function renderUp(float $elapsedMs): string
+    {
+        return '   ' . self::OK . '✔' . self::RESET
+            . ' ' . self::BOLD . 'Application up' . self::RESET
+            . self::META . ' in ' . self::elapsed($elapsedMs) . self::RESET . "\n\n";
     }
 
     /**

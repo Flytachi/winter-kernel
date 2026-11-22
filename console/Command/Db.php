@@ -14,6 +14,17 @@ use Flytachi\Winter\Ppa\Mapping\Structure\Table;
 use Flytachi\Winter\Ppa\Pool\PoolTelemetry;
 use Flytachi\Winter\Kernel\App\PluginPackage;
 use Flytachi\Winter\Kernel\Plugin;
+use Flytachi\Winter\Kernel\Kernel;
+use Flytachi\Winter\Kernel\Ppa\ConsoleLogger;
+use Flytachi\Winter\Kernel\Ppa\PpaSchema;
+use Flytachi\Winter\Ppa\Schema\RenamedFromCleaner;
+use Flytachi\Winter\Ppa\Schema\SchemaCheck;
+use Flytachi\Winter\Ppa\Schema\SchemaModel;
+use Flytachi\Winter\Ppa\Schema\SchemaSnapshot;
+use Flytachi\Winter\Ppa\Schema\SchemaSql;
+use Flytachi\Winter\Ppa\Schema\SchemaVersionFile;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 final class Db extends Cmd
 {
@@ -60,6 +71,19 @@ final class Db extends Cmd
                 break;
             case 'pool':
                 $this->pool();
+                break;
+            case 'snapshot':
+                match ($sub = $this->args['arguments'][2] ?? '') {
+                    'clean' => $this->snapshotClean(),
+                    '', 'custom' => $this->snapshot(),
+                    'help' => self::help(),
+                    default => self::printWarning(
+                        "Unknown 'db snapshot {$sub}': snapshot, snapshot custom <name>, snapshot clean."
+                    ),
+                };
+                break;
+            case 'status':
+                $this->status();
                 break;
             default:
                 self::printWarning("Unknown argument '{$this->args['arguments'][1]}'");
@@ -291,6 +315,7 @@ final class Db extends Cmd
             foreach ($items as $item) {
                 $data = $this->processItemData($item);
                 self::printLabel("[$label] " . $item->config::class, 34);
+                self::checkItem($item);
 
                 if (in_array('e', $this->args['flags']) && count($data['sqlExtensions']) > 0) {
                     self::printLabel("Extensions (" . count($data['sqlExtensions']) . ")", 36);
@@ -339,6 +364,10 @@ final class Db extends Cmd
 
     private function migrate(): void
     {
+        // Databases with a schema history (ppa/<Config>/) move by their versions; the
+        // rest keep the create-if-missing pass below, as in 4.x.
+        $versioned = $this->targetsPlugins() ? [] : $this->migrateVersioned();
+
         foreach ($this->resolveTargets() as ['label' => $label, 'root' => $rootDir]) {
             $declaration = PPAMapping::scanningDeclaration($rootDir);
 
@@ -354,8 +383,19 @@ final class Db extends Cmd
             }
 
             foreach ($items as $item) {
+                if ($rootDir === null && in_array($item->config::class, $versioned, true)) {
+                    continue;
+                }
                 $data = $this->processItemData($item);
                 self::printLabel("[$label] " . $item->config::class, 34);
+                if (!self::checkItem($item)) {
+                    self::printBadge('migrate', 'REFUSED — nothing created', 34, 31);
+                    continue;
+                }
+                if ($rootDir === null) {
+                    self::printInfo('No schema history: `call db snapshot` records the first version, and from then on '
+                        . '`db migrate` applies versions (changes to existing tables included).');
+                }
                 $db = $item->config->connection();
 
                 // Extensions (pgsql only)
@@ -524,7 +564,7 @@ final class Db extends Cmd
             if ($structure instanceof Table) {
                 $schemaSql = $structure->createSchemaIfNotExists($item->config->getDriver());
                 if ($schemaSql !== null) {
-                    $title = str_replace(';', '', str_replace('CREATE SCHEMA ', '', $schemaSql));
+                    $title = (string) $structure->schema;
                     if (!isset($sqlSchemes[$title])) {
                         $sqlSchemes[$title] = ['title' => $title, 'exec' => $schemaSql];
                     }
@@ -565,6 +605,370 @@ final class Db extends Cmd
         ];
     }
 
+    // --- Schema versions (ppa/<Config>/) ---
+
+    private function targetsPlugins(): bool
+    {
+        return isset($this->args['options']['plugin']) || isset($this->args['options']['plugins']);
+    }
+
+    /**
+     * Applies the pending versions of every database with a history.
+     *
+     * @return list<string> The config classes it handled — the legacy pass skips them.
+     * A database that fails ends the command with 1.
+     */
+    private function migrateVersioned(): array
+    {
+        $handled = [];
+        $failed = [];
+        $dry = isset($this->args['options']['dry']);
+        foreach ($this->schemaDatabases() as $db) {
+            if (!$db['dir']->exists()) {
+                continue;
+            }
+            $handled[] = $db['config']::class;
+            self::printLabel(self::header($db), 34);
+            try {
+                $migrator = PpaSchema::migrator($db, self::consoleLogger());
+                if ($dry) {
+                    $this->printPlan($migrator->status(), $db['driver']);
+                } else {
+                    $done = $migrator->migrate();
+                    if ($done === []) {
+                        self::printBadge('migrate', 'UP TO DATE', 34, 32);
+                    }
+                    foreach ($done as $d) {
+                        $state = strtoupper($d['action']) . ($d['ms'] ? " {$d['ms']} ms" : '');
+                        self::printBadge($d['version'], $state, 34, 32);
+                    }
+                }
+            } catch (\Throwable $e) {
+                self::printBadge('migrate', 'FAILED', 34, 31);
+                self::printWarning($e->getMessage());
+                $failed[] = self::shortName($db['config']::class);
+            }
+            $db['config']->disconnect();
+        }
+        if ($failed !== []) {
+            self::fail('db migrate failed: ' . implode(', ', $failed) . '.');
+        }
+        return $handled;
+    }
+
+    /** `--dry`: what `migrate` would run, statement by statement. */
+    private function printPlan(array $status, string $driver): void
+    {
+        foreach ($status['problems'] as $p) {
+            self::printWarning($p);
+        }
+        if ($status['pending'] === []) {
+            self::printBadge('migrate', 'UP TO DATE', 34, 32);
+            return;
+        }
+        if ($status['state'] === 'fresh') {
+            self::printInfo('A fresh database: created from the model of ' . end($status['versions'])->version
+                . ' at once, ' . count($status['versions']) . ' version(s) recorded, no version code run.');
+            $fresh = SchemaSql::create(
+                SchemaModel::fold($status['versions']),
+                $driver,
+                SchemaModel::objects($status['versions']),
+            );
+            foreach ($fresh as $sql) {
+                self::printSplit($sql . ';', 36);
+            }
+            return;
+        }
+        if ($status['state'] === 'unversioned') {
+            self::printInfo(
+                'Tables without a history: the latest version they match is recorded as baseline, the rest applied.'
+            );
+        }
+        foreach ($status['pending'] as $v) {
+            self::printLabel($v->label() . ($v->hasCode() ? '   + code: before() / after()' : ''), 36);
+            foreach (SchemaSql::plan($v->changes, $driver) as ['change' => $c, 'sql' => $sql]) {
+                if ($sql === []) {
+                    self::printInfo(SchemaSnapshot::describe($c));
+                }
+                foreach ($sql as $statement) {
+                    self::printSplit($statement . ';', 36);
+                }
+            }
+        }
+    }
+
+    /** `call db snapshot [custom <name>]` — records a version from the entities. */
+    private function snapshot(): void
+    {
+        $custom = ($this->args['arguments'][2] ?? '') === 'custom';
+        $name = $custom ? ($this->args['arguments'][3] ?? null) : ($this->args['options']['name'] ?? null);
+        if ($custom && $name === null) {
+            self::printWarning('Usage: call db snapshot custom <name>');
+            return;
+        }
+        $drop = self::csv($this->args['options']['drop'] ?? null);
+        $keep = self::csv($this->args['options']['keep'] ?? null);
+        $only = $this->args['options']['db'] ?? null;
+        $dry = isset($this->args['options']['dry']);
+        $refused = false;
+        $dbs = $this->schemaDatabases();
+        if ($dbs === []) {
+            self::printWarning('No #[Migratable] database has entities — nothing to snapshot.');
+            return;
+        }
+        foreach ($dbs as $db) {
+            if ($only !== null && strcasecmp($only, $db['name']) !== 0) {
+                continue;
+            }
+            $folder = PpaSchema::DIR . "/{$db['name']}/";
+            self::printLabel(self::header($db), 34);
+            $diff = SchemaSnapshot::diff(
+                $db['dir'],
+                $db['tables'],
+                $db['driver'],
+                $drop,
+                $keep,
+                $custom,
+                $db['extensions'],
+            );
+            foreach ($diff->notices as $n) {
+                self::printInfo($n);
+            }
+            foreach ($diff->changes as $c) {
+                self::print('  ' . SchemaSnapshot::describe($c), ($c['by'] ?? null) === 'code' ? 33 : 36);
+            }
+            if ($diff->errors !== []) {
+                foreach ($diff->errors as $e) {
+                    self::printWarning($e);
+                }
+                self::printBadge('snapshot', 'NOT WRITTEN', 34, 31);
+                $refused = true;
+                continue;
+            }
+            if ($diff->isEmpty() && !$custom) {
+                self::printBadge('snapshot', 'NOTHING TO RECORD', 34, 33);
+                continue;
+            }
+            if ($diff->isEmpty()) {
+                self::printInfo('No schema change: a version of code only — its before() / after() change the data.');
+            }
+            if ($diff->needsCode() && !$custom) {
+                self::printWarning('Some changes are left to code: record them with `call db snapshot custom <name>`.');
+                $refused = true;
+                continue;
+            }
+            if ($dry) {
+                self::printBadge('snapshot', 'DRY — nothing written', 34, 33);
+                continue;
+            }
+            // The config's class name as the namespace of the version's code: a V003_FillStock
+            // of each database, or of the application and a package, in one process.
+            $written = SchemaSnapshot::write($db['dir'], $diff, $db['driver'], $name, $custom, $db['config']::class);
+            foreach ($written['files'] as $file) {
+                self::printBadge($folder . substr($file, strlen($db['dir']->path) + 1), 'WRITTEN', 34, 32);
+            }
+            if ($custom) {
+                self::printInfo('Fill in before() / after() of ' . $folder . SchemaVersionFile::CODE_DIR . '/'
+                    . basename(end($written['files']))
+                    . ' — after() makes what is marked [by code].');
+            }
+            if ($diff->stale !== []) {
+                self::printInfo('`call db snapshot clean` removes the #[RenamedFrom] already recorded.');
+            }
+        }
+        if ($refused) {
+            self::fail('db snapshot: nothing was written for a database with errors (see above).');
+        }
+    }
+
+    /**
+     * Ends the command with 1 after a refusal already explained above it — a warning, not
+     * an exception: there is no bug to trace, and a trace under DEBUG buries the reason.
+     */
+    private static function fail(string $message): never
+    {
+        self::printWarning($message);
+        self::printTitle("Db", 34);
+        exit(1);
+    }
+
+    /** `call db snapshot clean [--dry]` — removes the #[RenamedFrom] the history already has. */
+    private function snapshotClean(): void
+    {
+        $dry = isset($this->args['options']['dry']);
+        $byFile = [];
+        $needed = [];
+        $stale = [];
+        foreach ($this->schemaDatabases() as $db) {
+            $diff = SchemaSnapshot::diff($db['dir'], $db['tables'], $db['driver'], extensions: $db['extensions']);
+            foreach ($diff->needed as $n) {
+                $needed[$n['entity'] . '::' . $n['property']] = $db['name'];
+            }
+            array_push($stale, ...$diff->stale);
+        }
+        $told = [];
+        foreach ($stale as $s) {
+            if ($s['entity'] === null) {
+                continue;
+            }
+            $key = $s['entity'] . '::' . $s['property'];
+            // An entity of several databases keeps it while one of them has not recorded it.
+            if (isset($needed[$key])) {
+                if (!isset($told[$key])) {
+                    self::printInfo("{$s['entity']}::{$s['property']} keeps #[RenamedFrom('{$s['from']}')]: "
+                        . "the history of '{$needed[$key]}' has not recorded it yet.");
+                    $told[$key] = true;
+                }
+                continue;
+            }
+            $file = (string) (new \ReflectionClass($s['entity']))->getFileName();
+            // An entity shared by several databases is cleaned once.
+            $byFile[$file][$s['property']] = $s;
+        }
+        if ($byFile === []) {
+            self::printBadge('snapshot clean', 'NOTHING TO CLEAN', 34, 33);
+            return;
+        }
+        foreach ($byFile as $file => $stale) {
+            $rel = str_starts_with($file, Kernel::$pathRoot)
+                ? ltrim(substr($file, strlen(Kernel::$pathRoot)), '/')
+                : $file;
+            foreach ($stale as $s) {
+                $on = str_starts_with($s['property'], '@')
+                    ? 'the class ' . substr($s['property'], 1)
+                    : "\${$s['property']}";
+                self::printInfo("{$rel}: #[RenamedFrom('{$s['from']}')] on {$on} — recorded in {$s['version']}");
+            }
+            $out = RenamedFromCleaner::clean((string) file_get_contents($file), array_keys($stale));
+            if ($dry) {
+                self::printBadge($rel, "DRY — {$out['removed']} would go", 34, 33);
+                continue;
+            }
+            file_put_contents($file, $out['source']);
+            self::printBadge($rel, "CLEANED {$out['removed']}", 34, 32);
+        }
+    }
+
+    /** `call db status` — versions applied and pending, and whether the entities moved on. */
+    private function status(): void
+    {
+        $dbs = $this->schemaDatabases();
+        if ($dbs === []) {
+            self::printWarning('No #[Migratable] database has entities.');
+            return;
+        }
+        $only = $this->args['options']['db'] ?? null;
+        foreach ($dbs as $db) {
+            if ($only !== null && strcasecmp($only, $db['name']) !== 0) {
+                continue;
+            }
+            $folder = PpaSchema::DIR . "/{$db['name']}/";
+            self::printLabel(self::header($db), 34);
+            if (!$db['dir']->exists()) {
+                self::printWarning("No schema history yet — `call db snapshot` records the first version in {$folder}");
+                continue;
+            }
+            try {
+                $st = PpaSchema::migrator($db, new NullLogger())->status();
+                foreach ($st['versions'] as $v) {
+                    $row = $st['rows'][$v->version] ?? null;
+                    $state = $row['state'] ?? 'pending';
+                    $mark = match ($state) {
+                        'pending' => '○',
+                        'failed', 'running' => '✖',
+                        default => '✔',
+                    };
+                    $when = $row !== null ? substr((string) $row['applied_at'], 0, 19) : '';
+                    $color = $state === 'pending' ? 33 : ($mark === '✖' ? 31 : 32);
+                    $text = trim("{$state} {$when}") . ($v->hasCode() ? '   + code' : '');
+                    self::printKeyValue("{$mark} {$v->label()}", $text, 52, 34, $color);
+                }
+                foreach ($st['problems'] as $p) {
+                    self::printWarning($p);
+                }
+                self::printInfo(match ($st['state']) {
+                    'fresh' => 'A fresh database: `db migrate` creates it at the last version at once.',
+                    'unversioned' => 'Tables without a history: `db migrate` records the version they match '
+                        . 'as baseline.',
+                    'behind' => count($st['pending']) . ' version(s) pending — `call db migrate`.',
+                    'current' => 'Up to date.',
+                    default => 'No versions.',
+                });
+            } catch (\Throwable $e) {
+                self::printWarning('Cannot read the history: ' . $e->getMessage());
+            }
+            $diff = SchemaSnapshot::diff($db['dir'], $db['tables'], $db['driver'], extensions: $db['extensions']);
+            foreach ($diff->notices as $n) {
+                self::printInfo($n);
+            }
+            if (!$diff->isEmpty() || $diff->errors !== []) {
+                $todo = $diff->errors === [] ? '' : ', ' . count($diff->errors) . ' to decide';
+                self::printWarning('The entities differ from the last version (' . count($diff->changes)
+                    . " change(s){$todo}) — `call db snapshot` records them.");
+            }
+            $db['config']->disconnect();
+        }
+        foreach (PpaSchema::strays($dbs) as $stray) {
+            self::printWarning(PpaSchema::DIR . "/{$stray}/ has versions, but no #[Migratable] config is called "
+                . "{$stray}: renamed? Rename the folder after the config.");
+        }
+    }
+
+    /**
+     * What the server would not build as the entities declare it ({@see SchemaCheck}):
+     * notices and errors said; false when there is an error.
+     */
+    private static function checkItem(DeclarationItem $item): bool
+    {
+        if (!class_exists(SchemaCheck::class)) {
+            return true;            // a winter-ppa from before the check
+        }
+        $check = SchemaCheck::tables(
+            $item->getTables(),
+            $item->config->getDriver(),
+            array_map(static fn($e) => $e->name, $item->getExtensions()),
+        );
+        foreach ($check['notices'] as $n) {
+            self::printInfo($n);
+        }
+        foreach ($check['errors'] as $e) {
+            self::printWarning($e);
+        }
+        return $check['errors'] === [];
+    }
+
+    /** @return list<array> */
+    private function schemaDatabases(): array
+    {
+        return PpaSchema::databases();
+    }
+
+    /** @return list<string> */
+    private static function csv(mixed $value): array
+    {
+        if (!is_string($value) || $value === '') {
+            return [];
+        }
+        return array_values(array_filter(array_map('trim', explode(',', $value)), fn($v) => $v !== ''));
+    }
+
+    /** `MainDb (pgsql) — ppa/MainDb/` */
+    private static function header(array $db): string
+    {
+        return self::shortName($db['config']::class) . " ({$db['driver']}) — " . PpaSchema::DIR . "/{$db['name']}/";
+    }
+
+    private static function shortName(string $class): string
+    {
+        return substr($class, (int) strrpos('\\' . $class, '\\'));
+    }
+
+    /** What a migration says, as console lines. */
+    private static function consoleLogger(): LoggerInterface
+    {
+        return new ConsoleLogger();
+    }
+
     public static function help(): void
     {
         $cl = 34;
@@ -592,6 +996,10 @@ final class Db extends Cmd
         self::printBadge('migrate', 'run migrations against connected databases', $cl, 36);
         self::printBadge('sql', 'preview generated SQL without executing', $cl, 36);
         self::printBadge('pool', 'show connection-pool utilisation of the running application', $cl, 36);
+        self::printBadge('snapshot', 'record the entities as a new schema version (ppa/<Config>/)', $cl, 36);
+        self::printBadge('snapshot custom <name>', 'the same, with a class for what the kernel cannot do', $cl, 36);
+        self::printBadge('snapshot clean', 'remove the #[RenamedFrom] the history already recorded', $cl, 36);
+        self::printBadge('status', 'schema versions applied and pending, entities vs the last version', $cl, 36);
         self::printLabel("Commands", $cl);
 
         self::printLabel("Flags", $cl);
@@ -607,6 +1015,13 @@ final class Db extends Cmd
         self::printKeyValue("--plugin=<name>", "target one imported package (composer name)", 20, $cl, 36);
         self::printKeyValue("--plugins", "target every imported package", 20, $cl, 36);
         self::printInfo("(no option = app)");
+        self::printKeyValue("--name=<name>", "snapshot: the version's name (default: from its changes)", 20, $cl, 36);
+        self::printKeyValue("--drop=<t.c,…>", "snapshot: tables / columns gone that may be dropped", 20, $cl, 36);
+        self::printKeyValue("", "  extension:<name> — an extension no longer declared", 20, $cl, 36);
+        self::printKeyValue("--keep=<t.c,…>", "snapshot: columns gone, kept in the database", 20, $cl, 36);
+        self::printKeyValue("--db=<Config>", "snapshot / status: one database (its config class)", 20, $cl, 36);
+        self::printKeyValue("--dry", "snapshot / clean / migrate: show, change nothing", 20, $cl, 36);
+        self::printInfo("With ppa/<Config>/ a database migrates by its versions; without, by create-if-missing.");
         self::printLabel("Options", $cl);
 
         self::printDivider($cl);
@@ -619,6 +1034,12 @@ final class Db extends Cmd
         self::printInfo("call db migrate --plugin=acme/billing");
         self::printInfo("call db migrate --plugins");
         self::printInfo("call db sql --plugin=acme/billing -s");
+        self::printInfo("call db snapshot");
+        self::printInfo("call db snapshot --drop=orders.legacy_code");
+        self::printInfo("call db snapshot custom change_order_id");
+        self::printInfo("call db snapshot clean --dry");
+        self::printInfo("call db status");
+        self::printInfo("call db migrate --dry");
         self::printLabel("Examples", $cl);
 
         self::printDivider($cl);

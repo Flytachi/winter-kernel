@@ -134,6 +134,41 @@ final class SupervisorPriorityIntegrationTest extends IntegrationCase
         self::assertSame(0, $this->exitCode($supervisor));
     }
 
+    public function test_up_is_told_once_the_start_is_over_after_on_starting(): void
+    {
+        $events = $this->events;
+        $supervisor = $this->supervise(
+            [$this->program('app')],
+            starting: static function () use ($events): void {
+                usleep(300_000);                    // a migration that takes a while
+                file_put_contents($events, sprintf("starting %d %.6f\n", getmypid(), microtime(true)), FILE_APPEND | LOCK_EX);
+            },
+            up: true,
+        );
+
+        self::assertTrue($this->pollUntil(fn() => $this->upAt() !== null));
+        self::assertGreaterThanOrEqual((float) $this->line('starting')[2], $this->upAt(), 'after onStarting');
+        self::assertGreaterThanOrEqual($this->at('app', 'start'), $this->upAt(), 'after the components');
+
+        posix_kill($supervisor, SIGTERM);
+        self::assertSame(0, $this->exitCode($supervisor));
+        self::assertSame(1, substr_count((string) file_get_contents($this->storage . '/up'), "\n"), 'once');
+    }
+
+    public function test_up_is_never_told_when_on_starting_fails(): void
+    {
+        $supervisor = $this->supervise(
+            [$this->program('app')],
+            starting: static function (): void {
+                throw new \RuntimeException('migration 42 failed');
+            },
+            up: true,
+        );
+
+        self::assertSame(1, $this->exitCode($supervisor));
+        self::assertNull($this->upAt());
+    }
+
     public function test_on_starting_that_throws_stops_the_application_before_the_rest(): void
     {
         // Ready means its signal handlers are set: the stop that follows is one it answers.

@@ -263,7 +263,8 @@ final class Application extends Cmd
             self::printKeyValue(ucfirst($name), $value, 14, self::CL, $on ? 32 : 90);
         }
         self::printKeyValue("DEBUG", $this->env('DEBUG'), 14, self::CL, 36);
-        self::printKeyValue("LOG_LEVEL", $this->env('LOG_LEVEL'), 14, self::CL, 36);
+        $level = trim((string) env('LOG_LEVEL', ''));
+        self::printKeyValue("LOG_LEVEL", $level !== '' ? $level : 'critical (default)', 14, self::CL, 36);
         self::printLabel("Configuration", self::CL);
     }
 

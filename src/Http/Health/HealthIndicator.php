@@ -171,20 +171,27 @@ class HealthIndicator implements HealthIndicatorInterface
 
     public function loggers(): array
     {
-        $globalLevel  = env('LOG_LEVEL', '');
         $globalOutput = env('LOG_OUTPUT', 'auto');
         $globalFormat = env('LOG_FORMAT', 'line');
 
+        // name => the level without one set: the libraries' channels exist only with them.
+        $names = ['sys' => 'critical', 'http' => 'critical'];
+        if (DepSupport::has(Dep::Ppa)) {
+            $names['ppa'] = 'info';
+        }
+        if (DepSupport::has(Dep::Redis)) {
+            $names['redis'] = 'info';
+        }
+
         $channels = [];
-        foreach (['sys', 'http'] as $name) {
+        foreach ($names as $name => $default) {
             $prefix   = 'LOG_' . strtoupper($name) . '_';
-            $level    = env($prefix . 'LEVEL')  ?? $globalLevel;
             $output   = env($prefix . 'OUTPUT') ?? $globalOutput;
             $format   = env($prefix . 'FORMAT') ?? $globalFormat;
             $fileMax  = (int) (env($prefix . 'FILE_MAX') ?? env('LOG_FILE_MAX', 30));
 
             $entry = [
-                'level'  => $level !== '' ? strtoupper((string) $level) : 'disabled',
+                'level'  => strtoupper(Kernel::logLevel($name, $default)),
                 'output' => $output,
                 'format' => $format,
             ];

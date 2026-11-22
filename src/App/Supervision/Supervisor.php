@@ -150,6 +150,8 @@ final class Supervisor
      *     the program's process that wrote the line. The supervisor's own log when absent.
      * @param int $lineMax Bytes of one line of a parsed program's output.
      * @param int $entryMax Bytes of one entry of its log; what is past them is cut, and said.
+     * @param (\Closure(): void)|null $up Told once when the start is over — every level
+     *     opened, onStarting done: "Application up" is said here, not before the start.
      */
     public function __construct(
         array $components,
@@ -166,6 +168,7 @@ final class Supervisor
         private readonly ?\Closure $programLog = null,
         private readonly int $lineMax = self::LINE_MAX,
         private readonly int $entryMax = self::ENTRY_MAX,
+        private readonly ?\Closure $up = null,
     ) {
         $ordered = $starting !== null;
         foreach ($components as $component) {
@@ -491,6 +494,7 @@ final class Supervisor
             }
             if ($this->openRank >= Priority::Low->rank()) {
                 $this->startupDone = true;
+                $this->up !== null && ($this->up)();
                 return;
             }
             $this->openRank++;

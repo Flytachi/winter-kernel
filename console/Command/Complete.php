@@ -144,12 +144,21 @@ final class Complete extends Cmd
             'migrate:run migrations against connected databases',
             'sql:preview generated SQL without executing',
             'pool:show connection-pool utilisation of the running server',
+            'snapshot:record the entities as a new schema version',
+            'status:schema versions applied and pending',
         ],
+        'db snapshot' => [
+            'custom:a version with code for what the kernel cannot do', 'clean:remove recorded #[RenamedFrom]',
+            '--name=:the version name', '--drop=:tables / columns that may be dropped',
+            '--keep=:columns kept in the database', '--db=:one database', '--dry:show, write nothing',
+        ],
+        'db status' => ['--db=:one database'],
         'db ping'    => [],   // auto-scans project + all plugins
         'db pool'    => [],   // reads what the running workers publish
         'db migrate' => [
             '-s:schemes only', '-t:tables only', '-i:indexes only', '-c:constraints only',
             '--plugin=:target a single plugin', '--plugins:target all plugins',
+            '--dry:show what would run, change nothing',
         ],
         'db sql' => [
             '-s:schemes only', '-t:tables only', '-i:indexes only', '-c:constraints only',

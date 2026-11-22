@@ -88,7 +88,8 @@ final class Kernel extends KernelStore
      */
     private static function wirePpa(): void
     {
-        PpaConnectionPool::setLogger(LoggerFactory::getLogger('PPA'));
+        self::libraryChannel('ppa');
+        PpaConnectionPool::setLogger(LoggerFactory::getLogger(PpaConnectionPool::class, 'ppa'));
         // The session timezone must follow the request, and the request's zone is
         // coroutine-local — reading PHP's engine global instead would let a request that
         // yielded on I/O pick up a concurrent request's zone.
@@ -131,7 +132,8 @@ final class Kernel extends KernelStore
      */
     private static function wireRedis(): void
     {
-        RedisPool::setLogger(LoggerFactory::getLogger('Redis'));
+        self::libraryChannel('redis');
+        RedisPool::setLogger(LoggerFactory::getLogger(RedisPool::class, 'redis'));
 
         // fork-safety — the same hazard as for the DB pool, and worse to diagnose: a
         // fork copies descriptors, so a socket opened before it is physically shared
@@ -178,28 +180,14 @@ final class Kernel extends KernelStore
         }
     }
 
+    /**
+     * The two channels every application has: `sys` and `http`. With no `LOG_LEVEL` they
+     * still write — at `critical`, to stdout: what stops the application is never silent.
+     * A library's own channel (`ppa`, `redis`) is added by its wiring, and only when the
+     * library is installed.
+     */
     private static function bootLogger(): void
     {
-        $levelStr = trim((string) env('LOG_LEVEL', ''));
-
-        $null = [
-            'level' => 'info',
-            'format' => 'line',
-            'output' => 'null',
-            'file_path' => null,
-            'file_max' => 0,
-            'syslog_ident' => 'winter'
-        ];
-
-        if (empty($levelStr)) {
-            LoggerFactory::setManager(new LoggerManager(
-                contextStorage: new ProcessContext(),
-                channels: ['sys' => $null, 'http' => $null],
-            ));
-            LoggerFactory::setDefaultChannel('sys');
-            return;
-        }
-
         $channels = [
             'sys'  => self::buildChannelConfig('sys'),
             'http' => self::buildChannelConfig('http'),
@@ -214,6 +202,39 @@ final class Kernel extends KernelStore
         ));
 
         LoggerFactory::setDefaultChannel('sys');
+    }
+
+    /**
+     * A library's channel: `info` when no level is set, not `critical` — what it says is
+     * what an operator reads at a start (the schema migrated, a pool losing connections).
+     */
+    private static function libraryChannel(string $name): void
+    {
+        $config = self::buildChannelConfig($name, 'info');
+        if ($config['output'] === 'file') {
+            self::assertLogDirectory();
+        }
+        LoggerFactory::addChannel($name, $config);
+    }
+
+    /**
+     * The level of a channel: `LOG_<CHANNEL>_LEVEL`, else `LOG_LEVEL`, else `$default`.
+     * An empty value is no value.
+     */
+    public static function logLevel(string $channel, string $default = 'critical'): string
+    {
+        $level = trim((string) env('LOG_' . strtoupper($channel) . '_LEVEL', ''));
+        if ($level === '') {
+            $level = trim((string) env('LOG_LEVEL', ''));
+        }
+        return strtolower($level !== '' ? $level : $default);
+    }
+
+    /** Whether a level was set for the channel — its own or `LOG_LEVEL`. */
+    public static function logLevelSet(string $channel): bool
+    {
+        return trim((string) env('LOG_' . strtoupper($channel) . '_LEVEL', '')) !== ''
+            || trim((string) env('LOG_LEVEL', '')) !== '';
     }
 
     /**
@@ -318,10 +339,10 @@ final class Kernel extends KernelStore
         LoggerFactory::addChannel($name, self::buildChannelConfig($name));
     }
 
-    private static function buildChannelConfig(string $channel): array
+    private static function buildChannelConfig(string $channel, string $defaultLevel = 'critical'): array
     {
         $prefix   = 'LOG_' . strtoupper($channel) . '_';
-        $levelStr = strtolower((string) (env($prefix . 'LEVEL') ?? env('LOG_LEVEL', 'info')));
+        $levelStr = self::logLevel($channel, $defaultLevel);
 
         $rawOutput = (string) (env($prefix . 'OUTPUT') ?? env('LOG_OUTPUT', 'auto'));
         $output    = self::resolveOutput($rawOutput);

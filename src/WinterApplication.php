@@ -15,6 +15,7 @@ use Flytachi\Winter\Kernel\App\ApplicationConfigException;
 use Flytachi\Winter\Kernel\App\Attribute\EnableActuator;
 use Flytachi\Winter\Kernel\App\Attribute\EnableAsync;
 use Flytachi\Winter\Kernel\App\Attribute\EnableCaching;
+use Flytachi\Winter\Kernel\App\Attribute\EnablePpaMigration;
 use Flytachi\Winter\Kernel\App\Attribute\EnableDaemon;
 use Flytachi\Winter\Kernel\App\Attribute\EnableProcess;
 use Flytachi\Winter\Kernel\App\Attribute\EnableScheduler;
@@ -61,6 +62,7 @@ use Flytachi\Winter\Kernel\Core\Dep;
 use Flytachi\Winter\Kernel\Core\Proxy\ProxyCollector;
 use Flytachi\Winter\Kernel\Core\Proxy\ProxyFactory;
 use Flytachi\Winter\Kernel\Core\DepSupport;
+use Flytachi\Winter\Kernel\Ppa\PpaSchema;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleRequest;
 use Flytachi\Winter\Kernel\Http\Adapter\SwooleResponse;
 use Flytachi\Winter\Kernel\Dev\FrontProxy;
@@ -331,11 +333,11 @@ abstract class WinterApplication
      * arrives, and they failed silently in the one place that matters.
      *
      * So one line always goes to stderr, whatever `DEBUG` and the log settings say:
-     * the logger is off unless `LOG_LEVEL` is set, and the failure may come before it
-     * is configured at all. The line carries the exception's own message — a statement
-     * about the application's configuration, not about any request — and the stack
-     * trace only with `DEBUG=true`. The same failure is logged as critical when a
-     * logger is available.
+     * the failure may come before the logger is configured at all. The line carries the
+     * exception's own message — a statement about the application's configuration, not
+     * about any request — and the stack trace only with `DEBUG=true`. The same failure is logged as critical when a
+     * level is set (`LOG_LEVEL` or `LOG_SYS_LEVEL`) — without one the logger's default
+     * `critical` would repeat this line.
      */
     private static function bootFailed(\Throwable $e): never
     {
@@ -354,6 +356,13 @@ abstract class WinterApplication
         if ($stderr !== false) {
             fwrite($stderr, "winter: {$message}\n");
         }
+        // With no level set the logger writes `critical` too — to stdout, the same failure
+        // twice in `docker logs`. Its entry is for logs someone configured (JSON for a
+        // collector); the default has the line above.
+        if (!Kernel::logLevelSet('sys')) {
+            return;
+        }
+
         try {
             LoggerFactory::getLogger(static::class)->critical($message);
         } catch (\Throwable) {
@@ -386,6 +395,13 @@ abstract class WinterApplication
         $frame = $e->getTrace()[0] ?? [];
         if (isset($frame['class'], $frame['file']) && is_a($frame['class'], \Throwable::class, true)) {
             $origin = $frame['file'] . ':' . ($frame['line'] ?? 0);
+        }
+
+        // With no level set the logger writes `critical` too — to stdout, the same failure
+        // twice in `docker logs`. Its entry is for logs someone configured (JSON for a
+        // collector); the default has the line above.
+        if (!Kernel::logLevelSet('sys')) {
+            return;
         }
 
         try {
@@ -948,7 +964,8 @@ abstract class WinterApplication
         // that forks the rest.
         $web = $settings !== null ? static::prepareHttp($settings, $watch, $siteMap, $logger) : null;
 
-        if (Banner::isEnabled($args)) {
+        $banner = Banner::isEnabled($args);
+        if ($banner) {
             $rows = static::bannerRows($companions, $web?->host(), $web?->port(), $web?->scheme() ?? 'http');
             if ($web !== null) {
                 // What the profile resolved to, because a limit nobody can see is a limit
@@ -956,24 +973,34 @@ abstract class WinterApplication
                 $rows[] = ['profile', self::profileSummary($web->settings)];
                 $rows[] = ['proxies', self::proxiesSummary($web->settings->getTrustedProxies())];
             }
-            Banner::print($rows, self::elapsedMs());
+            Banner::print($rows);
         }
 
+        if ($web !== null) {
+            $logger->info('Trusted proxies: ' . self::proxiesSummary($web->settings->getTrustedProxies()));
+        }
+        static::checkSchemaVersions($watch);
+
         $names = array_map(static fn(Component $c): string => $c->name(), $companions);
-        $logger->info(sprintf(
+        $upLine = sprintf(
             'Application up%s%s%s',
             $web !== null ? ': ' . BindAddress::url($web->scheme(), $web->host(), $web->port()) : ' (headless)',
             $names === [] ? '' : ($web !== null ? ' + ' : ': ') . '[' . implode(', ', $names) . ']',
             $watch ? ' (dev/watch)' : ''
-        ));
-        if ($web !== null) {
-            $logger->info('Trusted proxies: ' . self::proxiesSummary($web->settings->getTrustedProxies()));
-        }
+        );
+        // Said when it is true: every component started — after onStarting and the
+        // migrations, which may take minutes — not when the banner is printed.
+        $up = static function () use ($banner, $logger, $upLine): void {
+            if ($banner) {
+                Banner::printUp(self::elapsedMs());
+            }
+            $logger->info($upLine);
+        };
 
         // Nothing the boot opened may be inherited by the components forked from here.
         BeforeFork::runAll();
 
-        $supervisor = self::supervisor($components, $web, $watch);
+        $supervisor = self::supervisor($components, $web, $watch, $up);
         $code = $supervisor->run(untilDone: true);
         // Still the running application while it runs: its lock is released after.
         static::runStopped();
@@ -1292,8 +1319,64 @@ abstract class WinterApplication
      * @param list<Component> $components
      * @param bool $dev Under `call run dev`: a parsed program's lines and entries may be longer.
      */
-    private static function supervisor(array $components, ?HttpTier $web, bool $dev = false): Supervisor
+    /**
+     * Whether the application applies its schema versions at start — `#[EnablePpaMigration]`.
+     * Refused at once without winter-ppa, before any component starts.
+     */
+    /**
+     * Before the start, from the files and the entities only — no database: a database
+     * whose entities moved on from its last version (a snapshot forgotten), and under
+     * `call run dev` the versions that will not be applied because #[EnablePpaMigration]
+     * is not set. Says, changes nothing; nothing at all without schema versions.
+     */
+    private static function checkSchemaVersions(bool $watch): void
     {
+        if (!DepSupport::has(Dep::Ppa)) {
+            return;
+        }
+        try {
+            $dbs = array_values(array_filter(
+                PpaSchema::databases(),
+                static fn(array $db): bool => $db['dir']->exists(),
+            ));
+        } catch (\Throwable $e) {
+            PpaSchema::startLogger()->warning('Schema versions not checked: ' . $e->getMessage());
+            return;
+        }
+        if ($dbs === []) {
+            return;
+        }
+        $out = PpaSchema::startLogger();
+        if ($watch && !static::migratesAtStart()) {
+            $out->warning(
+                '#[EnablePpaMigration] is not set on ' . static::class . ': pending schema versions are not '
+                . 'applied at start — set it, or run `call db migrate`.'
+            );
+        }
+        foreach (PpaSchema::drift($dbs) as $line) {
+            $out->warning($line);
+        }
+    }
+
+    private static function migratesAtStart(): bool
+    {
+        if (!static::hasAttribute(EnablePpaMigration::class)) {
+            return false;
+        }
+        if (!DepSupport::has(Dep::Ppa)) {
+            throw new ApplicationConfigException(
+                '#[EnablePpaMigration] needs flytachi/winter-ppa: composer require flytachi/winter-ppa'
+            );
+        }
+        return true;
+    }
+
+    private static function supervisor(
+        array $components,
+        ?HttpTier $web,
+        bool $dev = false,
+        ?\Closure $up = null,
+    ): Supervisor {
         $run = ApplicationRuntime::current()?->managedBy();
         return new Supervisor(
             $components,
@@ -1340,17 +1423,22 @@ abstract class WinterApplication
                 ? null
                 : static fn(array $units) => ApplicationRuntime::publishUnits($run->appClass, $units),
             stopBudget: self::stopBudget($components, $web?->settings->getStopWait()),
-            starting: static::overrides('onStarting')
-                ? static function (): void {
+            starting: ($migrate = static::migratesAtStart()) || static::overrides('onStarting')
+                ? static function () use ($migrate): void {
                     LoggerFactory::setContextStorage(new ProcessContext());
                     LoggerFactory::setDefaultChannel('sys');
                     ForkReset::runAll();
+                    // The schema first: the application's own onStarting() may read it.
+                    if ($migrate) {
+                        PpaSchema::migrateAll(PpaSchema::startLogger());
+                    }
                     static::onStarting();
                 }
                 : null,
             programLog: self::programLog(...),
             lineMax: $dev ? Supervisor::DEV_LINE_MAX : Supervisor::LINE_MAX,
             entryMax: $dev ? Supervisor::DEV_ENTRY_MAX : Supervisor::ENTRY_MAX,
+            up: $up,
         );
     }
 

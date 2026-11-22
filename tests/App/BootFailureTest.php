@@ -47,15 +47,17 @@ final class BootFailureTest extends TestCase
     /**
      * @return array{int, string, string} Exit code, stdout, stderr.
      */
-    private function boot(bool $debug): array
+    private function boot(bool $debug, string $env = ''): array
     {
-        file_put_contents($this->project . '/.env', 'DEBUG=' . ($debug ? 'true' : 'false') . "\n");
+        file_put_contents($this->project . '/.env', 'DEBUG=' . ($debug ? 'true' : 'false') . "\n" . $env);
 
         $process = proc_open(
             [PHP_BINARY, $this->project . '/bootstrap.php'],
             [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $this->project,
+            // The test's own LOG_* would win over the .env.
+            array_filter(getenv(), static fn(string $k): bool => !str_starts_with($k, 'LOG_'), ARRAY_FILTER_USE_KEY),
         );
         $stdout = stream_get_contents($pipes[1]);
         $stderr = stream_get_contents($pipes[2]);
@@ -83,6 +85,24 @@ final class BootFailureTest extends TestCase
         self::assertSame(1, $code);
         self::assertStringContainsString('No components declared', $stderr);
         self::assertStringContainsString('#0 ', $stderr);
+    }
+
+    public function test_without_a_log_level_the_failure_is_said_once(): void
+    {
+        [$code, $stdout, $stderr] = $this->boot(debug: false);
+
+        self::assertSame(1, $code);
+        self::assertStringContainsString('No components declared', $stderr);
+        self::assertStringNotContainsString('No components declared', $stdout, 'the default critical logger would repeat it');
+    }
+
+    public function test_with_a_log_level_the_logger_has_it_too(): void
+    {
+        [$code, $stdout, $stderr] = $this->boot(debug: false, env: "LOG_LEVEL=error\nLOG_COLOR=never\n");
+
+        self::assertSame(1, $code);
+        self::assertStringContainsString('No components declared', $stderr);
+        self::assertStringContainsString('Boot failed: No components declared', $stdout);
     }
 
     private function remove(string $path): void
