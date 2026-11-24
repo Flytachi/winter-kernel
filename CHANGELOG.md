@@ -21,8 +21,11 @@ All notable changes to this project are documented here. The format follows
   - **`call db snapshot clean`** removes the `#[RenamedFrom]` every database's history has
     recorded — an entity of several databases keeps it until the last one has.
   - **`call db status`** — versions applied, pending or failed, and whether the entities moved on.
-  - **`call db migrate`** applies the pending versions of a database with a history (`--dry`
-    prints the statements); a database without one keeps the create-if-missing pass of 4.x and is
+  - **`call db migrate`** applies the pending versions of a database with a history; `--dry`
+    shows what a run would do, read from the database and nothing written — the statements of
+    each pending version, the versions a database without a history would record as baseline, and
+    a run that would be refused (an applied version edited, tables of no version) as `WOULD FAIL`,
+    ending with 1 as the run itself would; a database without one keeps the create-if-missing pass of 4.x and is
     told how to start a history. A failed database ends the command with 1.
 - **`#[EnablePpaMigration]`** on the application — the pending versions of every database are
   applied at start, in the onStarting slot: after the High components, before anything else; a
@@ -71,6 +74,11 @@ All notable changes to this project are documented here. The format follows
   `Redis` and `Migrations`. `/actuator` lists them.
 - **A failed start is said once** — the line on stderr; the logger has it too only when a level
   is set (`LOG_LEVEL` / `LOG_SYS_LEVEL`), not twice in `docker logs` by the default `critical`.
+
+### Fixed
+
+- **The console's key–value lines line up with a `…` or `→` in the key** — the key was padded by
+  bytes, so `--drop=<t.c,…>` in `call db --help` stood two columns short of its neighbours.
 
 ## [4.7.2] — 2026-11-21
 

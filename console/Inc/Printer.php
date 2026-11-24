@@ -111,7 +111,8 @@ abstract class Printer
      */
     public static function printKeyValue(string $key, string $value, int $pad = 20, int $cl = 33, int $vcl = 36): void
     {
-        $keyStr = str_pad($key, $pad);
+        // Padded by characters, not bytes: a key with `…` or `→` lined up two short.
+        $keyStr = $key . str_repeat(' ', max(0, $pad - (int) preg_match_all('/./us', $key)));
         echo "\033[" . $cl . "m" . " |\t $keyStr ";
         echo "\033[" . $vcl . "m" . "$value \n";
         echo "\033[0m";

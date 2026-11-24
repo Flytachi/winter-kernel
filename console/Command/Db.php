@@ -19,6 +19,7 @@ use Flytachi\Winter\Kernel\Ppa\ConsoleLogger;
 use Flytachi\Winter\Kernel\Ppa\PpaSchema;
 use Flytachi\Winter\Ppa\Schema\RenamedFromCleaner;
 use Flytachi\Winter\Ppa\Schema\SchemaCheck;
+use Flytachi\Winter\Ppa\Schema\SchemaMigrator;
 use Flytachi\Winter\Ppa\Schema\SchemaModel;
 use Flytachi\Winter\Ppa\Schema\SchemaSnapshot;
 use Flytachi\Winter\Ppa\Schema\SchemaSql;
@@ -632,7 +633,9 @@ final class Db extends Cmd
             try {
                 $migrator = PpaSchema::migrator($db, self::consoleLogger());
                 if ($dry) {
-                    $this->printPlan($migrator->status(), $db['driver']);
+                    if (!$this->printPlan($migrator, $db['driver'])) {
+                        $failed[] = self::shortName($db['config']::class);
+                    }
                 } else {
                     $done = $migrator->migrate();
                     if ($done === []) {
@@ -651,20 +654,31 @@ final class Db extends Cmd
             $db['config']->disconnect();
         }
         if ($failed !== []) {
-            self::fail('db migrate failed: ' . implode(', ', $failed) . '.');
+            self::fail(($dry ? 'db migrate --dry: migrate would fail for ' : 'db migrate failed: ')
+                . implode(', ', $failed) . '.');
         }
         return $handled;
     }
 
-    /** `--dry`: what `migrate` would run, statement by statement. */
-    private function printPlan(array $status, string $driver): void
+    /**
+     * `--dry`: what `migrate` would do, statement by statement — read from the database, the
+     * same decisions a run makes (refused, fresh, baseline, applied), nothing written.
+     *
+     * @return bool false: `migrate` would fail — the reason is printed.
+     */
+    private function printPlan(SchemaMigrator $migrator, string $driver): bool
     {
-        foreach ($status['problems'] as $p) {
-            self::printWarning($p);
+        $status = $migrator->status();
+        if ($status['problems'] !== []) {
+            self::printBadge('migrate', 'WOULD FAIL', 34, 31);
+            foreach ($status['problems'] as $p) {
+                self::printWarning($p);
+            }
+            return false;
         }
         if ($status['pending'] === []) {
             self::printBadge('migrate', 'UP TO DATE', 34, 32);
-            return;
+            return true;
         }
         if ($status['state'] === 'fresh') {
             self::printInfo('A fresh database: created from the model of ' . end($status['versions'])->version
@@ -677,14 +691,26 @@ final class Db extends Cmd
             foreach ($fresh as $sql) {
                 self::printSplit($sql . ';', 36);
             }
-            return;
+            return true;
         }
+        $pending = $status['pending'];
         if ($status['state'] === 'unversioned') {
-            self::printInfo(
-                'Tables without a history: the latest version they match is recorded as baseline, the rest applied.'
-            );
+            $match = $migrator->baselineMatch($status['versions']);
+            if ($match['matched'] === 0) {
+                self::printBadge('migrate', 'WOULD FAIL', 34, 31);
+                self::printWarning('Tables without a history that match none of the versions. Against the last one: '
+                    . implode('; ', array_slice($match['differences'], 0, 10)) . '.');
+                return false;
+            }
+            $marked = array_slice($status['versions'], 0, $match['matched']);
+            self::printInfo('Tables without a history: they match ' . end($marked)->version . ' — '
+                . count($marked) . ' version(s) recorded as baseline, nothing of them run.');
+            foreach ($marked as $v) {
+                self::printBadge($v->version, 'BASELINE', 34, 32);
+            }
+            $pending = array_slice($status['versions'], $match['matched']);
         }
-        foreach ($status['pending'] as $v) {
+        foreach ($pending as $v) {
             self::printLabel($v->label() . ($v->hasCode() ? '   + code: before() / after()' : ''), 36);
             foreach (SchemaSql::plan($v->changes, $driver) as ['change' => $c, 'sql' => $sql]) {
                 if ($sql === []) {
@@ -695,6 +721,7 @@ final class Db extends Cmd
                 }
             }
         }
+        return true;
     }
 
     /** `call db snapshot [custom <name>]` — records a version from the entities. */
