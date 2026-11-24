@@ -1,5 +1,4 @@
 # .gitattributes
-/dev           export-ignore
 /docs          export-ignore
 /tests         export-ignore
 /.github       export-ignore

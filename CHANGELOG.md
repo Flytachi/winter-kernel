@@ -62,6 +62,9 @@ All notable changes to this project are documented here. The format follows
   `<2.0` (the package stays optional): `call db` and `#[EnablePpaMigration]` work through its
   schema versions, which 1.x has not. A project on winter-ppa 1.x updates it together with the
   kernel: `composer require flytachi/winter-ppa:^2.0 -W` — winter-cdo comes to 4.2 with it.
+- **Requires `flytachi/winter-cdo` ^4.2** — the kernel's own requirement, with winter-ppa or
+  without: its SQLite connection checks foreign keys (`PRAGMA foreign_keys = ON`), so what an
+  entity declares as a key holds on SQLite too.
 
 - **`Application up` is said when it is true** — every component started, after onStarting and
   the migrations — not before the supervisor starts anything: with a migration of minutes the
