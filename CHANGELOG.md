@@ -6,9 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [4.8.0] — 2026-11-24
+
 ### Added
 
-- **Schema versions** (needs winter-ppa with `Schema`): a `#[Migratable]` database's schema follows
+- **Schema versions** (needs winter-ppa 2.0): a `#[Migratable]` database's schema follows
   its entities version by version, the history in `ppa/<Config>/` — the config's class name as it
   is (`App\Config\PgDb` → `ppa/PgDb/`), the code of its versions in `ppa/<Config>/custom/`;
   `db status` points at a folder of versions no config is named after (a config renamed).
@@ -55,6 +57,11 @@ All notable changes to this project are documented here. The format follows
   for that database. `db snapshot` / `status` pass the config's `#[Extension]`s to the versions.
 
 ### Changed
+
+- ⚠️ **flytachi/winter-ppa, when installed, must be 2.0** — the kernel declares a conflict with
+  `<2.0` (the package stays optional): `call db` and `#[EnablePpaMigration]` work through its
+  schema versions, which 1.x has not. A project on winter-ppa 1.x updates it together with the
+  kernel: `composer require flytachi/winter-ppa:^2.0 -W` — winter-cdo comes to 4.2 with it.
 
 - **`Application up` is said when it is true** — every component started, after onStarting and
   the migrations — not before the supervisor starts anything: with a migration of minutes the
@@ -829,5 +836,16 @@ boot.
 7. Optionally, regenerate the Docker files with `call cfg docker -f` to move to the
    `flytachi/winter` image.
 
-[Unreleased]: https://github.com/flytachi/winter-kernel/compare/v4.4.0...HEAD
+[Unreleased]: https://github.com/flytachi/winter-kernel/compare/v4.8.0...HEAD
+[4.8.0]: https://github.com/flytachi/winter-kernel/compare/v4.7.2...v4.8.0
+[4.7.2]: https://github.com/flytachi/winter-kernel/compare/v4.7.1...v4.7.2
+[4.7.1]: https://github.com/flytachi/winter-kernel/compare/v4.7.0...v4.7.1
+[4.7.0]: https://github.com/flytachi/winter-kernel/compare/v4.6.0...v4.7.0
+[4.6.0]: https://github.com/flytachi/winter-kernel/compare/v4.5.2...v4.6.0
+[4.5.2]: https://github.com/flytachi/winter-kernel/compare/v4.5.1...v4.5.2
+[4.5.1]: https://github.com/flytachi/winter-kernel/compare/v4.5.0...v4.5.1
+[4.5.0]: https://github.com/flytachi/winter-kernel/compare/v4.4.4...v4.5.0
+[4.4.4]: https://github.com/flytachi/winter-kernel/compare/v4.4.3...v4.4.4
+[4.4.3]: https://github.com/flytachi/winter-kernel/compare/v4.4.1...v4.4.3
+[4.4.1]: https://github.com/flytachi/winter-kernel/compare/v4.4.0...v4.4.1
 [4.4.0]: https://github.com/flytachi/winter-kernel/compare/v4.3.1...v4.4.0

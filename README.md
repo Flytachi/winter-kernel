@@ -29,7 +29,7 @@ ORM, a connection pool and a migration engine it never loads.
 
 | Package | What it adds | Docs |
 |---|---|---|
-| `flytachi/winter-ppa` | Repositories, entities, query builder, migrations, DB pool | [PPA](https://winterframe.net/docs/ppa) |
+| `flytachi/winter-ppa` (^2.0) | Repositories, entities, query builder, schema versions (migrations), DB pool | [PPA](https://winterframe.net/docs/ppa) |
 | `flytachi/winter-redis` | Pooled Redis: prefixed stores, hashes, lists, streams | [Redis](https://winterframe.net/docs/redis) |
 
 See [Ecosystem](https://winterframe.net/docs/ecosystem) for the full picture, including the
@@ -208,14 +208,14 @@ The tree below mirrors the site's own navigation.
 3. [Daemons](https://winterframe.net/docs/daemons)
 4. [Scheduler](https://winterframe.net/docs/scheduler)
 
-**5. Database (PPA)** — needs `flytachi/winter-ppa`
+**5. Database (PPA)** — needs `flytachi/winter-ppa` 2.0
 
 1. [PHP Persistence API](https://winterframe.net/docs/ppa)
 2. [Connection](https://winterframe.net/docs/db-configuration)
 3. [Entities](https://winterframe.net/docs/entities)
 4. [Repositories](https://winterframe.net/docs/repository)
 5. [Pagination](https://winterframe.net/docs/pagination)
-6. [Migrations](https://winterframe.net/docs/migrations)
+6. [Migrations](https://winterframe.net/docs/migrations) — schema versions: `db snapshot`, `db migrate`
 7. [Connection pool](https://winterframe.net/docs/ppa-pooling)
 
 **6. Redis** — needs `flytachi/winter-redis`

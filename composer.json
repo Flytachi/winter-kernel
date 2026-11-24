@@ -42,15 +42,18 @@
         "ext-fileinfo": "*"
     },
     "require-dev": {
-        "flytachi/winter-ppa": "^1.3",
+        "flytachi/winter-ppa": "^2.0",
         "flytachi/winter-redis": "^1.2",
         "phpunit/phpunit": "@stable",
         "squizlabs/php_codesniffer": "@stable",
         "swoole/ide-helper": "^6.0",
         "monolog/monolog": "@stable"
     },
+    "conflict": {
+        "flytachi/winter-ppa": "<2.0"
+    },
     "suggest": {
-        "flytachi/winter-ppa": "The database layer: repositories, entity mapping, migrations and a coroutine connection pool.",
+        "flytachi/winter-ppa": "The database layer (^2.0): repositories, entity mapping, versioned schema migrations and a coroutine connection pool.",
         "flytachi/winter-redis": "Pooled Redis: prefixed stores, hashes, lists and streams, with a coroutine-safe connection pool.",
         "ext-pdo": "Required for database access",
         "ext-simplexml": "Required for XML file operations and XML body parsing in HTTP parameter resolution",
