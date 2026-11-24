@@ -368,6 +368,9 @@ final class Db extends Cmd
         // Databases with a schema history (ppa/<Config>/) move by their versions; the
         // rest keep the create-if-missing pass below, as in 4.x.
         $versioned = $this->targetsPlugins() ? [] : $this->migrateVersioned();
+        // A database refused before anything ran — what its server would not build as
+        // declared. Nothing of it was created: the command must not look like a success.
+        $refused = [];
 
         foreach ($this->resolveTargets() as ['label' => $label, 'root' => $rootDir]) {
             $declaration = PPAMapping::scanningDeclaration($rootDir);
@@ -391,6 +394,7 @@ final class Db extends Cmd
                 self::printLabel("[$label] " . $item->config::class, 34);
                 if (!self::checkItem($item)) {
                     self::printBadge('migrate', 'REFUSED — nothing created', 34, 31);
+                    $refused[] = self::shortName($item->config::class);
                     continue;
                 }
                 if ($rootDir === null) {
@@ -511,6 +515,10 @@ final class Db extends Cmd
 
                 self::printLabel("[$label] " . $item->config::class, 34);
             }
+        }
+        if ($refused !== []) {
+            self::fail('db migrate: nothing was created for ' . implode(', ', $refused)
+                . ' — its server would not build it as declared (see above).');
         }
     }
 

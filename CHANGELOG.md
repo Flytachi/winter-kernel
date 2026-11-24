@@ -84,6 +84,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A refused `db migrate` ends with 1** — a database without a schema history whose server
+  would not build it as declared (a GIN index on MySQL, a name that is a reserved word) is said
+  `REFUSED — nothing created`, and the command now ends with 1, as a failed version does: a
+  deploy script no longer takes a database left without its tables for a success. A statement
+  the server rejects (`FAILED`) keeps ending with 0, as in 4.x — a rerun on SQLite reports what
+  is already there that way.
 - **The console's key–value lines line up with a `…` or `→` in the key** — the key was padded by
   bytes, so `--drop=<t.c,…>` in `call db --help` stood two columns short of its neighbours.
 

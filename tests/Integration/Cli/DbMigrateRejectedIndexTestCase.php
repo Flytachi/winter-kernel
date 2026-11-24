@@ -15,6 +15,11 @@ use Flytachi\Winter\Kernel\Tests\Integration\Fixtures\IntegrationTestCase;
  * name, an unknown column, a syntax error alike — and only the driver code tells them apart
  * (1061 is "Duplicate key name"). Reading the whole class as "already exists" showed a
  * rejected index in yellow as EXIST: the schema silently lacked it, and nothing said so.
+ *
+ * The rejection is the server's, not the check's before running: the index is a plain
+ * B-tree, and the table is there already without its column — error 1072, "Key column
+ * doesn't exist". (What the server could never build — GIN — is refused before anything
+ * runs: {@see DbMigrateRefusedIndexTestCase}.)
  */
 abstract class DbMigrateRejectedIndexTestCase extends IntegrationTestCase
 {
@@ -30,6 +35,9 @@ abstract class DbMigrateRejectedIndexTestCase extends IntegrationTestCase
         }
         self::$previousPathRoot = Kernel::$pathRoot ?? null;
         Kernel::$pathRoot = static::fixturePath();
+        // The table without the indexed column: `db migrate` finds the table there (EXIST)
+        // and the server rejects the index on a column it has not.
+        self::pdoOnTestSchema()->exec('CREATE TABLE migr_badix (id INT NOT NULL PRIMARY KEY)');
     }
 
     public static function tearDownAfterClass(): void
